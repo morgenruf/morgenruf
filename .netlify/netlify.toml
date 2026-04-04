@@ -84,7 +84,7 @@ force = false
 
 [[redirects]]
 from = "/install"
-to = "https://slack.com/oauth/v2/authorize?client_id=10844948237158.1085061485973&scope=chat:write,chat:write.public,im:history,im:read,im:write,channels:read,channels:join,groups:read,users:read,users:read.email,team:read,app_mentions:read&redirect_uri=https://api.morgenruf.dev/oauth/callback"
+to = "https://slack.com/oauth/v2/authorize?client_id=10844948237158.10850614859732&scope=chat:write,chat:write.public,im:history,im:read,im:write,channels:read,channels:join,groups:read,users:read,users:read.email,team:read,app_mentions:read&redirect_uri=https://api.morgenruf.dev/oauth/callback"
 status = 302.0
 force = false
 
@@ -96,7 +96,7 @@ force = false
 
 [[redirects]]
 from = "/slack"
-to = "https://slack.com/oauth/v2/authorize?client_id=10844948237158.1085061485973&scope=chat:write,chat:write.public,im:history,im:read,im:write,channels:read,channels:join,groups:read,users:read,users:read.email,team:read,app_mentions:read&redirect_uri=https://api.morgenruf.dev/oauth/callback"
+to = "https://slack.com/oauth/v2/authorize?client_id=10844948237158.10850614859732&scope=chat:write,chat:write.public,im:history,im:read,im:write,channels:read,channels:join,groups:read,users:read,users:read.email,team:read,app_mentions:read&redirect_uri=https://api.morgenruf.dev/oauth/callback"
 status = 302.0
 force = false
 

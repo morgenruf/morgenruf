@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
+COPY migrations/ ./migrations/
 COPY teams.yaml.example ./teams.yaml
 
 ENV PYTHONUNBUFFERED=1

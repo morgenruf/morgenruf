@@ -174,6 +174,8 @@ helm/morgenruf/
 
 Works with Cloudflare Zero Trust tunnel — point your CF tunnel to the service on port 3000.
 
+> **Migrations:** Database migrations run automatically as a Helm pre-install/pre-upgrade hook. No manual migration steps required.
+
 ---
 
 ## Roadmap
