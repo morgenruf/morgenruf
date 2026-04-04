@@ -1,0 +1,71 @@
+display_information:
+  name: Morgenruf
+  description: "🌅 Self-hosted daily standup bot — structured updates, per-project tracking, blocker detection."
+  background_color: "#0d1117"
+  long_description: |
+    Morgenruf (German: "morning call") is an open-source Slack standup bot that replaces 
+    expensive SaaS tools like Geekbot or Standup & Prosper — for free.
+
+    Every day at your configured time, Morgenruf DMs each team member with 3 questions:
+    ✅ What did you complete yesterday?
+    �� What are you working on today?
+    🚧 Any blockers?
+
+    Answers are collected privately via DM and posted as a clean, structured summary 
+    to your team channel. Tag updates with project names (Proj-X: ...) for automated 
+    per-project reporting.
+
+    Features:
+    • Configurable schedule per team (time, timezone, days)
+    • Per-project tagging format for downstream automation
+    • Blocker detection and highlighting
+    • Manual standup trigger via DM
+    • Open source (MIT) — self-host on Kubernetes or use our hosted version
+
+    Learn more at https://morgenruf.dev
+
+features:
+  app_home:
+    home_tab_enabled: true
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Morgenruf
+    always_online: true
+  shortcuts:
+    - name: Submit standup
+      callback_id: submit_standup
+      description: Submit your daily standup manually
+      type: global
+
+oauth_config:
+  redirect_urls:
+    - https://api.morgenruf.dev/oauth/callback
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - im:history
+      - im:read
+      - im:write
+      - channels:read
+      - channels:join
+      - groups:read
+      - users:read
+      - users:read.email
+      - team:read
+      - app_mentions:read
+
+settings:
+  event_subscriptions:
+    request_url: https://api.morgenruf.dev/slack/events
+    bot_events:
+      - message.im
+      - app_mention
+      - app_home_opened
+  interactivity:
+    is_enabled: true
+    request_url: https://api.morgenruf.dev/slack/interactions
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: true
