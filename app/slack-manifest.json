@@ -1,0 +1,65 @@
+{
+  "display_information": {
+    "name": "Morgenruf",
+    "description": "Self-hosted daily standup bot — structured updates, per-project tracking, blocker detection.",
+    "background_color": "#0d1117"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "Morgenruf",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/morgenruf",
+        "description": "Create and manage standups",
+        "usage_hint": "[create | status | help]",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://api.morgenruf.dev/oauth/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "chat:write.public",
+        "im:history",
+        "im:read",
+        "im:write",
+        "channels:read",
+        "channels:join",
+        "groups:read",
+        "users:read",
+        "users:read.email",
+        "team:read",
+        "app_mentions:read",
+        "commands"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://api.morgenruf.dev/slack/events",
+      "bot_events": [
+        "message.im",
+        "app_mention",
+        "app_home_opened"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://api.morgenruf.dev/slack/interactions"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
+  }
+}
