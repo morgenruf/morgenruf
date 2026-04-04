@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -460,6 +462,8 @@ def standup_summary_message(
     date: str,
     responses: list[dict],
     group_by: str = "member",
+    jira_base_url: str = "",
+    zendesk_base_url: str = "",
 ) -> dict:
     """
     Rich summary posted to channel.
@@ -513,7 +517,8 @@ def standup_summary_message(
             qa_lines = []
             for i, answer in enumerate(answers):
                 question = questions[i] if i < len(questions) else f"Q{i + 1}"
-                qa_lines.append(f"*{question}*\n{answer}")
+                linked = linkify_issues(answer, jira_base_url, zendesk_base_url)
+                qa_lines.append(f"*{question}*\n{linked}")
 
             if qa_lines:
                 blocks.append(
@@ -696,3 +701,186 @@ def away_confirmation_message(until: str = "tomorrow") -> dict:
             }
         ]
     }
+
+
+# ---------------------------------------------------------------------------
+# Issue auto-linking
+# ---------------------------------------------------------------------------
+
+def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "") -> str:
+    """Replace {PROJ-123} and {ZD-123} patterns with Slack mrkdwn links.
+
+    Zendesk tickets are matched first (``{ZD-NNN}``) so they are not
+    consumed by the generic Jira pattern.
+
+    Args:
+        text: Raw standup response text.
+        jira_base_url: e.g. ``"https://myorg.atlassian.net"``.
+        zendesk_base_url: e.g. ``"https://myorg.zendesk.com"``.
+    """
+    if zendesk_base_url:
+        def _zd(m: re.Match) -> str:  # type: ignore[type-arg]
+            num = m.group(1)
+            return f"<{zendesk_base_url}/agent/tickets/{num}|ZD-{num}>"
+
+        text = re.sub(r"\{ZD-(\d+)\}", _zd, text)
+
+    if jira_base_url:
+        def _jira(m: re.Match) -> str:  # type: ignore[type-arg]
+            key = m.group(1)
+            return f"<{jira_base_url}/browse/{key}|{key}>"
+
+        text = re.sub(r"\{([A-Z][A-Z0-9_]+-\d+)\}", _jira, text)
+
+    return text
+
+
+# ---------------------------------------------------------------------------
+# Summary builders (by-member and by-question)
+# ---------------------------------------------------------------------------
+
+def build_summary_by_member(
+    responses: list[dict],
+    questions: list[str],
+    user_profiles: dict | None = None,
+    jira_base_url: str = "",
+    zendesk_base_url: str = "",
+    edit_window_open: set | None = None,
+) -> list[dict]:
+    """Build Slack blocks for a standup summary grouped by member.
+
+    Each response dict must contain: ``user_id``, ``yesterday``, ``today``,
+    ``blockers``, and optionally ``id``.  ``user_profiles`` maps
+    ``user_id`` → ``{"display_name": str, "avatar_url": str}``.
+    ``edit_window_open`` is a set of user_ids who may still edit.
+    """
+    user_profiles = user_profiles or {}
+    edit_window_open = edit_window_open or set()
+
+    q_labels = list(questions) if questions else [
+        "What did you complete yesterday?",
+        "What are you working on today?",
+        "Any blockers?",
+    ]
+    answer_keys = ["yesterday", "today", "blockers"]
+
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "📋 Today's Standup Summary", "emoji": True},
+        },
+        {"type": "divider"},
+    ]
+
+    for resp in responses:
+        user_id: str = resp["user_id"]
+        profile = user_profiles.get(user_id, {})
+        display_name: str = profile.get("display_name") or f"<@{user_id}>"
+        avatar_url: str = profile.get("avatar_url", "")
+
+        # Context block: avatar + name
+        context_elements: list[dict] = []
+        if avatar_url:
+            context_elements.append({
+                "type": "image",
+                "image_url": avatar_url,
+                "alt_text": display_name,
+            })
+        context_elements.append({"type": "mrkdwn", "text": f"*{display_name}*"})
+        blocks.append({"type": "context", "elements": context_elements})
+
+        # Q&A section
+        qa_lines: list[str] = []
+        for idx, key in enumerate(answer_keys):
+            raw = resp.get(key, "") or ""
+            linked = linkify_issues(raw, jira_base_url, zendesk_base_url)
+            label = q_labels[idx] if idx < len(q_labels) else key.capitalize()
+            qa_lines.append(f"*{label}*\n{linked}")
+
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "\n\n".join(qa_lines)},
+        })
+
+        # Edit button (only if within window)
+        if user_id in edit_window_open:
+            blocks.append({
+                "type": "actions",
+                "elements": [{
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✏️ Edit my standup", "emoji": True},
+                    "action_id": "standup_edit",
+                    "value": str(resp.get("id", "")),
+                    "style": "primary",
+                }],
+            })
+
+        blocks.append({"type": "divider"})
+
+    return blocks
+
+
+def build_summary_by_question(
+    responses: list[dict],
+    questions: list[str],
+    user_profiles: dict | None = None,
+    jira_base_url: str = "",
+    zendesk_base_url: str = "",
+) -> list[dict]:
+    """Build Slack blocks for a standup summary grouped by question.
+
+    Shows all answers to Q1 first, then Q2, etc.
+
+    Each response dict must contain: ``user_id``, ``yesterday``, ``today``,
+    ``blockers``.  ``user_profiles`` maps
+    ``user_id`` → ``{"display_name": str, "avatar_url": str}``.
+    """
+    user_profiles = user_profiles or {}
+
+    q_labels = list(questions) if questions else [
+        "What did you complete yesterday?",
+        "What are you working on today?",
+        "Any blockers?",
+    ]
+    answer_keys = ["yesterday", "today", "blockers"]
+
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "📋 Today's Standup Summary", "emoji": True},
+        },
+        {"type": "divider"},
+    ]
+
+    for idx, key in enumerate(answer_keys):
+        label = q_labels[idx] if idx < len(q_labels) else key.capitalize()
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*{label}*"},
+        })
+
+        for resp in responses:
+            user_id: str = resp["user_id"]
+            profile = user_profiles.get(user_id, {})
+            display_name: str = profile.get("display_name") or f"<@{user_id}>"
+            avatar_url: str = profile.get("avatar_url", "")
+
+            raw = resp.get(key, "") or ""
+            linked = linkify_issues(raw, jira_base_url, zendesk_base_url)
+
+            context_elements: list[dict] = []
+            if avatar_url:
+                context_elements.append({
+                    "type": "image",
+                    "image_url": avatar_url,
+                    "alt_text": display_name,
+                })
+            context_elements.append({
+                "type": "mrkdwn",
+                "text": f"*{display_name}*: {linked}",
+            })
+            blocks.append({"type": "context", "elements": context_elements})
+
+        blocks.append({"type": "divider"})
+
+    return blocks

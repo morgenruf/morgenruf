@@ -264,73 +264,20 @@ def get_dashboard_stats(team_id: str) -> dict:
     }
 
 
+
 # ---------------------------------------------------------------------------
 # Webhooks
 # ---------------------------------------------------------------------------
 
-def _ensure_webhooks_table(conn) -> None:
-    with conn.cursor() as cur:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS webhooks (
-                id TEXT PRIMARY KEY,
-                team_id TEXT NOT NULL,
-                url TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """)
-
-
 def get_webhooks(team_id: str) -> list[dict]:
-    """Return all webhooks for a workspace."""
+    """Return all webhooks registered for a team."""
+    sql = "SELECT * FROM webhooks WHERE team_id = %s ORDER BY created_at"
     with db_conn() as conn:
-        _ensure_webhooks_table(conn)
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                "SELECT id, url, created_at FROM webhooks WHERE team_id = %s ORDER BY created_at",
-                (team_id,),
-            )
+            cur.execute(sql, (team_id,))
             rows = cur.fetchall()
     return [dict(r) for r in rows]
 
-
-def add_webhook(team_id: str, url: str) -> dict:
-    """Insert a new webhook and return it."""
-    import uuid as _uuid  # noqa: PLC0415
-    hook_id = str(_uuid.uuid4())
-    with db_conn() as conn:
-        _ensure_webhooks_table(conn)
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO webhooks (id, team_id, url) VALUES (%s, %s, %s)",
-                (hook_id, team_id, url),
-            )
-    return {"id": hook_id, "url": url}
-
-
-def delete_webhook(team_id: str, hook_id: str) -> None:
-    """Delete a webhook by id (scoped to team for safety)."""
-    with db_conn() as conn:
-        _ensure_webhooks_table(conn)
-        with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM webhooks WHERE id = %s AND team_id = %s",
-                (hook_id, team_id),
-            )
-
-
-def get_standup_by_id(standup_id: int) -> dict | None:
-    """Return a single standup row by primary key, or None."""
-    sql = "SELECT * FROM standups WHERE id = %s"
-    with db_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (standup_id,))
-            row = cur.fetchone()
-    return dict(row) if row else None
-
-
-# ---------------------------------------------------------------------------
-# Webhooks
-# ---------------------------------------------------------------------------
 
 def add_webhook(
     team_id: str,
@@ -354,16 +301,6 @@ def add_webhook(
     return dict(row)
 
 
-def get_webhooks(team_id: str) -> list[dict]:
-    """Return all webhooks registered for a team."""
-    sql = "SELECT * FROM webhooks WHERE team_id = %s ORDER BY created_at"
-    with db_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (team_id,))
-            rows = cur.fetchall()
-    return [dict(r) for r in rows]
-
-
 def delete_webhook(team_id: str, webhook_id: int) -> bool:
     """Delete a webhook by id (scoped to team_id for safety). Returns True if deleted."""
     sql = "DELETE FROM webhooks WHERE id = %s AND team_id = %s"
@@ -372,3 +309,17 @@ def delete_webhook(team_id: str, webhook_id: int) -> bool:
             cur.execute(sql, (webhook_id, team_id))
             deleted = cur.rowcount > 0
     return deleted
+
+
+# ---------------------------------------------------------------------------
+# Standup lookup
+# ---------------------------------------------------------------------------
+
+def get_standup_by_id(standup_id: int) -> dict | None:
+    """Return a single standup row by primary key, or None."""
+    sql = "SELECT * FROM standups WHERE id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (standup_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None

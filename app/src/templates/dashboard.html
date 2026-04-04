@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Morgenruf Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #161616;
+      --border: #1f1f1f;
+      --border2: #2a2a2a;
+      --accent: #22c55e;
+      --accent-dim: rgba(34,197,94,0.12);
+      --text: #e6edf3;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --sidebar-w: 220px;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+    input, select, textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 8px 12px;
+      width: 100%;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+    label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 50;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .sidebar-logo .icon { font-size: 22px; }
+    .sidebar-logo .brand { font-size: 16px; font-weight: 700; color: var(--accent); }
+    .sidebar-logo .sub { font-size: 11px; color: var(--text-dim); }
+    .nav-section { padding: 8px 12px 4px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-dim); }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px;
+      margin: 1px 8px;
+      border-radius: 8px;
+      color: var(--text-muted);
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      user-select: none;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+    .nav-item .nav-icon { width: 16px; text-align: center; font-size: 15px; flex-shrink: 0; }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 12px 0;
+      border-top: 1px solid var(--border);
+    }
+    .workspace-pill {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    .ws-avatar {
+      width: 28px; height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #000;
+      flex-shrink: 0;
+    }
+    .ws-name { font-weight: 500; color: var(--text); font-size: 13px; }
+    .ws-logout { font-size: 11px; color: var(--text-dim); }
+    .ws-logout a { color: var(--text-dim); }
+    .ws-logout a:hover { color: var(--danger); }
+
+    /* ── Main content ── */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .page-title { font-size: 18px; font-weight: 600; }
+    .page-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #16a34a; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+    .btn-secondary:hover { border-color: #444; background: #1e1e1e; }
+    .btn-danger { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+    .btn-danger:hover { background: rgba(239,68,68,0.2); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border2); }
+    .btn-ghost:hover { color: var(--text); background: var(--surface2); }
+    .btn-sm { padding: 5px 11px; font-size: 12px; }
+    .btn-icon { padding: 6px 8px; border-radius: 7px; background: transparent; border: 1px solid var(--border2); color: var(--text-muted); font-size: 14px; }
+    .btn-icon:hover { color: var(--text); background: var(--surface2); }
+
+    /* ── Sections ── */
+    .section { display: none; padding: 24px 28px; }
+    .section.active { display: block; }
+
+    /* ── Stats row ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .stat-label { font-size: 12px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+    .stat-value { font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
+    .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+    .gauge-wrap { position: relative; width: 80px; height: 80px; }
+    .gauge-wrap svg { transform: rotate(-90deg); }
+    .gauge-num {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; color: var(--accent);
+    }
+
+    /* ── Standup cards ── */
+    .standups-grid { display: flex; flex-direction: column; gap: 12px; }
+    .standup-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: border-color 0.15s;
+    }
+    .standup-card:hover { border-color: var(--border2); }
+    .standup-icon {
+      width: 40px; height: 40px;
+      background: var(--accent-dim);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .standup-info { flex: 1; min-width: 0; }
+    .standup-name { font-weight: 600; font-size: 15px; }
+    .standup-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .standup-meta span { margin-right: 14px; }
+    .standup-actions { display: flex; align-items: center; gap: 8px; }
+    .toggle {
+      width: 38px; height: 22px;
+      background: var(--border2);
+      border-radius: 11px;
+      position: relative;
+      cursor: pointer;
+      border: none;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      top: 3px; left: 3px;
+      transition: left 0.2s;
+    }
+    .toggle.on::after { left: 19px; }
+    .badge-active { background: rgba(34,197,94,0.1); color: var(--accent); border: 1px solid rgba(34,197,94,0.2); border-radius: 100px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
+    .badge-paused { background: rgba(107,114,128,0.1); color: var(--text-dim); border: 1px solid rgba(107,114,128,0.2); border-radius: 100px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
+    .empty-state {
+      text-align: center; padding: 60px 20px;
+      color: var(--text-dim);
+    }
+    .empty-state .empty-icon { font-size: 40px; margin-bottom: 16px; }
+    .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; margin-bottom: 20px; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 200;
+      padding: 32px 16px;
+      overflow-y: auto;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 640px;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-title { font-size: 16px; font-weight: 600; }
+    .modal-close {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 20px; padding: 4px 8px; border-radius: 6px;
+      cursor: pointer;
+    }
+    .modal-close:hover { color: var(--text); background: var(--surface2); }
+    .modal-body { padding: 24px; }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .form-grid.full { grid-template-columns: 1fr; }
+    .form-group { margin-bottom: 16px; }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-section-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 12px 0 8px;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+    .days-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+    .day-chip {
+      padding: 5px 11px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.12s;
+    }
+    .day-chip.selected { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+    /* Questions list */
+    .questions-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .question-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .question-row input { flex: 1; }
+    .q-drag { color: var(--text-dim); cursor: grab; padding: 0 4px; font-size: 14px; }
+    .q-del { background: none; border: none; color: var(--text-dim); font-size: 18px; padding: 4px 6px; border-radius: 6px; }
+    .q-del:hover { color: var(--danger); background: rgba(239,68,68,0.08); }
+    .btn-add-q {
+      background: none; border: 1px dashed var(--border2); border-radius: 8px;
+      color: var(--text-dim); padding: 7px 14px; font-size: 13px; width: 100%;
+      transition: all 0.12s;
+    }
+    .btn-add-q:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    /* Accordion */
+    .accordion-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; padding: 10px 0; user-select: none;
+    }
+    .accordion-header h4 { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+    .accordion-arrow { transition: transform 0.2s; color: var(--text-dim); }
+    .accordion-body { display: none; }
+    .accordion-body.open { display: block; }
+    .accordion-arrow.open { transform: rotate(180deg); }
+
+    /* Select styled */
+    select option { background: #1a1a1a; }
+
+    /* Multi-select */
+    .multi-select-wrap { position: relative; }
+    .multi-select-display {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 7px;
+      padding: 8px 12px;
+      cursor: pointer;
+      min-height: 38px;
+      display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+    }
+    .multi-select-display:focus, .multi-select-display.open { border-color: var(--accent); outline: none; }
+    .tag-pill {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 100px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .tag-pill .del { cursor: pointer; font-size: 14px; line-height: 1; }
+    .multi-dropdown {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 9px;
+      z-index: 100;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      display: none;
+    }
+    .multi-dropdown.open { display: block; }
+    .multi-opt {
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .multi-opt:hover { background: var(--surface2); }
+    .multi-opt.selected { color: var(--accent); }
+    .multi-opt .chk { width: 14px; height: 14px; border: 1px solid var(--border2); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    .multi-opt.selected .chk { background: var(--accent); border-color: var(--accent); color: #000; }
+    .placeholder-text { color: var(--text-dim); font-size: 13px; }
+
+    /* Members */
+    .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .member-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--surface2);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .avatar-initials {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .member-name { font-weight: 500; font-size: 14px; }
+    .member-tz { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+    /* Webhooks */
+    .webhooks-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .webhooks-table { width: 100%; border-collapse: collapse; }
+    .webhooks-table th { padding: 12px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); text-align: left; border-bottom: 1px solid var(--border); background: var(--surface2); }
+    .webhooks-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); }
+    .webhooks-table tr:last-child td { border-bottom: none; }
+    .webhooks-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .webhook-url { font-family: monospace; font-size: 12px; color: var(--text-muted); word-break: break-all; }
+    .add-webhook-row { display: flex; gap: 10px; margin-top: 14px; }
+    .add-webhook-row input { flex: 1; }
+
+    /* Reports */
+    .chart-placeholder {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    /* Toast */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: slideIn 0.2s ease;
+      max-width: 320px;
+    }
+    .toast.success { border-left: 3px solid var(--accent); }
+    .toast.error { border-left: 3px solid var(--danger); }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+    /* Loading */
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-center { display: flex; align-items: center; justify-content: center; padding: 60px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <!-- ── Sidebar ── -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <span class="icon">&#127749;</span>
+      <div>
+        <div class="brand">Morgenruf</div>
+        <div class="sub">Dashboard</div>
+      </div>
+    </div>
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item active" data-section="standups">
+      <span class="nav-icon">&#9201;</span> Standups
+    </div>
+    <div class="nav-item" data-section="members">
+      <span class="nav-icon">&#128101;</span> Members
+    </div>
+    <div class="nav-item" data-section="reports">
+      <span class="nav-icon">&#128202;</span> Reports
+    </div>
+    <div class="nav-section" style="margin-top:8px">Config</div>
+    <div class="nav-item" data-section="settings">
+      <span class="nav-icon">&#9881;</span> Settings
+    </div>
+    <div class="nav-item" data-section="webhooks">
+      <span class="nav-icon">&#128279;</span> Webhooks
+    </div>
+    <div class="sidebar-footer">
+      <div class="workspace-pill">
+        <div class="ws-avatar" id="ws-avatar">M</div>
+        <div>
+          <div class="ws-name" id="ws-name">{{ team_name }}</div>
+          <div class="ws-logout"><a href="/dashboard/logout">Sign out</a></div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <div id="main">
+    <!-- Standups -->
+    <div id="section-standups" class="section active">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Standups</div>
+          <div class="page-subtitle">Manage your team's standup schedules</div>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button>
+      </div>
+      <div id="stats-grid" class="stats-grid"></div>
+      <div id="standups-list" class="standups-grid"></div>
+    </div>
+
+    <!-- Members -->
+    <div id="section-members" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Members</div>
+          <div class="page-subtitle">Team members synced from Slack</div>
+        </div>
+        <button class="btn btn-secondary" onclick="loadMembers()">&#8635; Refresh</button>
+      </div>
+      <div id="members-grid" class="members-grid"></div>
+    </div>
+
+    <!-- Reports -->
+    <div id="section-reports" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Reports</div>
+          <div class="page-subtitle">Standup completion stats — last 7 days</div>
+        </div>
+      </div>
+      <div id="reports-content"></div>
+    </div>
+
+    <!-- Settings -->
+    <div id="section-settings" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Settings</div>
+          <div class="page-subtitle">Workspace-level configuration</div>
+        </div>
+      </div>
+      <div id="settings-content" style="max-width:520px"></div>
+    </div>
+
+    <!-- Webhooks -->
+    <div id="section-webhooks" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Webhooks</div>
+          <div class="page-subtitle">Receive POST notifications when standups complete</div>
+        </div>
+      </div>
+      <div id="webhooks-content"></div>
+    </div>
+  </div>
+
+  <!-- ── Standup Modal ── -->
+  <div class="modal-overlay" id="standup-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">New Standup</div>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="modal-standup-id"/>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Standup Name</label>
+            <input type="text" id="f-name" placeholder="Morning Standup"/>
+          </div>
+          <div class="form-group">
+            <label>Channel</label>
+            <select id="f-channel">
+              <option value="">Select a channel...</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Participants</label>
+          <div class="multi-select-wrap" id="participants-wrap">
+            <div class="multi-select-display" id="participants-display" tabindex="0">
+              <span class="placeholder-text">Select participants...</span>
+            </div>
+            <div class="multi-dropdown" id="participants-dropdown"></div>
+          </div>
+        </div>
+
+        <div class="form-section-title">Schedule</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Time</label>
+            <input type="time" id="f-time" value="09:00"/>
+          </div>
+          <div class="form-group">
+            <label>Timezone</label>
+            <select id="f-tz">
+              <option value="UTC">UTC</option>
+              <option value="America/New_York">America/New_York</option>
+              <option value="America/Chicago">America/Chicago</option>
+              <option value="America/Denver">America/Denver</option>
+              <option value="America/Los_Angeles">America/Los_Angeles</option>
+              <option value="Europe/London">Europe/London</option>
+              <option value="Europe/Berlin">Europe/Berlin</option>
+              <option value="Europe/Paris">Europe/Paris</option>
+              <option value="Europe/Amsterdam">Europe/Amsterdam</option>
+              <option value="Asia/Tokyo">Asia/Tokyo</option>
+              <option value="Asia/Shanghai">Asia/Shanghai</option>
+              <option value="Asia/Kolkata">Asia/Kolkata</option>
+              <option value="Australia/Sydney">Australia/Sydney</option>
+              <option value="Pacific/Auckland">Pacific/Auckland</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Days</label>
+          <div class="days-grid" id="days-grid">
+            <div class="day-chip selected" data-day="mon">Mon</div>
+            <div class="day-chip selected" data-day="tue">Tue</div>
+            <div class="day-chip selected" data-day="wed">Wed</div>
+            <div class="day-chip selected" data-day="thu">Thu</div>
+            <div class="day-chip selected" data-day="fri">Fri</div>
+            <div class="day-chip" data-day="sat">Sat</div>
+            <div class="day-chip" data-day="sun">Sun</div>
+          </div>
+        </div>
+
+        <div class="form-section-title">Questions</div>
+        <div class="questions-list" id="questions-list"></div>
+        <button class="btn-add-q" onclick="addQuestion()">&#43; Add question</button>
+
+        <div class="form-section-title">Report</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Report Channel</label>
+            <select id="f-report-channel">
+              <option value="">Same as standup channel</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Report Time</label>
+            <input type="time" id="f-report-time"/>
+          </div>
+        </div>
+
+        <!-- Advanced -->
+        <div class="accordion-header" onclick="toggleAdvanced()">
+          <h4>Advanced Settings</h4>
+          <span class="accordion-arrow" id="adv-arrow">&#8964;</span>
+        </div>
+        <div class="accordion-body" id="adv-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Group Report By</label>
+              <select id="f-group-by">
+                <option value="member">Member</option>
+                <option value="question">Question</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Post As</label>
+              <select id="f-post-as">
+                <option value="combined">Combined message</option>
+                <option value="separate">Separate messages</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Sort Order</label>
+              <select id="f-sort-order">
+                <option value="chronological">Chronological</option>
+                <option value="alphabetical">Alphabetical</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Edit Window</label>
+              <select id="f-edit-window">
+                <option value="report">Until report time</option>
+                <option value="4h">4 hours</option>
+                <option value="none">No limit</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Jira Base URL</label>
+              <input type="url" id="f-jira" placeholder="https://yourteam.atlassian.net"/>
+            </div>
+            <div class="form-group">
+              <label>Zendesk Base URL</label>
+              <input type="url" id="f-zendesk" placeholder="https://yourteam.zendesk.com"/>
+            </div>
+          </div>
+          <div class="form-group" style="display:flex;align-items:center;gap:10px">
+            <button class="toggle on" id="f-avatar-toggle" onclick="toggleAvatar(this)" type="button"></button>
+            <label style="margin:0;cursor:pointer" onclick="toggleAvatar(document.getElementById('f-avatar-toggle'))">Display member avatar in report</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveStandup()">Save Standup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast container ── -->
+  <div id="toast-container"></div>
+
+  <script>
+  // ── State ──
+  const state = {
+    section: 'standups',
+    standups: [],
+    members: [],
+    channels: [],
+    stats: {},
+    webhooks: [],
+    participants: [],
+    loaded: {}
+  };
+
+  // ── Navigation ──
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const sec = item.dataset.section;
+      switchSection(sec);
+    });
+  });
+
+  function switchSection(sec) {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === sec));
+    document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + sec));
+    state.section = sec;
+    if (!state.loaded[sec]) {
+      state.loaded[sec] = true;
+      if (sec === 'standups') loadStandups();
+      if (sec === 'members') loadMembers();
+      if (sec === 'reports') loadReports();
+      if (sec === 'settings') loadSettings();
+      if (sec === 'webhooks') loadWebhooks();
+    }
+  }
+
+  // ── Workspace avatar letter ──
+  const teamName = '{{ team_name }}';
+  document.getElementById('ws-avatar').textContent = (teamName || 'M')[0].toUpperCase();
+
+  // ── API helpers ──
+  async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch('/dashboard/api' + path, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || res.statusText);
+    }
+    return res.json();
+  }
+
+  // ── Toast ──
+  function toast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  // ── Stats ──
+  async function loadStats() {
+    try {
+      const s = await api('GET', '/stats');
+      state.stats = s;
+      renderStats(s);
+    } catch (e) {
+      renderStats({ completion_rate: 0, active_members: 0, total_responses: 0 });
+    }
+  }
+
+  function renderStats(s) {
+    const rate = s.completion_rate || 0;
+    const circ = 2 * Math.PI * 28;
+    const dash = circ * (rate / 100);
+    document.getElementById('stats-grid').innerHTML =
+      '<div class="stat-card"><div class="stat-label">Completion Rate</div>' +
+      '<div style="display:flex;align-items:center;gap:16px">' +
+      '<div class="gauge-wrap">' +
+      '<svg width="80" height="80" viewBox="0 0 64 64">' +
+      '<circle cx="32" cy="32" r="28" fill="none" stroke="#1f1f1f" stroke-width="6"/>' +
+      '<circle cx="32" cy="32" r="28" fill="none" stroke="#22c55e" stroke-width="6"' +
+      ' stroke-dasharray="' + dash.toFixed(1) + ' ' + (circ - dash).toFixed(1) + '"' +
+      ' stroke-linecap="round"/></svg>' +
+      '<div class="gauge-num">' + rate + '%</div></div>' +
+      '<div><div class="stat-sub">Last 7 days</div></div></div></div>' +
+
+      '<div class="stat-card"><div class="stat-label">Active Members</div>' +
+      '<div class="stat-value">' + (s.active_members || 0) + '</div>' +
+      '<div class="stat-sub">responded this week</div></div>' +
+
+      '<div class="stat-card"><div class="stat-label">Responses This Week</div>' +
+      '<div class="stat-value">' + (s.total_responses || 0) + '</div>' +
+      '<div class="stat-sub">total submissions</div></div>';
+  }
+
+  // ── Standups ──
+  async function loadStandups() {
+    document.getElementById('standups-list').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    await Promise.all([loadStats(), loadChannels()]);
+    try {
+      state.standups = await api('GET', '/standups');
+      renderStandups();
+    } catch (e) {
+      document.getElementById('standups-list').innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load standups.</p>';
+    }
+  }
+
+  function renderStandups() {
+    const el = document.getElementById('standups-list');
+    if (!state.standups.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9201;</div><h3>No standups yet</h3><p>Create your first standup to get your team going.</p><button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button></div>';
+      return;
+    }
+    el.innerHTML = state.standups.map(s => {
+      const chName = channelName(s.channel_id);
+      const days = (s.schedule_days || []).join(', ');
+      const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
+      return '<div class="standup-card" id="sc-' + s.id + '">' +
+        '<div class="standup-icon">&#9201;</div>' +
+        '<div class="standup-info">' +
+        '<div class="standup-name">' + esc(s.name || 'Morning Standup') + '</div>' +
+        '<div class="standup-meta">' +
+        '<span>#' + esc(chName) + '</span>' +
+        '<span>' + esc(s.schedule_time || '09:00') + ' ' + esc(s.schedule_tz || 'UTC') + '</span>' +
+        '<span>' + esc(days) + '</span>' +
+        badge +
+        '</div></div>' +
+        '<div class="standup-actions">' +
+        '<button class="toggle ' + (s.active ? 'on' : '') + '" onclick="toggleStandup(' + s.id + ', this)" title="Toggle active"></button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + ')">Edit</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteStandup(' + s.id + ')">Delete</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  async function toggleStandup(id, btn) {
+    const standup = state.standups.find(s => s.id === id);
+    if (!standup) return;
+    const newActive = !standup.active;
+    try {
+      await api('PUT', '/standups/' + id, { active: newActive });
+      standup.active = newActive;
+      btn.classList.toggle('on', newActive);
+      renderStandups();
+      toast(newActive ? 'Standup activated' : 'Standup paused');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function deleteStandup(id) {
+    if (!confirm('Delete this standup? This cannot be undone.')) return;
+    try {
+      await api('DELETE', '/standups/' + id);
+      state.standups = state.standups.filter(s => s.id !== id);
+      renderStandups();
+      toast('Standup deleted');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  // ── Channels ──
+  async function loadChannels() {
+    try {
+      state.channels = await api('GET', '/channels');
+    } catch (e) { state.channels = []; }
+    populateChannelSelects();
+  }
+
+  function populateChannelSelects() {
+    ['f-channel', 'f-report-channel'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const placeholder = id === 'f-report-channel' ? '<option value="">Same as standup channel</option>' : '<option value="">Select a channel...</option>';
+      sel.innerHTML = placeholder + state.channels.map(c => '<option value="' + esc(c.id) + '">#' + esc(c.name) + '</option>').join('');
+    });
+  }
+
+  function channelName(id) {
+    const c = state.channels.find(c => c.id === id);
+    return c ? c.name : (id || 'unknown');
+  }
+
+  // ── Members ──
+  async function loadMembers() {
+    document.getElementById('members-grid').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      state.members = await api('GET', '/members');
+      renderMembers();
+      populateParticipantsDropdown();
+    } catch (e) {
+      document.getElementById('members-grid').innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load members.</p>';
+    }
+  }
+
+  function renderMembers() {
+    const el = document.getElementById('members-grid');
+    if (!state.members.length) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">No members found.</p>';
+      return;
+    }
+    el.innerHTML = state.members.map(m => {
+      const initials = (m.name || m.display_name || '?').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+      const avatarHtml = m.avatar
+        ? '<div class="avatar"><img src="' + esc(m.avatar) + '" alt=""/></div>'
+        : '<div class="avatar-initials">' + esc(initials) + '</div>';
+      return '<div class="member-card">' + avatarHtml +
+        '<div><div class="member-name">' + esc(m.name || m.display_name || m.id) + '</div>' +
+        '<div class="member-tz">' + esc(m.tz || 'UTC') + '</div></div></div>';
+    }).join('');
+  }
+
+  // ── Reports ──
+  async function loadReports() {
+    const el = document.getElementById('reports-content');
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      const s = await api('GET', '/stats');
+      el.innerHTML =
+        '<div class="stats-grid" style="margin-bottom:24px">' +
+        '<div class="stat-card"><div class="stat-label">Completion Rate (7d)</div><div class="stat-value">' + (s.completion_rate || 0) + '%</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Active Members</div><div class="stat-value">' + (s.active_members || 0) + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Total Responses</div><div class="stat-value">' + (s.total_responses || 0) + '</div></div>' +
+        '<div class="stat-card"><div class="stat-label">Total Members</div><div class="stat-value">' + (s.total_members || 0) + '</div></div>' +
+        '</div>' +
+        '<div class="chart-placeholder">&#128202; Detailed charts coming soon — connect more responses to see trends.</div>';
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load stats.</p>';
+    }
+  }
+
+  // ── Settings ──
+  async function loadSettings() {
+    const el = document.getElementById('settings-content');
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      const standups = await api('GET', '/standups');
+      if (standups.length) {
+        const s = standups[0];
+        el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px">' +
+          '<div style="font-weight:600;font-size:15px">Primary Standup Config</div>' +
+          '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
+          '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection('standups')">Edit Configuration</button>' +
+          '</div>';
+      } else {
+        el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9881;</div><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection('standups')">&#43; New Standup</button></div>';
+      }
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-dim)">Failed to load settings.</p>';
+    }
+  }
+
+  // ── Webhooks ──
+  async function loadWebhooks() {
+    const el = document.getElementById('webhooks-content');
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    try {
+      state.webhooks = await api('GET', '/webhooks');
+      renderWebhooks();
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load webhooks.</p>';
+    }
+  }
+
+  function renderWebhooks() {
+    const el = document.getElementById('webhooks-content');
+    const rows = state.webhooks.map(h =>
+      '<tr><td class="webhook-url">' + esc(h.url) + '</td>' +
+      '<td style="color:var(--text-dim);font-size:12px">' + (h.created_at ? new Date(h.created_at).toLocaleDateString() : '') + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteWebhook('' + esc(h.id) + '')">Delete</button></td></tr>'
+    ).join('');
+
+    el.innerHTML =
+      '<div class="webhooks-table-wrap">' +
+      '<table class="webhooks-table"><thead><tr><th>URL</th><th>Added</th><th></th></tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
+      '</table></div>' +
+      '<div class="add-webhook-row">' +
+      '<input type="url" id="new-webhook-url" placeholder="https://example.com/webhook"/>' +
+      '<button class="btn btn-primary" onclick="addWebhook()">&#43; Add Webhook</button>' +
+      '</div>';
+  }
+
+  async function addWebhook() {
+    const urlEl = document.getElementById('new-webhook-url');
+    const url = urlEl.value.trim();
+    if (!url) { toast('Please enter a URL', 'error'); return; }
+    try {
+      const hook = await api('POST', '/webhooks', { url });
+      state.webhooks.push(hook);
+      renderWebhooks();
+      toast('Webhook added');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function deleteWebhook(id) {
+    if (!confirm('Remove this webhook?')) return;
+    try {
+      await api('DELETE', '/webhooks/' + id);
+      state.webhooks = state.webhooks.filter(h => h.id !== id);
+      renderWebhooks();
+      toast('Webhook removed');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  // ── Modal ──
+  function openCreateModal() {
+    if (!state.members.length) loadMembers();
+    document.getElementById('modal-title').textContent = 'New Standup';
+    document.getElementById('modal-standup-id').value = '';
+    document.getElementById('f-name').value = 'Morning Standup';
+    document.getElementById('f-channel').value = '';
+    document.getElementById('f-time').value = '09:00';
+    document.getElementById('f-tz').value = 'UTC';
+    document.getElementById('f-report-channel').value = '';
+    document.getElementById('f-report-time').value = '';
+    document.getElementById('f-group-by').value = 'member';
+    document.getElementById('f-post-as').value = 'combined';
+    document.getElementById('f-sort-order').value = 'chronological';
+    document.getElementById('f-edit-window').value = 'report';
+    document.getElementById('f-jira').value = '';
+    document.getElementById('f-zendesk').value = '';
+    document.getElementById('f-avatar-toggle').classList.add('on');
+    selectDays(['mon','tue','wed','thu','fri']);
+    setQuestions(['What did you complete yesterday?','What are you working on today?','Any blockers?']);
+    clearParticipants();
+    document.getElementById('standup-modal').classList.add('open');
+  }
+
+  function openEditModal(id) {
+    const s = state.standups.find(x => x.id === id);
+    if (!s) return;
+    if (!state.members.length) loadMembers();
+    document.getElementById('modal-title').textContent = 'Edit Standup';
+    document.getElementById('modal-standup-id').value = id;
+    document.getElementById('f-name').value = s.name || '';
+    document.getElementById('f-channel').value = s.channel_id || '';
+    document.getElementById('f-time').value = s.schedule_time || '09:00';
+    document.getElementById('f-tz').value = s.schedule_tz || 'UTC';
+    document.getElementById('f-report-channel').value = s.report_channel || '';
+    document.getElementById('f-report-time').value = s.report_time || '';
+    document.getElementById('f-group-by').value = s.group_by || 'member';
+    document.getElementById('f-post-as').value = s.post_as || 'combined';
+    document.getElementById('f-sort-order').value = s.sort_order || 'chronological';
+    document.getElementById('f-edit-window').value = s.edit_window || 'report';
+    document.getElementById('f-jira').value = s.jira_base_url || '';
+    document.getElementById('f-zendesk').value = s.zendesk_base_url || '';
+    document.getElementById('f-avatar-toggle').classList.toggle('on', s.display_avatar !== false);
+    selectDays(s.schedule_days || []);
+    setQuestions(s.questions || []);
+    setParticipants(s.participants || []);
+    document.getElementById('standup-modal').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('standup-modal').classList.remove('open');
+  }
+
+  document.getElementById('standup-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('standup-modal')) closeModal();
+  });
+
+  async function saveStandup() {
+    const id = document.getElementById('modal-standup-id').value;
+    const days = Array.from(document.querySelectorAll('.day-chip.selected')).map(d => d.dataset.day);
+    const questions = Array.from(document.querySelectorAll('.question-input')).map(i => i.value.trim()).filter(Boolean);
+    const body = {
+      name: document.getElementById('f-name').value.trim() || 'Morning Standup',
+      channel_id: document.getElementById('f-channel').value,
+      schedule_time: document.getElementById('f-time').value,
+      schedule_tz: document.getElementById('f-tz').value,
+      schedule_days: days,
+      questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
+      participants: state.participants,
+      report_channel: document.getElementById('f-report-channel').value,
+      report_time: document.getElementById('f-report-time').value,
+      group_by: document.getElementById('f-group-by').value,
+      post_as: document.getElementById('f-post-as').value,
+      sort_order: document.getElementById('f-sort-order').value,
+      edit_window: document.getElementById('f-edit-window').value,
+      display_avatar: document.getElementById('f-avatar-toggle').classList.contains('on'),
+      jira_base_url: document.getElementById('f-jira').value.trim(),
+      zendesk_base_url: document.getElementById('f-zendesk').value.trim(),
+    };
+    try {
+      let updated;
+      if (id) {
+        updated = await api('PUT', '/standups/' + id, body);
+        const idx = state.standups.findIndex(s => s.id == id);
+        if (idx >= 0) state.standups[idx] = updated;
+      } else {
+        updated = await api('POST', '/standups', body);
+        state.standups.push(updated);
+      }
+      renderStandups();
+      closeModal();
+      toast(id ? 'Standup updated' : 'Standup created');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  // ── Day chips ──
+  document.querySelectorAll('.day-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('selected'));
+  });
+
+  function selectDays(days) {
+    document.querySelectorAll('.day-chip').forEach(c => {
+      c.classList.toggle('selected', days.includes(c.dataset.day));
+    });
+  }
+
+  // ── Questions ──
+  function setQuestions(qs) {
+    const list = document.getElementById('questions-list');
+    list.innerHTML = '';
+    qs.forEach(q => appendQuestion(q));
+  }
+
+  function appendQuestion(val = '') {
+    const row = document.createElement('div');
+    row.className = 'question-row';
+    row.innerHTML =
+      '<span class="q-drag">&#8597;</span>' +
+      '<input type="text" class="question-input" value="' + esc(val) + '" placeholder="Enter question..."/>' +
+      '<button class="q-del" type="button" onclick="this.parentElement.remove()">&times;</button>';
+    document.getElementById('questions-list').appendChild(row);
+  }
+
+  function addQuestion() { appendQuestion(); }
+
+  // ── Advanced accordion ──
+  function toggleAdvanced() {
+    const body = document.getElementById('adv-body');
+    const arrow = document.getElementById('adv-arrow');
+    body.classList.toggle('open');
+    arrow.classList.toggle('open');
+  }
+
+  // ── Avatar toggle ──
+  function toggleAvatar(btn) { btn.classList.toggle('on'); }
+
+  // ── Participants multi-select ──
+  function populateParticipantsDropdown() {
+    const dd = document.getElementById('participants-dropdown');
+    dd.innerHTML = state.members.map(m =>
+      '<div class="multi-opt" data-id="' + esc(m.id) + '" onclick="toggleParticipant('' + esc(m.id) + '', '' + esc(m.name || m.display_name || m.id) + '')">' +
+      '<div class="chk">&#10003;</div>' +
+      '<span>' + esc(m.name || m.display_name || m.id) + '</span></div>'
+    ).join('');
+    refreshParticipantDisplay();
+  }
+
+  function toggleParticipant(id, name) {
+    const idx = state.participants.indexOf(id);
+    if (idx >= 0) state.participants.splice(idx, 1);
+    else state.participants.push(id);
+    refreshParticipantDisplay();
+  }
+
+  function refreshParticipantDisplay() {
+    const disp = document.getElementById('participants-display');
+    const dd = document.getElementById('participants-dropdown');
+    // update check marks
+    dd.querySelectorAll('.multi-opt').forEach(opt => {
+      const sel = state.participants.includes(opt.dataset.id);
+      opt.classList.toggle('selected', sel);
+    });
+    if (!state.participants.length) {
+      disp.innerHTML = '<span class="placeholder-text">Select participants...</span>';
+      return;
+    }
+    disp.innerHTML = state.participants.map(id => {
+      const m = state.members.find(x => x.id === id);
+      const name = m ? (m.name || m.display_name || id) : id;
+      return '<span class="tag-pill">' + esc(name) + '<span class="del" onclick="event.stopPropagation();toggleParticipant('' + esc(id) + '','')">&times;</span></span>';
+    }).join('');
+  }
+
+  document.getElementById('participants-display').addEventListener('click', () => {
+    document.getElementById('participants-dropdown').classList.toggle('open');
+    document.getElementById('participants-display').classList.toggle('open');
+  });
+
+  document.addEventListener('click', e => {
+    const wrap = document.getElementById('participants-wrap');
+    if (!wrap.contains(e.target)) {
+      document.getElementById('participants-dropdown').classList.remove('open');
+      document.getElementById('participants-display').classList.remove('open');
+    }
+  });
+
+  function clearParticipants() {
+    state.participants = [];
+    refreshParticipantDisplay();
+  }
+
+  function setParticipants(ids) {
+    state.participants = ids || [];
+    refreshParticipantDisplay();
+  }
+
+  // ── Utilities ──
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Boot ──
+  loadStandups();
+  </script>
+</body>
+</html>
