@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Privacy Policy — Morgenruf</title>
+  <meta name="description" content="Morgenruf Privacy Policy — how we collect, use and protect your data."/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>&#x1F305;</text></svg>"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+    h1,h2{color:#fff} h2{margin-top:2rem;margin-bottom:.5rem}
+    a{color:#58a6ff} p,li{color:#8b949e;line-height:1.7}
+    ul{list-style:disc;padding-left:1.5rem;margin-bottom:1rem}
+  </style>
+  <link rel="canonical" href="https://morgenruf.dev/privacy"/>
+  <meta name="robots" content="noindex, follow"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:site_name" content="Morgenruf"/>
+</head>
+<body class="max-w-3xl mx-auto px-6 py-16">
+  <a href="/" class="text-sm text-gray-500 hover:text-white mb-8 inline-block">← Back to morgenruf.dev</a>
+  <h1 class="text-3xl font-bold mb-2">Privacy Policy</h1>
+  <p class="text-sm text-gray-500 mb-10">Effective date: April 5, 2025 · Last updated: April 5, 2025</p>
+
+  <p>Morgenruf ("we", "our", "us") operates the Slack application and website at morgenruf.dev. This policy explains what data we collect, why, and how we protect it.</p>
+
+  <h2 class="text-xl font-semibold">1. Data We Collect</h2>
+  <p>When you install Morgenruf in your Slack workspace, we collect:</p>
+  <ul>
+    <li><strong class="text-white">Workspace information</strong> — your Slack team ID, team name, and the bot token issued to us by Slack.</li>
+    <li><strong class="text-white">User information</strong> — Slack user IDs, display names, email addresses (if granted), and timezones of members who participate in standups.</li>
+    <li><strong class="text-white">Standup responses</strong> — the text of standup submissions (yesterday, today, blockers).</li>
+    <li><strong class="text-white">Configuration</strong> — your chosen standup schedule, channel, and question settings.</li>
+  </ul>
+  <p>We do <strong class="text-white">not</strong> collect or read any messages outside of direct messages sent to the Morgenruf bot, or public channel messages where the bot is explicitly mentioned.</p>
+
+  <h2 class="text-xl font-semibold">2. How We Use Your Data</h2>
+  <ul>
+    <li>To send standup prompts to team members at scheduled times.</li>
+    <li>To post standup summaries to your configured channel.</li>
+    <li>To generate per-project and team reports.</li>
+    <li>To send transactional emails (e.g., installation confirmation) via Resend.</li>
+  </ul>
+  <p>We do <strong class="text-white">not</strong> sell your data. We do not use standup content for advertising or AI training.</p>
+
+  <h2 class="text-xl font-semibold">3. Data Storage</h2>
+  <p>Data is stored in a PostgreSQL database hosted on Railway.app infrastructure in the United States. Bot tokens are encrypted at rest. Standup data is retained for 90 days by default, after which it is automatically deleted.</p>
+
+  <h2 class="text-xl font-semibold">4. Data Sharing</h2>
+  <p>We share data only with the following sub-processors:</p>
+  <ul>
+    <li><strong class="text-white">Slack Technologies</strong> — to deliver messages via the Slack API.</li>
+    <li><strong class="text-white">Railway.app</strong> — database and application hosting.</li>
+    <li><strong class="text-white">Resend</strong> — transactional email delivery.</li>
+    <li><strong class="text-white">Netlify</strong> — website hosting.</li>
+  </ul>
+
+  <h2 class="text-xl font-semibold">5. Data Deletion</h2>
+  <p>You can request deletion of all your workspace data at any time by:</p>
+  <ul>
+    <li>Uninstalling Morgenruf from your Slack workspace (triggers automatic data deletion within 30 days), or</li>
+    <li>Emailing <a href="mailto:privacy@morgenruf.dev">privacy@morgenruf.dev</a> with your Slack team ID.</li>
+  </ul>
+
+  <h2 class="text-xl font-semibold">6. Security</h2>
+  <p>We use HTTPS for all data in transit. Slack tokens are stored encrypted. We follow Slack's security best practices including token rotation. We conduct periodic security reviews of our infrastructure.</p>
+
+  <h2 class="text-xl font-semibold">7. Children's Privacy</h2>
+  <p>Morgenruf is not directed at children under 13. We do not knowingly collect data from children.</p>
+
+  <h2 class="text-xl font-semibold">8. Changes to This Policy</h2>
+  <p>We may update this policy. We will notify workspace admins via Slack DM for material changes. Continued use after notice constitutes acceptance.</p>
+
+  <h2 class="text-xl font-semibold">9. Contact</h2>
+  <p>Questions? Email <a href="mailto:privacy@morgenruf.dev">privacy@morgenruf.dev</a> or open an issue at <a href="https://github.com/morgenruf/morgenruf">github.com/morgenruf/morgenruf</a>.</p>
+
+  <hr class="border-gray-800 my-10"/>
+  <p class="text-sm text-gray-600">© 2025 Morgenruf · <a href="/privacy" class="hover:text-white">Privacy</a> · <a href="/terms" class="hover:text-white">Terms</a></p>
+</body>
+</html>
