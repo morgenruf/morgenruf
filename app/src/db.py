@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from contextlib import contextmanager
 from typing import Any, Generator
 
@@ -114,6 +115,9 @@ def upsert_workspace_config(team_id: str, **kwargs: Any) -> None:
     """Insert or update workspace config. Pass only columns you want to set."""
     allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
+    for col in fields:
+        if not re.match(r'^[a-z_]+$', col):
+            raise ValueError(f"Invalid column name: {col}")
 
     if not fields:
         # Insert with defaults only

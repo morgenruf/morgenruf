@@ -6,6 +6,7 @@ import logging
 import os
 
 from flask import Blueprint, redirect, request, jsonify, session
+from markupsafe import escape
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
@@ -46,6 +47,7 @@ def index():
 def install():
     """Redirect the browser to the Slack OAuth authorisation page."""
     state = os.urandom(16).hex()
+    session['oauth_state'] = state
     url = _url_generator.generate(state=state)
     return redirect(url)
 
@@ -53,12 +55,16 @@ def install():
 @oauth_bp.route("/oauth/callback")
 def oauth_callback():
     """Exchange the OAuth code for a bot token and store the installation."""
+    incoming_state = request.args.get("state", "")
+    if not incoming_state or incoming_state != session.pop("oauth_state", None):
+        return "Invalid state parameter", 400
+
     code = request.args.get("code")
     error = request.args.get("error")
 
     if error:
         logger.warning("OAuth flow returned error: %s", error)
-        return f"<h3>Installation cancelled: {error}</h3>", 400
+        return f"<h3>Installation cancelled: {escape(error)}</h3>", 400
 
     if not code:
         logger.warning("OAuth callback received with no code")

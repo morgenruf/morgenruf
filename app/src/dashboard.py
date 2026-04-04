@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import logging
 import os
 import uuid
 from functools import wraps
+from urllib.parse import urlparse
 
 from flask import (
     Blueprint,
@@ -27,6 +29,25 @@ dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
 _SCOPES = "channels:read,chat:write,im:history,im:read,im:write,users:read,users:read.email"
+
+
+def _is_safe_webhook_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname or ""
+        if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+        try:
+            addr = ipaddress.ip_address(host)
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+                return False
+        except ValueError:
+            pass  # hostname, not IP — allow it (DNS resolution at request time)
+        return True
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -322,6 +343,8 @@ def api_add_webhook():
     url_val = data.get("url", "").strip()
     if not url_val:
         return jsonify({"error": "url is required"}), 400
+    if not _is_safe_webhook_url(url_val):
+        return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
     try:
         hook = db.add_webhook(team_id, url_val)
         return jsonify(hook), 201

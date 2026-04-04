@@ -58,7 +58,14 @@ def create_app() -> tuple[App, Flask]:
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
     flask_app = Flask(__name__)
-    flask_app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.urandom(32)
+    secret_key = os.environ.get("FLASK_SECRET_KEY")
+    if not secret_key:
+        logger.warning("FLASK_SECRET_KEY not set — using random key (sessions will not persist across restarts)")
+        secret_key = os.urandom(32)
+    flask_app.secret_key = secret_key
+    flask_app.config["SESSION_COOKIE_SECURE"] = True
+    flask_app.config["SESSION_COOKIE_HTTPONLY"] = True
+    flask_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     flask_app.register_blueprint(oauth_bp)
     flask_app.register_blueprint(dashboard_bp)
 

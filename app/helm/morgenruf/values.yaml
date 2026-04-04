@@ -59,6 +59,8 @@ externalDatabase:
 resend:
   apiKey: ""
 
+flaskSecretKey: ""
+
 resources:
   requests:
     cpu: 50m
