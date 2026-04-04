@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: ghcr.io/morgenruf/morgenruf
   pullPolicy: Always
-  tag: "main"
+  tag: "latest"
 
 service:
   type: ClusterIP
@@ -14,52 +14,75 @@ ingress:
   className: "nginx"
   annotations:
     kubernetes.io/ingress.class: nginx
-    # Cloudflare Zero Trust — add your annotations here
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     # external-dns.alpha.kubernetes.io/hostname: api.morgenruf.dev
   hosts:
     - host: api.morgenruf.dev
       paths:
-        - path: /slack/events
+        - path: /
           pathType: Prefix
-        - path: /healthz
-          pathType: Prefix
-  tls: []
+  tls:
+    - secretName: morgenruf-tls
+      hosts:
+        - api.morgenruf.dev
 
-# Teams config — mounted as configmap
-teamsConfig: |
-  teams:
-    - name: my-team
-      channel: "#team-myteam"
-      standup_time: "09:00"
-      timezone: "Asia/Kolkata"
-      days: "mon-fri"
-      members:
-        - slack_id: "U0000000001"
-          name: Alice
+# Slack OAuth credentials
+slack:
+  clientId: ""
+  clientSecret: ""
+  signingSecret: ""
 
-# Secrets — set via --set or external secrets operator
-secret:
-  slackBotToken: ""
-  slackSigningSecret: ""
+# App config
+app:
+  url: "https://api.morgenruf.dev"
+  port: "3000"
+
+# PostgreSQL — bundled (set enabled: false to use external)
+postgresql:
+  enabled: true
+  auth:
+    username: morgenruf
+    password: ""          # auto-generated if empty
+    database: morgenruf
+  primary:
+    persistence:
+      enabled: true
+      size: 5Gi
+  image:
+    tag: "16"
+
+# External PostgreSQL (used when postgresql.enabled: false)
+externalDatabase:
+  url: ""   # postgresql://user:pass@host:5432/db
+
+# Resend (optional — welcome emails)
+resend:
+  apiKey: ""
 
 resources:
   requests:
     cpu: 50m
     memory: 128Mi
   limits:
-    cpu: 200m
-    memory: 256Mi
+    cpu: 500m
+    memory: 512Mi
 
 livenessProbe:
   httpGet:
     path: /healthz
     port: 3000
-  initialDelaySeconds: 10
+  initialDelaySeconds: 15
   periodSeconds: 30
 
 readinessProbe:
   httpGet:
     path: /healthz
     port: 3000
-  initialDelaySeconds: 5
+  initialDelaySeconds: 10
   periodSeconds: 10
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80

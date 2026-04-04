@@ -1,16 +1,22 @@
 apiVersion: v2
 name: morgenruf
-description: Slack standup bot — structured daily standups with per-project tracking
+description: Self-hosted Slack standup bot with PostgreSQL
 type: application
-version: 0.1.0
-appVersion: "latest"
+version: 0.2.0
+appVersion: "1.0.0"
 keywords:
   - slack
   - standup
   - bot
-  - devops
-home: https://github.com/morgenruf/morgenruf
+home: https://morgenruf.dev
 sources:
   - https://github.com/morgenruf/morgenruf
 maintainers:
-  - name: morgenruf contributors
+  - name: morgenruf
+    email: hello@morgenruf.dev
+    url: https://morgenruf.dev
+dependencies:
+  - name: postgresql
+    version: "15.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
