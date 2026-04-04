@@ -98,6 +98,8 @@
     .a3{animation:fadeUp 0.6s ease 0.25s both}
     .a4{animation:fadeUp 0.6s ease 0.35s both}
     .a5{animation:fadeUp 0.6s ease 0.45s both}
+    @media(min-width:640px){.sm\:grid-4-cols{grid-template-columns:repeat(4,1fr)!important}}
+    @media(min-width:640px){.sm\:border-bottom-0{border-bottom:none!important}.sm\:border-right{border-right:1px solid #21262d!important}}
   </style>
 </head>
 <body x-data="{ mobileOpen: false }">
@@ -169,8 +171,12 @@
             View on GitHub
           </a>
         </div>
-        <p class="text-sm text-muted mt-6 a5">
-          <span class="text-bright font-medium">MIT licensed</span> &middot; Self-host or use hosted &middot; No seat limits &middot; No credit card
+        <div class="mt-6 a5" style="display:inline-flex;align-items:center;gap:10px;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.25);border-radius:10px;padding:10px 18px">
+          <span style="font-size:18px">🎉</span>
+          <span style="font-size:15px;font-weight:800;color:#3fb950">Free. Forever. No credit card.</span>
+        </div>
+        <p class="text-sm text-muted mt-4 a5">
+          <span class="text-bright font-medium">MIT licensed</span> &middot; Self-host or use hosted &middot; No seat limits
         </p>
       </div>
 
@@ -378,6 +384,114 @@
   </div>
 </section>
 
+<!-- BEFORE / AFTER -->
+<section class="py-20 md:py-28 border-t border-border">
+  <div class="max-w-5xl mx-auto px-5">
+    <div class="text-center mb-14">
+      <p class="section-label mb-3">Why switch</p>
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Before Morgenruf. After Morgenruf.</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Before -->
+      <div style="background:rgba(248,81,73,0.05);border:1px solid rgba(248,81,73,0.25);border-radius:14px;padding:28px 30px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <span style="font-size:22px">😩</span>
+          <h3 style="font-size:18px;font-weight:700;color:#f85149">Before</h3>
+        </div>
+        <ul style="display:flex;flex-direction:column;gap:13px;list-style:none;padding:0;margin:0">
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#8b949e"><span style="color:#f85149;font-weight:700;flex-shrink:0;margin-top:1px">✗</span>Paying $2.50/user/month</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#8b949e"><span style="color:#f85149;font-weight:700;flex-shrink:0;margin-top:1px">✗</span>Your data on someone else&rsquo;s servers</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#8b949e"><span style="color:#f85149;font-weight:700;flex-shrink:0;margin-top:1px">✗</span>No customization</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#8b949e"><span style="color:#f85149;font-weight:700;flex-shrink:0;margin-top:1px">✗</span>Vendor lock-in</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#8b949e"><span style="color:#f85149;font-weight:700;flex-shrink:0;margin-top:1px">✗</span>Complex pricing tiers</li>
+        </ul>
+      </div>
+      <!-- After -->
+      <div style="background:rgba(63,185,80,0.05);border:1px solid rgba(63,185,80,0.25);border-radius:14px;padding:28px 30px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <span style="font-size:22px">🌅</span>
+          <h3 style="font-size:18px;font-weight:700;color:#3fb950">After</h3>
+        </div>
+        <ul style="display:flex;flex-direction:column;gap:13px;list-style:none;padding:0;margin:0">
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#e6edf3"><span style="color:#3fb950;font-weight:700;flex-shrink:0;margin-top:1px">✓</span>Free forever, open source</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#e6edf3"><span style="color:#3fb950;font-weight:700;flex-shrink:0;margin-top:1px">✓</span>Your data, your servers</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#e6edf3"><span style="color:#3fb950;font-weight:700;flex-shrink:0;margin-top:1px">✓</span>Fully customizable</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#e6edf3"><span style="color:#3fb950;font-weight:700;flex-shrink:0;margin-top:1px">✓</span>Deploy anywhere</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#e6edf3"><span style="color:#3fb950;font-weight:700;flex-shrink:0;margin-top:1px">✓</span>No per-seat pricing</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECURITY / PRIVACY -->
+<section class="py-20 md:py-28 border-t border-border">
+  <div class="max-w-5xl mx-auto px-5">
+    <div class="text-center mb-14">
+      <p class="section-label mb-3">Security &amp; Privacy</p>
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Your data never leaves your infrastructure</h2>
+      <p class="text-muted mt-4 text-lg max-w-2xl mx-auto">When you self-host Morgenruf, every standup answer stays on your servers &mdash; always.</p>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="feature-card p-6 text-center">
+        <div style="font-size:32px;margin-bottom:14px">🔒</div>
+        <h3 class="text-base font-bold text-bright mb-2">Self-hosted</h3>
+        <p class="text-muted text-sm leading-relaxed">Deploy to your own Kubernetes cluster or VPS. No third-party servers ever touch your data.</p>
+      </div>
+      <div class="feature-card p-6 text-center">
+        <div style="font-size:32px;margin-bottom:14px">🛡️</div>
+        <h3 class="text-base font-bold text-bright mb-2">Zero telemetry</h3>
+        <p class="text-muted text-sm leading-relaxed">We collect nothing. No analytics, no usage tracking, no data sent anywhere outside your infra.</p>
+      </div>
+      <div class="feature-card p-6 text-center">
+        <div style="font-size:32px;margin-bottom:14px">👁️</div>
+        <h3 class="text-base font-bold text-bright mb-2">Open source</h3>
+        <p class="text-muted text-sm leading-relaxed">Every line of code is public. Audit it, fork it, run it yourself. No black boxes, ever.</p>
+      </div>
+      <div class="feature-card p-6 text-center">
+        <div style="font-size:32px;margin-bottom:14px">🔑</div>
+        <h3 class="text-base font-bold text-bright mb-2">Encrypted at rest</h3>
+        <p class="text-muted text-sm leading-relaxed">PostgreSQL with your own encryption keys. Your standup data is yours and only yours.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OPEN SOURCE TRUST -->
+<section class="py-20 md:py-28 border-t border-border">
+  <div class="max-w-5xl mx-auto px-5">
+    <div class="text-center mb-12">
+      <p class="section-label mb-3">Open source</p>
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Built in public. Trusted by teams.</h2>
+    </div>
+    <a href="https://github.com/morgenruf/morgenruf" target="_blank" rel="noopener" style="text-decoration:none;display:block">
+      <div style="background:#161b22;border:1px solid #21262d;border-radius:14px;overflow:hidden;transition:border-color 0.2s" onmouseover="this.style.borderColor='#30363d'" onmouseout="this.style.borderColor='#21262d'">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr)" class="sm:grid-4-cols">
+          <div style="text-align:center;padding:28px 20px;border-right:1px solid #21262d;border-bottom:1px solid #21262d" class="sm:border-bottom-0">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8b949e;margin-bottom:8px">GitHub Stars</div>
+            <div style="font-size:26px;font-weight:800;color:#e6edf3;display:flex;align-items:center;justify-content:center;gap:6px"><span>⭐</span> <span id="gh-stars">&mdash;</span></div>
+          </div>
+          <div style="text-align:center;padding:28px 20px;border-bottom:1px solid #21262d" class="sm:border-right sm:border-bottom-0">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8b949e;margin-bottom:8px">Contributors</div>
+            <div style="font-size:26px;font-weight:800;color:#e6edf3;display:flex;align-items:center;justify-content:center;gap:6px"><span>👥</span> <span id="gh-contributors">&mdash;</span></div>
+          </div>
+          <div style="text-align:center;padding:28px 20px;border-right:1px solid #21262d">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8b949e;margin-bottom:8px">License</div>
+            <div style="font-size:20px;font-weight:800;color:#3fb950">Apache 2.0</div>
+          </div>
+          <div style="text-align:center;padding:28px 20px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8b949e;margin-bottom:8px">Development</div>
+            <div style="font-size:20px;font-weight:800;color:#58a6ff">Built in public</div>
+          </div>
+        </div>
+      </div>
+    </a>
+    <p class="text-center text-muted text-sm mt-5">
+      <a href="https://github.com/morgenruf/morgenruf" target="_blank" rel="noopener" style="color:#58a6ff" class="hover:underline">Star us on GitHub &rarr;</a>
+    </p>
+  </div>
+</section>
+
 <!-- PRICING COMPARISON -->
 <section id="pricing" class="py-20 md:py-28 border-t border-border">
   <div class="max-w-5xl mx-auto px-5">
@@ -385,6 +499,12 @@
       <p class="section-label mb-3">Pricing</p>
       <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Why pay for standups?</h2>
       <p class="text-muted mt-4 text-lg max-w-xl mx-auto">For a 10-person team, Geekbot costs <strong class="text-bright">$300/year</strong>. Morgenruf costs <strong style="color:#3fb950">$0</strong>.</p>
+      <div style="display:inline-block;margin-top:20px;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.25);border-radius:10px;padding:14px 24px">
+        <p style="font-size:14px;color:#e6edf3;line-height:1.6">
+          Unlike <strong class="text-bright">Geekbot ($2.50/user)</strong> or <strong class="text-bright">Standup &amp; Prosper</strong> &mdash;
+          <strong style="color:#3fb950">Morgenruf is 100% free and open source.</strong>
+        </p>
+      </div>
     </div>
     <div class="compare-wrap">
       <div style="overflow-x:auto">
@@ -399,10 +519,16 @@
           </thead>
           <tbody>
             <tr>
-              <td>Monthly price</td>
-              <td class="col-us"><span style="font-size:17px;font-weight:800;color:#3fb950">Free</span><span style="display:block;font-size:11px;color:#6b6f76">forever</span></td>
+              <td>Price</td>
+              <td class="col-us"><span style="font-size:17px;font-weight:800;color:#3fb950">Free</span><span style="display:block;font-size:11px;color:#6b6f76">forever, no credit card</span></td>
               <td>$2.50<span style="color:#8b949e;font-size:12px">/user/mo</span></td>
-              <td>$3.00<span style="color:#8b949e;font-size:12px">/user/mo</span></td>
+              <td>$1.00<span style="color:#8b949e;font-size:12px">/user/mo</span></td>
+            </tr>
+            <tr>
+              <td>Self-hosted</td>
+              <td class="col-us"><span class="chk">&#x2713;</span></td>
+              <td><span class="crs">&#x2717;</span></td>
+              <td><span class="crs">&#x2717;</span></td>
             </tr>
             <tr>
               <td>Open source</td>
@@ -411,25 +537,31 @@
               <td><span class="crs">&#x2717;</span></td>
             </tr>
             <tr>
-              <td>Self-hostable</td>
+              <td>Slack integration</td>
+              <td class="col-us"><span class="chk">&#x2713;</span></td>
+              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
+              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
+            </tr>
+            <tr>
+              <td>Webhooks</td>
+              <td class="col-us"><span class="chk">&#x2713;</span></td>
+              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
+              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
+            </tr>
+            <tr>
+              <td>Custom questions</td>
+              <td class="col-us"><span class="chk">&#x2713;</span></td>
+              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
+              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
+            </tr>
+            <tr>
+              <td>Data ownership</td>
               <td class="col-us"><span class="chk">&#x2713;</span></td>
               <td><span class="crs">&#x2717;</span></td>
               <td><span class="crs">&#x2717;</span></td>
             </tr>
             <tr>
               <td>No seat limits</td>
-              <td class="col-us"><span class="chk">&#x2713;</span></td>
-              <td><span class="crs">&#x2717;</span></td>
-              <td><span class="crs">&#x2717;</span></td>
-            </tr>
-            <tr>
-              <td>Private DMs</td>
-              <td class="col-us"><span class="chk">&#x2713;</span></td>
-              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
-              <td><span style="color:#8b949e;font-size:17px">&#x2713;</span></td>
-            </tr>
-            <tr>
-              <td>Blocker detection</td>
               <td class="col-us"><span class="chk">&#x2713;</span></td>
               <td><span class="crs">&#x2717;</span></td>
               <td><span class="crs">&#x2717;</span></td>
@@ -539,5 +671,24 @@
   </div>
 </footer>
 
+<script>
+  (function(){
+    fetch('https://api.github.com/repos/morgenruf/morgenruf')
+      .then(function(r){return r.json()})
+      .then(function(d){
+        var s=document.getElementById('gh-stars');
+        if(s&&d.stargazers_count!=null)s.textContent=d.stargazers_count.toLocaleString();
+      }).catch(function(){});
+    fetch('https://api.github.com/repos/morgenruf/morgenruf/contributors?per_page=1&anon=true',{headers:{'Accept':'application/vnd.github.v3+json'}})
+      .then(function(r){
+        var link=r.headers.get('Link');
+        if(link){var m=link.match(/page=(\d+)>; rel="last"/);if(m){var c=document.getElementById('gh-contributors');if(c)c.textContent=parseInt(m[1]).toLocaleString();}}
+        return r.json();
+      }).then(function(d){
+        var c=document.getElementById('gh-contributors');
+        if(c&&c.textContent==='—'&&d&&d.length)c.textContent=d.length;
+      }).catch(function(){});
+  })();
+</script>
 </body>
 </html>

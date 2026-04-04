@@ -226,3 +226,149 @@ def get_today_standups(team_id: str) -> list[dict]:
             cur.execute(sql, (team_id,))
             rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Dashboard stats
+# ---------------------------------------------------------------------------
+
+def get_dashboard_stats(team_id: str) -> dict:
+    """Return completion rate, active member count, and response counts."""
+    sql_responses = """
+        SELECT COUNT(*) AS total,
+               COUNT(DISTINCT user_id) AS active_members
+        FROM standups
+        WHERE team_id = %s
+          AND standup_date >= CURRENT_DATE - INTERVAL '7 days'
+    """
+    sql_total_members = "SELECT COUNT(*) AS cnt FROM members WHERE team_id = %s AND active = TRUE"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql_responses, (team_id,))
+            row = dict(cur.fetchone())
+            cur.execute(sql_total_members, (team_id,))
+            members_row = dict(cur.fetchone())
+    total_members = members_row.get("cnt", 0) or 0
+    responses_week = row.get("total", 0) or 0
+    active_members = row.get("active_members", 0) or 0
+    # Completion rate: responses this week / (members * working days this week)
+    completion_rate = 0
+    if total_members > 0 and responses_week > 0:
+        completion_rate = min(100, int(responses_week / max(total_members, 1) * 100 / 5))
+    return {
+        "completion_rate": completion_rate,
+        "active_members": active_members,
+        "total_responses": responses_week,
+        "responses_this_week": responses_week,
+        "total_members": total_members,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+def _ensure_webhooks_table(conn) -> None:
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS webhooks (
+                id TEXT PRIMARY KEY,
+                team_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
+
+def get_webhooks(team_id: str) -> list[dict]:
+    """Return all webhooks for a workspace."""
+    with db_conn() as conn:
+        _ensure_webhooks_table(conn)
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, url, created_at FROM webhooks WHERE team_id = %s ORDER BY created_at",
+                (team_id,),
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_webhook(team_id: str, url: str) -> dict:
+    """Insert a new webhook and return it."""
+    import uuid as _uuid  # noqa: PLC0415
+    hook_id = str(_uuid.uuid4())
+    with db_conn() as conn:
+        _ensure_webhooks_table(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO webhooks (id, team_id, url) VALUES (%s, %s, %s)",
+                (hook_id, team_id, url),
+            )
+    return {"id": hook_id, "url": url}
+
+
+def delete_webhook(team_id: str, hook_id: str) -> None:
+    """Delete a webhook by id (scoped to team for safety)."""
+    with db_conn() as conn:
+        _ensure_webhooks_table(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM webhooks WHERE id = %s AND team_id = %s",
+                (hook_id, team_id),
+            )
+
+
+def get_standup_by_id(standup_id: int) -> dict | None:
+    """Return a single standup row by primary key, or None."""
+    sql = "SELECT * FROM standups WHERE id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (standup_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Webhooks
+# ---------------------------------------------------------------------------
+
+def add_webhook(
+    team_id: str,
+    url: str,
+    secret: str | None = None,
+    events: list[str] | None = None,
+) -> dict:
+    """Insert a new webhook and return the created row."""
+    if events is None:
+        events = ["standup.completed"]
+    sql = """
+        INSERT INTO webhooks (team_id, webhook_url, secret, events)
+        VALUES (%s, %s, %s, %s)
+        RETURNING *
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, url, secret, events))
+            row = cur.fetchone()
+    logger.info("Added webhook %s for team %s", url, team_id)
+    return dict(row)
+
+
+def get_webhooks(team_id: str) -> list[dict]:
+    """Return all webhooks registered for a team."""
+    sql = "SELECT * FROM webhooks WHERE team_id = %s ORDER BY created_at"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_webhook(team_id: str, webhook_id: int) -> bool:
+    """Delete a webhook by id (scoped to team_id for safety). Returns True if deleted."""
+    sql = "DELETE FROM webhooks WHERE id = %s AND team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (webhook_id, team_id))
+            deleted = cur.rowcount > 0
+    return deleted

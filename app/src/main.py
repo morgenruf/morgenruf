@@ -16,6 +16,7 @@ from installation_store import PostgresInstallationStore
 from handlers import register_handlers
 from scheduler import build_scheduler
 from oauth import oauth_bp
+from dashboard import dashboard_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,7 +58,9 @@ def create_app() -> tuple[App, Flask]:
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
     flask_app = Flask(__name__)
+    flask_app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.urandom(32)
     flask_app.register_blueprint(oauth_bp)
+    flask_app.register_blueprint(dashboard_bp)
 
     handler = SlackRequestHandler(slack_app)
 

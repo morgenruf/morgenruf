@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
-from flask import Blueprint, redirect, request, jsonify
+from flask import Blueprint, redirect, request, jsonify, session
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
@@ -121,7 +121,10 @@ def oauth_callback():
     _schedule_workspace(team_id, bot_token)
 
     logger.info("Installation complete for team %s (%s)", team_id, team_name)
-    return redirect(f"{_APP_URL}/installed?team={team_id}")
+    # Store team in session and redirect to dashboard
+    session["team_id"] = team_id
+    session["team_name"] = team_name
+    return redirect(f"{_APP_URL}/dashboard")
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,342 @@
+"""Dashboard Flask blueprint — workspace configuration UI and API."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import uuid
+from functools import wraps
+
+from flask import (
+    Blueprint,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+
+import db
+
+logger = logging.getLogger(__name__)
+
+dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
+
+_APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
+_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
+_SCOPES = "channels:read,chat:write,im:history,im:read,im:write,users:read,users:read.email"
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+
+def _login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("team_id"):
+            if request.path.startswith("/dashboard/api/"):
+                return jsonify({"error": "Unauthorized"}), 401
+            return redirect(url_for("dashboard.login"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def _get_bot_token() -> str | None:
+    team_id = session.get("team_id")
+    if not team_id:
+        return None
+    try:
+        inst = db.get_installation(team_id)
+        return inst["bot_token"] if inst else None
+    except Exception as exc:
+        logger.warning("Could not get bot token: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Page routes
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard")
+@_login_required
+def dashboard():
+    team_id = session["team_id"]
+    try:
+        inst = db.get_installation(team_id)
+        team_name = inst["team_name"] if inst else team_id
+    except Exception:
+        team_name = team_id
+    return render_template("dashboard.html", team_name=team_name, team_id=team_id)
+
+
+@dashboard_bp.route("/dashboard/login")
+def login():
+    if session.get("team_id"):
+        return redirect(url_for("dashboard.dashboard"))
+    state = os.urandom(16).hex()
+    session["oauth_state"] = state
+    slack_oauth_url = (
+        "https://slack.com/oauth/v2/authorize"
+        f"?client_id={_CLIENT_ID}"
+        f"&scope={_SCOPES}"
+        f"&redirect_uri={_APP_URL}/oauth/callback"
+        f"&state={state}"
+    )
+    return render_template("login.html", slack_oauth_url=slack_oauth_url)
+
+
+@dashboard_bp.route("/dashboard/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("dashboard.login"))
+
+
+# ---------------------------------------------------------------------------
+# Standup config API
+# Each workspace_config row is treated as one "standup".
+# For workspaces that haven't created one yet, we support creation.
+# ---------------------------------------------------------------------------
+
+def _config_to_standup(cfg: dict) -> dict:
+    """Normalise a workspace_config row into a standup API object."""
+    questions = cfg.get("questions") or []
+    if isinstance(questions, str):
+        try:
+            questions = json.loads(questions)
+        except Exception:
+            questions = []
+    return {
+        "id": cfg.get("id", 1),
+        "name": cfg.get("name", "Morning Standup"),
+        "channel_id": cfg.get("channel_id") or "",
+        "schedule_time": cfg.get("schedule_time") or "09:00",
+        "schedule_tz": cfg.get("schedule_tz") or "UTC",
+        "schedule_days": (cfg.get("schedule_days") or "mon,tue,wed,thu,fri").split(","),
+        "questions": questions,
+        "active": cfg.get("active", True),
+        "participants": cfg.get("participants") or [],
+        "report_channel": cfg.get("report_channel") or "",
+        "report_time": cfg.get("report_time") or "",
+        "group_by": cfg.get("group_by") or "member",
+        "post_as": cfg.get("post_as") or "combined",
+        "sort_order": cfg.get("sort_order") or "chronological",
+        "edit_window": cfg.get("edit_window") or "report",
+        "display_avatar": cfg.get("display_avatar", True),
+        "jira_base_url": cfg.get("jira_base_url") or "",
+        "zendesk_base_url": cfg.get("zendesk_base_url") or "",
+    }
+
+
+@dashboard_bp.route("/dashboard/api/standups", methods=["GET"])
+@_login_required
+def api_list_standups():
+    team_id = session["team_id"]
+    try:
+        cfg = db.get_workspace_config(team_id)
+        if cfg:
+            return jsonify([_config_to_standup(cfg)])
+        return jsonify([])
+    except Exception as exc:
+        logger.error("api_list_standups error: %s", exc)
+        return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/standups", methods=["POST"])
+@_login_required
+def api_create_standup():
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    try:
+        days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
+        if isinstance(days, list):
+            days = ",".join(days)
+        db.upsert_workspace_config(
+            team_id,
+            channel_id=data.get("channel_id", ""),
+            schedule_time=data.get("schedule_time", "09:00"),
+            schedule_tz=data.get("schedule_tz", "UTC"),
+            schedule_days=days,
+            questions=data.get("questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]),
+            active=data.get("active", True),
+        )
+        cfg = db.get_workspace_config(team_id)
+        return jsonify(_config_to_standup(cfg)), 201
+    except Exception as exc:
+        logger.error("api_create_standup error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["PUT"])
+@_login_required
+def api_update_standup(standup_id: str):
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    try:
+        days = data.get("schedule_days")
+        if isinstance(days, list):
+            days = ",".join(days)
+        kwargs: dict = {}
+        if "channel_id" in data:
+            kwargs["channel_id"] = data["channel_id"]
+        if "schedule_time" in data:
+            kwargs["schedule_time"] = data["schedule_time"]
+        if "schedule_tz" in data:
+            kwargs["schedule_tz"] = data["schedule_tz"]
+        if days is not None:
+            kwargs["schedule_days"] = days
+        if "questions" in data:
+            kwargs["questions"] = data["questions"]
+        if "active" in data:
+            kwargs["active"] = data["active"]
+        if kwargs:
+            db.upsert_workspace_config(team_id, **kwargs)
+        cfg = db.get_workspace_config(team_id)
+        return jsonify(_config_to_standup(cfg))
+    except Exception as exc:
+        logger.error("api_update_standup error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["DELETE"])
+@_login_required
+def api_delete_standup(standup_id: str):
+    team_id = session["team_id"]
+    try:
+        db.upsert_workspace_config(team_id, active=False)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("api_delete_standup error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Members API
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/members", methods=["GET"])
+@_login_required
+def api_members():
+    token = _get_bot_token()
+    if not token:
+        return jsonify([])
+    try:
+        from slack_sdk import WebClient  # noqa: PLC0415
+        client = WebClient(token=token)
+        result = client.users_list(limit=200)
+        members = []
+        for u in result.get("members", []):
+            if u.get("deleted") or u.get("is_bot") or u.get("id") == "USLACKBOT":
+                continue
+            profile = u.get("profile", {})
+            members.append({
+                "id": u["id"],
+                "name": profile.get("real_name") or u.get("name", ""),
+                "display_name": profile.get("display_name") or u.get("name", ""),
+                "avatar": profile.get("image_48", ""),
+                "email": profile.get("email", ""),
+                "tz": u.get("tz", "UTC"),
+            })
+        return jsonify(members)
+    except Exception as exc:
+        logger.error("api_members error: %s", exc)
+        # Fall back to DB members
+        try:
+            rows = db.get_active_members(session["team_id"])
+            return jsonify([
+                {"id": r["user_id"], "name": r.get("real_name", ""), "email": r.get("email", ""), "tz": r.get("tz", "UTC")}
+                for r in rows
+            ])
+        except Exception:
+            return jsonify([])
+
+
+# ---------------------------------------------------------------------------
+# Channels API (helper for dropdowns)
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/channels", methods=["GET"])
+@_login_required
+def api_channels():
+    token = _get_bot_token()
+    if not token:
+        return jsonify([])
+    try:
+        from slack_sdk import WebClient  # noqa: PLC0415
+        client = WebClient(token=token)
+        result = client.conversations_list(types="public_channel,private_channel", exclude_archived=True, limit=200)
+        channels = [
+            {"id": c["id"], "name": c["name"]}
+            for c in result.get("channels", [])
+        ]
+        return jsonify(sorted(channels, key=lambda c: c["name"]))
+    except Exception as exc:
+        logger.error("api_channels error: %s", exc)
+        return jsonify([])
+
+
+# ---------------------------------------------------------------------------
+# Stats API
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/stats", methods=["GET"])
+@_login_required
+def api_stats():
+    team_id = session["team_id"]
+    try:
+        stats = db.get_dashboard_stats(team_id)
+        return jsonify(stats)
+    except Exception as exc:
+        logger.warning("api_stats error: %s", exc)
+        return jsonify({
+            "completion_rate": 0,
+            "active_members": 0,
+            "total_responses": 0,
+            "responses_this_week": 0,
+        })
+
+
+# ---------------------------------------------------------------------------
+# Webhooks API
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/webhooks", methods=["GET"])
+@_login_required
+def api_list_webhooks():
+    team_id = session["team_id"]
+    try:
+        hooks = db.get_webhooks(team_id)
+        return jsonify(hooks)
+    except Exception as exc:
+        logger.warning("api_list_webhooks error: %s", exc)
+        return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/webhooks", methods=["POST"])
+@_login_required
+def api_add_webhook():
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    url_val = data.get("url", "").strip()
+    if not url_val:
+        return jsonify({"error": "url is required"}), 400
+    try:
+        hook = db.add_webhook(team_id, url_val)
+        return jsonify(hook), 201
+    except Exception as exc:
+        logger.error("api_add_webhook error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["DELETE"])
+@_login_required
+def api_delete_webhook(hook_id: str):
+    team_id = session["team_id"]
+    try:
+        db.delete_webhook(team_id, hook_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        logger.error("api_delete_webhook error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
