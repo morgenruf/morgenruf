@@ -15,9 +15,9 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: nginx
     # Cloudflare Zero Trust — add your annotations here
-    # external-dns.alpha.kubernetes.io/hostname: standup.morgenruf.dev
+    # external-dns.alpha.kubernetes.io/hostname: api.morgenruf.dev
   hosts:
-    - host: standup.morgenruf.dev
+    - host: api.morgenruf.dev
       paths:
         - path: /slack/events
           pathType: Prefix
