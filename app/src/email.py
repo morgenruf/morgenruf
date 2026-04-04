@@ -48,3 +48,344 @@ def welcome_email_html(team_name: str, installed_by: str) -> str:
       <p>— The Morgenruf team</p>
     </div>
     """
+
+
+# ---------------------------------------------------------------------------
+# Shared HTML helpers
+# ---------------------------------------------------------------------------
+
+def _email_wrapper(content: str, footer_extra: str = "") -> str:
+    """Wrap content in the dark-theme morgenruf email shell."""
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="en">'
+        "<head>"
+        '<meta charset="UTF-8" />'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0" />'
+        "<style>"
+        "  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');"
+        "  * { box-sizing: border-box; margin: 0; padding: 0; }"
+        "  body { background: #0a0a0a; color: #e5e5e5; font-family: 'Inter', sans-serif; }"
+        "</style>"
+        "</head>"
+        '<body style="background:#0a0a0a;color:#e5e5e5;font-family:\'Inter\',Arial,sans-serif;'
+        'padding:40px 16px;">'
+        '<table width="100%" cellpadding="0" cellspacing="0" role="presentation">'
+        "  <tr>"
+        '    <td align="center">'
+        '      <table width="600" cellpadding="0" cellspacing="0" role="presentation"'
+        '             style="max-width:600px;width:100%;">'
+        # Logo row
+        "        <tr>"
+        '          <td style="padding:32px 0 24px;">'
+        '            <span style="font-size:22px;font-weight:700;color:#22c55e;'
+        'letter-spacing:-0.5px;">morgenruf</span>'
+        "          </td>"
+        "        </tr>"
+        # Content card
+        "        <tr>"
+        '          <td style="background:#141414;border-radius:12px;padding:40px;'
+        'border:1px solid #1f1f1f;">'
+        + content
+        + "          </td>"
+        "        </tr>"
+        # Footer
+        "        <tr>"
+        '          <td style="padding:24px 0;font-size:13px;color:#525252;text-align:center;">'
+        "            "
+        + footer_extra
+        + '<br /><a href="https://morgenruf.dev/unsubscribe" '
+        'style="color:#525252;">Unsubscribe</a>'
+        " &nbsp;·&nbsp; "
+        '<a href="https://morgenruf.dev" style="color:#525252;">morgenruf.dev</a>'
+        "          </td>"
+        "        </tr>"
+        "      </table>"
+        "    </td>"
+        "  </tr>"
+        "</table>"
+        "</body>"
+        "</html>"
+    )
+
+
+def _cta_button(label: str, url: str) -> str:
+    return (
+        '<a href="' + url + '" '
+        'style="display:inline-block;margin-top:28px;padding:12px 28px;'
+        'background:#22c55e;color:#0a0a0a;font-weight:600;font-size:15px;'
+        'border-radius:8px;text-decoration:none;">'
+        + label
+        + "</a>"
+    )
+
+
+def _h1(text: str) -> str:
+    return (
+        '<h1 style="font-size:24px;font-weight:700;color:#e5e5e5;margin-bottom:16px;">'
+        + text
+        + "</h1>"
+    )
+
+
+def _p(text: str) -> str:
+    return (
+        '<p style="font-size:15px;line-height:1.7;color:#a3a3a3;margin-bottom:12px;">'
+        + text
+        + "</p>"
+    )
+
+
+def _stat_row(label: str, value: str) -> str:
+    return (
+        '<tr>'
+        '<td style="padding:10px 0;font-size:14px;color:#a3a3a3;border-bottom:1px solid #1f1f1f;">'
+        + label
+        + "</td>"
+        '<td style="padding:10px 0;font-size:14px;font-weight:600;color:#e5e5e5;'
+        'text-align:right;border-bottom:1px solid #1f1f1f;">'
+        + value
+        + "</td>"
+        "</tr>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# 1. First standup created
+# ---------------------------------------------------------------------------
+
+def send_first_standup_email(
+    to_email: str,
+    team_name: str,
+    standup_name: str,
+    first_standup_time: str,
+) -> None:
+    """Send email after the first standup is created for a workspace."""
+    try:
+        import resend  # type: ignore[import]
+    except ImportError:
+        logger.warning("resend package not installed — skipping first-standup email")
+        return
+
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend.api_key:
+        logger.debug("RESEND_API_KEY not configured — skipping first-standup email")
+        return
+
+    try:
+        resend.Emails.send({
+            "from": "hello@morgenruf.dev",
+            "reply_to": "support@morgenruf.dev",
+            "to": to_email,
+            "subject": "Your first standup is set up \U0001f389",
+            "html": first_standup_email_html(team_name, standup_name, first_standup_time),
+        })
+        logger.info("Sent first-standup email to %s for team %s", to_email, team_name)
+    except Exception as exc:
+        logger.error("Failed to send first-standup email to %s: %s", to_email, exc)
+
+
+def first_standup_email_html(
+    team_name: str,
+    standup_name: str,
+    first_standup_time: str,
+) -> str:
+    content = (
+        _h1("Your first standup is set up \U0001f389")
+        + _p(
+            "Great news — <strong style='color:#e5e5e5;'>" + team_name + "</strong> is "
+            "ready to roll. Here's what you configured:"
+        )
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">'
+        + _stat_row("Standup name", standup_name)
+        + _stat_row("First run", first_standup_time)
+        + "</table>"
+        + _p(
+            "Team members will receive a DM in Slack at the scheduled time. "
+            "Their responses will be posted as a clean digest to your chosen channel."
+        )
+        + _cta_button("View in Slack", "https://slack.com/app_redirect?app=morgenruf")
+    )
+    return _email_wrapper(
+        content,
+        footer_extra="You're receiving this because you installed Morgenruf in "
+        + team_name + ".",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2. Weekly digest
+# ---------------------------------------------------------------------------
+
+def send_weekly_digest_email(
+    to_email: str,
+    team_name: str,
+    stats: dict,
+) -> None:
+    """Send weekly standup summary email.
+
+    Args:
+        stats: dict with keys ``total_responses``, ``active_members``,
+               ``completion_rate`` (percentage as float/int), ``top_responder``.
+    """
+    try:
+        import resend  # type: ignore[import]
+    except ImportError:
+        logger.warning("resend package not installed — skipping weekly digest email")
+        return
+
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend.api_key:
+        logger.debug("RESEND_API_KEY not configured — skipping weekly digest email")
+        return
+
+    try:
+        resend.Emails.send({
+            "from": "hello@morgenruf.dev",
+            "reply_to": "support@morgenruf.dev",
+            "to": to_email,
+            "subject": "Your week in standups \U0001f4ca",
+            "html": weekly_digest_email_html(team_name, stats),
+        })
+        logger.info("Sent weekly digest email to %s for team %s", to_email, team_name)
+    except Exception as exc:
+        logger.error("Failed to send weekly digest email to %s: %s", to_email, exc)
+
+
+def weekly_digest_email_html(team_name: str, stats: dict) -> str:
+    completion = str(stats.get("completion_rate", 0)) + "%"
+    content = (
+        _h1("Your week in standups \U0001f4ca")
+        + _p("Here's how <strong style='color:#e5e5e5;'>" + team_name + "</strong> did this week:")
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">'
+        + _stat_row("Total responses", str(stats.get("total_responses", 0)))
+        + _stat_row("Active members", str(stats.get("active_members", 0)))
+        + _stat_row("Completion rate", completion)
+        + _stat_row("Top responder", str(stats.get("top_responder", "—")))
+        + "</table>"
+        + _p("Keep the momentum going — consistency is the secret to great async standups.")
+        + _cta_button("View in Slack", "https://slack.com/app_redirect?app=morgenruf")
+    )
+    return _email_wrapper(
+        content,
+        footer_extra="Weekly digest for " + team_name + ".",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 3. Inactive nudge
+# ---------------------------------------------------------------------------
+
+def send_inactive_nudge_email(
+    to_email: str,
+    team_name: str,
+    days_inactive: int,
+) -> None:
+    """Send nudge email when a workspace has had no standup responses for N days."""
+    try:
+        import resend  # type: ignore[import]
+    except ImportError:
+        logger.warning("resend package not installed — skipping inactive nudge email")
+        return
+
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend.api_key:
+        logger.debug("RESEND_API_KEY not configured — skipping inactive nudge email")
+        return
+
+    try:
+        resend.Emails.send({
+            "from": "hello@morgenruf.dev",
+            "reply_to": "support@morgenruf.dev",
+            "to": to_email,
+            "subject": "Your team hasn't standup'd in " + str(days_inactive) + " days",
+            "html": inactive_nudge_email_html(team_name, days_inactive),
+        })
+        logger.info(
+            "Sent inactive nudge email to %s for team %s (%d days)",
+            to_email, team_name, days_inactive,
+        )
+    except Exception as exc:
+        logger.error("Failed to send inactive nudge email to %s: %s", to_email, exc)
+
+
+def inactive_nudge_email_html(team_name: str, days_inactive: int) -> str:
+    days_str = str(days_inactive)
+    content = (
+        _h1("It's been " + days_str + " days \U0001f4ac")
+        + _p(
+            "<strong style='color:#e5e5e5;'>" + team_name + "</strong> hasn't had any "
+            "standup responses in <strong style='color:#22c55e;'>" + days_str
+            + " days</strong>."
+        )
+        + _p(
+            "Consistent standups keep teams aligned and unblock work faster. "
+            "It only takes a minute — jump back in from Slack."
+        )
+        + _cta_button("Resume standups in Slack", "https://slack.com/app_redirect?app=morgenruf")
+    )
+    return _email_wrapper(
+        content,
+        footer_extra="Sent because there has been no standup activity in " + team_name + ".",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 4. Release announcement
+# ---------------------------------------------------------------------------
+
+def send_release_announcement_email(
+    to_email: str,
+    team_name: str,
+    version: str,
+    changelog_url: str,
+) -> None:
+    """Send new release notification email."""
+    try:
+        import resend  # type: ignore[import]
+    except ImportError:
+        logger.warning("resend package not installed — skipping release announcement email")
+        return
+
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend.api_key:
+        logger.debug("RESEND_API_KEY not configured — skipping release announcement email")
+        return
+
+    try:
+        resend.Emails.send({
+            "from": "hello@morgenruf.dev",
+            "reply_to": "support@morgenruf.dev",
+            "to": to_email,
+            "subject": "Morgenruf " + version + " is here \u2728",
+            "html": release_announcement_email_html(team_name, version, changelog_url),
+        })
+        logger.info(
+            "Sent release announcement email to %s for team %s (v%s)",
+            to_email, team_name, version,
+        )
+    except Exception as exc:
+        logger.error("Failed to send release announcement email to %s: %s", to_email, exc)
+
+
+def release_announcement_email_html(
+    team_name: str,
+    version: str,
+    changelog_url: str,
+) -> str:
+    content = (
+        _h1("Morgenruf " + version + " is here \u2728")
+        + _p(
+            "Hi <strong style='color:#e5e5e5;'>" + team_name
+            + "</strong> — we just shipped a new version of Morgenruf."
+        )
+        + _p(
+            "This release includes improvements and fixes to make your daily standups "
+            "even smoother. Check the full changelog for details."
+        )
+        + _cta_button("View changelog", changelog_url)
+    )
+    return _email_wrapper(
+        content,
+        footer_extra="You're receiving this as an admin of " + team_name + ".",
+    )
