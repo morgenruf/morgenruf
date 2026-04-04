@@ -1,5 +1,18 @@
 # Morgenruf 🌅
 
+## Repository Structure
+
+```
+morgenruf/
+├── app/        ← Slack bot (Python, Helm chart, Dockerfile)
+├── website/    ← Marketing website (Netlify)
+├── LICENSE
+└── README.md
+```
+
+---
+
+
 > **German:** *Morgenruf* — "morning call"
 
 A self-hosted Slack standup bot that asks your team structured daily standup questions, posts formatted summaries to team channels, and enables per-project reporting.
