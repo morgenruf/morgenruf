@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/morgenruf/morgenruf/discussions
+    about: Ask questions and share ideas
+  - name: 📖 Documentation
+    url: https://docs.morgenruf.dev
+    about: Read the docs
+  - name: 🔒 Security Issue
+    url: https://github.com/morgenruf/morgenruf/security/advisories/new
+    about: Report a security vulnerability privately

@@ -1,25 +1,45 @@
 ---
 name: Bug report
-about: Something not working as expected
+about: Report a bug in Morgenruf
+title: '[Bug] '
 labels: bug
+assignees: ''
 ---
 
-**Describe the bug**
-A clear description of what the bug is.
+## Describe the bug
 
-**To reproduce**
-Steps to reproduce the behavior.
+<!-- A clear and concise description of what the bug is. -->
 
-**Expected behavior**
-What you expected to happen.
+## To reproduce
 
-**Environment**
+Steps to reproduce the behavior:
+
+1. Go to '...'
+2. Run '...'
+3. See error
+
+## Expected behavior
+
+<!-- What did you expect to happen? -->
+
+## Actual behavior
+
+<!-- What actually happened? -->
+
+## Environment
+
 - Morgenruf version:
-- Deployment: Docker / Helm / Local
-- Python version:
-- Slack Bolt version:
+- Slack workspace type (free/pro/business+/enterprise):
+- Deployment: self-hosted / cloud
+- Kubernetes version (if applicable):
+- Helm chart version (if applicable):
 
-**Logs**
+## Logs
+
 ```
 paste relevant logs here
 ```
+
+## Additional context
+
+<!-- Add any other context, screenshots, or information about the problem here. -->

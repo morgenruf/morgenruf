@@ -1,13 +1,27 @@
 ---
 name: Feature request
-about: Suggest an idea or improvement
+about: Suggest a new feature or improvement
+title: '[Feature] '
 labels: enhancement
+assignees: ''
 ---
 
-**What problem does this solve?**
+## Is your feature request related to a problem?
 
-**Describe the solution you'd like**
+<!-- A clear and concise description of the problem. e.g. "I'm always frustrated when..." -->
 
-**Alternatives considered**
+## Describe the solution
 
-**Additional context**
+<!-- A clear and concise description of what you want to happen. -->
+
+## Describe alternatives you've considered
+
+<!-- Any alternative solutions or features you've considered. -->
+
+## Competitor reference
+
+<!-- Does [Geekbot](https://geekbot.com) or [Standup & Prosper](https://standupandprosper.com) have this feature? How do they implement it? -->
+
+## Additional context
+
+<!-- Add any other context, mockups, or screenshots about the feature request here. -->

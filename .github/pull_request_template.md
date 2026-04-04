@@ -1,21 +1,32 @@
-## Summary
+## What does this PR do?
 
-<!-- What does this PR do? -->
+<!-- A brief description of the change and the motivation behind it -->
 
 ## Type of change
 
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
-- [ ] Documentation update
+- [ ] Docs update
+- [ ] Refactor
 
-## Testing
+## How has this been tested?
 
-<!-- How was this tested? -->
+- [ ] Tested locally
+- [ ] Unit tests added/updated
+- [ ] Tested in Slack workspace
 
 ## Checklist
 
-- [ ] Code follows project style
-- [ ] Self-reviewed
-- [ ] Docs updated if needed
-- [ ] No breaking changes (or clearly documented)
+- [ ] My code follows the project style
+- [ ] I've updated docs if needed
+- [ ] No secrets committed
+- [ ] I've added tests for new functionality
+
+## Related issues
+
+Closes #
+
+## Screenshots
+
+<!-- If this PR includes UI changes (Block Kit, App Home, modals), add screenshots here. -->
