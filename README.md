@@ -152,7 +152,7 @@ message.im          DM messages
 app_mention         Bot mentions
 ```
 
-Request URL: `https://standup.yourdomain.com/slack/events`
+Request URL: `https://standup.morgenruf.dev/slack/events`
 
 ---
 
