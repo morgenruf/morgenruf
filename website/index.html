@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Morgenruf — Self-Hosted Slack Standup Bot</title>
+  <meta name="description" content="Open-source self-hosted Slack standup bot. Replace Geekbot or Standup and Prosper. Kubernetes-ready, MIT licensed, free forever."/>
+  <meta property="og:title" content="Morgenruf — Self-Hosted Slack Standup Bot"/>
+  <meta property="og:description" content="Stop paying per user. Run your own standup bot. Kubernetes-ready, MIT licensed, free forever."/>
+  <meta property="og:url" content="https://morgenruf.dev"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27><text y=%27.9em%27 font-size=%2790%27>&#x1F305;</text></svg>"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            d950:"#0d1117", d900:"#161b22", d800:"#21262d", d700:"#30363d",
+            bacc:"#58a6ff", bgrn:"#3fb950", born:"#f78166", bylw:"#e3b341"
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+    .hero-glow{background:radial-gradient(ellipse 80% 50% at 50% -5%,rgba(88,166,255,.13) 0%,transparent 70%)}
+    .card{background:#161b22;border:1px solid #21262d;transition:border-color .2s,transform .2s}
+    .card:hover{border-color:#30363d;transform:translateY(-2px)}
+    .cta-grad{background:linear-gradient(135deg,#0d1b4e,#1a1a3e,#0d1b4e)}
+    .code-wrap{background:#161b22;border:1px solid #30363d;border-radius:8px;font-family:"SF Mono","Fira Code",monospace}
+    .slack-bg{background:#1a1d21}.slack-bubble{background:#222529;border-radius:4px}
+    .hl-col{border-left:3px solid #58a6ff;background:rgba(88,166,255,.04)}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    .fu{animation:fadeUp .55s ease forwards}
+    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="sticky top-0 z-50 border-b border-d800 bg-d950/90 backdrop-blur" x-data="{open:false}">
+  <div class="max-w-6xl mx-auto px-5 flex items-center justify-between h-14">
+    <a href="/" class="flex items-center gap-2 font-bold text-white text-lg">
+      <span class="text-2xl">&#x1F305;</span> Morgenruf
+    </a>
+    <div class="hidden md:flex items-center gap-6 text-sm text-gray-400">
+      <a href="#features" class="hover:text-white">Features</a>
+      <a href="#compare" class="hover:text-white">Compare</a>
+      <a href="#how" class="hover:text-white">How it works</a>
+      <a href="#deploy" class="hover:text-white">Deploy</a>
+      <a href="https://github.com/morgenruf/morgenruf" target="_blank" class="hover:text-white flex items-center gap-1">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.744 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <a href="#install" class="hidden md:flex items-center gap-1.5 bg-bacc hover:bg-blue-400 text-d950 font-bold text-sm px-4 py-1.5 rounded-md">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 01-2.52 2.523A2.528 2.528 0 010 15.165a2.527 2.527 0 012.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 012.521-2.52 2.527 2.527 0 012.521 2.52v6.313A2.528 2.528 0 018.834 24a2.528 2.528 0 01-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 01-2.521-2.52A2.528 2.528 0 018.834 0a2.528 2.528 0 012.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 012.521 2.521 2.528 2.528 0 01-2.521 2.521H2.522A2.528 2.528 0 010 8.834a2.528 2.528 0 012.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 012.522-2.521A2.528 2.528 0 0124 8.834a2.528 2.528 0 01-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 01-2.523 2.521 2.527 2.527 0 01-2.52-2.521V2.522A2.527 2.527 0 0115.165 0a2.528 2.528 0 012.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 012.523 2.522A2.528 2.528 0 0115.165 24a2.527 2.527 0 01-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 01-2.52-2.523 2.526 2.526 0 012.52-2.52h6.313A2.527 2.527 0 0124 15.165a2.528 2.528 0 01-2.522 2.523h-6.313z"/></svg>
+      Add to Slack
+    </a>
+    <button @click="open=!open" class="md:hidden text-gray-400 hover:text-white p-1">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+  </div>
+  <div x-show="open" x-transition class="md:hidden border-t border-d800 px-5 py-3 space-y-1 text-sm">
+    <a href="#features" @click="open=false" class="block py-2 text-gray-400 hover:text-white">Features</a>
+    <a href="#compare" @click="open=false" class="block py-2 text-gray-400 hover:text-white">Compare</a>
+    <a href="#how" @click="open=false" class="block py-2 text-gray-400 hover:text-white">How it works</a>
+    <a href="#deploy" @click="open=false" class="block py-2 text-gray-400 hover:text-white">Deploy</a>
+    <a href="https://github.com/morgenruf/morgenruf" target="_blank" class="block py-2 text-gray-400 hover:text-white">GitHub</a>
+    <a href="#install" @click="open=false" class="block py-2 text-bacc font-semibold">Add to Slack &rarr;</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero-glow pt-20 pb-16 px-5">
+  <div class="max-w-6xl mx-auto">
+    <div class="max-w-3xl mx-auto text-center mb-14 fu">
+      <div class="inline-flex items-center gap-2 bg-d900 border border-d700 rounded-full px-4 py-1.5 text-xs text-gray-400 mb-6">
+        <span class="w-1.5 h-1.5 rounded-full bg-bgrn animate-pulse inline-block"></span>
+        Open source &middot; MIT License &middot; Self-hosted or hosted
+      </div>
+      <h1 class="text-5xl sm:text-6xl font-bold text-white leading-tight tracking-tight mb-5">
+        The standup bot<br/><span class="text-bacc">you actually own</span>
+      </h1>
+      <p class="text-xl text-gray-400 mb-8 leading-relaxed max-w-2xl mx-auto">
+        Stop paying per user. Stop trusting strangers with your standup data.<br/>
+        Self-host on Kubernetes or use our hosted version &mdash; free forever.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-3 justify-center mb-8">
+        <a href="#install" class="flex items-center justify-center gap-2 bg-bacc hover:bg-blue-400 text-d950 font-bold px-8 py-3 rounded-lg text-sm">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 01-2.52 2.523A2.528 2.528 0 010 15.165a2.527 2.527 0 012.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 012.521-2.52 2.527 2.527 0 012.521 2.52v6.313A2.528 2.528 0 018.834 24a2.528 2.528 0 01-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 01-2.521-2.52A2.528 2.528 0 018.834 0a2.528 2.528 0 012.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 012.521 2.521 2.528 2.528 0 01-2.521 2.521H2.522A2.528 2.528 0 010 8.834a2.528 2.528 0 012.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 012.522-2.521A2.528 2.528 0 0124 8.834a2.528 2.528 0 01-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 01-2.523 2.521 2.527 2.527 0 01-2.52-2.521V2.522A2.527 2.527 0 0115.165 0a2.528 2.528 0 012.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 012.523 2.522A2.528 2.528 0 0115.165 24a2.527 2.527 0 01-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 01-2.52-2.523 2.526 2.526 0 012.52-2.52h6.313A2.527 2.527 0 0124 15.165a2.528 2.528 0 01-2.522 2.523h-6.313z"/></svg>
+          Add to Slack &mdash; free
+        </a>
+        <a href="https://github.com/morgenruf/morgenruf" target="_blank" class="flex items-center justify-center gap-2 bg-d900 hover:bg-d800 border border-d700 text-white font-semibold px-8 py-3 rounded-lg text-sm">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.744 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          &#11088; Star on GitHub
+        </a>
+        <a href="#deploy" class="flex items-center justify-center gap-2 bg-d900 hover:bg-d800 border border-d700 text-white font-semibold px-8 py-3 rounded-lg text-sm">
+          Self-host with Helm &rarr;
+        </a>
+      </div>
+      <div class="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-gray-500">
+        <span class="flex items-center gap-1"><span class="text-bgrn">&#10003;</span> MIT Licensed</span>
+        <span class="flex items-center gap-1"><span class="text-bgrn">&#10003;</span> Self-hosted or hosted</span>
+        <span class="flex items-center gap-1"><span class="text-bgrn">&#10003;</span> Kubernetes + Helm</span>
+        <span class="flex items-center gap-1"><span class="text-bgrn">&#10003;</span> amd64 + arm64</span>
+        <span class="flex items-center gap-1"><span class="text-bgrn">&#10003;</span> No vendor lock-in</span>
+      </div>
+    </div>
+
+    <!-- Slack mock -->
+    <div class="max-w-md mx-auto slack-bg rounded-xl border border-d700 p-4 shadow-2xl text-sm">
+      <div class="flex items-center gap-2 mb-3 pb-3 border-b border-d700">
+        <div class="w-8 h-8 rounded bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-xs font-bold text-d950 flex-shrink-0">M</div>
+        <div><span class="text-white font-semibold">Morgenruf</span><span class="ml-2 text-xs bg-d700 text-gray-400 px-1.5 py-0.5 rounded">App</span></div>
+        <span class="ml-auto text-xs text-gray-600">9:00 AM</span>
+      </div>
+      <div class="space-y-3">
+        <div class="slack-bubble p-2.5 text-gray-300">&#x1F44B; Good morning! Time for your daily standup &#x1F305;<br/><span class="text-bacc">&#x2705; What did you complete yesterday?</span></div>
+        <div class="flex gap-2 justify-end">
+          <div class="slack-bubble p-2.5 text-gray-300 max-w-xs">Proj-Bridj: deployed Terraform module<br/>Proj-Isec: reviewed IAM policies</div>
+          <div class="w-7 h-7 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-xs font-bold">A</div>
+        </div>
+        <div class="slack-bubble p-2.5 text-gray-300"><span class="text-bylw">&#x1F3AF; What are you working on today?</span></div>
+        <div class="flex gap-2 justify-end">
+          <div class="slack-bubble p-2.5 text-gray-300 max-w-xs">Proj-Bridj: load balancer config<br/>Proj-Isec: fix SSL cert renewal</div>
+          <div class="w-7 h-7 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-xs font-bold">A</div>
+        </div>
+        <div class="slack-bubble p-2.5 text-gray-300"><span class="text-born">&#x1F6A7; Any blockers?</span></div>
+        <div class="flex gap-2 justify-end">
+          <div class="slack-bubble p-2.5 text-gray-300 max-w-xs">Waiting on AWS quota approval</div>
+          <div class="w-7 h-7 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-xs font-bold">A</div>
+        </div>
+        <div class="slack-bubble p-2.5 text-bgrn text-xs">&#x2705; Thanks! Posted to #team-platform</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL OPTIONS -->
+<section id="install" class="py-16 px-5 border-t border-d800">
+  <div class="max-w-4xl mx-auto">
+    <h2 class="text-3xl font-bold text-center text-white mb-3">Get started your way</h2>
+    <p class="text-gray-400 text-center mb-10">Hosted or self-hosted. Your choice, always.</p>
+    <div class="grid md:grid-cols-2 gap-5">
+      <div class="card rounded-xl p-7 border-bacc/40">
+        <div class="inline-flex items-center gap-1.5 bg-bacc/10 text-bacc text-xs font-semibold px-3 py-1 rounded-full mb-4">HOSTED &mdash; FREE</div>
+        <h3 class="text-xl font-bold text-white mb-2">Add to Slack</h3>
+        <p class="text-gray-400 text-sm mb-6">Click once and Morgenruf is live in your workspace. We handle hosting, updates, and uptime. No credit card, no per-user fees.</p>
+        <ul class="space-y-2 text-sm text-gray-400 mb-6">
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> Free for unlimited users</li>
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> Up in 60 seconds</li>
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> Automatic updates</li>
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> Email support</li>
+        </ul>
+        <a href="https://slack.com/oauth/v2/authorize?client_id=YOUR_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
+           class="flex items-center justify-center gap-2 w-full bg-bacc hover:bg-blue-400 text-d950 font-bold py-3 rounded-lg text-sm">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 01-2.52 2.523A2.528 2.528 0 010 15.165a2.527 2.527 0 012.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 012.521-2.52 2.527 2.527 0 012.521 2.52v6.313A2.528 2.528 0 018.834 24a2.528 2.528 0 01-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 01-2.521-2.52A2.528 2.528 0 018.834 0a2.528 2.528 0 012.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 012.521 2.521 2.528 2.528 0 01-2.521 2.521H2.522A2.528 2.528 0 010 8.834a2.528 2.528 0 012.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 012.522-2.521A2.528 2.528 0 0124 8.834a2.528 2.528 0 01-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 01-2.523 2.521 2.527 2.527 0 01-2.52-2.521V2.522A2.527 2.527 0 0115.165 0a2.528 2.528 0 012.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 012.523 2.522A2.528 2.528 0 0115.165 24a2.527 2.527 0 01-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 01-2.52-2.523 2.526 2.526 0 012.52-2.52h6.313A2.527 2.527 0 0124 15.165a2.528 2.528 0 01-2.522 2.523h-6.313z"/></svg>
+          Add to Slack &mdash; it&apos;s free
+        </a>
+      </div>
+      <div class="card rounded-xl p-7">
+        <div class="inline-flex items-center gap-1.5 bg-d800 text-gray-400 text-xs font-semibold px-3 py-1 rounded-full mb-4">SELF-HOSTED &mdash; MIT</div>
+        <h3 class="text-xl font-bold text-white mb-2">Run it yourself</h3>
+        <p class="text-gray-400 text-sm mb-6">Deploy on your own Kubernetes cluster. Your data never leaves your infra. Full control, forever.</p>
+        <ul class="space-y-2 text-sm text-gray-400 mb-6">
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> Data stays in your infra</li>
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> Helm chart included</li>
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> amd64 + arm64 image</li>
+          <li class="flex items-center gap-2"><span class="text-bgrn">&#10003;</span> MIT licensed &mdash; modify freely</li>
+        </ul>
+        <a href="#deploy" class="flex items-center justify-center gap-2 w-full bg-d800 hover:bg-d700 border border-d700 text-white font-bold py-3 rounded-lg text-sm">
+          View deployment guide &rarr;
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="py-14 px-5 border-t border-d800">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-white mb-3">SaaS standup bots are bleeding you dry</h2>
+    <p class="text-gray-400 text-center mb-10">Every seat. Every month. Your data on their servers.</p>
+    <div class="grid md:grid-cols-3 gap-5">
+      <div class="card rounded-xl p-6"><div class="text-3xl mb-3">&#x1F4B8;</div><h3 class="font-semibold text-white mb-2">Per-user pricing that scales against you</h3><p class="text-gray-400 text-sm">Geekbot, Standup &amp; Prosper, DailyBot &mdash; all charge per user per month. A 30-person team pays $90&ndash;$120/month just to ask three questions.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-3xl mb-3">&#x1F512;</div><h3 class="font-semibold text-white mb-2">Your standup data on their servers</h3><p class="text-gray-400 text-sm">Every blocker, every project name, every team member&apos;s update &mdash; sitting on a vendor database you have zero visibility into.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-3xl mb-3">&#x1F6A7;</div><h3 class="font-semibold text-white mb-2">Vendor lock-in with no exit</h3><p class="text-gray-400 text-sm">When they raise prices or shut down, your standup history is gone and your team&apos;s workflow breaks overnight.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section id="compare" class="py-14 px-5 border-t border-d800">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-white mb-3">How Morgenruf compares</h2>
+    <p class="text-gray-400 text-center mb-10">Open source and hosted. The best of both worlds.</p>
+    <div class="overflow-x-auto rounded-xl border border-d700">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-d900 border-b border-d700">
+          <th class="text-left p-4 text-gray-400 font-medium">Feature</th>
+          <th class="p-4 text-bacc font-bold hl-col">Morgenruf</th>
+          <th class="p-4 text-gray-400 font-medium">Geekbot</th>
+          <th class="p-4 text-gray-400 font-medium">Standup &amp; Prosper</th>
+          <th class="p-4 text-gray-400 font-medium">DailyBot</th>
+        </tr></thead>
+        <tbody class="divide-y divide-d800">
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Open source</td><td class="p-4 text-center hl-col text-bgrn font-bold">MIT</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Self-hostable</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Hosted (Add to Slack)</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713;</td><td class="p-4 text-center text-bgrn">&#x2713;</td><td class="p-4 text-center text-bgrn">&#x2713;</td><td class="p-4 text-center text-bgrn">&#x2713;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Free forever</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713;</td><td class="p-4 text-center text-xs text-gray-500">&#x2264;10 users</td><td class="p-4 text-center text-xs text-gray-500">Limited</td><td class="p-4 text-center text-gray-600">&#x2717;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Data in your infra</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713; (self-hosted)</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Kubernetes + Helm</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Per-project tagging</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td><td class="p-4 text-center text-gray-600">&#x2717;</td></tr>
+          <tr class="hover:bg-d900/40"><td class="p-4 text-gray-300">Custom questions</td><td class="p-4 text-center hl-col text-bgrn font-bold">&#x2713;</td><td class="p-4 text-center text-bgrn">&#x2713;</td><td class="p-4 text-center text-bgrn">&#x2713;</td><td class="p-4 text-center text-bgrn">&#x2713;</td></tr>
+          <tr class="bg-d900/30"><td class="p-4 text-gray-300 font-medium">Price</td><td class="p-4 text-center hl-col font-bold text-bgrn">Free</td><td class="p-4 text-center text-xs text-gray-400">$3/user/mo</td><td class="p-4 text-center text-xs text-gray-400">$1&ndash;4/user/mo</td><td class="p-4 text-center text-xs text-gray-400">Paid</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" class="py-14 px-5 border-t border-d800">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-white mb-3">Everything you need. Nothing you don&apos;t.</h2>
+    <p class="text-gray-400 text-center mb-10">Lightweight by design. Powerful where it counts.</p>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div class="card rounded-xl p-6"><div class="text-2xl mb-3">&#x1F4C5;</div><h3 class="font-semibold text-white mb-2">Configurable schedules</h3><p class="text-gray-400 text-sm">Different standup times per team, per timezone. Mon&ndash;Fri or custom days.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-2xl mb-3">&#x1F4AC;</div><h3 class="font-semibold text-white mb-2">DM-based collection</h3><p class="text-gray-400 text-sm">Bot DMs each member privately. Answers post as a clean summary to the team channel.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-2xl mb-3">&#x1F3D7;&#xFE0F;</div><h3 class="font-semibold text-white mb-2">Per-project format</h3><p class="text-gray-400 text-sm">Tag updates as <code class="bg-d800 px-1 rounded text-xs">Proj-X: ...</code> for automated downstream reporting and integrations.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-2xl mb-3">&#x1F6A7;</div><h3 class="font-semibold text-white mb-2">Blocker detection</h3><p class="text-gray-400 text-sm">Blockers are clearly surfaced in the standup summary so nothing slips through the cracks.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-2xl mb-3">&#x26A1;</div><h3 class="font-semibold text-white mb-2">Manual trigger</h3><p class="text-gray-400 text-sm">Team members type <code class="bg-d800 px-1 rounded text-xs">standup</code> anytime to submit early or outside the schedule.</p></div>
+      <div class="card rounded-xl p-6"><div class="text-2xl mb-3">&#x2638;&#xFE0F;</div><h3 class="font-semibold text-white mb-2">Production-ready</h3><p class="text-gray-400 text-sm">Helm chart, GHCR image, liveness probes, multi-arch (amd64+arm64), cosign-signed. Deploy in minutes.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" class="py-14 px-5 border-t border-d800">
+  <div class="max-w-3xl mx-auto">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-white mb-3">Up in 4 steps</h2>
+    <p class="text-gray-400 text-center mb-12">From zero to automated standups in under 15 minutes.</p>
+    <div class="space-y-0">
+      <div class="flex gap-5"><div class="flex flex-col items-center"><div class="w-9 h-9 rounded-full bg-bacc flex items-center justify-center text-d950 font-bold text-sm flex-shrink-0">1</div><div class="w-px flex-1 bg-d700 my-2"></div></div><div class="pb-8"><h3 class="font-semibold text-white mb-1">Create your Slack App</h3><p class="text-gray-400 text-sm">Go to <a href="https://api.slack.com/apps" target="_blank" class="text-bacc hover:underline">api.slack.com/apps</a> &rarr; Create New App &rarr; paste the manifest from the repo. Install and copy your Bot Token and Signing Secret.</p></div></div>
+      <div class="flex gap-5"><div class="flex flex-col items-center"><div class="w-9 h-9 rounded-full bg-bacc flex items-center justify-center text-d950 font-bold text-sm flex-shrink-0">2</div><div class="w-px flex-1 bg-d700 my-2"></div></div><div class="pb-8"><h3 class="font-semibold text-white mb-1">Configure your teams</h3><p class="text-gray-400 text-sm">Copy <code class="bg-d800 px-1 rounded">teams.yaml.example</code> to <code class="bg-d800 px-1 rounded">teams.yaml</code>. Add Slack user IDs, schedule, and timezone. One file controls everything.</p></div></div>
+      <div class="flex gap-5"><div class="flex flex-col items-center"><div class="w-9 h-9 rounded-full bg-bacc flex items-center justify-center text-d950 font-bold text-sm flex-shrink-0">3</div><div class="w-px flex-1 bg-d700 my-2"></div></div><div class="pb-8"><h3 class="font-semibold text-white mb-1">Deploy with Helm</h3><p class="text-gray-400 text-sm">One command to your Kubernetes cluster. Helm handles deployment, service, ingress, secrets, and configmap.</p></div></div>
+      <div class="flex gap-5"><div class="flex flex-col items-center"><div class="w-9 h-9 rounded-full bg-bgrn flex items-center justify-center text-d950 font-bold text-sm flex-shrink-0">&#x2713;</div></div><div class="pb-2"><h3 class="font-semibold text-white mb-1">Standups run automatically</h3><p class="text-gray-400 text-sm">Every weekday at the configured time, Morgenruf DMs your team, collects answers, and posts formatted summaries. Done.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- DEPLOY -->
+<section id="deploy" class="py-14 px-5 border-t border-d800" x-data="{tab:'helm'}">
+  <div class="max-w-3xl mx-auto">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-white mb-3">Deploy in one command</h2>
+    <p class="text-gray-400 text-center mb-8">Self-hosting? Pick your method.</p>
+    <div class="flex gap-1 bg-d900 p-1 rounded-lg mb-4 w-fit mx-auto border border-d700">
+      <button @click="tab='helm'" :class="tab==='helm'?'bg-d700 text-white':'text-gray-400 hover:text-white'" class="px-4 py-1.5 rounded-md text-sm font-medium">Helm</button>
+      <button @click="tab='docker'" :class="tab==='docker'?'bg-d700 text-white':'text-gray-400 hover:text-white'" class="px-4 py-1.5 rounded-md text-sm font-medium">Docker</button>
+      <button @click="tab='local'" :class="tab==='local'?'bg-d700 text-white':'text-gray-400 hover:text-white'" class="px-4 py-1.5 rounded-md text-sm font-medium">Local</button>
+    </div>
+    <div class="relative code-wrap p-5 text-sm leading-relaxed overflow-x-auto" x-show="tab==='helm'" x-transition>
+      <button class="absolute top-3 right-3 text-xs text-gray-500 hover:text-gray-300 bg-d700 px-2 py-1 rounded" @click="navigator.clipboard.writeText(document.getElementById('code-helm').innerText).then(()=>{$el.textContent='Copied!';setTimeout(()=>$el.textContent='Copy',1500)})">Copy</button>
+      <pre id="code-helm" class="text-gray-300"><span class="text-bgrn">helm</span> upgrade --install morgenruf   oci://ghcr.io/morgenruf/helm/morgenruf   --namespace morgenruf   --create-namespace   --set secret.slackBotToken=<span class="text-bylw">"xoxb-..."</span>   --set secret.slackSigningSecret=<span class="text-bylw">"..."</span></pre>
+    </div>
+    <div class="relative code-wrap p-5 text-sm leading-relaxed overflow-x-auto" x-show="tab==='docker'" x-transition>
+      <button class="absolute top-3 right-3 text-xs text-gray-500 hover:text-gray-300 bg-d700 px-2 py-1 rounded" @click="navigator.clipboard.writeText(document.getElementById('code-docker').innerText).then(()=>{$el.textContent='Copied!';setTimeout(()=>$el.textContent='Copy',1500)})">Copy</button>
+      <pre id="code-docker" class="text-gray-300"><span class="text-bgrn">docker</span> run -d   -e SLACK_BOT_TOKEN=<span class="text-bylw">xoxb-...</span>   -e SLACK_SIGNING_SECRET=<span class="text-bylw">...</span>   -v ./teams.yaml:/app/teams.yaml   -p 3000:3000   ghcr.io/morgenruf/morgenruf:latest</pre>
+    </div>
+    <div class="relative code-wrap p-5 text-sm leading-relaxed overflow-x-auto" x-show="tab==='local'" x-transition>
+      <button class="absolute top-3 right-3 text-xs text-gray-500 hover:text-gray-300 bg-d700 px-2 py-1 rounded" @click="navigator.clipboard.writeText(document.getElementById('code-local').innerText).then(()=>{$el.textContent='Copied!';setTimeout(()=>$el.textContent='Copy',1500)})">Copy</button>
+      <pre id="code-local" class="text-gray-300"><span class="text-bgrn">git</span> clone https://github.com/morgenruf/morgenruf
+<span class="text-bgrn">cd</span> morgenruf/app
+cp .env.example .env &amp;&amp; cp teams.yaml.example teams.yaml
+pip install -r requirements.txt
+python src/main.py</pre>
+    </div>
+    <p class="text-center mt-4 text-sm text-gray-500">Full docs at <a href="https://github.com/morgenruf/morgenruf#readme" target="_blank" class="text-bacc hover:underline">github.com/morgenruf/morgenruf</a></p>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section class="py-14 px-5 border-t border-d800">
+  <div class="max-w-4xl mx-auto">
+    <h2 class="text-2xl sm:text-3xl font-bold text-center text-white mb-3">Roadmap</h2>
+    <p class="text-gray-400 text-center mb-10">Built in the open. Shaped by the community.</p>
+    <div class="grid sm:grid-cols-2 gap-6">
+      <div class="card rounded-xl p-6"><h3 class="font-semibold text-bgrn mb-4">&#x2705; Released</h3><ul class="space-y-2 text-sm text-gray-400">
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>DM-based standup collection</li>
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>Per-team schedule &amp; timezone</li>
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>Per-project format (Proj-X:)</li>
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>Manual standup trigger</li>
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>Helm chart + GHCR image</li>
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>Multi-arch (amd64 + arm64)</li>
+        <li class="flex gap-2"><span class="text-bgrn mt-0.5">&#10003;</span>Cosign image signing + Trivy scan</li>
+      </ul></div>
+      <div class="card rounded-xl p-6"><h3 class="font-semibold text-bylw mb-4">&#x1F51C; Coming soon</h3><ul class="space-y-2 text-sm text-gray-400">
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Hosted version (Add to Slack)</li>
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Per-project standup reports</li>
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Missed standup reminders</li>
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Weekly summaries</li>
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Web dashboard</li>
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Slack App Directory listing</li>
+        <li class="flex gap-2"><span class="text-bylw mt-0.5">&rarr;</span>Jira + GitHub webhook integrations</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- OSS CTA -->
+<section class="py-14 px-5 border-t border-d800">
+  <div class="max-w-3xl mx-auto cta-grad rounded-2xl p-10 text-center border border-d700">
+    <div class="text-4xl mb-4">&#x1F305;</div>
+    <h2 class="text-2xl sm:text-3xl font-bold text-white mb-3">Built in the open. Forever.</h2>
+    <p class="text-gray-400 mb-6 max-w-lg mx-auto">MIT licensed. Fork it, extend it, run it on your terms. We welcome contributors of all levels.</p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="https://github.com/morgenruf/morgenruf" target="_blank" class="flex items-center justify-center gap-2 bg-white hover:bg-gray-100 text-d950 font-bold px-7 py-3 rounded-lg text-sm">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.744 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        &#11088; Star on GitHub
+      </a>
+      <a href="https://github.com/morgenruf/morgenruf/discussions" target="_blank" class="flex items-center justify-center gap-2 border border-d600 hover:border-gray-500 text-white font-semibold px-7 py-3 rounded-lg text-sm">&#x1F4AC; Join the discussion</a>
+      <a href="mailto:support@morgenruf.dev" class="flex items-center justify-center gap-2 border border-d600 hover:border-gray-500 text-white font-semibold px-7 py-3 rounded-lg text-sm">&#x1F4E7; support@morgenruf.dev</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="border-t border-d800 py-10 px-5">
+  <div class="max-w-6xl mx-auto">
+    <div class="grid sm:grid-cols-4 gap-8 mb-8">
+      <div><div class="flex items-center gap-2 font-bold text-white mb-2"><span class="text-xl">&#x1F305;</span> Morgenruf</div><p class="text-xs text-gray-500 leading-relaxed">Self-hosted Slack standup bot.<br/>MIT License &middot; Free forever.</p></div>
+      <div><h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Product</h4><ul class="space-y-2 text-sm text-gray-500"><li><a href="#features" class="hover:text-white">Features</a></li><li><a href="#compare" class="hover:text-white">Compare</a></li><li><a href="#deploy" class="hover:text-white">Deploy</a></li><li><a href="https://github.com/morgenruf/morgenruf/releases" target="_blank" class="hover:text-white">Releases</a></li></ul></div>
+      <div><h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Resources</h4><ul class="space-y-2 text-sm text-gray-500"><li><a href="https://github.com/morgenruf/morgenruf#readme" target="_blank" class="hover:text-white">Docs</a></li><li><a href="https://github.com/morgenruf/morgenruf/issues" target="_blank" class="hover:text-white">Issues</a></li><li><a href="https://github.com/morgenruf/morgenruf/discussions" target="_blank" class="hover:text-white">Discussions</a></li><li><a href="https://github.com/morgenruf/morgenruf/blob/main/CONTRIBUTING.md" target="_blank" class="hover:text-white">Contributing</a></li></ul></div>
+      <div><h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Legal</h4><ul class="space-y-2 text-sm text-gray-500"><li><a href="https://github.com/morgenruf/morgenruf/blob/main/LICENSE" target="_blank" class="hover:text-white">MIT License</a></li><li><a href="https://github.com/morgenruf/morgenruf/blob/main/SECURITY.md" target="_blank" class="hover:text-white">Security</a></li><li><a href="https://github.com/morgenruf/morgenruf/blob/main/CODE_OF_CONDUCT.md" target="_blank" class="hover:text-white">Code of Conduct</a></li><li><a href="mailto:support@morgenruf.dev" class="hover:text-white">support@morgenruf.dev</a></li></ul></div>
+    </div>
+    <div class="border-t border-d800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+      <span>&#169; 2026 Morgenruf &middot; MIT License</span>
+      <div class="flex items-center gap-4">
+        <a href="https://github.com/morgenruf/morgenruf" target="_blank" class="hover:text-gray-400">GitHub</a>
+        <a href="mailto:support@morgenruf.dev" class="hover:text-gray-400">Email</a>
+        <a href="https://morgenruf.dev" class="hover:text-gray-400">morgenruf.dev</a>
+      </div>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

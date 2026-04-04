@@ -1,0 +1,40 @@
+[build]
+  publish = "website"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[redirects]]
+  from = "/github"
+  to = "https://github.com/morgenruf/morgenruf"
+  status = 301
+
+[[redirects]]
+  from = "/docs"
+  to = "https://github.com/morgenruf/morgenruf#readme"
+  status = 301
+
+[[redirects]]
+  from = "/install"
+  to = "https://slack.com/oauth/v2/authorize?client_id=YOUR_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
+  status = 302
+
+[[redirects]]
+  from = "/slack"
+  to = "https://slack.com/oauth/v2/authorize?client_id=YOUR_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
+  status = 302
