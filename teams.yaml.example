@@ -1,0 +1,30 @@
+# Team standup configuration
+# Copy this file to teams.yaml and fill in your Slack user IDs.
+#
+# Finding Slack user IDs:
+#   Slack → Click on a person's profile → More (⋮) → Copy member ID
+#
+# Timezone list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+teams:
+  - name: backend-team
+    channel: "#team-backend"
+    standup_time: "09:00"        # 24h format, local to timezone below
+    timezone: "Asia/Kolkata"     # pytz timezone string
+    days: "mon-fri"              # mon, tue, wed, thu, fri, sat, sun — or ranges like mon-fri
+    members:
+      - slack_id: "U0000000001"
+        name: Alice
+      - slack_id: "U0000000002"
+        name: Bob
+
+  - name: platform-team
+    channel: "#team-platform"
+    standup_time: "09:30"
+    timezone: "Europe/Berlin"
+    days: "mon-fri"
+    members:
+      - slack_id: "U0000000003"
+        name: Charlie
+      - slack_id: "U0000000004"
+        name: Diana

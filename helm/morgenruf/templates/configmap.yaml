@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "morgenruf.fullname" . }}-teams
+  labels:
+    {{- include "morgenruf.labels" . | nindent 4 }}
+data:
+  teams.yaml: |
+    {{- .Values.teamsConfig | nindent 4 }}

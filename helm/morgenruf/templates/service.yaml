@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "morgenruf.fullname" . }}
+  labels:
+    {{- include "morgenruf.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    {{- include "morgenruf.selectorLabels" . | nindent 4 }}

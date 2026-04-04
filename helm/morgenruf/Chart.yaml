@@ -1,0 +1,16 @@
+apiVersion: v2
+name: morgenruf
+description: Slack standup bot — structured daily standups with per-project tracking
+type: application
+version: 0.1.0
+appVersion: "latest"
+keywords:
+  - slack
+  - standup
+  - bot
+  - devops
+home: https://github.com/morgenruf/morgenruf
+sources:
+  - https://github.com/morgenruf/morgenruf
+maintainers:
+  - name: morgenruf contributors

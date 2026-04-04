@@ -1,0 +1,65 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/morgenruf/morgenruf
+  pullPolicy: Always
+  tag: "main"
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # Cloudflare Zero Trust — add your annotations here
+    # external-dns.alpha.kubernetes.io/hostname: standup.yourdomain.com
+  hosts:
+    - host: standup.yourdomain.com
+      paths:
+        - path: /slack/events
+          pathType: Prefix
+        - path: /healthz
+          pathType: Prefix
+  tls: []
+
+# Teams config — mounted as configmap
+teamsConfig: |
+  teams:
+    - name: my-team
+      channel: "#team-myteam"
+      standup_time: "09:00"
+      timezone: "Asia/Kolkata"
+      days: "mon-fri"
+      members:
+        - slack_id: "U0000000001"
+          name: Alice
+
+# Secrets — set via --set or external secrets operator
+secret:
+  slackBotToken: ""
+  slackSigningSecret: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10

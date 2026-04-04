@@ -1,0 +1,11 @@
+.env
+teams.yaml
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+dist/
+*.egg-info/
+.DS_Store
