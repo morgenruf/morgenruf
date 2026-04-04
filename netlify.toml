@@ -31,10 +31,10 @@
 
 [[redirects]]
   from = "/install"
-  to = "https://slack.com/oauth/v2/authorize?client_id=YOUR_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
+  to = "https://slack.com/oauth/v2/authorize?client_id=REPLACE_WITH_SLACK_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
   status = 302
 
 [[redirects]]
   from = "/slack"
-  to = "https://slack.com/oauth/v2/authorize?client_id=YOUR_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
+  to = "https://slack.com/oauth/v2/authorize?client_id=REPLACE_WITH_SLACK_CLIENT_ID&scope=chat:write,im:history,im:read,im:write,channels:read,users:read"
   status = 302
