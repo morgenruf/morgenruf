@@ -31,58 +31,68 @@ def _format_standup(user_id: str, answers: list[str]) -> str:
     )
 
 
-def register_handlers(app: App, teams: list[dict]) -> None:
+def _persist_standup(team_id: str, user_id: str, answers: list[str]) -> None:
+    """Best-effort persist to DB; log and continue on failure."""
+    try:
+        import db  # noqa: PLC0415
+        db.save_standup(
+            team_id=team_id,
+            user_id=user_id,
+            yesterday=answers[0],
+            today=answers[1],
+            blockers=answers[2],
+        )
+    except Exception as exc:
+        logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
+
+
+def register_handlers(app: App) -> None:
     """Register all Slack event handlers."""
 
-    # Build user_id → team channel map for quick lookup
-    user_team_map: dict[str, str] = {}
-    for team in teams:
-        for member in team.get("members", []):
-            user_team_map[member["slack_id"]] = team["channel"]
-
     @app.event("message")
-    def handle_dm(event, say, client, logger):
+    def handle_dm(event, say, client, logger):  # noqa: ANN001
         """Handle incoming DMs — collect standup answers step by step."""
-        # Only handle DMs (channel_type == "im")
         if event.get("channel_type") != "im":
             return
         if event.get("subtype"):
-            return  # ignore bot messages, edits, etc.
+            return
 
-        user_id = event["user"]
-        text = event.get("text", "").strip()
+        user_id: str = event["user"]
+        team_id: str = event.get("team", "")
+        text: str = event.get("text", "").strip()
+        cache_key = f"{team_id}:{user_id}"
 
-        session = state_store.get(user_id)
+        session = state_store.get(cache_key)
         if not session:
-            return  # not in an active standup session
+            return
 
-        session = state_store.record_answer(user_id, text)
+        session = state_store.record_answer(cache_key, text)
 
         if session.step < len(QUESTIONS):
-            # Ask next question
             say(QUESTIONS[session.step])
         else:
-            # All 3 answers collected — post to team channel
             say("✅ Thanks! Your standup has been posted.")
 
-            channel = user_team_map.get(user_id, session.team)
             formatted = _format_standup(user_id, session.answers)
+            channel = session.channel
 
-            try:
-                client.chat_postMessage(channel=channel, text=formatted)
-                logger.info("Posted standup for %s to %s", user_id, channel)
-            except Exception as e:
-                logger.error("Failed to post standup for %s: %s", user_id, e)
-                say(f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}")
+            if channel:
+                try:
+                    client.chat_postMessage(channel=channel, text=formatted)
+                    logger.info("Posted standup for %s to %s", user_id, channel)
+                except Exception as exc:
+                    logger.error("Failed to post standup for %s: %s", user_id, exc)
+                    say(f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}")
 
-            state_store.clear(user_id)
+            _persist_standup(session.team_id, user_id, session.answers)
+            state_store.clear(cache_key)
 
     @app.event("app_mention")
-    def handle_mention(event, say):
+    def handle_mention(event, say):  # noqa: ANN001
         say("👋 I'm the standup bot! I'll DM you at your team's standup time. Type `help` in a DM to me for more info.")
 
     @app.message("help")
-    def handle_help(message, say):
+    def handle_help(message, say):  # noqa: ANN001
         if message.get("channel_type") != "im":
             return
         say(
@@ -98,16 +108,26 @@ def register_handlers(app: App, teams: list[dict]) -> None:
         )
 
     @app.message("standup")
-    def handle_manual_standup(message, say, client):
+    def handle_manual_standup(message, say, client):  # noqa: ANN001
         """Allow team members to trigger their own standup manually."""
         if message.get("channel_type") != "im":
             return
-        user_id = message["user"]
+        user_id: str = message["user"]
+        team_id: str = message.get("team", "")
+        cache_key = f"{team_id}:{user_id}"
 
-        if state_store.is_active(user_id):
+        if state_store.is_active(cache_key):
             say("You already have an active standup session. Answer the current question or wait for it to reset.")
             return
 
-        team_channel = user_team_map.get(user_id, "")
-        session = state_store.start(user_id, team_channel)
+        # Look up the configured channel for this workspace
+        channel = ""
+        try:
+            import db  # noqa: PLC0415
+            config = db.get_workspace_config(team_id) or {}
+            channel = config.get("channel_id", "")
+        except Exception:
+            pass
+
+        state_store.start(cache_key, channel, team_id=team_id)
         say(f"📋 Starting your standup!\n\n{QUESTIONS[0]}")
