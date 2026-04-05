@@ -1,0 +1,229 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Morgenruf Standup Bot — Starter (EC2 + docker-compose) ~$15/mo'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: {default: Slack App Credentials}
+        Parameters: [SlackClientId, SlackClientSecret, SlackSigningSecret]
+      - Label: {default: App Config}
+        Parameters: [AppDomain, FlaskSecretKey]
+      - Label: {default: Database}
+        Parameters: [DBPassword]
+      - Label: {default: EC2}
+        Parameters: [InstanceType, KeyPairName]
+
+Parameters:
+  SlackClientId:
+    Type: String
+    Description: "Slack App → Basic Information → Client ID"
+  SlackClientSecret:
+    Type: String
+    NoEcho: true
+    Description: "Slack App → Basic Information → Client Secret (32 hex chars)"
+  SlackSigningSecret:
+    Type: String
+    NoEcho: true
+    Description: "Slack App → Basic Information → Signing Secret (32 hex chars)"
+  AppDomain:
+    Type: String
+    Description: "Your domain (e.g. standup.mycompany.com). Point DNS A record to EC2 IP after deploy."
+  FlaskSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Leave blank to auto-generate. Or: openssl rand -hex 32"
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 12
+    Description: "PostgreSQL password (min 12 chars)"
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small, t3.medium]
+    Description: "t3.micro=~$8/mo (dev only), t3.small=~$15/mo (recommended)"
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "EC2 Key Pair for SSH access (optional but recommended)"
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{Key: Name, Value: morgenruf-vpc}]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  # Security Group
+  SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Morgenruf bot
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0}
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0}
+
+  # EC2 Instance
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds: [!Ref SG]
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: {VolumeSize: 20, VolumeType: gp3}
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          yum update -y
+          yum install -y docker git
+          systemctl enable --now docker
+          curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+
+          # Install nginx + certbot
+          yum install -y nginx python3-certbot-nginx
+          
+          # Write env file
+          FLASK_KEY="${FlaskSecretKey}"
+          if [ -z "$FLASK_KEY" ]; then
+            FLASK_KEY=$(openssl rand -hex 32)
+          fi
+
+          mkdir -p /opt/morgenruf
+          cat > /opt/morgenruf/.env <<EOF
+          SLACK_CLIENT_ID=${SlackClientId}
+          SLACK_CLIENT_SECRET=${SlackClientSecret}
+          SLACK_SIGNING_SECRET=${SlackSigningSecret}
+          APP_URL=https://${AppDomain}
+          DATABASE_URL=postgresql://morgenruf:${DBPassword}@localhost:5432/morgenruf
+          FLASK_SECRET_KEY=$FLASK_KEY
+          EOF
+
+          # Write docker-compose.yml
+          cat > /opt/morgenruf/docker-compose.yml <<'COMPOSE'
+          version: '3.8'
+          services:
+            db:
+              image: postgres:16-alpine
+              environment:
+                POSTGRES_USER: morgenruf
+                POSTGRES_PASSWORD: DBPASS_PLACEHOLDER
+                POSTGRES_DB: morgenruf
+              volumes:
+                - pgdata:/var/lib/postgresql/data
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD", "pg_isready", "-U", "morgenruf"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+
+            app:
+              image: ghcr.io/morgenruf/morgenruf:latest
+              env_file: .env
+              ports:
+                - "3000:3000"
+              depends_on:
+                db:
+                  condition: service_healthy
+              restart: unless-stopped
+
+          volumes:
+            pgdata:
+          COMPOSE
+
+          sed -i "s/DBPASS_PLACEHOLDER/${DBPassword}/g" /opt/morgenruf/docker-compose.yml
+
+          # Configure nginx reverse proxy
+          cat > /etc/nginx/conf.d/morgenruf.conf <<NGINX
+          server {
+              listen 80;
+              server_name ${AppDomain};
+              location / {
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+          NGINX
+
+          systemctl enable --now nginx
+
+          # Start app
+          cd /opt/morgenruf
+          docker-compose pull
+          docker-compose up -d
+
+          # Get TLS cert (non-interactive, email hardcoded as placeholder)
+          # certbot --nginx -d ${AppDomain} --non-interactive --agree-tos -m admin@${AppDomain} || true
+
+          echo "Morgenruf deployed! Visit http://${AppDomain} to verify."
+      Tags:
+        - {Key: Name, Value: morgenruf}
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      InstanceId: !Ref Instance
+
+Outputs:
+  PublicIP:
+    Description: "EC2 Public IP — point your DNS A record here"
+    Value: !Ref EIP
+  AppURL:
+    Description: "Your Morgenruf URL"
+    Value: !Sub "https://${AppDomain}"
+  SlackRedirectURL:
+    Description: "Add this to Slack App → OAuth & Permissions → Redirect URLs"
+    Value: !Sub "https://${AppDomain}/slack/oauth_redirect"
+  SSHCommand:
+    Description: "SSH into the instance"
+    Value: !Sub "ssh -i ${KeyPairName}.pem ec2-user@${EIP}"
