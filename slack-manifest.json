@@ -18,24 +18,20 @@
     "slash_commands": [
       {
         "command": "/standup",
-        "description": "Start your daily standup now",
-        "should_escape": false
+        "description": "Start your daily standup now"
       },
       {
         "command": "/skip",
-        "description": "Skip today's standup",
-        "should_escape": false
+        "description": "Skip today's standup"
       },
       {
         "command": "/kudos",
         "description": "Give a shoutout to a teammate",
-        "usage_hint": "@teammate [message]",
-        "should_escape": false
+        "usage_hint": "@teammate [message]"
       },
       {
         "command": "/help",
-        "description": "Show Morgenruf commands and help",
-        "should_escape": false
+        "description": "Show Morgenruf commands and help"
       }
     ]
   },
@@ -74,7 +70,6 @@
       "request_url": "https://api.morgenruf.dev/slack/events"
     },
     "org_deploy_enabled": false,
-    "socket_mode_enabled": false,
-    "token_rotation_enabled": true
+    "socket_mode_enabled": false
   }
 }
