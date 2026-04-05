@@ -113,7 +113,7 @@ def get_all_installations() -> list[dict]:
 
 def upsert_workspace_config(team_id: str, **kwargs: Any) -> None:
     """Insert or update workspace config. Pass only columns you want to set."""
-    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active", "reminder_minutes", "edit_window_hours"}
+    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active", "reminder_minutes", "edit_window_hours", "jira_base_url", "github_repo", "linear_team"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     for col in fields:
         if not re.match(r'^[a-z_]+$', col):
@@ -417,3 +417,142 @@ def get_member_email(team_id: str, user_id: str) -> str | None:
             cur.execute(sql, (team_id, user_id))
             row = cur.fetchone()
     return row[0] if row else None
+
+
+# ---------------------------------------------------------------------------
+# Standup schedules
+# ---------------------------------------------------------------------------
+
+def get_standup_schedules(team_id: str) -> list[dict]:
+    """Return all active standup schedules for a workspace."""
+    sql = "SELECT * FROM standup_schedules WHERE team_id = %s ORDER BY created_at"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def create_standup_schedule(team_id: str, **kwargs) -> dict:
+    """Insert a new standup schedule row and return it."""
+    allowed = {"name", "channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "participants", "reminder_minutes", "active"}
+    fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if "questions" in fields and isinstance(fields["questions"], list):
+        fields["questions"] = json.dumps(fields["questions"])
+    cols = ", ".join(fields.keys())
+    placeholders = ", ".join(["%s"] * len(fields))
+    sql = f"""
+        INSERT INTO standup_schedules (team_id, {cols}, updated_at)
+        VALUES (%s, {placeholders}, NOW())
+        RETURNING *
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, [team_id] + list(fields.values()))
+            row = cur.fetchone()
+    return dict(row)
+
+
+def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | None:
+    """Update a standup schedule by id (scoped to team_id)."""
+    allowed = {"name", "channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "participants", "reminder_minutes", "active"}
+    fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if not fields:
+        return get_standup_schedule(team_id, schedule_id)
+    if "questions" in fields and isinstance(fields["questions"], list):
+        fields["questions"] = json.dumps(fields["questions"])
+    set_clause = ", ".join(f"{k} = %s" for k in fields) + ", updated_at = NOW()"
+    sql = f"UPDATE standup_schedules SET {set_clause} WHERE id = %s AND team_id = %s RETURNING *"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, list(fields.values()) + [schedule_id, team_id])
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def delete_standup_schedule(team_id: str, schedule_id: int) -> bool:
+    """Soft-delete by setting active=false (scoped to team_id)."""
+    sql = "UPDATE standup_schedules SET active = FALSE WHERE id = %s AND team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (schedule_id, team_id))
+            return cur.rowcount > 0
+
+
+def get_standup_schedule(team_id: str, schedule_id: int) -> dict | None:
+    """Return a single standup schedule by id (scoped to team_id)."""
+    sql = "SELECT * FROM standup_schedules WHERE id = %s AND team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (schedule_id, team_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def get_all_active_schedules() -> list[dict]:
+    """Return all active schedules across all workspaces (for scheduler bootstrap)."""
+    sql = """
+        SELECT s.*, i.bot_token
+        FROM standup_schedules s
+        JOIN installations i ON i.team_id = s.team_id
+        WHERE s.active = TRUE
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Kudos
+# ---------------------------------------------------------------------------
+
+def save_kudos(team_id: str, from_user: str, to_user: str, message: str, channel_id: str = "") -> dict:
+    """Save a kudos entry and return it."""
+    sql = """
+        INSERT INTO kudos (team_id, from_user, to_user, message, channel_id)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING *
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, from_user, to_user, message, channel_id))
+            row = cur.fetchone()
+    return dict(row)
+
+
+def get_kudos(team_id: str, limit: int = 50) -> list[dict]:
+    """Return recent kudos for a team."""
+    sql = """
+        SELECT * FROM kudos
+        WHERE team_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, limit))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
+    """Return top kudos receivers for the last N days."""
+    sql = """
+        SELECT
+            to_user,
+            COUNT(*) AS received,
+            MAX(created_at) AS last_kudos
+        FROM kudos
+        WHERE team_id = %s
+          AND created_at >= NOW() - (%s * INTERVAL '1 day')
+        GROUP BY to_user
+        ORDER BY received DESC
+        LIMIT 20
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, days))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]

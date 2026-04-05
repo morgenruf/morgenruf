@@ -227,6 +227,9 @@ def api_update_standup(standup_id: str):
             kwargs["active"] = data["active"]
         if "reminder_minutes" in data:
             kwargs["reminder_minutes"] = int(data.get("reminder_minutes") or 0)
+        for field in ("jira_base_url", "github_repo", "linear_team"):
+            if field in data:
+                kwargs[field] = data[field]
         if kwargs:
             db.upsert_workspace_config(team_id, **kwargs)
         cfg = db.get_workspace_config(team_id)
@@ -410,9 +413,45 @@ def api_analytics():
 
 
 # ---------------------------------------------------------------------------
-# CSV Export API
+# Kudos API
 # ---------------------------------------------------------------------------
 
+@dashboard_bp.route("/dashboard/api/kudos", methods=["GET"])
+@_login_required
+def api_list_kudos():
+    team_id = session["team_id"]
+    limit = int(request.args.get("limit", 50))
+    try:
+        kudos = db.get_kudos(team_id, limit)
+        for k in kudos:
+            if k.get("created_at"):
+                k["created_at"] = k["created_at"].isoformat()
+        return jsonify(kudos)
+    except Exception as exc:
+        logger.warning("api_list_kudos: %s", exc)
+        return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/kudos/leaderboard", methods=["GET"])
+@_login_required
+def api_kudos_leaderboard():
+    team_id = session["team_id"]
+    days = int(request.args.get("days", 30))
+    try:
+        board = db.get_kudos_leaderboard(team_id, days)
+        for row in board:
+            if row.get("last_kudos"):
+                row["last_kudos"] = row["last_kudos"].isoformat()
+            row["received"] = int(row.get("received") or 0)
+        return jsonify(board)
+    except Exception as exc:
+        logger.warning("api_kudos_leaderboard: %s", exc)
+        return jsonify([])
+
+
+# ---------------------------------------------------------------------------
+# CSV Export API
+# ---------------------------------------------------------------------------
 @dashboard_bp.route("/dashboard/api/export/csv", methods=["GET"])
 @_login_required
 def api_export_csv():
@@ -445,3 +484,97 @@ def api_export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename=standups-{team_id}.csv"},
     )
+
+
+# ── Templates API ──────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/dashboard/api/templates", methods=["GET"])
+@_login_required
+def api_templates():
+    from templates_library import TEMPLATES  # noqa: PLC0415
+    return jsonify(TEMPLATES)
+
+
+# ── Standup Schedules API ───────────────────────────────────────────────────
+
+@dashboard_bp.route("/dashboard/api/schedules", methods=["GET"])
+@_login_required
+def api_list_schedules():
+    team_id = session["team_id"]
+    try:
+        schedules = db.get_standup_schedules(team_id)
+        return jsonify(schedules)
+    except Exception as exc:
+        logger.error("api_list_schedules: %s", exc)
+        return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/schedules", methods=["POST"])
+@_login_required
+def api_create_schedule():
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    try:
+        days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
+        if isinstance(days, list):
+            days = ",".join(days)
+        schedule = db.create_standup_schedule(
+            team_id,
+            name=data.get("name", "Daily Standup"),
+            channel_id=data.get("channel_id", ""),
+            schedule_time=data.get("schedule_time", "09:00"),
+            schedule_tz=data.get("schedule_tz", "UTC"),
+            schedule_days=days,
+            questions=data.get("questions", ["What did you complete yesterday?", "What are you working on today?", "Any blockers?"]),
+            participants=data.get("participants", []),
+            reminder_minutes=int(data.get("reminder_minutes") or 0),
+            active=data.get("active", True),
+        )
+        try:
+            from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+            inst = db.get_installation(team_id)
+            if inst and get_scheduler():
+                sched_with_token = dict(schedule)
+                sched_with_token["bot_token"] = inst["bot_token"]
+                register_schedule_job(get_scheduler(), sched_with_token)
+        except Exception as exc2:
+            logger.warning("Could not register schedule job live: %s", exc2)
+        return jsonify(schedule), 201
+    except Exception as exc:
+        logger.error("api_create_schedule: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/schedules/<int:schedule_id>", methods=["PUT"])
+@_login_required
+def api_update_schedule(schedule_id: int):
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    try:
+        days = data.get("schedule_days")
+        if isinstance(days, list):
+            days = ",".join(days)
+        kwargs: dict = {}
+        for field in ("name", "channel_id", "schedule_time", "schedule_tz", "reminder_minutes", "active", "questions", "participants"):
+            if field in data:
+                kwargs[field] = data[field]
+        if days is not None:
+            kwargs["schedule_days"] = days
+        schedule = db.update_standup_schedule(team_id, schedule_id, **kwargs)
+        if not schedule:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify(schedule)
+    except Exception as exc:
+        logger.error("api_update_schedule: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/schedules/<int:schedule_id>", methods=["DELETE"])
+@_login_required
+def api_delete_schedule(schedule_id: int):
+    team_id = session["team_id"]
+    try:
+        db.delete_standup_schedule(team_id, schedule_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500

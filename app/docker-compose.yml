@@ -1,0 +1,44 @@
+version: "3.9"
+
+# Morgenruf — Mac / Linux self-hosted quickstart
+# Usage:
+#   1. cp .env.example .env && fill in .env
+#   2. docker compose up -d
+#   3. Visit http://localhost:3000/dashboard
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: morgenruf
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-morgenruf}
+      POSTGRES_DB: morgenruf
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U morgenruf"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ghcr.io/morgenruf/morgenruf:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://morgenruf:${DB_PASSWORD:-morgenruf}@db:5432/morgenruf
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      PORT: "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
