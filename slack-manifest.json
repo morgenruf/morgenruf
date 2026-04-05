@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Morgenruf",
-    "description": "Self-hosted daily standup bot \u2014 AI summaries, analytics, and MCP for AI tools",
+    "description": "Self-hosted daily standup bot - AI summaries, analytics, and MCP for AI tools",
     "background_color": "#0d1117"
   },
   "features": {
@@ -17,24 +17,20 @@
     "slash_commands": [
       {
         "command": "/standup",
-        "description": "Start your daily standup now",
-        "url": "https://api.morgenruf.dev/slack/events"
+        "description": "Start your daily standup now"
       },
       {
         "command": "/skip",
-        "description": "Skip today's standup",
-        "url": "https://api.morgenruf.dev/slack/events"
+        "description": "Skip today's standup"
       },
       {
         "command": "/kudos",
         "description": "Give a shoutout to a teammate",
-        "usage_hint": "@teammate [message]",
-        "url": "https://api.morgenruf.dev/slack/events"
+        "usage_hint": "@teammate [message]"
       },
       {
         "command": "/help",
-        "description": "Show Morgenruf commands and help",
-        "url": "https://api.morgenruf.dev/slack/events"
+        "description": "Show Morgenruf commands and help"
       }
     ]
   },
@@ -65,10 +61,12 @@
         "app_mention",
         "app_home_opened",
         "member_joined_channel"
-      ]
+      ],
+      "request_url": "https://api.morgenruf.dev/slack/events"
     },
     "interactivity": {
-      "is_enabled": true
+      "is_enabled": true,
+      "request_url": "https://api.morgenruf.dev/slack/events"
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": false
