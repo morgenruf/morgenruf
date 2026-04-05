@@ -366,24 +366,6 @@ app/helm/morgenruf/
 
 ## Deploy
 
-### ☁️ AWS (One-Click CloudFormation)
-
-#### Starter (~$15/mo) — Single EC2 instance
-Best for small teams. Runs docker-compose on a single server.
-
-[![Launch Starter Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=morgenruf-starter&templateURL=https://raw.githubusercontent.com/morgenruf/morgenruf/main/deploy/aws/starter.yaml)
-
-EC2 t3.small + PostgreSQL 16 in Docker + Nginx + Elastic IP.
-
-#### Production (~$25/mo) — ECS Fargate Spot + RDS
-Zero server management. Auto-healing.
-
-[![Launch Production Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=morgenruf-prod&templateURL=https://raw.githubusercontent.com/morgenruf/morgenruf/main/deploy/aws/production.yaml)
-
-ECS Fargate Spot + RDS PostgreSQL t4g.micro + ALB + ACM + Secrets Manager.
-
-See [`deploy/aws/README.md`](./deploy/aws/README.md) for full setup instructions and parameter reference.
-
 ---
 
 ## Roadmap
