@@ -6,8 +6,10 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 
+import pytz
 import requests
 from slack_bolt import App
 
@@ -15,11 +17,15 @@ from state import QUESTIONS, state_store
 
 logger = logging.getLogger(__name__)
 
+_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
 
-def _format_standup(user_id: str, answers: list[str]) -> str:
+
+def _format_standup(user_id: str, answers: list[str], mood: str | None = None) -> str:
     """Format collected answers into a structured standup post."""
     date_str = datetime.utcnow().strftime("%B %d, %Y")
-    yesterday, today, blockers = answers[0], answers[1], answers[2]
+    yesterday = answers[0] if len(answers) > 0 else "—"
+    today = answers[1] if len(answers) > 1 else "—"
+    blockers = answers[2] if len(answers) > 2 else "—"
 
     blocker_text = (
         "_None_ ✅"
@@ -27,24 +33,28 @@ def _format_standup(user_id: str, answers: list[str]) -> str:
         else blockers
     )
 
-    return (
+    text = (
         f"📋 *Standup from <@{user_id}>* — {date_str}\n\n"
         f"*✅ Yesterday:*\n{yesterday}\n\n"
         f"*🎯 Today:*\n{today}\n\n"
         f"*🚧 Blockers:*\n{blocker_text}"
     )
+    if mood:
+        text += f"\n\n*🎭 Mood:* {mood}"
+    return text
 
 
-def _persist_standup(team_id: str, user_id: str, answers: list[str]) -> None:
+def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str | None = None) -> None:
     """Best-effort persist to DB; log and continue on failure."""
     try:
         import db  # noqa: PLC0415
         db.save_standup(
             team_id=team_id,
             user_id=user_id,
-            yesterday=answers[0],
-            today=answers[1],
-            blockers=answers[2],
+            yesterday=answers[0] if len(answers) > 0 else "",
+            today=answers[1] if len(answers) > 1 else "",
+            blockers=answers[2] if len(answers) > 2 else "",
+            mood=mood,
         )
     except Exception as exc:
         logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
@@ -150,13 +160,22 @@ def register_handlers(app: App) -> None:
             return
 
         session = state_store.record_answer(cache_key, text)
+        n_questions = len(session.questions)
 
-        if session.step < len(QUESTIONS):
-            say(QUESTIONS[session.step])
+        if session.step < n_questions:
+            # Still asking custom questions
+            say(session.questions[session.step])
+        elif session.step == n_questions:
+            # All questions answered — ask mood
+            say(_MOOD_QUESTION)
         else:
+            # Mood answered — all done
+            question_answers = session.answers[:n_questions]
+            mood = session.answers[n_questions] if len(session.answers) > n_questions else None
+
             say("✅ Thanks! Your standup has been posted.")
 
-            formatted = _format_standup(user_id, session.answers)
+            formatted = _format_standup(user_id, question_answers, mood=mood)
             channel = session.channel
 
             if channel:
@@ -167,7 +186,7 @@ def register_handlers(app: App) -> None:
                     logger.error("Failed to post standup for %s: %s", user_id, exc)
                     say(f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}")
 
-            _persist_standup(session.team_id, user_id, session.answers)
+            _persist_standup(session.team_id, user_id, question_answers, mood=mood)
             state_store.clear(cache_key)
 
             # Fire standup.completed webhooks
@@ -175,10 +194,11 @@ def register_handlers(app: App) -> None:
                 "team_id": session.team_id,
                 "user_id": user_id,
                 "answers": {
-                    "yesterday": session.answers[0],
-                    "today": session.answers[1],
-                    "blockers": session.answers[2],
+                    "yesterday": question_answers[0] if len(question_answers) > 0 else "",
+                    "today": question_answers[1] if len(question_answers) > 1 else "",
+                    "blockers": question_answers[2] if len(question_answers) > 2 else "",
                 },
+                "mood": mood,
                 "timestamp": datetime.utcnow().isoformat(),
             })
 
@@ -263,11 +283,13 @@ def register_handlers(app: App) -> None:
             return
         say(
             "🤖 *Standup Bot Help*\n\n"
-            "I'll DM you at your scheduled standup time with 3 questions:\n"
-            "1. What did you complete yesterday?\n"
-            "2. What are you working on today?\n"
-            "3. Any blockers?\n\n"
-            "Type `standup` here anytime to start a standup manually. 🚀"
+            "I'll ask you your team's standup questions at the scheduled time. "
+            "Type `standup` to start now. 🚀\n\n"
+            "*Commands:*\n"
+            "• `standup` — start a standup manually\n"
+            "• `skip` — skip today's standup\n"
+            "• `timezone <tz>` — set your timezone (e.g. `timezone America/New_York`)\n"
+            "• `help` — show this message"
         )
 
     @app.message("standup")
@@ -283,17 +305,27 @@ def register_handlers(app: App) -> None:
             say("You already have an active standup session. Answer the current question or wait for it to reset.")
             return
 
-        # Look up the configured channel for this workspace
+        # Look up the configured channel and custom questions for this workspace
         channel = ""
+        questions = None
         try:
             import db  # noqa: PLC0415
             config = db.get_workspace_config(team_id) or {}
             channel = config.get("channel_id", "")
+            qs = config.get("questions") or []
+            if isinstance(qs, str):
+                import json as _json
+                try:
+                    qs = _json.loads(qs)
+                except Exception:
+                    qs = []
+            if qs:
+                questions = qs
         except Exception:
             pass
 
-        state_store.start(cache_key, channel, team_id=team_id)
-        say(f"📋 Starting your standup!\n\n{QUESTIONS[0]}")
+        session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
+        say(f"📋 Starting your standup!\n\n{session.questions[0]}")
 
     @app.action("standup_edit")
     def handle_standup_edit(ack, body, say, client):  # noqa: ANN001
@@ -315,12 +347,63 @@ def register_handlers(app: App) -> None:
 
         cache_key = f"{team_id}:{user_id}"
         channel = ""
+        questions = None
         try:
             import db  # noqa: PLC0415
             config = db.get_workspace_config(team_id) or {}
             channel = config.get("channel_id", "")
+            qs = config.get("questions") or []
+            if isinstance(qs, str):
+                import json as _json
+                try:
+                    qs = _json.loads(qs)
+                except Exception:
+                    qs = []
+            if qs:
+                questions = qs
         except Exception:
             pass
 
-        state_store.start(cache_key, channel, team_id=team_id)
-        say(f"✏️ Let's update your standup!\n\n{QUESTIONS[0]}")
+        session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
+        say(f"✏️ Let's update your standup!\n\n{session.questions[0]}")
+
+    @app.message("skip")
+    def handle_skip(message, say):  # noqa: ANN001
+        """Allow users to skip today's standup."""
+        if message.get("channel_type") != "im":
+            return
+        user_id = message["user"]
+        team_id = message.get("team", "")
+        try:
+            import db  # noqa: PLC0415
+            db.skip_today(team_id, user_id)
+        except Exception:
+            pass
+        # Also clear any active session
+        cache_key = f"{team_id}:{user_id}"
+        state_store.clear(cache_key)
+        say("✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
+
+    @app.message(re.compile(r"^timezone\s+(\S+)$", re.IGNORECASE))
+    def handle_set_timezone(message, say, context):  # noqa: ANN001
+        """Allow users to set their personal timezone."""
+        if message.get("channel_type") != "im":
+            return
+        user_id = message["user"]
+        team_id = message.get("team", "")
+        tz_str = context["matches"][0]
+        try:
+            pytz.timezone(tz_str)  # validate
+        except Exception:
+            say(
+                f"❌ Unknown timezone `{tz_str}`. Use a TZ name like `America/New_York` or `Europe/London`.\n"
+                "See: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
+            )
+            return
+        try:
+            import db  # noqa: PLC0415
+            db.upsert_member(team_id, user_id, tz=tz_str)
+        except Exception as exc:
+            say(f"⚠️ Could not save timezone: {exc}")
+            return
+        say(f"✅ Your timezone has been updated to *{tz_str}*.")

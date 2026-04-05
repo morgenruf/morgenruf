@@ -25,9 +25,10 @@ class UserSession:
     cache_key: str          # "team_id:user_id"
     team_id: str
     channel: str            # target channel for the summary post
-    step: int = 0           # 0=sent q1, 1=sent q2, 2=sent q3, 3=done
+    step: int = 0           # 0=sent q1, 1=sent q2, 2=sent q3, 3=mood, 4=done
     answers: list[str] = field(default_factory=list)
     started_at: datetime = field(default_factory=datetime.utcnow)
+    questions: list[str] = field(default_factory=lambda: list(QUESTIONS))
 
     @property
     def user_id(self) -> str:
@@ -41,13 +42,18 @@ class StateStore:
         self._sessions: dict[str, UserSession] = {}
         self._lock = Lock()
 
-    def start(self, cache_key: str, channel: str, *, team_id: str = "") -> UserSession:
+    def start(self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None) -> UserSession:
         """Begin a new standup session. cache_key should be 'team_id:user_id'."""
         if not team_id:
             # Derive team_id from cache_key when not provided explicitly
             team_id = cache_key.split(":", 1)[0] if ":" in cache_key else ""
         with self._lock:
-            session = UserSession(cache_key=cache_key, team_id=team_id, channel=channel)
+            session = UserSession(
+                cache_key=cache_key,
+                team_id=team_id,
+                channel=channel,
+                questions=list(questions) if questions is not None else list(QUESTIONS),
+            )
             self._sessions[cache_key] = session
             return session
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import ipaddress
 import logging
@@ -12,6 +14,7 @@ from urllib.parse import urlparse
 
 from flask import (
     Blueprint,
+    Response,
     jsonify,
     redirect,
     render_template,
@@ -156,6 +159,7 @@ def _config_to_standup(cfg: dict) -> dict:
         "display_avatar": cfg.get("display_avatar", True),
         "jira_base_url": cfg.get("jira_base_url") or "",
         "zendesk_base_url": cfg.get("zendesk_base_url") or "",
+        "reminder_minutes": int(cfg.get("reminder_minutes") or 0),
     }
 
 
@@ -190,6 +194,7 @@ def api_create_standup():
             schedule_days=days,
             questions=data.get("questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]),
             active=data.get("active", True),
+            reminder_minutes=int(data.get("reminder_minutes") or 0),
         )
         cfg = db.get_workspace_config(team_id)
         return jsonify(_config_to_standup(cfg)), 201
@@ -220,6 +225,8 @@ def api_update_standup(standup_id: str):
             kwargs["questions"] = data["questions"]
         if "active" in data:
             kwargs["active"] = data["active"]
+        if "reminder_minutes" in data:
+            kwargs["reminder_minutes"] = int(data.get("reminder_minutes") or 0)
         if kwargs:
             db.upsert_workspace_config(team_id, **kwargs)
         cfg = db.get_workspace_config(team_id)
@@ -378,3 +385,63 @@ def api_delete_webhook(hook_id: str):
     except Exception as exc:
         logger.error("api_delete_webhook error: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Analytics API
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/analytics", methods=["GET"])
+@_login_required
+def api_analytics():
+    team_id = session["team_id"]
+    days = int(request.args.get("days", 7))
+    try:
+        stats = db.get_participation_stats(team_id, days)
+        for row in stats:
+            if row.get("last_standup"):
+                row["last_standup"] = row["last_standup"].isoformat()
+            row["responses"] = int(row.get("responses") or 0)
+            row["days_with_blockers"] = int(row.get("days_with_blockers") or 0)
+        return jsonify(stats)
+    except Exception as exc:
+        logger.error("api_analytics error: %s", exc)
+        return jsonify([])
+
+
+# ---------------------------------------------------------------------------
+# CSV Export API
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/export/csv", methods=["GET"])
+@_login_required
+def api_export_csv():
+    team_id = session["team_id"]
+    from_date = request.args.get("from")
+    to_date = request.args.get("to")
+    try:
+        rows = db.export_standups(team_id, from_date, to_date)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=["standup_date", "user_id", "yesterday", "today", "blockers", "has_blockers", "submitted_at", "mood"],
+    )
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({
+            "standup_date": row.get("standup_date", ""),
+            "user_id": row.get("user_id", ""),
+            "yesterday": row.get("yesterday", ""),
+            "today": row.get("today", ""),
+            "blockers": row.get("blockers", ""),
+            "has_blockers": row.get("has_blockers", ""),
+            "submitted_at": row.get("submitted_at", ""),
+            "mood": row.get("mood", ""),
+        })
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=standups-{team_id}.csv"},
+    )
