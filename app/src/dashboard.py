@@ -8,6 +8,7 @@ import json
 import ipaddress
 import logging
 import os
+import secrets
 import uuid
 from functools import wraps
 from urllib.parse import urlparse
@@ -256,6 +257,10 @@ def api_update_standup(standup_id: str):
             kwargs["ai_summary_enabled"] = bool(data["ai_summary_enabled"])
         if "ai_provider" in data:
             kwargs["ai_provider"] = data["ai_provider"]
+        if "manager_email" in data:
+            kwargs["manager_email"] = data["manager_email"]
+        if "manager_digest_enabled" in data:
+            kwargs["manager_digest_enabled"] = bool(data["manager_digest_enabled"])
         if kwargs:
             db.upsert_workspace_config(team_id, **kwargs)
         cfg = db.get_workspace_config(team_id)
@@ -705,3 +710,35 @@ def api_delete_rule(rule_id: int):
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+# ── Public Feed ─────────────────────────────────────────────────────────────
+
+@dashboard_bp.route("/feed/<token>")
+def public_feed(token: str):
+    from datetime import date  # noqa: PLC0415
+    config = db.get_workspace_by_feed_token(token)
+    if not config or not config.get("feed_public"):
+        return "<h2>Feed not found or not public.</h2>", 404
+    team_id = config["team_id"]
+    standups = db.get_standups(team_id, days=1)
+    today = date.today().strftime("%A, %B %-d, %Y")
+    return render_template("feed.html", standups=standups, config=config, today=today)
+
+
+@dashboard_bp.route("/dashboard/api/feed-token", methods=["POST"])
+@_login_required
+def api_generate_feed_token():
+    team_id = session["team_id"]
+    token = secrets.token_urlsafe(24)
+    db.upsert_workspace_config(team_id, feed_token=token, feed_public=True)
+    app_url = os.environ.get("APP_URL", "")
+    return jsonify({"token": token, "url": f"{app_url}/feed/{token}"})
+
+
+@dashboard_bp.route("/dashboard/api/feed-token", methods=["DELETE"])
+@_login_required
+def api_disable_feed():
+    team_id = session["team_id"]
+    db.upsert_workspace_config(team_id, feed_public=False)
+    return jsonify({"ok": True})

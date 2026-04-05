@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Standup Report — {{ config.get('standup_name', 'Team Standup') }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f6fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+    .header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 28px 24px 24px;
+    }
+    .header-inner {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .workspace-name {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .report-title {
+      font-size: 1.55rem;
+      font-weight: 700;
+    }
+    .report-date {
+      font-size: 0.92rem;
+      color: #9ca3af;
+      margin-top: 4px;
+    }
+    .content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 28px 16px 60px;
+    }
+    .empty-state {
+      background: #fff;
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 1rem;
+      margin-top: 8px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #22c55e;
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .user-name {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .submitted-at {
+      font-size: 0.78rem;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+    .fields {
+      display: grid;
+      gap: 10px;
+    }
+    .field-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b7280;
+      margin-bottom: 3px;
+    }
+    .field-value {
+      font-size: 0.95rem;
+      color: #374151;
+      line-height: 1.5;
+    }
+    .blocker-box {
+      background: #fff7ed;
+      border-left: 3px solid #f97316;
+      padding: 8px 12px;
+      border-radius: 0 6px 6px 0;
+    }
+    .blocker-label {
+      color: #c2410c;
+    }
+    .blocker-value {
+      color: #9a3412;
+    }
+    .footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 0.82rem;
+      color: #9ca3af;
+    }
+    .footer a {
+      color: #22c55e;
+      text-decoration: none;
+    }
+    @media (min-width: 600px) {
+      .fields {
+        grid-template-columns: 1fr 1fr;
+      }
+      .blocker-field {
+        grid-column: 1 / -1;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="workspace-name">{{ config.get('standup_name', 'Team Standup') }}</div>
+    <div class="report-title">Standup Report</div>
+    <div class="report-date">{{ today }}</div>
+  </div>
+</div>
+
+<div class="content">
+  {% if standups %}
+    {% for s in standups %}
+    <div class="card">
+      <div class="card-header">
+        <div class="avatar">{{ (s.get('user_name') or s.get('user_id', '?'))[0] | upper }}</div>
+        <div>
+          <div class="user-name">{{ s.get('user_name') or s.get('user_id', 'Unknown') }}</div>
+          {% if s.get('submitted_at') %}
+          <div class="submitted-at">Submitted at {{ s['submitted_at'].strftime('%H:%M') if s['submitted_at'] else '' }}</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="fields">
+        <div>
+          <div class="field-label">Yesterday</div>
+          <div class="field-value">{{ s.get('yesterday') or '—' }}</div>
+        </div>
+        <div>
+          <div class="field-label">Today</div>
+          <div class="field-value">{{ s.get('today') or '—' }}</div>
+        </div>
+        {% set b = s.get('blockers', '') %}
+        {% if b and b.strip().lower() not in ('', 'none', 'n/a', 'no', '-') %}
+        <div class="blocker-field blocker-box">
+          <div class="field-label blocker-label">⚠️ Blockers</div>
+          <div class="field-value blocker-value">{{ b }}</div>
+        </div>
+        {% else %}
+        <div>
+          <div class="field-label">Blockers</div>
+          <div class="field-value">None</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No standup responses yet for today.</div>
+  {% endif %}
+</div>
+
+<div class="footer">
+  Powered by <a href="https://morgenruf.dev">Morgenruf</a> &bull; morgenruf.dev
+</div>
+
+</body>
+</html>

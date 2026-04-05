@@ -60,6 +60,168 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
         logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
 
 
+def _send_question_block(client, user_id: str, question: str, step: int) -> None:
+    """Send a standup question as a Block Kit input block with dispatch_action."""
+    client.chat_postMessage(
+        channel=user_id,
+        text=question,  # fallback for notifications
+        blocks=[
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*{question}*"},
+            },
+            {
+                "type": "input",
+                "block_id": f"answer_{step}",
+                "dispatch_action": True,
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": f"standup_answer_{step}",
+                    "placeholder": {"type": "plain_text", "text": "Type your answer..."},
+                    "multiline": True,
+                },
+                "label": {"type": "plain_text", "text": "Your answer"},
+            },
+        ],
+    )
+
+
+def _start_standup_session(user_id: str, team_id: str, client) -> None:
+    """Look up workspace config, create a session, and send the first question block."""
+    cache_key = f"{team_id}:{user_id}"
+    if state_store.is_active(cache_key):
+        client.chat_postMessage(
+            channel=user_id,
+            text="You already have an active standup session. Answer the current question or wait for it to reset.",
+        )
+        return
+
+    channel = ""
+    questions = None
+    try:
+        import db  # noqa: PLC0415
+        config = db.get_workspace_config(team_id) or {}
+        channel = config.get("channel_id", "")
+        qs = config.get("questions") or []
+        if isinstance(qs, str):
+            import json as _json  # noqa: PLC0415
+            try:
+                qs = _json.loads(qs)
+            except Exception:
+                qs = []
+        if qs:
+            questions = qs
+    except Exception:
+        pass
+
+    session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
+    client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
+    _send_question_block(client, user_id, session.questions[0], 0)
+
+
+def _complete_standup(user_id: str, session, client) -> None:
+    """Finalize a completed standup: send Block Kit confirmation, post to channel, persist, fire events."""
+    n_questions = len(session.questions)
+    question_answers = session.answers[:n_questions]
+    mood = session.answers[n_questions] if len(session.answers) > n_questions else None
+
+    # Block Kit confirmation with edit button
+    client.chat_postMessage(
+        channel=user_id,
+        text="✅ Standup submitted!",
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Standup submitted!* You can edit your responses within 30 minutes.",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "✏️ Edit responses"},
+                        "action_id": "edit_standup",
+                        "style": "primary",
+                    }
+                ],
+            },
+        ],
+    )
+
+    formatted = _format_standup(user_id, question_answers, mood=mood)
+    channel = session.channel
+    if channel:
+        try:
+            try:
+                import db as _db  # noqa: PLC0415
+                from autolink import autolink  # noqa: PLC0415
+                cfg = _db.get_workspace_config(session.team_id) or {}
+                formatted = autolink(formatted, cfg)
+            except Exception:
+                pass
+            client.chat_postMessage(channel=channel, text=formatted)
+            logger.info("Posted standup for %s to %s", user_id, channel)
+        except Exception as exc:
+            logger.error("Failed to post standup for %s: %s", user_id, exc)
+            client.chat_postMessage(
+                channel=user_id,
+                text=f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}",
+            )
+
+    _persist_standup(session.team_id, user_id, question_answers, mood=mood)
+    state_store.clear(f"{session.team_id}:{user_id}")
+
+    fire_webhooks(session.team_id, "standup.completed", {
+        "team_id": session.team_id,
+        "user_id": user_id,
+        "answers": {
+            "yesterday": question_answers[0] if len(question_answers) > 0 else "",
+            "today": question_answers[1] if len(question_answers) > 1 else "",
+            "blockers": question_answers[2] if len(question_answers) > 2 else "",
+        },
+        "mood": mood,
+        "timestamp": datetime.utcnow().isoformat(),
+    })
+
+    try:
+        import db as _db  # noqa: PLC0415
+        from ai_summary import generate_summary  # noqa: PLC0415
+        config = _db.get_workspace_config(session.team_id) or {}
+        if config.get("ai_summary_enabled") and channel:
+            today_standups = _db.get_today_standups(session.team_id)
+            active_members = _db.get_active_members(session.team_id)
+            submitted_users = {s["user_id"] for s in today_standups}
+            all_submitted = all(m["user_id"] in submitted_users for m in active_members)
+            if all_submitted and len(today_standups) > 1:
+                inst = _db.get_installation(session.team_id)
+                team_name = (inst or {}).get("team_name", "")
+                summary_text = generate_summary(today_standups, team_name)
+                if summary_text:
+                    client.chat_postMessage(
+                        channel=channel,
+                        text=f"✨ *AI Summary*\n\n{summary_text}",
+                    )
+    except Exception as exc:
+        logger.warning("AI summary failed: %s", exc)
+
+    try:
+        from workflow import evaluate_rules  # noqa: PLC0415
+        blocker_text = question_answers[2] if len(question_answers) > 2 else ""
+        has_blockers = bool(blocker_text.strip())
+        evaluate_rules(
+            session.team_id,
+            "blocker_detected",
+            {"has_blockers": has_blockers, "blockers": blocker_text, "team": session.team_id},
+            client,
+        )
+        evaluate_rules(session.team_id, "standup_complete", {"team": session.team_id}, client)
+    except Exception as exc:
+        logger.warning("Workflow rules evaluation failed: %s", exc)
+
+
 def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
     """POST payload to every registered webhook for team_id.
 
@@ -163,94 +325,14 @@ def register_handlers(app: App) -> None:
         n_questions = len(session.questions)
 
         if session.step < n_questions:
-            # Still asking custom questions
-            say(session.questions[session.step])
+            # Still collecting question answers — send next question as Block Kit
+            _send_question_block(client, user_id, session.questions[session.step], session.step)
         elif session.step == n_questions:
-            # All questions answered — ask mood
+            # All questions answered — ask mood (plain text, no block needed)
             say(_MOOD_QUESTION)
         else:
-            # Mood answered — all done
-            question_answers = session.answers[:n_questions]
-            mood = session.answers[n_questions] if len(session.answers) > n_questions else None
-
-            say("✅ Thanks! Your standup has been posted.")
-
-            formatted = _format_standup(user_id, question_answers, mood=mood)
-            channel = session.channel
-
-            if channel:
-                try:
-                    # Apply autolinks best-effort before posting to channel
-                    try:
-                        import db as _db  # noqa: PLC0415
-                        from autolink import autolink  # noqa: PLC0415
-                        cfg = _db.get_workspace_config(session.team_id) or {}
-                        formatted = autolink(formatted, cfg)
-                    except Exception:
-                        pass
-                    client.chat_postMessage(channel=channel, text=formatted)
-                    logger.info("Posted standup for %s to %s", user_id, channel)
-                except Exception as exc:
-                    logger.error("Failed to post standup for %s: %s", user_id, exc)
-                    say(f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}")
-
-            _persist_standup(session.team_id, user_id, question_answers, mood=mood)
-            state_store.clear(cache_key)
-
-            # Fire standup.completed webhooks
-            fire_webhooks(session.team_id, "standup.completed", {
-                "team_id": session.team_id,
-                "user_id": user_id,
-                "answers": {
-                    "yesterday": question_answers[0] if len(question_answers) > 0 else "",
-                    "today": question_answers[1] if len(question_answers) > 1 else "",
-                    "blockers": question_answers[2] if len(question_answers) > 2 else "",
-                },
-                "mood": mood,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
-
-            # Post AI summary if enabled and all members have submitted
-            try:
-                import db as _db
-                from ai_summary import generate_summary
-                config = _db.get_workspace_config(session.team_id) or {}
-                if config.get("ai_summary_enabled") and channel:
-                    today_standups = _db.get_today_standups(session.team_id)
-                    active_members = _db.get_active_members(session.team_id)
-                    submitted_users = {s["user_id"] for s in today_standups}
-                    all_submitted = all(m["user_id"] in submitted_users for m in active_members)
-                    if all_submitted and len(today_standups) > 1:
-                        inst = _db.get_installation(session.team_id)
-                        team_name = (inst or {}).get("team_name", "")
-                        summary_text = generate_summary(today_standups, team_name)
-                        if summary_text:
-                            client.chat_postMessage(
-                                channel=channel,
-                                text=f"✨ *AI Summary*\n\n{summary_text}",
-                            )
-            except Exception as exc:
-                logger.warning("AI summary failed: %s", exc)
-
-            # Evaluate workflow rules
-            try:
-                from workflow import evaluate_rules  # noqa: PLC0415
-                blocker_text = question_answers[2] if len(question_answers) > 2 else ""
-                has_blockers = bool(blocker_text.strip())
-                evaluate_rules(
-                    session.team_id,
-                    "blocker_detected",
-                    {"has_blockers": has_blockers, "blockers": blocker_text, "team": session.team_id},
-                    client,
-                )
-                evaluate_rules(
-                    session.team_id,
-                    "standup_complete",
-                    {"team": session.team_id},
-                    client,
-                )
-            except Exception as exc:
-                logger.warning("Workflow rules evaluation failed: %s", exc)
+            # Mood answered — finalize
+            _complete_standup(user_id, session, client)
 
     @app.event("app_home_opened")
     def handle_app_home(event, client):  # noqa: ANN001
@@ -350,33 +432,137 @@ def register_handlers(app: App) -> None:
             return
         user_id: str = message["user"]
         team_id: str = message.get("team", "")
-        cache_key = f"{team_id}:{user_id}"
+        _start_standup_session(user_id, team_id, client)
 
-        if state_store.is_active(cache_key):
-            say("You already have an active standup session. Answer the current question or wait for it to reset.")
+    @app.action(re.compile(r"standup_answer_\d+"))
+    def handle_standup_answer(ack, body, client):  # noqa: ANN001
+        """Handle Block Kit input submission for each standup question."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        action = body["actions"][0]
+        answer: str = action.get("value", "")
+
+        cache_key = f"{team_id}:{user_id}"
+        session = state_store.get(cache_key)
+        if not session:
             return
 
-        # Look up the configured channel and custom questions for this workspace
-        channel = ""
-        questions = None
+        session = state_store.record_answer(cache_key, answer)
+        n_questions = len(session.questions)
+
+        if session.step < n_questions:
+            _send_question_block(client, user_id, session.questions[session.step], session.step)
+        elif session.step == n_questions:
+            # All main questions answered — ask mood as plain text
+            client.chat_postMessage(channel=user_id, text=_MOOD_QUESTION)
+        # else: mood comes via plain-text DM (handle_dm fallback)
+
+    @app.command("/standup")
+    def handle_standup_command(ack, body, client):  # noqa: ANN001
+        """Slash command to start a standup session."""
+        ack()
+        user_id: str = body["user_id"]
+        team_id: str = body["team_id"]
+        _start_standup_session(user_id, team_id, client)
+
+    @app.command("/skip")
+    def handle_skip_command(ack, body, client):  # noqa: ANN001
+        """Slash command to skip today's standup."""
+        ack()
+        user_id: str = body["user_id"]
+        team_id: str = body["team_id"]
         try:
             import db  # noqa: PLC0415
-            config = db.get_workspace_config(team_id) or {}
-            channel = config.get("channel_id", "")
-            qs = config.get("questions") or []
-            if isinstance(qs, str):
-                import json as _json
-                try:
-                    qs = _json.loads(qs)
-                except Exception:
-                    qs = []
-            if qs:
-                questions = qs
+            db.skip_today(team_id, user_id)
         except Exception:
             pass
+        cache_key = f"{team_id}:{user_id}"
+        state_store.clear(cache_key)
+        client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
-        session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
-        say(f"📋 Starting your standup!\n\n{session.questions[0]}")
+    @app.action("edit_standup")
+    def handle_edit_standup(ack, body, client):  # noqa: ANN001
+        """Handle 'Edit responses' button — open a pre-filled modal within the 30-minute window."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+
+        import db  # noqa: PLC0415
+        standup = db.get_latest_standup(user_id, team_id)
+        if not standup:
+            client.chat_postMessage(channel=user_id, text="No standup found to edit.")
+            return
+
+        submitted = standup.get("submitted_at")
+        if submitted:
+            if submitted.tzinfo is None:
+                submitted = submitted.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - submitted > timedelta(minutes=30):
+                client.chat_postMessage(
+                    channel=user_id,
+                    text="⏰ Edit window has closed (30 minutes after submission).",
+                )
+                return
+
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view={
+                "type": "modal",
+                "callback_id": "edit_standup_modal",
+                "title": {"type": "plain_text", "text": "Edit Standup"},
+                "submit": {"type": "plain_text", "text": "Save"},
+                "blocks": [
+                    {
+                        "type": "input",
+                        "block_id": "q1",
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": "answer",
+                            "initial_value": standup.get("yesterday") or "",
+                            "multiline": True,
+                        },
+                        "label": {"type": "plain_text", "text": "Yesterday"},
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "q2",
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": "answer",
+                            "initial_value": standup.get("today") or "",
+                            "multiline": True,
+                        },
+                        "label": {"type": "plain_text", "text": "Today"},
+                    },
+                    {
+                        "type": "input",
+                        "block_id": "q3",
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": "answer",
+                            "initial_value": standup.get("blockers") or "",
+                            "multiline": True,
+                        },
+                        "label": {"type": "plain_text", "text": "Blockers"},
+                    },
+                ],
+            },
+        )
+
+    @app.view("edit_standup_modal")
+    def handle_edit_modal_submit(ack, body, client):  # noqa: ANN001
+        """Handle modal submission for standup editing."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        values = body["view"]["state"]["values"]
+        yesterday = values["q1"]["answer"]["value"] or ""
+        today = values["q2"]["answer"]["value"] or ""
+        blockers = values["q3"]["answer"]["value"] or ""
+        import db  # noqa: PLC0415
+        db.update_standup(user_id, team_id, yesterday=yesterday, today=today, blockers=blockers)
+        client.chat_postMessage(channel=user_id, text="✅ Standup updated!")
 
     @app.action("standup_edit")
     def handle_standup_edit(ack, body, say, client):  # noqa: ANN001
