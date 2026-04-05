@@ -386,7 +386,23 @@
       padding: 14px 16px;
       display: flex; align-items: center; gap: 12px;
     }
-    .avatar {
+    .member-info { flex: 1; min-width: 0; }
+    .member-name { font-weight: 500; font-size: 14px; }
+    .member-tz { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+    .member-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .role-badge {
+      display: inline-block;
+      font-size: 10px; font-weight: 600; letter-spacing: .04em;
+      padding: 2px 7px; border-radius: 20px;
+      background: rgba(34,197,94,0.18); color: var(--accent);
+      border: 1px solid rgba(34,197,94,0.3);
+    }
+    .role-badge.member {
+      background: rgba(156,163,175,0.15); color: var(--text-dim);
+      border: 1px solid rgba(156,163,175,0.2);
+    }
+    .btn-role { font-size: 11px; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text-muted); cursor: pointer; transition: background 0.12s; }
+    .btn-role:hover { background: var(--border); color: var(--text); }
       width: 36px; height: 36px;
       border-radius: 8px;
       background: var(--surface2);
@@ -779,6 +795,18 @@
             <button class="toggle on" id="f-avatar-toggle" onclick="toggleAvatar(this)" type="button"></button>
             <label style="margin:0;cursor:pointer" onclick="toggleAvatar(document.getElementById('f-avatar-toggle'))">Display member avatar in report</label>
           </div>
+          <div class="form-section-title" style="margin-top:16px">✨ AI Summary</div>
+          <div class="form-group" style="display:flex;align-items:center;gap:10px">
+            <button class="toggle" id="f-ai-summary-toggle" onclick="this.classList.toggle('on')" type="button"></button>
+            <label style="margin:0;cursor:pointer" onclick="document.getElementById('f-ai-summary-toggle').classList.toggle('on')">Enable AI-generated daily summary <span style="color:var(--text-dim)">(requires OPENAI_API_KEY or ANTHROPIC_API_KEY)</span></label>
+          </div>
+          <div class="form-group" style="max-width:260px;margin-top:10px">
+            <label>Provider</label>
+            <select id="f-ai-provider">
+              <option value="openai">OpenAI gpt-4o-mini</option>
+              <option value="anthropic">Anthropic claude-haiku</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -846,6 +874,30 @@
     }
     return res.json();
   }
+
+  // ── Current user / RBAC ──
+  window._myRole = 'member';
+  window._myUserId = '';
+
+  async function loadMe() {
+    try {
+      const me = await api('GET', '/me');
+      window._myRole = me.role || 'member';
+      window._myUserId = me.user_id || '';
+    } catch (e) { /* keep defaults */ }
+  }
+
+  async function setRole(userId, role) {
+    try {
+      await api('PUT', '/members/' + userId + '/role', { role });
+      const m = state.members.find(x => x.id === userId);
+      if (m) m.role = role;
+      renderMembers();
+      toast('Role updated to ' + role);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  loadMe();
 
   // ── Toast ──
   function toast(msg, type = 'success') {
@@ -1000,9 +1052,20 @@
       const avatarHtml = m.avatar
         ? '<div class="avatar"><img src="' + esc(m.avatar) + '" alt=""/></div>'
         : '<div class="avatar-initials">' + esc(initials) + '</div>';
+      const role = m.role || 'member';
+      const badgeHtml = role === 'admin'
+        ? '<span class="role-badge">Admin</span>'
+        : '<span class="role-badge member">Member</span>';
+      let roleBtn = '';
+      if (window._myRole === 'admin' && m.id !== window._myUserId) {
+        roleBtn = role === 'admin'
+          ? '<button class="btn-role" onclick="setRole(\'' + esc(m.id) + '\',\'member\')">Make Member</button>'
+          : '<button class="btn-role" onclick="setRole(\'' + esc(m.id) + '\',\'admin\')">Make Admin</button>';
+      }
       return '<div class="member-card">' + avatarHtml +
-        '<div><div class="member-name">' + esc(m.name || m.display_name || m.id) + '</div>' +
-        '<div class="member-tz">' + esc(m.tz || 'UTC') + '</div></div></div>';
+        '<div class="member-info"><div class="member-name">' + esc(m.name || m.display_name || m.id) + '</div>' +
+        '<div class="member-tz">' + esc(m.tz || 'UTC') + '</div>' +
+        '<div class="member-meta">' + badgeHtml + roleBtn + '</div></div></div>';
     }).join('');
   }
 
@@ -1120,6 +1183,8 @@
     document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
     document.getElementById('f-reminder').value = '0';
+    document.getElementById('f-ai-summary-toggle').classList.remove('on');
+    document.getElementById('f-ai-provider').value = 'openai';
     selectDays(['mon','tue','wed','thu','fri']);
     setQuestions(['What did you complete yesterday?','What are you working on today?','Any blockers?']);
     clearParticipants();
@@ -1148,6 +1213,8 @@
     document.getElementById('f-linear-team').value = s.linear_team || '';
     document.getElementById('f-avatar-toggle').classList.toggle('on', s.display_avatar !== false);
     document.getElementById('f-reminder').value = s.reminder_minutes || 0;
+    document.getElementById('f-ai-summary-toggle').classList.toggle('on', !!s.ai_summary_enabled);
+    document.getElementById('f-ai-provider').value = s.ai_provider || 'openai';
     selectDays(s.schedule_days || []);
     setQuestions(s.questions || []);
     setParticipants(s.participants || []);
@@ -1186,12 +1253,9 @@
       github_repo: document.getElementById('f-github-repo').value.trim(),
       linear_team: document.getElementById('f-linear-team').value.trim(),
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
+      ai_summary_enabled: document.getElementById('f-ai-summary-toggle').classList.contains('on'),
+      ai_provider: document.getElementById('f-ai-provider').value,
     };
-    try {
-      let updated;
-      if (id) {
-        updated = await api('PUT', '/standups/' + id, body);
-        const idx = state.standups.findIndex(s => s.id == id);
         if (idx >= 0) state.standups[idx] = updated;
       } else {
         updated = await api('POST', '/standups', body);
@@ -1489,6 +1553,8 @@
     document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
     document.getElementById('f-reminder').value = '0';
+    document.getElementById('f-ai-summary-toggle').classList.remove('on');
+    document.getElementById('f-ai-provider').value = 'openai';
     selectDays(['mon','tue','wed','thu','fri']);
     setQuestions(['What did you complete yesterday?','What are you working on today?','Any blockers?']);
     clearParticipants();
@@ -1518,6 +1584,8 @@
     document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
     document.getElementById('f-reminder').value = s.reminder_minutes || 0;
+    document.getElementById('f-ai-summary-toggle').classList.remove('on');
+    document.getElementById('f-ai-provider').value = 'openai';
     selectDays((s.schedule_days || 'mon,tue,wed,thu,fri').split(','));
     const qs = Array.isArray(s.questions) ? s.questions : [];
     setQuestions(qs.length ? qs : ['What did you complete yesterday?','What are you working on today?','Any blockers?']);

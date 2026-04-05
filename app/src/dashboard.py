@@ -320,9 +320,20 @@ def api_set_member_role(user_id: str):
 @dashboard_bp.route("/dashboard/api/members", methods=["GET"])
 @_login_required
 def api_members():
+    team_id = session["team_id"]
     token = _get_bot_token()
     if not token:
         return jsonify([])
+
+    # Build role map from DB
+    role_map: dict[str, str] = {}
+    try:
+        db_members = db.get_active_members(team_id)
+        for r in db_members:
+            role_map[r["user_id"]] = r.get("role", "member")
+    except Exception:
+        pass
+
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
         client = WebClient(token=token)
@@ -332,22 +343,24 @@ def api_members():
             if u.get("deleted") or u.get("is_bot") or u.get("id") == "USLACKBOT":
                 continue
             profile = u.get("profile", {})
+            uid = u["id"]
             members.append({
-                "id": u["id"],
+                "id": uid,
                 "name": profile.get("real_name") or u.get("name", ""),
                 "display_name": profile.get("display_name") or u.get("name", ""),
                 "avatar": profile.get("image_48", ""),
                 "email": profile.get("email", ""),
                 "tz": u.get("tz", "UTC"),
+                "role": role_map.get(uid, "member"),
             })
         return jsonify(members)
     except Exception as exc:
         logger.error("api_members error: %s", exc)
         # Fall back to DB members
         try:
-            rows = db.get_active_members(session["team_id"])
+            rows = db.get_active_members(team_id)
             return jsonify([
-                {"id": r["user_id"], "name": r.get("real_name", ""), "email": r.get("email", ""), "tz": r.get("tz", "UTC")}
+                {"id": r["user_id"], "name": r.get("real_name", ""), "email": r.get("email", ""), "tz": r.get("tz", "UTC"), "role": r.get("role", "member")}
                 for r in rows
             ])
         except Exception:
