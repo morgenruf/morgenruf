@@ -147,44 +147,57 @@ def logout():
 
 # ---------------------------------------------------------------------------
 # Standup config API
-# Each workspace_config row is treated as one "standup".
-# For workspaces that haven't created one yet, we support creation.
+# Each standup_schedules row is one "standup".
 # ---------------------------------------------------------------------------
 
-def _config_to_standup(cfg: dict) -> dict:
-    """Normalise a workspace_config row into a standup API object."""
-    questions = cfg.get("questions") or []
+def _schedule_to_standup(row: dict) -> dict:
+    """Normalise a standup_schedules row into a standup API object."""
+    questions = row.get("questions") or []
     if isinstance(questions, str):
         try:
             questions = json.loads(questions)
         except Exception:
             questions = []
+
+    participants = row.get("participants") or []
+    if isinstance(participants, str):
+        try:
+            participants = json.loads(participants)
+        except Exception:
+            participants = []
+
+    raw_days = row.get("schedule_days") or "mon,tue,wed,thu,fri"
+    schedule_days = raw_days.split(",") if isinstance(raw_days, str) else raw_days
+
     return {
-        "id": cfg.get("id", 1),
-        "name": cfg.get("name", "Morning Standup"),
-        "channel_id": cfg.get("channel_id") or "",
-        "schedule_time": cfg.get("schedule_time") or "09:00",
-        "schedule_tz": cfg.get("schedule_tz") or "UTC",
-        "schedule_days": (cfg.get("schedule_days") or "mon,tue,wed,thu,fri").split(","),
+        "id": row["id"],
+        "name": row.get("name") or "Morning Standup",
+        "channel_id": row.get("channel_id") or "",
+        "schedule_time": row.get("schedule_time") or "09:00",
+        "schedule_tz": row.get("schedule_tz") or "UTC",
+        "schedule_days": schedule_days,
         "questions": questions,
-        "active": cfg.get("active", True),
-        "participants": cfg.get("participants") or [],
-        "report_channel": cfg.get("report_channel") or "",
-        "report_time": cfg.get("report_time") or "",
-        "group_by": cfg.get("group_by") or "member",
-        "post_as": cfg.get("post_as") or "combined",
-        "sort_order": cfg.get("sort_order") or "chronological",
-        "edit_window": cfg.get("edit_window") or "report",
-        "display_avatar": cfg.get("display_avatar", True),
-        "jira_base_url": cfg.get("jira_base_url") or "",
-        "zendesk_base_url": cfg.get("zendesk_base_url") or "",
-        "reminder_minutes": int(cfg.get("reminder_minutes") or 0),
-        "ai_summary_enabled": bool(cfg.get("ai_summary_enabled", False)),
-        "ai_provider": cfg.get("ai_provider") or "openai",
-        "feed_token": cfg.get("feed_token") or "",
-        "feed_public": bool(cfg.get("feed_public", False)),
-        "manager_email": cfg.get("manager_email") or "",
-        "manager_digest_enabled": bool(cfg.get("manager_digest_enabled", False)),
+        "active": row.get("active", True),
+        "participants": participants,
+        "reminder_minutes": int(row.get("reminder_minutes") or 0),
+        # Extended fields — may not be present in all rows
+        "report_channel": row.get("report_channel") or "",
+        "report_time": row.get("report_time") or "",
+        "group_by": row.get("group_by") or "member",
+        "post_as": row.get("post_as") or "combined",
+        "sort_order": row.get("sort_order") or "chronological",
+        "edit_window": row.get("edit_window") or "report",
+        "display_avatar": bool(row.get("display_avatar", True)),
+        "jira_base_url": row.get("jira_base_url") or "",
+        "zendesk_base_url": row.get("zendesk_base_url") or "",
+        "github_repo": row.get("github_repo") or "",
+        "linear_team": row.get("linear_team") or "",
+        "ai_summary_enabled": bool(row.get("ai_summary_enabled", False)),
+        "ai_provider": row.get("ai_provider") or "openai",
+        "feed_token": row.get("feed_token") or "",
+        "feed_public": bool(row.get("feed_public", False)),
+        "manager_email": row.get("manager_email") or "",
+        "manager_digest_enabled": bool(row.get("manager_digest_enabled", False)),
     }
 
 
@@ -193,10 +206,8 @@ def _config_to_standup(cfg: dict) -> dict:
 def api_list_standups():
     team_id = session["team_id"]
     try:
-        cfg = db.get_workspace_config(team_id)
-        if cfg:
-            return jsonify([_config_to_standup(cfg)])
-        return jsonify([])
+        rows = db.get_standup_schedules(team_id)
+        return jsonify([_schedule_to_standup(r) for r in rows])
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
         return jsonify([])
@@ -211,18 +222,19 @@ def api_create_standup():
         days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
         if isinstance(days, list):
             days = ",".join(days)
-        db.upsert_workspace_config(
+        row = db.create_standup_schedule(
             team_id,
+            name=data.get("name", "Morning Standup"),
             channel_id=data.get("channel_id", ""),
             schedule_time=data.get("schedule_time", "09:00"),
             schedule_tz=data.get("schedule_tz", "UTC"),
             schedule_days=days,
             questions=data.get("questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]),
+            participants=data.get("participants", []),
             active=data.get("active", True),
             reminder_minutes=int(data.get("reminder_minutes") or 0),
         )
-        cfg = db.get_workspace_config(team_id)
-        return jsonify(_config_to_standup(cfg)), 201
+        return jsonify(_schedule_to_standup(row)), 201
     except Exception as exc:
         logger.error("api_create_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -234,39 +246,28 @@ def api_update_standup(standup_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
     try:
-        days = data.get("schedule_days")
-        if isinstance(days, list):
-            days = ",".join(days)
         kwargs: dict = {}
-        if "channel_id" in data:
-            kwargs["channel_id"] = data["channel_id"]
-        if "schedule_time" in data:
-            kwargs["schedule_time"] = data["schedule_time"]
-        if "schedule_tz" in data:
-            kwargs["schedule_tz"] = data["schedule_tz"]
-        if days is not None:
-            kwargs["schedule_days"] = days
-        if "questions" in data:
-            kwargs["questions"] = data["questions"]
-        if "active" in data:
-            kwargs["active"] = data["active"]
-        if "reminder_minutes" in data:
-            kwargs["reminder_minutes"] = int(data.get("reminder_minutes") or 0)
-        for field in ("jira_base_url", "github_repo", "linear_team"):
+        for field in (
+            "name", "channel_id", "schedule_time", "schedule_tz",
+            "questions", "participants", "active",
+            "report_channel", "report_time", "group_by", "post_as", "sort_order",
+            "edit_window", "display_avatar", "jira_base_url", "zendesk_base_url",
+            "github_repo", "linear_team", "ai_provider", "feed_token", "feed_public",
+            "manager_email",
+        ):
             if field in data:
                 kwargs[field] = data[field]
+        if "schedule_days" in data:
+            days = data["schedule_days"]
+            kwargs["schedule_days"] = ",".join(days) if isinstance(days, list) else days
+        if "reminder_minutes" in data:
+            kwargs["reminder_minutes"] = int(data.get("reminder_minutes") or 0)
         if "ai_summary_enabled" in data:
             kwargs["ai_summary_enabled"] = bool(data["ai_summary_enabled"])
-        if "ai_provider" in data:
-            kwargs["ai_provider"] = data["ai_provider"]
-        if "manager_email" in data:
-            kwargs["manager_email"] = data["manager_email"]
         if "manager_digest_enabled" in data:
             kwargs["manager_digest_enabled"] = bool(data["manager_digest_enabled"])
-        if kwargs:
-            db.upsert_workspace_config(team_id, **kwargs)
-        cfg = db.get_workspace_config(team_id)
-        return jsonify(_config_to_standup(cfg))
+        row = db.update_standup_schedule(team_id, int(standup_id), **kwargs)
+        return jsonify(_schedule_to_standup(row))
     except Exception as exc:
         logger.error("api_update_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -277,7 +278,7 @@ def api_update_standup(standup_id: str):
 def api_delete_standup(standup_id: str):
     team_id = session["team_id"]
     try:
-        db.upsert_workspace_config(team_id, active=False)
+        db.delete_standup_schedule(team_id, int(standup_id))
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error("api_delete_standup error: %s", exc)
@@ -373,6 +374,41 @@ def api_members():
             ])
         except Exception:
             return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/members/invite", methods=["POST"])
+@_login_required
+@_admin_required
+def api_invite_admin():
+    """Look up a Slack user by name/email and grant them admin role."""
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    user_id = data.get("user_id", "").strip()
+    role = data.get("role", "admin")
+    if not user_id:
+        return jsonify({"error": "user_id required"}), 400
+    token = _get_bot_token()
+    if not token:
+        return jsonify({"error": "No bot token"}), 500
+    try:
+        from slack_sdk import WebClient  # noqa: PLC0415
+        client = WebClient(token=token)
+        info = client.users_info(user=user_id)
+        u = info["user"]
+        profile = u.get("profile", {})
+        db.upsert_member(
+            team_id=team_id,
+            user_id=user_id,
+            real_name=profile.get("real_name") or u.get("name", ""),
+            email=profile.get("email", ""),
+            tz=u.get("tz", "UTC"),
+        )
+        db.set_member_role(team_id, user_id, role)
+        return jsonify({"ok": True, "user_id": user_id, "role": role,
+                        "name": profile.get("real_name") or u.get("name", "")})
+    except Exception as exc:
+        logger.error("api_invite_admin error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
 
 
 # ---------------------------------------------------------------------------

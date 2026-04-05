@@ -560,7 +560,10 @@
           <div class="page-title">Members</div>
           <div class="page-subtitle">Team members synced from Slack</div>
         </div>
-        <button class="btn btn-secondary" onclick="loadMembers()">&#8635; Refresh</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary" onclick="openInviteModal()">+ Invite Admin</button>
+          <button class="btn btn-secondary" onclick="loadMembers()">&#8635; Refresh</button>
+        </div>
       </div>
       <div id="members-grid" class="members-grid"></div>
     </div>
@@ -789,6 +792,37 @@
 
   </div>
 
+  <!-- Invite Admin Modal -->
+  <div id="invite-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-header">
+        <div class="modal-title">Invite Admin</div>
+        <button class="modal-close" onclick="closeInviteModal()">&#10005;</button>
+      </div>
+      <div style="padding:20px">
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">
+          Search for a workspace member and grant them admin access to this dashboard.
+        </p>
+        <div style="position:relative;margin-bottom:12px">
+          <input id="invite-search" type="text" class="form-input" placeholder="Search by name or email..."
+                 oninput="searchInviteMembers(this.value)" autocomplete="off" />
+          <div id="invite-results" style="position:absolute;top:100%;left:0;right:0;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;max-height:200px;overflow-y:auto;z-index:100;display:none"></div>
+        </div>
+        <div id="invite-selected" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px;margin-bottom:12px;align-items:center;gap:10px">
+          <img id="invite-avatar" src="" style="width:32px;height:32px;border-radius:50%"/>
+          <div>
+            <div id="invite-name" style="font-weight:600;font-size:13px"></div>
+            <div id="invite-email" style="font-size:12px;color:var(--text-muted)"></div>
+          </div>
+        </div>
+        <input id="invite-user-id" type="hidden" />
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-secondary" onclick="closeInviteModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitInvite()">Grant Admin Access</button>
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- MCP Create Key Modal -->
   <div class="modal-overlay" id="mcp-key-modal" style="display:none">
     <div class="modal" style="max-width:440px">
@@ -1206,7 +1240,7 @@
     }
     el.innerHTML = state.standups.map(s => {
       const chName = channelName(s.channel_id);
-      const days = (s.schedule_days || []).join(', ');
+      const dayChips = (s.schedule_days || []).map(d => '<span class="day-chip">' + esc(d) + '</span>').join('');
       const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
       return '<div class="standup-card" id="sc-' + s.id + '">' +
         '<div class="standup-icon">&#9201;</div>' +
@@ -1215,7 +1249,7 @@
         '<div class="standup-meta">' +
         '<span>#' + esc(chName) + '</span>' +
         '<span>' + esc(s.schedule_time || '09:00') + ' ' + esc(s.schedule_tz || 'UTC') + '</span>' +
-        '<span>' + esc(days) + '</span>' +
+        dayChips +
         badge +
         '</div></div>' +
         '<div class="standup-actions">' +
@@ -1309,6 +1343,58 @@
         '<div class="member-tz">' + esc(m.tz || 'UTC') + '</div>' +
         '<div class="member-meta">' + badgeHtml + roleBtn + '</div></div></div>';
     }).join('');
+  }
+
+  function openInviteModal() {
+    document.getElementById('invite-modal').style.display = 'flex';
+    document.getElementById('invite-search').value = '';
+    document.getElementById('invite-results').style.display = 'none';
+    document.getElementById('invite-selected').style.display = 'none';
+    document.getElementById('invite-user-id').value = '';
+  }
+  function closeInviteModal() {
+    document.getElementById('invite-modal').style.display = 'none';
+  }
+  async function searchInviteMembers(q) {
+    if (!q || q.length < 2) { document.getElementById('invite-results').style.display = 'none'; return; }
+    const all = state.members || [];
+    const matches = all.filter(m =>
+      m.name.toLowerCase().includes(q.toLowerCase()) ||
+      (m.email || '').toLowerCase().includes(q.toLowerCase())
+    ).slice(0, 8);
+    const el = document.getElementById('invite-results');
+    if (!matches.length) { el.style.display = 'none'; return; }
+    el.innerHTML = matches.map(m => `
+      <div onclick="selectInviteMember('${m.id}','${m.name.replace(/'/g,"\\'")}','${m.email||''}','${m.avatar||''}')"
+           style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px"
+           onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
+        ${m.avatar ? `<img src="${m.avatar}" style="width:24px;height:24px;border-radius:50%"/>` : ''}
+        <div>
+          <div style="font-size:13px;font-weight:500">${m.name}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${m.email||''}</div>
+        </div>
+      </div>
+    `).join('');
+    el.style.display = 'block';
+  }
+  function selectInviteMember(id, name, email, avatar) {
+    document.getElementById('invite-user-id').value = id;
+    document.getElementById('invite-name').textContent = name;
+    document.getElementById('invite-email').textContent = email;
+    document.getElementById('invite-avatar').src = avatar;
+    document.getElementById('invite-selected').style.display = 'flex';
+    document.getElementById('invite-results').style.display = 'none';
+    document.getElementById('invite-search').value = name;
+  }
+  async function submitInvite() {
+    const user_id = document.getElementById('invite-user-id').value;
+    if (!user_id) { toast('Please select a member first', 'error'); return; }
+    try {
+      await api('POST', '/members/invite', { user_id, role: 'admin' });
+      toast('Admin access granted!');
+      closeInviteModal();
+      loadMembers();
+    } catch(e) { toast(e.message, 'error'); }
   }
 
   // ── Reports ──
