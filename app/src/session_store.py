@@ -1,6 +1,10 @@
 """Session store — Redis-backed with in-memory fallback."""
 from __future__ import annotations
-import json, logging, os
+
+import json
+import logging
+import os
+
 logger = logging.getLogger(__name__)
 
 _redis = None

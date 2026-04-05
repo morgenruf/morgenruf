@@ -10,8 +10,7 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from slack_sdk import WebClient
-
-from state import QUESTIONS, state_store
+from state import state_store
 
 logger = logging.getLogger(__name__)
 

@@ -7,13 +7,12 @@ import hmac
 import json
 import logging
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytz
 import requests
 from slack_bolt import App
-
-from state import QUESTIONS, state_store
+from state import state_store
 
 logger = logging.getLogger(__name__)
 

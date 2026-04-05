@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """You are a team standup summariser. Given a list of standup updates from team members, write a single cohesive paragraph (3-5 sentences) that:
 1. Highlights the key themes of what the team worked on yesterday
-2. Notes what the team is focused on today  
+2. Notes what the team is focused on today
 3. Calls out any blockers or risks
 
 Be concise, professional, and use "the team" language. Do not list every person individually."""

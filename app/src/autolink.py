@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 
-
 _JIRA_RE = re.compile(r'\b([A-Z][A-Z0-9]+-\d+)\b')
 _GH_RE = re.compile(r'(?<!\w)#(\d+)\b')
 

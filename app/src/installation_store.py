@@ -5,10 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from slack_sdk.oauth.installation_store import InstallationStore
-from slack_sdk.oauth.installation_store import Installation, Bot
-
 import db
+from slack_sdk.oauth.installation_store import Bot, Installation, InstallationStore
 
 logger = logging.getLogger(__name__)
 

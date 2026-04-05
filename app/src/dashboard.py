@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import ipaddress
+import json
 import logging
 import os
 import secrets
-import uuid
 from functools import wraps
 from urllib.parse import urlparse
 
+import db
 from flask import (
     Blueprint,
     Response,
@@ -23,8 +23,6 @@ from flask import (
     session,
     url_for,
 )
-
-import db
 from oauth import verify_login_token
 
 logger = logging.getLogger(__name__)
