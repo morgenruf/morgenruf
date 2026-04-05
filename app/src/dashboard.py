@@ -295,11 +295,18 @@ def api_channels():
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
         client = WebClient(token=token)
-        result = client.conversations_list(types="public_channel,private_channel", exclude_archived=True, limit=200)
-        channels = [
-            {"id": c["id"], "name": c["name"]}
-            for c in result.get("channels", [])
-        ]
+        channels = []
+        cursor = None
+        while True:
+            kwargs = {"types": "public_channel", "exclude_archived": True, "limit": 200}
+            if cursor:
+                kwargs["cursor"] = cursor
+            result = client.conversations_list(**kwargs)
+            for c in result.get("channels", []):
+                channels.append({"id": c["id"], "name": c["name"]})
+            cursor = result.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
         return jsonify(sorted(channels, key=lambda c: c["name"]))
     except Exception as exc:
         logger.error("api_channels error: %s", exc)
