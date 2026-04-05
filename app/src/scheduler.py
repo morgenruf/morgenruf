@@ -23,31 +23,43 @@ def get_scheduler() -> Optional[BackgroundScheduler]:
     return _scheduler
 
 
-def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str) -> None:
-    """DM every active member of a workspace to start their standup."""
+def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
+    """DM participants of a standup schedule (or all active members if no schedule)."""
     try:
         import db  # noqa: PLC0415
-        members = db.get_active_members(team_id)
-    except Exception as exc:
-        logger.error("Could not load members for %s: %s", team_id, exc)
-        return
+        if schedule_id:
+            schedule = db.get_standup_schedule(team_id, schedule_id)
+            if not schedule or not schedule.get("active"):
+                logger.info("Schedule %s inactive, skipping", schedule_id)
+                return
+            questions_raw = schedule.get("questions") or []
+            if isinstance(questions_raw, str):
+                import json as _json
+                try:
+                    questions_raw = _json.loads(questions_raw)
+                except Exception:
+                    questions_raw = []
+            questions = questions_raw if questions_raw else None
+            participants_filter = schedule.get("participants") or []
+            channel_id = schedule.get("channel_id") or channel_id
+        else:
+            config = db.get_workspace_config(team_id) or {}
+            qs = config.get("questions") or []
+            if isinstance(qs, str):
+                import json as _json
+                try:
+                    qs = _json.loads(qs)
+                except Exception:
+                    qs = []
+            questions = qs if qs else None
+            participants_filter = []
 
-    # Load custom questions from workspace config
-    questions = None
-    try:
-        import db  # noqa: PLC0415
-        config = db.get_workspace_config(team_id) or {}
-        qs = config.get("questions") or []
-        if isinstance(qs, str):
-            import json as _json
-            try:
-                qs = _json.loads(qs)
-            except Exception:
-                qs = []
-        if qs:
-            questions = qs
+        members = db.get_active_members(team_id)
+        if participants_filter:
+            members = [m for m in members if m["user_id"] in participants_filter]
     except Exception as exc:
-        logger.warning("Could not load questions for %s: %s", team_id, exc)
+        logger.error("Could not load data for standup %s/%s: %s", team_id, schedule_id, exc)
+        return
 
     logger.info("Triggering standup for team %s (%d members)", team_id, len(members))
     client = WebClient(token=bot_token)
@@ -199,6 +211,48 @@ def register_workspace_job(
     )
 
 
+def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> None:
+    """Register a cron job for a standup_schedules row."""
+    team_id = schedule["team_id"]
+    bot_token = schedule["bot_token"]
+    schedule_id = schedule["id"]
+    schedule_time = schedule.get("schedule_time", "09:00")
+    schedule_tz = schedule.get("schedule_tz", "UTC")
+    schedule_days = schedule.get("schedule_days", "mon,tue,wed,thu,fri")
+    channel_id = schedule.get("channel_id") or ""
+    reminder_minutes = int(schedule.get("reminder_minutes") or 0)
+
+    try:
+        hour, minute = schedule_time.split(":")
+        tz = pytz.timezone(schedule_tz)
+    except Exception as exc:
+        logger.error("Invalid schedule config %s: %s", schedule_id, exc)
+        return
+
+    trigger = CronTrigger(hour=int(hour), minute=int(minute), day_of_week=schedule_days, timezone=tz)
+    job_id = f"schedule_{team_id}_{schedule_id}"
+    scheduler.add_job(
+        _send_standup_to_workspace,
+        trigger=trigger,
+        args=[team_id, bot_token, channel_id, schedule_id],
+        id=job_id,
+        name=f"{schedule.get('name', 'Standup')} — {team_id}",
+        replace_existing=True,
+    )
+    logger.info("Registered schedule job %s (%s) at %s %s", schedule_id, schedule.get("name"), schedule_time, schedule_tz)
+
+    if reminder_minutes > 0:
+        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
+        reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
+        scheduler.add_job(
+            _send_reminder_to_workspace,
+            trigger=CronTrigger(hour=reminder_dt.hour, minute=reminder_dt.minute, day_of_week=schedule_days, timezone=tz),
+            args=[team_id, bot_token, reminder_minutes],
+            id=f"reminder_schedule_{team_id}_{schedule_id}",
+            replace_existing=True,
+        )
+
+
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:
     """Build scheduler from a list of (team_id, bot_token, config) tuples."""
     global _scheduler
@@ -206,6 +260,15 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
 
     for team_id, bot_token, config in installations:
         register_workspace_job(scheduler, team_id, bot_token, config)
+
+    # Register standup_schedules jobs
+    try:
+        import db  # noqa: PLC0415
+        all_schedules = db.get_all_active_schedules()
+        for sched in all_schedules:
+            register_schedule_job(scheduler, sched)
+    except Exception as exc:
+        logger.warning("Could not load standup_schedules: %s", exc)
 
     _scheduler = scheduler
     return scheduler

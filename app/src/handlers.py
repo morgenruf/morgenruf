@@ -180,6 +180,14 @@ def register_handlers(app: App) -> None:
 
             if channel:
                 try:
+                    # Apply autolinks best-effort before posting to channel
+                    try:
+                        import db as _db  # noqa: PLC0415
+                        from autolink import autolink  # noqa: PLC0415
+                        cfg = _db.get_workspace_config(session.team_id) or {}
+                        formatted = autolink(formatted, cfg)
+                    except Exception:
+                        pass
                     client.chat_postMessage(channel=channel, text=formatted)
                     logger.info("Posted standup for %s to %s", user_id, channel)
                 except Exception as exc:
@@ -289,6 +297,7 @@ def register_handlers(app: App) -> None:
             "• `standup` — start a standup manually\n"
             "• `skip` — skip today's standup\n"
             "• `timezone <tz>` — set your timezone (e.g. `timezone America/New_York`)\n"
+            "• `kudos @teammate Great job!` — recognise a teammate 🏆\n"
             "• `help` — show this message"
         )
 
@@ -383,6 +392,51 @@ def register_handlers(app: App) -> None:
         cache_key = f"{team_id}:{user_id}"
         state_store.clear(cache_key)
         say("✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
+
+    @app.message(re.compile(r"^kudos\s+<@([A-Z0-9]+)>\s+(.+)$", re.IGNORECASE))
+    def handle_kudos(message, say, client, context, logger):
+        """Handle kudos messages: kudos <@USER> Great work!"""
+        from_user = message["user"]
+        team_id = message.get("team", "")
+        to_user = context["matches"][0]
+        kudos_message = context["matches"][1].strip()
+        channel_type = message.get("channel_type", "")
+        channel_id = message.get("channel", "")
+
+        if from_user == to_user:
+            say("😄 Nice try, but you can't give kudos to yourself!")
+            return
+
+        try:
+            import db  # noqa: PLC0415
+            db.save_kudos(team_id, from_user, to_user, kudos_message, channel_id)
+        except Exception as exc:
+            logger.warning("Could not save kudos: %s", exc)
+
+        kudos_card = (
+            f"🏆 *Kudos!*\n\n"
+            f"<@{from_user}> gave kudos to <@{to_user}>\n\n"
+            f"> {kudos_message}"
+        )
+
+        try:
+            if channel_type == "im":
+                try:
+                    import db  # noqa: PLC0415
+                    config = db.get_workspace_config(team_id) or {}
+                    post_channel = config.get("channel_id", "")
+                    if post_channel:
+                        client.chat_postMessage(channel=post_channel, text=kudos_card)
+                        say(f"✅ Kudos posted to <#{post_channel}>! 🎉")
+                    else:
+                        say(kudos_card + "\n\n_(Configure a standup channel in the dashboard to post kudos there)_")
+                except Exception:
+                    say(kudos_card)
+            else:
+                client.chat_postMessage(channel=channel_id, text=kudos_card)
+        except Exception as exc:
+            logger.error("Failed to post kudos: %s", exc)
+            say(f"✅ Kudos saved! <@{to_user}> has been recognised. 🎉")
 
     @app.message(re.compile(r"^timezone\s+(\S+)$", re.IGNORECASE))
     def handle_set_timezone(message, say, context):  # noqa: ANN001
