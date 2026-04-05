@@ -75,6 +75,73 @@ See [**Kubernetes Deployment**](#kubernetes-deployment) below.
 
 ---
 
+## Docker / Mac Quickstart
+
+The fastest way to run Morgenruf locally or on a Mac server.
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Mac/Linux/Windows)
+- A Slack app — [create one](https://api.slack.com/apps) using the manifest at `slack-manifest.yaml`
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/morgenruf/morgenruf
+cd morgenruf/app
+cp .env.example .env
+# Edit .env with your Slack credentials
+```
+
+### 2. Start
+
+```bash
+docker compose up -d
+```
+
+That's it. The bot is now running at `http://localhost:3000`.
+
+### 3. Expose to the internet (required for Slack webhooks)
+
+Slack needs to reach your bot. Options:
+
+**Cloudflare Tunnel (recommended — free, no port forwarding):**
+```bash
+brew install cloudflare/cloudflare/cloudflared
+cloudflared tunnel --url http://localhost:3000
+# Copy the https://xxxx.trycloudflare.com URL
+# Set APP_URL=https://xxxx.trycloudflare.com in .env
+# docker compose restart app
+```
+
+**ngrok:**
+```bash
+ngrok http 3000
+# Copy the https URL and set APP_URL in .env
+```
+
+### 4. Configure your Slack app
+
+Set these URLs in your Slack app settings:
+- **Event Subscriptions Request URL:** `https://your-tunnel-url/slack/events`
+- **OAuth Redirect URL:** `https://your-tunnel-url/oauth/callback`
+- **Interactivity Request URL:** `https://your-tunnel-url/slack/interactions`
+
+Then click **"Add to Slack"** from `https://your-tunnel-url/install`.
+
+### Mac as a permanent server
+
+To run on a Mac Mini or Mac server permanently:
+
+```bash
+# Start on boot
+brew services start docker  # or use Docker Desktop login items
+
+# Keep containers running
+docker compose up -d --restart-policy always
+```
+
+---
+
 ## Standup Format
 
 The bot DMs each member 4 questions:
