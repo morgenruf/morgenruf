@@ -1,9 +1,9 @@
 {
   "display_information": {
     "name": "Morgenruf",
-    "description": "Self-hosted daily standup bot — AI summaries, analytics, and MCP for AI tools",
+    "description": "Self-hosted daily standup bot \u2014 AI summaries, analytics, and MCP for AI tools",
     "background_color": "#0d1117",
-    "long_description": "Morgenruf runs your team's daily standups directly in Slack. At your configured time, it DMs each team member privately with structured questions (Yesterday / Today / Blockers / Mood), then posts a clean formatted summary to your channel — with optional AI-generated paragraph summary powered by GPT-4o-mini or Claude.\n\nKey features:\n• AI standup summaries (OpenAI / Anthropic)\n• Analytics dashboard with participation charts\n• Multiple schedules per workspace\n• Per-user timezone support\n• Skip today, edit window, mood tracking\n• Kudos / peer recognition with leaderboard\n• Jira, GitHub, Linear issue auto-linking\n• Webhook integrations\n• MCP server — connect Claude, Cursor, or GitHub Copilot directly to your standup data\n• Role-based access control\n• Weekly digest emails\n• Self-host on Kubernetes, Docker Compose, or AWS\n\nMIT licensed. Free forever. No data leaves your infra.\n\nDocs: https://docs.morgenruf.dev"
+    "long_description": "Morgenruf runs your team's daily standups directly in Slack. At your configured time, it DMs each team member privately with structured questions (Yesterday / Today / Blockers / Mood), then posts a clean formatted summary to your channel \u2014 with optional AI-generated paragraph summary powered by GPT-4o-mini or Claude.\n\nKey features:\n\u2022 AI standup summaries (OpenAI / Anthropic)\n\u2022 Analytics dashboard with participation charts\n\u2022 Multiple schedules per workspace\n\u2022 Per-user timezone support\n\u2022 Skip today, edit window, mood tracking\n\u2022 Kudos / peer recognition with leaderboard\n\u2022 Jira, GitHub, Linear issue auto-linking\n\u2022 Webhook integrations\n\u2022 MCP server \u2014 connect Claude, Cursor, or GitHub Copilot directly to your standup data\n\u2022 Role-based access control\n\u2022 Weekly digest emails\n\u2022 Self-host on Kubernetes, Docker Compose, or AWS\n\nMIT licensed. Free forever. No data leaves your infra.\n\nDocs: https://docs.morgenruf.dev"
   },
   "features": {
     "app_home": {
@@ -19,13 +19,11 @@
       {
         "command": "/standup",
         "description": "Start your daily standup now",
-        "usage_hint": "",
         "should_escape": false
       },
       {
         "command": "/skip",
         "description": "Skip today's standup",
-        "usage_hint": "",
         "should_escape": false
       },
       {
@@ -37,7 +35,6 @@
       {
         "command": "/help",
         "description": "Show Morgenruf commands and help",
-        "usage_hint": "",
         "should_escape": false
       }
     ]
