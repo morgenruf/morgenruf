@@ -161,7 +161,12 @@ def _complete_standup(user_id: str, session, client) -> None:
                 formatted = autolink(formatted, cfg)
             except Exception:
                 pass
-            client.chat_postMessage(channel=channel, text=formatted)
+            result = client.chat_postMessage(channel=channel, text=formatted)
+            # React with ✅ to confirm standup posted (like Geekbot)
+            try:
+                client.reactions_add(channel=channel, timestamp=result["ts"], name="white_check_mark")
+            except Exception:
+                pass
             logger.info("Posted standup for %s to %s", user_id, channel)
         except Exception as exc:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
@@ -406,7 +411,36 @@ def register_handlers(app: App) -> None:
 
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
-        say("👋 I'm the standup bot! I'll DM you at your team's standup time. Type `help` in a DM to me for more info.")
+        say("👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history.")
+
+    @app.event("member_joined_channel")
+    def handle_member_joined(event, client):  # noqa: ANN001
+        """Welcome new members and register them for standups."""
+        user_id: str = event.get("user", "")
+        team_id: str = event.get("team", "")
+        if not user_id or not team_id:
+            return
+        try:
+            import db  # noqa: PLC0415
+            user_info = client.users_info(user=user_id).get("user", {})
+            profile = user_info.get("profile", {})
+            db.upsert_member(
+                team_id=team_id,
+                user_id=user_id,
+                real_name=profile.get("real_name", ""),
+                email=profile.get("email", ""),
+                tz=user_info.get("tz", "UTC"),
+            )
+            client.chat_postMessage(
+                channel=user_id,
+                text=(
+                    "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
+                    "I'll DM you each morning with a few quick questions to share with your team. "
+                    "Use `/standup` to try a standup now, or `/help` to learn more."
+                ),
+            )
+        except Exception as exc:
+            logger.warning("member_joined_channel error: %s", exc)
 
     @app.message("help")
     def handle_help(message, say):  # noqa: ANN001
@@ -480,7 +514,61 @@ def register_handlers(app: App) -> None:
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
-    @app.action("edit_standup")
+    @app.command("/help")
+    def handle_help_command(ack, body, client):  # noqa: ANN001
+        """Slash command to show available commands and help."""
+        ack()
+        user_id: str = body["user_id"]
+        client.chat_postMessage(
+            channel=user_id,
+            text="Morgenruf Help",
+            blocks=[
+                {"type": "header", "text": {"type": "plain_text", "text": "🌅 Morgenruf — Commands"}},
+                {"type": "section", "text": {"type": "mrkdwn", "text": (
+                    "*Standup commands:*\n"
+                    "• `/standup` — Start your standup right now\n"
+                    "• `/skip` — Skip today's standup\n"
+                    "• `/kudos @teammate message` — Give a shoutout\n"
+                    "• `/help` — Show this message\n\n"
+                    "*Other ways to interact:*\n"
+                    "• Reply to a standup DM at any time to start\n"
+                    "• Use the *App Home* tab to see your history and settings\n"
+                    "• Mention `@Morgenruf` in any channel for help\n\n"
+                    "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>"
+                )}},
+            ],
+        )
+
+    @app.command("/kudos")
+    def handle_kudos_command(ack, body, client):  # noqa: ANN001
+        """Slash command to give kudos to a teammate."""
+        ack()
+        user_id: str = body["user_id"]
+        team_id: str = body["team_id"]
+        text: str = (body.get("text") or "").strip()
+
+        if not text:
+            client.chat_postMessage(
+                channel=user_id,
+                text="Usage: `/kudos @teammate Great job on the release! 🚀`",
+            )
+            return
+
+        try:
+            import db  # noqa: PLC0415
+            config = db.get_workspace_config(team_id) or {}
+            channel_id = config.get("channel_id")
+            if channel_id:
+                client.chat_postMessage(
+                    channel=channel_id,
+                    text=f"🏆 <@{user_id}> gives kudos: {text}",
+                )
+            client.chat_postMessage(channel=user_id, text=f"✅ Kudos sent: {text}")
+        except Exception as exc:
+            logger.warning("kudos command error: %s", exc)
+            client.chat_postMessage(channel=user_id, text="❌ Couldn't send kudos. Please try again.")
+
+
     def handle_edit_standup(ack, body, client):  # noqa: ANN001
         """Handle 'Edit responses' button — open a pre-filled modal within the 30-minute window."""
         ack()
