@@ -509,6 +509,9 @@
     <div class="nav-item" data-section="kudos">
       <span class="nav-icon">&#127942;</span> Kudos
     </div>
+    <div class="nav-item" data-section="automation">
+      <span class="nav-icon">&#9889;</span> Automation
+    </div>
     <div class="sidebar-footer">
       <div class="workspace-pill">
         <div class="ws-avatar" id="ws-avatar">M</div>
@@ -630,6 +633,67 @@
             <div class="stat-label" style="margin-bottom:12px;padding-left:2px">Recent Kudos</div>
             <div id="kudos-feed"><div class="loading-center"><div class="spinner"></div></div></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Automation -->
+    <div id="section-automation" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">⚡ Automation</div>
+          <div class="page-subtitle">Configure trigger→action workflow rules</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddRuleForm()">+ Add Rule</button>
+      </div>
+      <div style="max-width:760px">
+        <div id="rules-list"><div class="loading-center"><div class="spinner"></div></div></div>
+
+        <!-- Add Rule form (hidden by default) -->
+        <div id="add-rule-form" class="stat-card" style="display:none;margin-top:20px">
+          <div class="stat-label" style="margin-bottom:16px">New Automation Rule</div>
+          <form onsubmit="saveRule(event)" style="display:grid;gap:12px">
+            <div>
+              <label style="font-size:0.85rem;color:var(--text-muted)">Rule Name</label>
+              <input id="rule-name" class="input" placeholder="e.g. Alert on blockers" required style="width:100%;margin-top:4px">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:0.85rem;color:var(--text-muted)">Trigger</label>
+                <select id="rule-trigger" class="input" onchange="toggleConditionValue()" style="width:100%;margin-top:4px">
+                  <option value="blocker_detected">🚧 Blockers Detected</option>
+                  <option value="low_participation">📉 Low Participation</option>
+                  <option value="standup_complete">✅ Standup Complete</option>
+                </select>
+              </div>
+              <div id="rule-condition-wrap">
+                <label style="font-size:0.85rem;color:var(--text-muted)">Threshold % (participation)</label>
+                <input id="rule-condition" class="input" type="number" min="0" max="100" placeholder="50" style="width:100%;margin-top:4px">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:0.85rem;color:var(--text-muted)">Action</label>
+                <select id="rule-action" class="input" style="width:100%;margin-top:4px">
+                  <option value="post_to_channel">📣 Post to Channel</option>
+                  <option value="send_dm">💬 Send DM</option>
+                  <option value="fire_webhook">🔗 Fire Webhook</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:0.85rem;color:var(--text-muted)">Target (channel ID, user ID, or URL)</label>
+                <input id="rule-target" class="input" placeholder="C0123456 or https://..." required style="width:100%;margin-top:4px">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:0.85rem;color:var(--text-muted)">Message Template (optional — supports {team}, {trigger}, {blockers}, {participation})</label>
+              <textarea id="rule-message" class="input" rows="2" style="width:100%;margin-top:4px;resize:vertical" placeholder="Leave blank for default message"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button type="button" class="btn btn-secondary" onclick="closeAddRuleForm()">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save Rule</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -856,6 +920,7 @@
       if (sec === 'analytics') loadAnalytics(7);
       if (sec === 'schedules') loadSchedules();
       if (sec === 'kudos') loadKudos();
+      if (sec === 'automation') loadRules();
     }
   }
 
@@ -1683,6 +1748,89 @@
       document.getElementById('modal-standup-id').dataset.mode = '';
       toast(id ? 'Schedule updated' : 'Schedule created');
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  // ── Automation / Rules ──
+  async function loadRules() {
+    const el = document.getElementById('rules-list');
+    if (!el) return;
+    try {
+      const rules = await fetch('/dashboard/api/rules').then(r => r.json()).catch(() => []);
+      renderRules(rules);
+    } catch(e) {
+      el.innerHTML = '<p style="color:var(--text-muted)">Failed to load rules.</p>';
+    }
+  }
+
+  function renderRules(rules) {
+    const el = document.getElementById('rules-list');
+    if (!el) return;
+    if (!rules.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚡</div><h3>No automation rules</h3><p>Add a rule to automate actions when standups trigger events.</p></div>';
+      return;
+    }
+    const triggerLabels = { blocker_detected: '🚧 Blockers Detected', low_participation: '📉 Low Participation', standup_complete: '✅ Standup Complete' };
+    const actionLabels = { post_to_channel: '📣 Post to Channel', send_dm: '💬 Send DM', fire_webhook: '🔗 Webhook' };
+    el.innerHTML = '<div class="standups-grid">' + rules.map(r =>
+      '<div class="stat-card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;">' +
+      '<div style="flex:1;min-width:0;">' +
+      '<div style="font-weight:600;margin-bottom:4px;">' + esc(r.name) + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<span style="background:rgba(99,102,241,0.15);color:#6366f1;padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(triggerLabels[r.trigger] || r.trigger) + '</span>' +
+      '<span style="background:rgba(16,185,129,0.15);color:#10b981;padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(actionLabels[r.action] || r.action) + '</span>' +
+      '<span style="font-size:0.8rem;color:var(--text-muted);align-self:center;">' + esc(r.action_target) + '</span>' +
+      '</div>' +
+      '</div>' +
+      '<button class="btn btn-secondary btn-sm" onclick="deleteRule(' + r.id + ')" style="flex-shrink:0;">Delete</button>' +
+      '</div>'
+    ).join('') + '</div>';
+  }
+
+  async function deleteRule(id) {
+    if (!confirm('Delete this automation rule?')) return;
+    try {
+      await api('DELETE', '/rules/' + id);
+      state.loaded['automation'] = false;
+      loadRules();
+      toast('Rule deleted');
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  function openAddRuleForm() {
+    document.getElementById('add-rule-form').style.display = '';
+    toggleConditionValue();
+  }
+
+  function closeAddRuleForm() {
+    document.getElementById('add-rule-form').style.display = 'none';
+  }
+
+  function toggleConditionValue() {
+    const trigger = document.getElementById('rule-trigger').value;
+    const wrap = document.getElementById('rule-condition-wrap');
+    if (wrap) wrap.style.display = trigger === 'low_participation' ? '' : 'none';
+  }
+
+  async function saveRule(event) {
+    event.preventDefault();
+    const body = {
+      name: document.getElementById('rule-name').value.trim(),
+      trigger: document.getElementById('rule-trigger').value,
+      action: document.getElementById('rule-action').value,
+      action_target: document.getElementById('rule-target').value.trim(),
+      action_message: document.getElementById('rule-message').value.trim() || null,
+      condition_value: document.getElementById('rule-trigger').value === 'low_participation'
+        ? (document.getElementById('rule-condition').value || '50')
+        : null,
+    };
+    try {
+      await api('POST', '/rules', body);
+      closeAddRuleForm();
+      event.target.reset();
+      state.loaded['automation'] = false;
+      loadRules();
+      toast('Rule created');
+    } catch(e) { toast(e.message, 'error'); }
   }
 
   // ── Boot ──

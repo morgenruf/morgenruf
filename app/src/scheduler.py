@@ -119,6 +119,18 @@ def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: 
         except Exception as exc:
             logger.warning("Failed reminder DM to %s / %s: %s", team_id, user_id, exc)
 
+    # Evaluate low_participation workflow rules
+    try:
+        import db  # noqa: PLC0415
+        from workflow import evaluate_rules  # noqa: PLC0415
+        stats = db.get_participation_stats(team_id, days=1)
+        total = len(stats)
+        responded = sum(1 for s in stats if (s.get("responses") or 0) > 0)
+        pct = int((responded / total * 100) if total else 100)
+        evaluate_rules(team_id, "low_participation", {"participation_pct": pct, "team": team_id}, client)
+    except Exception as exc:
+        logger.warning("Participation workflow rules failed for %s: %s", team_id, exc)
+
 
 def _send_weekly_digest(team_id: str, bot_token: str) -> None:
     """Send a weekly summary email to the workspace admin."""
