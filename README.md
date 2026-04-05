@@ -142,6 +142,37 @@ docker compose up -d --restart-policy always
 
 ---
 
+## Google Chat (Beta)
+
+Morgenruf supports Google Chat via the Chat REST API and a service account.
+
+> **Note:** Google Chat bot integration requires **Google Workspace** (not free Gmail accounts).
+
+### Setup
+
+1. **Create a GCP project** at [console.cloud.google.com](https://console.cloud.google.com)
+2. **Enable the Chat API** — _APIs & Services → Library → Google Chat API → Enable_
+3. **Create a service account** — _IAM & Admin → Service Accounts → Create_
+4. **Download the JSON key** for the service account
+5. **Set the env var** — paste the entire JSON as a single line:
+   ```bash
+   GOOGLE_CREDENTIALS='{"type":"service_account","project_id":"...","private_key":"...","client_email":"...",...}'
+   ```
+6. **Configure the bot in Google Chat Admin** — _admin.google.com → Apps → Google Chat → Manage bots_
+   - Set the **Webhook URL** to: `https://your-domain.com/google/events`
+   - Enable _Direct messages_ and _Space messages_
+7. **Restart Morgenruf** — the Google Chat blueprint is registered automatically when `GOOGLE_CREDENTIALS` is set.
+
+### Commands (in Google Chat DM or Space)
+
+| Command | Description |
+|---------|-------------|
+| `/standup` | Start your daily standup |
+| `/skip` | Skip today's standup |
+| `/help` | Show available commands |
+
+---
+
 ## Standup Format
 
 The bot DMs each member 4 questions:
