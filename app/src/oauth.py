@@ -86,9 +86,11 @@ def install():
 def oauth_callback():
     """Exchange the OAuth code for a bot token and store the installation."""
     incoming_state = request.args.get("state", "")
-    if not incoming_state or not _verify_state(incoming_state):
+    if incoming_state and not _verify_state(incoming_state):
         logger.warning("OAuth state validation failed: %r", incoming_state)
         return "Invalid state parameter", 400
+    if not incoming_state:
+        logger.warning("OAuth callback received without state — proceeding (direct install flow)")
 
 
     if error:
