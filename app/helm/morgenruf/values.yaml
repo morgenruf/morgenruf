@@ -1,5 +1,7 @@
 replicaCount: 1
 
+# imagePullSecrets: []  # Only needed if image is private. Public image: leave commented out.
+
 image:
   repository: ghcr.io/morgenruf/morgenruf
   pullPolicy: Always
