@@ -1,24 +1,32 @@
 display_information:
   name: Morgenruf
-  description: "Daily standup bot — structured async standups with per-project tracking"
+  description: "Self-hosted daily standup bot — AI summaries, analytics, and MCP for AI tools"
   background_color: "#0d1117"
-  long_description: "Morgenruf runs your team's daily standups directly in Slack. At your configured time, it DMs each team member with 3 questions (Yesterday / Today / Blockers), collects answers privately, and posts a clean formatted summary to your team channel. Supports per-project tagging (Proj-X: ...) for automated reporting. Self-host on Kubernetes or use the hosted version at morgenruf.dev. MIT licensed, free forever."
+  long_description: "Morgenruf runs your team's daily standups directly in Slack. At your configured time, it DMs each team member privately with structured questions (Yesterday / Today / Blockers / Mood), then posts a clean formatted summary to your channel — with optional AI-generated paragraph summary powered by GPT-4o-mini or Claude.\n\nKey features:\n• AI standup summaries (OpenAI / Anthropic)\n• Analytics dashboard with participation charts\n• Multiple schedules per workspace\n• Per-user timezone support\n• Skip today, edit window, mood tracking\n• Kudos / peer recognition with leaderboard\n• Jira, GitHub, Linear issue auto-linking\n• Webhook integrations\n• MCP server — connect Claude, Cursor, or GitHub Copilot directly to your standup data\n• Role-based access control\n• Weekly digest emails\n• Self-host on Kubernetes, Docker Compose, or AWS\n\nMIT licensed. Free forever. No data leaves your infra.\n\nDocs: https://docs.morgenruf.dev"
 
 features:
   app_home:
-    home_tab_enabled: false
+    home_tab_enabled: true
     messages_tab_enabled: true
-    messages_tab_read_only_enabled: false
+    messages_tab_read_only_enabled: true
   bot_user:
     display_name: Morgenruf
     always_online: true
   slash_commands:
     - command: /standup
-      description: Start your daily standup
+      description: Start your daily standup now
       usage_hint: ""
       should_escape: false
     - command: /skip
       description: Skip today's standup
+      usage_hint: ""
+      should_escape: false
+    - command: /kudos
+      description: Give a shoutout to a teammate
+      usage_hint: "@teammate [message]"
+      should_escape: false
+    - command: /help
+      description: Show Morgenruf commands and help
       usage_hint: ""
       should_escape: false
 
@@ -32,9 +40,12 @@ oauth_config:
       - im:read
       - im:write
       - channels:read
+      - channels:history
+      - groups:read
+      - reactions:write
       - users:read
-      - team:read
       - users:read.email
+      - team:read
 
 settings:
   event_subscriptions:
@@ -43,8 +54,10 @@ settings:
       - message.im
       - app_mention
       - app_home_opened
+      - member_joined_channel
   interactivity:
-    is_enabled: false
+    is_enabled: true
+    request_url: https://api.morgenruf.dev/slack/events
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: true
