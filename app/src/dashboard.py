@@ -69,6 +69,23 @@ def _login_required(f):
     return wrapper
 
 
+def _admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        team_id = session.get("team_id")
+        user_id = session.get("user_id")
+        if not team_id:
+            return jsonify({"error": "Unauthorized"}), 401
+        try:
+            role = db.get_member_role(team_id, user_id or "")
+            if role != "admin":
+                return jsonify({"error": "Admin required"}), 403
+        except Exception:
+            pass  # fail open if DB error
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def _get_bot_token() -> str | None:
     team_id = session.get("team_id")
     if not team_id:
@@ -90,9 +107,11 @@ def dashboard():
     # Accept one-time login token from OAuth redirect to bootstrap session
     token = request.args.get("t")
     if token:
-        team_id = verify_login_token(token)
-        if team_id:
+        result = verify_login_token(token)
+        if result:
+            team_id, user_id = result
             session["team_id"] = team_id
+            session["user_id"] = user_id
             try:
                 inst = db.get_installation(team_id)
                 session["team_name"] = inst["team_name"] if inst else team_id
@@ -160,6 +179,8 @@ def _config_to_standup(cfg: dict) -> dict:
         "jira_base_url": cfg.get("jira_base_url") or "",
         "zendesk_base_url": cfg.get("zendesk_base_url") or "",
         "reminder_minutes": int(cfg.get("reminder_minutes") or 0),
+        "ai_summary_enabled": bool(cfg.get("ai_summary_enabled", False)),
+        "ai_provider": cfg.get("ai_provider") or "openai",
     }
 
 
@@ -230,6 +251,10 @@ def api_update_standup(standup_id: str):
         for field in ("jira_base_url", "github_repo", "linear_team"):
             if field in data:
                 kwargs[field] = data[field]
+        if "ai_summary_enabled" in data:
+            kwargs["ai_summary_enabled"] = bool(data["ai_summary_enabled"])
+        if "ai_provider" in data:
+            kwargs["ai_provider"] = data["ai_provider"]
         if kwargs:
             db.upsert_workspace_config(team_id, **kwargs)
         cfg = db.get_workspace_config(team_id)
@@ -248,6 +273,43 @@ def api_delete_standup(standup_id: str):
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error("api_delete_standup error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Me / Role API
+# ---------------------------------------------------------------------------
+
+@dashboard_bp.route("/dashboard/api/me", methods=["GET"])
+@_login_required
+def api_me():
+    team_id = session["team_id"]
+    user_id = session.get("user_id", "")
+    try:
+        role = db.get_member_role(team_id, user_id)
+    except Exception:
+        role = "member"
+    return jsonify({
+        "team_id": team_id,
+        "user_id": user_id,
+        "team_name": session.get("team_name", ""),
+        "role": role,
+    })
+
+
+@dashboard_bp.route("/dashboard/api/members/<user_id>/role", methods=["PUT"])
+@_login_required
+@_admin_required
+def api_set_member_role(user_id: str):
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    role = data.get("role", "member")
+    try:
+        db.set_member_role(team_id, user_id, role)
+        return jsonify({"ok": True, "user_id": user_id, "role": role})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
 

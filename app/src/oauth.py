@@ -137,6 +137,13 @@ def oauth_callback():
         logger.error("Failed to persist installation for %s: %s", team_id, exc)
         # Don't fail the flow — continue to send welcome messages
 
+    # Grant admin role to the installing user
+    if authed_user_id:
+        try:
+            db.ensure_admin(team_id, authed_user_id)
+        except Exception as exc:
+            logger.warning("Could not set admin role: %s", exc)
+
     # Send welcome DM to the installing user
     if authed_user_id:
         try:
@@ -163,7 +170,8 @@ def oauth_callback():
     # Set session and pass team_id in URL as fallback for proxies that drop cookies
     session["team_id"] = team_id
     session["team_name"] = team_name
-    token = _make_login_token(team_id)
+    session["user_id"] = authed_user_id
+    token = _make_login_token(team_id, authed_user_id)
     return redirect(f"{_APP_URL}/dashboard?t={token}")
 
 
@@ -186,28 +194,36 @@ def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str) -> Non
         logger.warning("Could not retrieve user email for welcome message: %s", exc)
 
 
-def _make_login_token(team_id: str) -> str:
+def _make_login_token(team_id: str, user_id: str = "") -> str:
     """Short-lived HMAC token to bootstrap dashboard session via URL."""
     ts = str(int(time.time()))
-    payload = f"{ts}.{team_id}"
+    payload = f"{ts}.{team_id}|{user_id}"
     sig = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
     import base64
     return base64.urlsafe_b64encode(f"{payload}.{sig}".encode()).decode()
 
 
-def verify_login_token(token: str) -> str | None:
-    """Verify login token, return team_id if valid (5 min window)."""
+def verify_login_token(token: str) -> tuple[str, str] | None:
+    """Verify login token, return (team_id, user_id) if valid (5 min window).
+
+    Returns None if invalid. user_id may be empty for tokens issued before
+    this version.
+    """
     try:
         import base64
         decoded = base64.urlsafe_b64decode(token.encode()).decode()
-        ts_str, team_id, sig = decoded.split(".", 2)
-        payload = f"{ts_str}.{team_id}"
+        ts_str, team_user, sig = decoded.split(".", 2)
+        payload = f"{ts_str}.{team_user}"
         expected = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig):
             return None
         if int(time.time()) - int(ts_str) > 300:
             return None
-        return team_id
+        if "|" in team_user:
+            team_id, user_id = team_user.split("|", 1)
+        else:
+            team_id, user_id = team_user, ""
+        return team_id, user_id
     except Exception:
         return None
 

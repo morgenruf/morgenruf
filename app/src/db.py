@@ -113,7 +113,7 @@ def get_all_installations() -> list[dict]:
 
 def upsert_workspace_config(team_id: str, **kwargs: Any) -> None:
     """Insert or update workspace config. Pass only columns you want to set."""
-    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active", "reminder_minutes", "edit_window_hours", "jira_base_url", "github_repo", "linear_team"}
+    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active", "reminder_minutes", "edit_window_hours", "jira_base_url", "github_repo", "linear_team", "ai_summary_enabled", "ai_provider"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     for col in fields:
         if not re.match(r'^[a-z_]+$', col):
@@ -556,3 +556,39 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
             cur.execute(sql, (team_id, days))
             rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Role-based access control
+# ---------------------------------------------------------------------------
+
+def get_member_role(team_id: str, user_id: str) -> str:
+    """Return 'admin' or 'member' for a user. Defaults to 'member' if not found."""
+    sql = "SELECT role FROM members WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return (row[0] if row else None) or "member"
+
+
+def set_member_role(team_id: str, user_id: str, role: str) -> None:
+    """Set a member's role to 'admin' or 'member'."""
+    if role not in ("admin", "member"):
+        raise ValueError(f"Invalid role: {role}")
+    sql = "UPDATE members SET role = %s WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (role, team_id, user_id))
+
+
+def ensure_admin(team_id: str, user_id: str) -> None:
+    """Upsert user as admin — used on OAuth install."""
+    sql = """
+        INSERT INTO members (team_id, user_id, role)
+        VALUES (%s, %s, 'admin')
+        ON CONFLICT (team_id, user_id) DO UPDATE SET role = 'admin'
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
