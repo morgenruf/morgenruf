@@ -113,7 +113,7 @@ def get_all_installations() -> list[dict]:
 
 def upsert_workspace_config(team_id: str, **kwargs: Any) -> None:
     """Insert or update workspace config. Pass only columns you want to set."""
-    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active"}
+    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active", "reminder_minutes", "edit_window_hours"}
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     for col in fields:
         if not re.match(r'^[a-z_]+$', col):
@@ -178,16 +178,16 @@ def upsert_member(
     user_id: str,
     real_name: str | None = None,
     email: str | None = None,
-    tz: str = "UTC",
+    tz: str | None = None,
 ) -> None:
-    """Insert or update a member record."""
+    """Insert or update a member record. Only non-None values overwrite existing ones."""
     sql = """
         INSERT INTO members (team_id, user_id, real_name, email, tz)
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (team_id, user_id) DO UPDATE SET
-            real_name = EXCLUDED.real_name,
-            email = EXCLUDED.email,
-            tz = EXCLUDED.tz,
+            real_name = COALESCE(EXCLUDED.real_name, members.real_name),
+            email = COALESCE(EXCLUDED.email, members.email),
+            tz = COALESCE(EXCLUDED.tz, members.tz),
             active = TRUE
     """
     with db_conn() as conn:
@@ -205,16 +205,17 @@ def save_standup(
     yesterday: str,
     today: str,
     blockers: str,
+    mood: str | None = None,
 ) -> None:
     """Persist a completed standup."""
     has_blockers = blockers.strip().lower() not in ("none", "no", "nope", "-", "n/a", "")
     sql = """
-        INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers, mood)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers))
+            cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers, mood))
     logger.info("Saved standup for %s / %s", team_id, user_id)
 
 
@@ -327,3 +328,92 @@ def get_standup_by_id(standup_id: int) -> dict | None:
             cur.execute(sql, (standup_id,))
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Skip today
+# ---------------------------------------------------------------------------
+
+def skip_today(team_id: str, user_id: str) -> None:
+    """Mark user as skipping today's standup."""
+    sql = """
+        INSERT INTO user_skip (team_id, user_id, skip_date)
+        VALUES (%s, %s, CURRENT_DATE)
+        ON CONFLICT DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+
+
+def is_skipped_today(team_id: str, user_id: str) -> bool:
+    """Return True if user has skipped today."""
+    sql = "SELECT 1 FROM user_skip WHERE team_id=%s AND user_id=%s AND skip_date=CURRENT_DATE"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            return cur.fetchone() is not None
+
+
+# ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+
+def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
+    """Return per-member participation stats for the last N days."""
+    sql = """
+        SELECT
+            m.user_id,
+            m.real_name,
+            COUNT(s.id) AS responses,
+            MAX(s.submitted_at) AS last_standup,
+            COUNT(CASE WHEN s.has_blockers THEN 1 END) AS days_with_blockers
+        FROM members m
+        LEFT JOIN standups s ON s.team_id = m.team_id
+            AND s.user_id = m.user_id
+            AND s.standup_date >= CURRENT_DATE - (%s - 1) * INTERVAL '1 day'
+        WHERE m.team_id = %s AND m.active = TRUE
+        GROUP BY m.user_id, m.real_name
+        ORDER BY responses DESC, m.real_name
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (days, team_id))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# CSV export
+# ---------------------------------------------------------------------------
+
+def export_standups(team_id: str, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    """Return standup rows for export, optionally filtered by date range."""
+    conditions = ["team_id = %s"]
+    params: list = [team_id]
+    if from_date:
+        conditions.append("standup_date >= %s")
+        params.append(from_date)
+    if to_date:
+        conditions.append("standup_date <= %s")
+        params.append(to_date)
+    sql = f"SELECT * FROM standups WHERE {' AND '.join(conditions)} ORDER BY standup_date, submitted_at"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Member email lookup
+# ---------------------------------------------------------------------------
+
+def get_member_email(team_id: str, user_id: str) -> str | None:
+    """Return email for a member, or None."""
+    sql = "SELECT email FROM members WHERE team_id=%s AND user_id=%s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return row[0] if row else None

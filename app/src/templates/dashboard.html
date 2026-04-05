@@ -477,6 +477,9 @@
     <div class="nav-item" data-section="reports">
       <span class="nav-icon">&#128202;</span> Reports
     </div>
+    <div class="nav-item" data-section="analytics">
+      <span class="nav-icon">&#128270;</span> Analytics
+    </div>
     <div class="nav-section" style="margin-top:8px">Config</div>
     <div class="nav-item" data-section="settings">
       <span class="nav-icon">&#9881;</span> Settings
@@ -529,8 +532,24 @@
           <div class="page-title">Reports</div>
           <div class="page-subtitle">Standup completion stats — last 7 days</div>
         </div>
+        <button class="btn btn-secondary" onclick="exportCSV()">&#8659; Export CSV</button>
       </div>
       <div id="reports-content"></div>
+    </div>
+
+    <!-- Analytics -->
+    <div id="section-analytics" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Analytics</div>
+          <div class="page-subtitle">Per-member participation breakdown</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadAnalytics(7)" id="ana-btn-7" style="opacity:1">7 days</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadAnalytics(30)" id="ana-btn-30">30 days</button>
+        </div>
+      </div>
+      <div id="analytics-content"></div>
     </div>
 
     <!-- Settings -->
@@ -629,6 +648,12 @@
         <div class="form-section-title">Questions</div>
         <div class="questions-list" id="questions-list"></div>
         <button class="btn-add-q" onclick="addQuestion()">&#43; Add question</button>
+
+        <div class="form-section-title">Reminder</div>
+        <div class="form-group" style="max-width:260px">
+          <label>Minutes before standup (0 = no reminder)</label>
+          <input type="number" id="f-reminder" min="0" max="1440" value="0" placeholder="e.g. 15"/>
+        </div>
 
         <div class="form-section-title">Report</div>
         <div class="form-grid">
@@ -739,6 +764,7 @@
       if (sec === 'reports') loadReports();
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
+      if (sec === 'analytics') loadAnalytics(7);
     }
   }
 
@@ -1028,6 +1054,7 @@
     document.getElementById('f-jira').value = '';
     document.getElementById('f-zendesk').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
+    document.getElementById('f-reminder').value = '0';
     selectDays(['mon','tue','wed','thu','fri']);
     setQuestions(['What did you complete yesterday?','What are you working on today?','Any blockers?']);
     clearParticipants();
@@ -1053,6 +1080,7 @@
     document.getElementById('f-jira').value = s.jira_base_url || '';
     document.getElementById('f-zendesk').value = s.zendesk_base_url || '';
     document.getElementById('f-avatar-toggle').classList.toggle('on', s.display_avatar !== false);
+    document.getElementById('f-reminder').value = s.reminder_minutes || 0;
     selectDays(s.schedule_days || []);
     setQuestions(s.questions || []);
     setParticipants(s.participants || []);
@@ -1088,6 +1116,7 @@
       display_avatar: document.getElementById('f-avatar-toggle').classList.contains('on'),
       jira_base_url: document.getElementById('f-jira').value.trim(),
       zendesk_base_url: document.getElementById('f-zendesk').value.trim(),
+      reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
     };
     try {
       let updated;
@@ -1103,6 +1132,51 @@
       closeModal();
       toast(id ? 'Standup updated' : 'Standup created');
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  // ── Analytics ──
+  async function loadAnalytics(days) {
+    const el = document.getElementById('analytics-content');
+    if (!el) return;
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    // Update button styles
+    document.getElementById('ana-btn-7').className = 'btn ' + (days === 7 ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
+    document.getElementById('ana-btn-30').className = 'btn ' + (days === 30 ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
+    try {
+      const data = await fetch('/dashboard/api/analytics?days=' + days).then(r => r.json());
+      renderAnalytics(data, days);
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load analytics.</p>';
+    }
+  }
+
+  function renderAnalytics(rows, days) {
+    const el = document.getElementById('analytics-content');
+    if (!rows.length) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">No data yet. Run some standups first!</p>';
+      return;
+    }
+    const tableRows = rows.map(r => {
+      const last = r.last_standup ? r.last_standup.slice(0, 10) : '—';
+      const bar = '🟢'.repeat(Math.min(r.responses, 5)) + '⬜'.repeat(Math.max(0, 5 - Math.min(r.responses, 5)));
+      const blockers = r.days_with_blockers ? '🚧 ' + r.days_with_blockers : '—';
+      return '<tr>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + esc(r.real_name || r.user_id) + '</td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + bar + ' ' + r.responses + '/' + days + '</td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + blockers + '</td>' +
+        '<td style="padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text-muted)">' + last + '</td>' +
+        '</tr>';
+    }).join('');
+    el.innerHTML =
+      '<div class="webhooks-table-wrap">' +
+      '<table class="webhooks-table">' +
+      '<thead><tr>' +
+      '<th>Member</th><th>Responses (' + days + 'd)</th><th>Blockers</th><th>Last Standup</th>' +
+      '</tr></thead><tbody>' + tableRows + '</tbody></table></div>';
+  }
+
+  function exportCSV() {
+    window.open('/dashboard/api/export/csv', '_blank');
   }
 
   // ── Day chips ──
