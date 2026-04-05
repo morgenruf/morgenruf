@@ -946,10 +946,10 @@
         el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px">' +
           '<div style="font-weight:600;font-size:15px">Primary Standup Config</div>' +
           '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
-          '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection('standups')">Edit Configuration</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit Configuration</button>' +
           '</div>';
       } else {
-        el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9881;</div><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection('standups')">&#43; New Standup</button></div>';
+        el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9881;</div><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
       }
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-dim)">Failed to load settings.</p>';
