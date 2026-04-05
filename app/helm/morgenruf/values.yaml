@@ -28,15 +28,24 @@ ingress:
       hosts:
         - api.morgenruf.dev
 
-# Slack OAuth credentials
+# ---------------------------------------------------------------------------
+# Required: Slack OAuth credentials
+# Get these from https://api.slack.com/apps → your app → Basic Information
+# ---------------------------------------------------------------------------
 slack:
+  # App Credentials → Client ID (looks like: 1234567890.9876543210)
   clientId: ""
+  # App Credentials → Client Secret (32 hex chars)
   clientSecret: ""
+  # App Credentials → Signing Secret (32 hex chars, different from client secret)
   signingSecret: ""
 
-# App config
+# ---------------------------------------------------------------------------
+# Required: App URL — the public HTTPS URL where the bot is reachable
+# Used for Slack OAuth redirect and dashboard links
+# ---------------------------------------------------------------------------
 app:
-  url: "https://api.morgenruf.dev"
+  url: "https://api.your-domain.com"   # ← change this to your domain
   port: "3000"
 
 # PostgreSQL — bundled sub-chart
@@ -59,17 +68,27 @@ postgresql:
     repository: bitnami/postgresql
     tag: "16"
 
-# External PostgreSQL (recommended for production)
-# Set postgresql.enabled: false and provide this URL.
+# ---------------------------------------------------------------------------
+# Required: External PostgreSQL (recommended)
+# Set postgresql.enabled: false (default) and provide DATABASE_URL here.
 # Works with: RDS, Cloud SQL, CloudNativePG, Supabase, Neon, plain postgres:16
+# Format: postgresql://user:password@host:5432/dbname
+# ---------------------------------------------------------------------------
 externalDatabase:
-  url: ""   # postgresql://user:pass@host:5432/dbname
+  url: ""   # e.g. postgresql://morgenruf:strongpass@db-host:5432/morgenruf
 
-# Resend (optional — welcome emails)
+# ---------------------------------------------------------------------------
+# Required: Flask session secret — generate with: openssl rand -hex 32
+# Used to sign session cookies and HMAC OAuth state tokens.
+# ---------------------------------------------------------------------------
+flaskSecretKey: ""   # openssl rand -hex 32
+
+# ---------------------------------------------------------------------------
+# Optional: Resend API key — for welcome emails on install
+# Get from https://resend.com — free tier is sufficient
+# ---------------------------------------------------------------------------
 resend:
   apiKey: ""
-
-flaskSecretKey: ""
 
 resources:
   requests:

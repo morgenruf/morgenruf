@@ -169,28 +169,35 @@ If you use Cloudflare Tunnel instead of an ingress controller:
 ### values.yaml reference
 
 ```yaml
+# Required ─────────────────────────────────────────────
 slack:
-  clientId: ""
-  clientSecret: ""
-  signingSecret: ""
+  clientId: ""           # Slack app → Basic Information → Client ID
+  clientSecret: ""       # Slack app → Basic Information → Client Secret (32 chars)
+  signingSecret: ""      # Slack app → Basic Information → Signing Secret
 
 externalDatabase:
-  url: ""              # postgresql://user:pass@host:5432/db
+  url: ""                # postgresql://user:pass@host:5432/db
 
-flaskSecretKey: ""     # openssl rand -hex 32
+flaskSecretKey: ""       # openssl rand -hex 32
 
 app:
-  url: "https://api.morgenruf.dev"
+  url: "https://api.your-domain.com"   # Public HTTPS URL for OAuth redirects
 
+# Optional ─────────────────────────────────────────────
 resend:
-  apiKey: ""           # optional — for welcome emails
+  apiKey: ""             # Resend API key for welcome emails (free tier ok)
 
 ingress:
-  enabled: true        # set false for Cloudflare Tunnel
+  enabled: true          # set false for Cloudflare Tunnel / custom routing
   className: "nginx"
   hosts:
-    - host: api.morgenruf.dev
+    - host: api.your-domain.com
 ```
+
+> ⚠️ **Common mistake:** `slack.clientSecret` and `slack.signingSecret` are **different values**.  
+> Both are found on your Slack app's **Basic Information** page.  
+> — Client Secret: 32 hex chars (e.g. `346a428c78b0d8c84b70e74d12a58ab5`)  
+> — Signing Secret: 32 hex chars, listed separately under "App Credentials"
 
 ---
 
