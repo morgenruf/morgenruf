@@ -512,6 +512,9 @@
     <div class="nav-item" data-section="automation">
       <span class="nav-icon">&#9889;</span> Automation
     </div>
+    <div class="nav-item" data-section="mcp">
+      <span class="nav-icon">&#128299;</span> MCP
+    </div>
     <div class="sidebar-footer">
       <div class="workspace-pill">
         <div class="ws-avatar" id="ws-avatar">M</div>
@@ -882,6 +885,57 @@
 
   <!-- ── Toast container ── -->
   <div id="toast-container"></div>
+
+  <!-- ── MCP Section ── -->
+  <div id="section-mcp" class="section">
+    <div class="topbar">
+      <div>
+        <div class="page-title">🔌 MCP Integration</div>
+        <div class="page-subtitle">Connect AI Assistants — Let Claude, Cursor, and GitHub Copilot query your standup data</div>
+      </div>
+      <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">📖 Full Setup Guide</a>
+    </div>
+    <div style="max-width:720px;display:grid;gap:20px;padding-top:4px">
+
+      <!-- Team ID box -->
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:12px">Your Team ID</div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-family:monospace;font-size:14px">
+          <code id="mcp-team-id" style="flex:1;background:none;border:none;padding:0;color:var(--text);font-size:14px">Loading…</code>
+          <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('mcp-team-id')">Copy</button>
+        </div>
+        <p style="font-size:12px;color:var(--text-dim);margin-top:8px">Use this as <code style="font-size:11px">MCP_TEAM_ID</code> in your AI assistant config</p>
+      </div>
+
+      <!-- Config generator -->
+      <div class="stat-card">
+        <div class="stat-label" style="margin-bottom:12px">Config Generator</div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:6px">AI Assistant</label>
+          <select id="mcp-assistant" onchange="renderMCPConfig()" style="width:240px">
+            <option value="claude">Claude Desktop</option>
+            <option value="cursor">Cursor</option>
+            <option value="copilot">GitHub Copilot</option>
+          </select>
+        </div>
+        <div style="position:relative">
+          <pre id="mcp-config-output" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;color:var(--text);white-space:pre;overflow-x:auto;margin:0;line-height:1.6"></pre>
+          <button onclick="copyMCPConfig()" style="position:absolute;top:10px;right:10px" class="btn btn-secondary btn-sm">Copy</button>
+        </div>
+        <div style="margin-top:10px">
+          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Config file location:</label>
+          <code id="mcp-config-path" style="font-size:12px;color:var(--text-muted)"></code>
+        </div>
+      </div>
+
+      <!-- Links -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary">📖 Full MCP Setup Guide</a>
+        <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost">🛠 View All 8 Tools</a>
+      </div>
+
+    </div>
+  </div>
 
   <script>
   // ── State ──
@@ -1932,8 +1986,88 @@
     } catch(e) { toast(e.message, 'error'); }
   }
 
+  // ── MCP ──
+  let _mcpTeamId = '';
+
+  async function loadMCPSection() {
+    try {
+      const me = await api('GET', '/me');
+      _mcpTeamId = me.team_id || '';
+      const el = document.getElementById('mcp-team-id');
+      if (el) el.textContent = _mcpTeamId || 'Not available';
+      renderMCPConfig();
+    } catch(e) {
+      const el = document.getElementById('mcp-team-id');
+      if (el) el.textContent = 'Error loading';
+    }
+  }
+
+  function renderMCPConfig() {
+    const assistant = document.getElementById('mcp-assistant')?.value || 'claude';
+    const teamId = _mcpTeamId || 'T0123ABCDE';
+    const dbUrl = 'postgresql://morgenruf:password@localhost:5432/morgenruf';
+
+    let config, path;
+    if (assistant === 'claude') {
+      path = navigator.platform.includes('Win')
+        ? '%APPDATA%\\Claude\\claude_desktop_config.json'
+        : '~/Library/Application Support/Claude/claude_desktop_config.json';
+      config = JSON.stringify({
+        mcpServers: {
+          morgenruf: {
+            command: 'python',
+            args: ['app/src/mcp_server.py'],
+            env: { DATABASE_URL: dbUrl, MCP_TEAM_ID: teamId }
+          }
+        }
+      }, null, 2);
+    } else if (assistant === 'cursor') {
+      path = '~/.cursor/mcp.json';
+      config = JSON.stringify({
+        mcpServers: {
+          morgenruf: {
+            command: 'python',
+            args: ['/path/to/mcp_server.py'],
+            env: { DATABASE_URL: dbUrl, MCP_TEAM_ID: teamId }
+          }
+        }
+      }, null, 2);
+    } else {
+      path = '.github/copilot-config.json (in your repository)';
+      config = JSON.stringify({
+        mcp: {
+          servers: {
+            morgenruf: {
+              command: 'python',
+              args: ['/path/to/mcp_server.py'],
+              env: { DATABASE_URL: dbUrl, MCP_TEAM_ID: teamId }
+            }
+          }
+        }
+      }, null, 2);
+    }
+
+    const out = document.getElementById('mcp-config-output');
+    const pathEl = document.getElementById('mcp-config-path');
+    if (out) out.textContent = config;
+    if (pathEl) pathEl.textContent = path;
+  }
+
+  function copyMCPConfig() {
+    const out = document.getElementById('mcp-config-output');
+    if (!out) return;
+    navigator.clipboard.writeText(out.textContent).then(() => toast('Config copied!'));
+  }
+
+  function copyToClipboard(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent.trim()).then(() => toast('Copied!'));
+  }
+
   // ── Boot ──
   loadStandups();
+  loadMCPSection();
   </script>
 </body>
 </html>

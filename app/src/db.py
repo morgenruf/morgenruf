@@ -169,8 +169,40 @@ def get_workspace_by_feed_token(token: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_standups(team_id: str, days: int = 1) -> list[dict]:
-    """Return standup submissions for the last N days (default: today only)."""
+def get_standups(
+    team_id: str,
+    days: int = 1,
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> list[dict]:
+    """Return standup submissions.
+
+    If *from_date* / *to_date* (YYYY-MM-DD strings) are provided they take
+    priority over *days*.  Otherwise the last *days* days are returned.
+    """
+    if from_date or to_date:
+        conditions = ["s.team_id = %s"]
+        params: list = [team_id]
+        if from_date:
+            conditions.append("s.standup_date >= %s")
+            params.append(from_date)
+        if to_date:
+            conditions.append("s.standup_date <= %s")
+            params.append(to_date)
+        where = " AND ".join(conditions)
+        sql = f"""
+            SELECT s.*, m.real_name AS user_name
+            FROM standups s
+            LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
+            WHERE {where}
+            ORDER BY s.standup_date DESC, s.submitted_at
+        """
+        with db_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+        return [dict(r) for r in rows]
+
     sql = """
         SELECT s.*, m.real_name AS user_name
         FROM standups s
@@ -671,3 +703,64 @@ def update_standup(user_id: str, team_id: str, **kwargs: Any) -> None:
         with conn.cursor() as cur:
             cur.execute(sql, values)
     logger.info("Updated standup for %s / %s", team_id, user_id)
+
+
+# ---------------------------------------------------------------------------
+# MCP API keys
+# ---------------------------------------------------------------------------
+
+import hashlib as _hashlib
+import secrets as _secrets
+
+
+def generate_mcp_key(team_id: str, name: str = "Default") -> str:
+    """Generate a new MCP API key, store its hash, return the full key."""
+    key = "mrn_" + _secrets.token_urlsafe(32)
+    key_hash = _hashlib.sha256(key.encode()).hexdigest()
+    key_prefix = key[:12]
+    sql = """
+        INSERT INTO mcp_api_keys (team_id, key_hash, key_prefix, name)
+        VALUES (%s, %s, %s, %s)
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, key_hash, key_prefix, name))
+    logger.info("Generated MCP key %s... for team %s", key_prefix, team_id)
+    return key
+
+
+def get_mcp_keys(team_id: str) -> list[dict]:
+    """Return all MCP keys for a team (prefix only, not the raw key)."""
+    sql = """
+        SELECT id, key_prefix, name, created_at, last_used_at, active
+        FROM mcp_api_keys
+        WHERE team_id = %s
+        ORDER BY created_at DESC
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def revoke_mcp_key(key_id: int, team_id: str) -> None:
+    """Soft-delete an MCP API key (marks inactive)."""
+    sql = "UPDATE mcp_api_keys SET active = FALSE WHERE id = %s AND team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (key_id, team_id))
+
+
+def verify_mcp_key(key: str) -> str | None:
+    """Verify an API key, update last_used_at, return team_id or None."""
+    key_hash = _hashlib.sha256(key.encode()).hexdigest()
+    sql = """
+        UPDATE mcp_api_keys SET last_used_at = NOW()
+        WHERE key_hash = %s AND active = TRUE
+        RETURNING team_id
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (key_hash,))
+            row = cur.fetchone()
+    return row[0] if row else None
