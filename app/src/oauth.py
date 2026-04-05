@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
+import time
 
 from flask import Blueprint, redirect, request, jsonify, session
 from markupsafe import escape
@@ -38,6 +41,34 @@ _url_generator = AuthorizeUrlGenerator(
 )
 
 
+def _state_secret() -> bytes:
+    key = os.environ.get("FLASK_SECRET_KEY", "fallback-insecure-key")
+    return key.encode() if isinstance(key, str) else key
+
+
+def _make_state() -> str:
+    """Generate a self-contained HMAC-signed state token (no session needed)."""
+    nonce = os.urandom(16).hex()
+    ts = str(int(time.time()))
+    payload = f"{ts}.{nonce}"
+    sig = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def _verify_state(state: str) -> bool:
+    """Verify HMAC-signed state token. Accepts tokens up to 10 minutes old."""
+    try:
+        ts_str, nonce, sig = state.rsplit(".", 2)
+        payload = f"{ts_str}.{nonce}"
+        expected = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return False
+        age = int(time.time()) - int(ts_str)
+        return 0 <= age <= 600  # 10 minute window
+    except Exception:
+        return False
+
+
 @oauth_bp.route("/")
 def index():
     return jsonify({"name": "morgenruf", "version": "1.0.0", "status": "ok"})
@@ -46,8 +77,7 @@ def index():
 @oauth_bp.route("/install")
 def install():
     """Redirect the browser to the Slack OAuth authorisation page."""
-    state = os.urandom(16).hex()
-    session['oauth_state'] = state
+    state = _make_state()
     url = _url_generator.generate(state=state)
     return redirect(url)
 
@@ -56,11 +86,10 @@ def install():
 def oauth_callback():
     """Exchange the OAuth code for a bot token and store the installation."""
     incoming_state = request.args.get("state", "")
-    if not incoming_state or incoming_state != session.pop("oauth_state", None):
+    if not incoming_state or not _verify_state(incoming_state):
+        logger.warning("OAuth state validation failed: %r", incoming_state)
         return "Invalid state parameter", 400
 
-    code = request.args.get("code")
-    error = request.args.get("error")
 
     if error:
         logger.warning("OAuth flow returned error: %s", error)
