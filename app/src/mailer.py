@@ -115,6 +115,7 @@ def send_weekly_digest(
     _send(to_email, f"📊 Weekly Standup Digest — {team_name}", html)
 
 
+def send_welcome_email(to_email: str, team_name: str, installed_by: str) -> None:
     """Send welcome email on new workspace installation."""
     try:
         import resend  # type: ignore[import]
