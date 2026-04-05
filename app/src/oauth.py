@@ -8,13 +8,12 @@ import logging
 import os
 import time
 
-from flask import Blueprint, redirect, request, jsonify, session
+import db
+from flask import Blueprint, jsonify, redirect, request, session
+from mailer import send_welcome_email
 from markupsafe import escape
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
-
-import db
-from mailer import send_welcome_email
 
 logger = logging.getLogger(__name__)
 

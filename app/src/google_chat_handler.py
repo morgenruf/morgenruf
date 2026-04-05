@@ -4,9 +4,8 @@ from __future__ import annotations
 import logging
 import os
 
-from flask import Blueprint, request, jsonify
-
 import db
+from flask import Blueprint, jsonify, request
 from state import QUESTIONS, state_store
 
 logger = logging.getLogger(__name__)

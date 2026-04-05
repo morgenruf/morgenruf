@@ -1,6 +1,7 @@
 """Google Chat adapter — uses Chat API v1 with service account auth."""
 import json
 import logging
+
 import requests
 from adapters.base import PlatformAdapter
 
@@ -18,6 +19,7 @@ class GoogleChatAdapter(PlatformAdapter):
 
     def _get_token(self) -> str:
         import time
+
         import jwt as pyjwt
 
         now = int(time.time())

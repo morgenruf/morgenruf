@@ -4,9 +4,8 @@ from __future__ import annotations
 import json
 import logging
 
-from flask import Blueprint, jsonify, request
-
 import db
+from flask import Blueprint, jsonify, request
 
 logger = logging.getLogger(__name__)
 mcp_bp = Blueprint("mcp", __name__)
@@ -164,7 +163,6 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
 
     if name == "get_workspace_summary":
         members = db.get_active_members(team_id) or []
-        stats_rows = db.get_participation_stats(team_id, days=7) or []
         rows_today = db.get_standups(team_id, days=1) or []
         all_recent = db.get_standups(team_id, days=7) or []
         blockers = [r for r in all_recent if r.get("blockers", "").strip().lower() not in _NO_BLOCKER]

@@ -15,7 +15,6 @@ from typing import Optional
 
 import session_store
 
-
 QUESTIONS = [
     "✅ *What did you complete yesterday?*\n> List by project (e.g. `Proj-Bridj: deployed TF module`)",
     "🎯 *What are you working on today?*\n> List by project",
