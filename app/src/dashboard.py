@@ -759,3 +759,30 @@ def api_mcp_config():
         "mcp_server_path": "app/src/mcp_server.py",
         "docs_url": "https://docs.morgenruf.dev/mcp.html",
     })
+
+
+# ── MCP API Key management ───────────────────────────────────────────────────
+
+@dashboard_bp.route("/dashboard/api/mcp/keys", methods=["GET"])
+@_login_required
+def api_get_mcp_keys():
+    team_id = session["team_id"]
+    keys = db.get_mcp_keys(team_id)
+    return jsonify({"keys": keys})
+
+
+@dashboard_bp.route("/dashboard/api/mcp/keys", methods=["POST"])
+@_login_required
+def api_create_mcp_key():
+    team_id = session["team_id"]
+    name = request.json.get("name", "Default") if request.json else "Default"
+    key = db.generate_mcp_key(team_id, name)
+    return jsonify({"key": key, "message": "Save this key — it won't be shown again!"})
+
+
+@dashboard_bp.route("/dashboard/api/mcp/keys/<int:key_id>", methods=["DELETE"])
+@_login_required
+def api_revoke_mcp_key(key_id: int):
+    team_id = session["team_id"]
+    db.revoke_mcp_key(key_id, team_id)
+    return jsonify({"ok": True})
