@@ -16,5 +16,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install pytest pytest-mock pyyaml python-dotenv httpx
-      - run: python -m pytest app/tests/ -v --tb=short
+      - run: pip install pytest pytest-mock pytest-cov pyyaml python-dotenv httpx
+      - run: python -m pytest app/tests/ -v --tb=short --cov=app/src --cov-report=xml
+      - uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
