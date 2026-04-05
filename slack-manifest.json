@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Morgenruf",
-    "description": "Self-hosted daily standup bot - structured updates, per-project tracking, blocker detection.",
+    "description": "Daily standups for Slack — open-source & self-hosted",
     "background_color": "#0d1117",
     "long_description": "Morgenruf runs your team's daily standups directly in Slack — no expensive SaaS required.\r\n \r\nEach day at your configured time, it DMs team members 3 questions, \r\ncollects answers privately, and posts a clean summary to your team channel.\r\n \r\n Features:\r\n • Configurable schedule (time, timezone, days)\r\n • Per-project tagging for automated reporting\r\n • Blocker detection and highlighting\r\n • Open source (MIT) — self-host or use our hosted version at morgenruf.dev"
   },
@@ -21,10 +21,6 @@
       "https://api.morgenruf.dev/oauth/callback"
     ],
     "scopes": {
-      "user": [
-        "admin.apps:write",
-        "admin.apps:read"
-      ],
       "bot": [
         "chat:write",
         "chat:write.public",
