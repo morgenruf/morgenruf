@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from flask import Flask, request, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from installation_store import PostgresInstallationStore
 from handlers import register_handlers
@@ -58,6 +59,8 @@ def create_app() -> tuple[App, Flask]:
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
     flask_app = Flask(__name__)
+    # Trust Cloudflare/reverse-proxy headers so Flask knows the request is HTTPS
+    flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     secret_key = os.environ.get("FLASK_SECRET_KEY")
     if not secret_key:
         logger.warning("FLASK_SECRET_KEY not set — using random key (sessions will not persist across restarts)")
