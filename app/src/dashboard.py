@@ -746,3 +746,16 @@ def api_disable_feed():
     team_id = session["team_id"]
     db.upsert_workspace_config(team_id, feed_public=False)
     return jsonify({"ok": True})
+
+
+@dashboard_bp.route("/dashboard/api/mcp-config")
+@_login_required
+def api_mcp_config():
+    team_id = session["team_id"]
+    app_url = os.environ.get("APP_URL", "")
+    return jsonify({
+        "team_id": team_id,
+        "app_url": app_url,
+        "mcp_server_path": "app/src/mcp_server.py",
+        "docs_url": "https://docs.morgenruf.dev/mcp.html",
+    })
