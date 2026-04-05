@@ -15,11 +15,9 @@ features:
   slash_commands:
     - command: /standup
       description: Start your daily standup now
-      usage_hint: ""
       should_escape: false
     - command: /skip
       description: Skip today's standup
-      usage_hint: ""
       should_escape: false
     - command: /kudos
       description: Give a shoutout to a teammate
@@ -27,7 +25,6 @@ features:
       should_escape: false
     - command: /help
       description: Show Morgenruf commands and help
-      usage_hint: ""
       should_escape: false
 
 oauth_config:
