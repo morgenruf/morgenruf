@@ -92,6 +92,8 @@ def oauth_callback():
     if not incoming_state:
         logger.warning("OAuth callback received without state — proceeding (direct install flow)")
 
+    code = request.args.get("code")
+    error = request.args.get("error")
 
     if error:
         logger.warning("OAuth flow returned error: %s", error)
