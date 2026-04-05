@@ -153,6 +153,33 @@ def _send_weekly_digest(team_id: str, bot_token: str) -> None:
         logger.warning("Weekly digest failed for %s: %s", team_id, exc)
 
 
+def _send_manager_digest(team_id: str) -> None:
+    """Send today's standup digest to the configured manager email (if enabled)."""
+    try:
+        import db  # noqa: PLC0415
+        from mailer import send_manager_digest  # noqa: PLC0415
+        config = db.get_workspace_config(team_id)
+        if not config:
+            return
+        if not config.get("manager_digest_enabled"):
+            return
+        manager_email = config.get("manager_email") or ""
+        if not manager_email:
+            return
+        inst = db.get_installation(team_id)
+        workspace_name = inst.get("team_name", team_id) if inst else team_id
+        standups = db.get_standups(team_id, days=1)
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        send_manager_digest(
+            manager_email=manager_email,
+            workspace_name=workspace_name,
+            standups=standups,
+            date_str=date_str,
+        )
+    except Exception as exc:
+        logger.warning("Manager digest failed for %s: %s", team_id, exc)
+
+
 def register_workspace_job(
     scheduler: BackgroundScheduler,
     team_id: str,
@@ -223,6 +250,23 @@ def register_workspace_job(
         args=[team_id, bot_token],
         id=f"digest_{team_id}",
         name=f"Weekly Digest — {team_id}",
+        replace_existing=True,
+    )
+
+    # Manager digest job — runs daily at standup time (after standup completes)
+    # Use a 30-minute offset after the standup time so responses are in by then
+    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)
+    scheduler.add_job(
+        _send_manager_digest,
+        trigger=CronTrigger(
+            hour=standup_plus_30.hour,
+            minute=standup_plus_30.minute,
+            day_of_week=schedule_days,
+            timezone=tz,
+        ),
+        args=[team_id],
+        id=f"manager_digest_{team_id}",
+        name=f"Manager Digest — {team_id}",
         replace_existing=True,
     )
 

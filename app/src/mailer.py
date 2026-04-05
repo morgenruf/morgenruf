@@ -562,3 +562,57 @@ def release_announcement_email_html(
         content,
         footer_extra="You're receiving this as an admin of " + team_name + ".",
     )
+
+
+# ---------------------------------------------------------------------------
+# Manager digest
+# ---------------------------------------------------------------------------
+
+def send_manager_digest(manager_email: str, workspace_name: str, standups: list, date_str: str) -> None:
+    """Send daily standup digest email to manager."""
+    if not manager_email:
+        logger.warning("No manager_email — skipping manager digest")
+        return
+
+    blockers = [s for s in standups if s.get("blockers", "").strip().lower() not in ("", "none", "n/a", "no", "-")]
+    participation = len(standups)
+
+    rows = ""
+    for s in standups:
+        has_blocker = s.get("blockers", "").strip().lower() not in ("", "none", "n/a", "no", "-")
+        blocker_style = "background:#fff3cd;padding:4px 8px;border-radius:4px;" if has_blocker else ""
+        rows += (
+            "<tr>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee;font-weight:600'>{s.get('user_name') or s.get('user_id', '')}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee'>{s.get('yesterday', '')}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee'>{s.get('today', '')}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee;{blocker_style}'>{s.get('blockers', '') or '—'}</td>"
+            "</tr>"
+        )
+
+    blocker_notice = (
+        f" · <span style='color:#e67e22'>⚠️ {len(blockers)} blocker(s)</span>"
+        if blockers else ""
+    )
+
+    html = f"""<!DOCTYPE html>
+<html><body style="font-family:-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:20px">
+<h2 style="color:#1a1a2e">📋 Daily Standup Digest — {date_str}</h2>
+<p style="color:#666">{workspace_name} · {participation} response(s){blocker_notice}</p>
+<table style="width:100%;border-collapse:collapse;margin-top:20px">
+  <thead><tr style="background:#f8f9fa">
+    <th style="padding:12px;text-align:left">Member</th>
+    <th style="padding:12px;text-align:left">Yesterday</th>
+    <th style="padding:12px;text-align:left">Today</th>
+    <th style="padding:12px;text-align:left">Blockers</th>
+  </tr></thead>
+  <tbody>{rows}</tbody>
+</table>
+<p style="margin-top:30px;color:#999;font-size:12px">Sent by <a href="https://morgenruf.dev">Morgenruf</a> · <a href="https://morgenruf.dev">Manage settings</a></p>
+</body></html>"""
+
+    _send(
+        to_email=manager_email,
+        subject=f"[{workspace_name}] Standup Digest — {date_str}",
+        html=html,
+    )

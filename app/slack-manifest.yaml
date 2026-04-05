@@ -37,6 +37,15 @@ features:
       callback_id: submit_standup
       description: Submit your daily standup manually
       type: global
+  slash_commands:
+    - command: /standup
+      description: Start your daily standup
+      usage_hint: ""
+      should_escape: false
+    - command: /skip
+      description: Skip today's standup
+      usage_hint: ""
+      should_escape: false
 
 oauth_config:
   redirect_urls:
