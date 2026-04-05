@@ -1,35 +1,55 @@
 # Changelog
 
-All notable changes to Morgenruf will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to Morgenruf are documented here.
+Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](https://semver.org)
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-04-04
-
+## [0.4.0] — 2026-04-05
 ### Added
+- ⚡ Workflow automation rules engine (blocker/participation triggers → post/DM/webhook)
+- 🏆 Kudos / peer recognition system with leaderboard
+- 🔐 Role-based access control (admin/member)
+- 🤖 AI standup summary (OpenAI GPT-4o-mini / Anthropic Claude Haiku)
+- 📅 Multiple standup schedules per workspace
+- 📝 25 pre-built question templates
+- 🔗 Jira / GitHub / Linear auto-linking in summaries
+- 🌐 Google Chat adapter (Beta)
+- 🔧 MCP server for AI assistant integration (Claude, Cursor, Copilot)
+- 📊 Public standup feed URL (shareable read-only page)
+- 📧 Manager digest email (daily HTML summary)
+- 🛡️ Redis-backed sessions (survives pod restarts)
+- 🚨 Sentry error monitoring
 
-- Multi-workspace OAuth support with PostgreSQL installation store
-- Web dashboard for workspace configuration
-- Block Kit UI: standup creation modal, DM prompts, App Home tab
-- S&P advanced features: user avatar display, Jira/Zendesk issue auto-linking, webhooks with HMAC signing, edit-after-submit window, group-by-question view
-- 5 email templates (welcome, first standup, weekly digest, inactive nudge, release announcement)
-- Automatic DB migrations as Helm pre-install/pre-upgrade hook
-- Security hardening: CSRF protection, SSRF blocking, non-root Docker container, K8s securityContext
-
-### Changed
-
-- Refactored from single-workspace to multi-workspace architecture
-- Upgraded Helm chart to v0.2.0 with bundled PostgreSQL (Bitnami)
-
-## [0.1.0] - 2026-03-01
-
+## [0.3.0] — 2026-03-20
 ### Added
+- 🏠 Slack App Home tab
+- ⏭️ Skip today command
+- ⏰ Reminder notifications
+- 🌍 Per-user timezone support
+- 📈 Analytics dashboard with participation charts
+- 📤 CSV export
+- 😊 Mood tracking
+- 📬 Weekly digest
 
+## [0.2.0] — 2026-03-01
+### Added
+- 🌐 Web dashboard for workspace configuration
+- 🔗 Webhook integrations
+- ✏️ Edit window for standup responses
+- 📧 Welcome email on install
+
+## [0.1.0] — 2026-02-15
+### Added
 - Initial release
-- Basic Slack standup bot with slash command
-- Single-workspace support
-- Helm chart v0.1.0
-- Docker image published to ghcr.io
+- Slack OAuth install flow
+- Daily standup DM flow (3 questions)
+- Standup summary posted to channel
+- PostgreSQL persistence
+- Helm chart
+
+[Unreleased]: https://github.com/morgenruf/morgenruf/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/morgenruf/morgenruf/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/morgenruf/morgenruf/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/morgenruf/morgenruf/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/morgenruf/morgenruf/releases/tag/v0.1.0

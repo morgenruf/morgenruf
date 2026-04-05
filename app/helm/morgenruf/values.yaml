@@ -90,6 +90,19 @@ flaskSecretKey: ""   # openssl rand -hex 32
 resend:
   apiKey: ""
 
+# ---------------------------------------------------------------------------
+# Optional: Redis URL for persistent sessions
+# redis:
+#   url: ""
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Optional: Sentry error monitoring
+# ---------------------------------------------------------------------------
+sentry:
+  dsn: ""
+  env: "production"
+
 resources:
   requests:
     cpu: 50m

@@ -1,7 +1,8 @@
-"""Conversation state — tracks each user's active standup session in memory.
+"""Conversation state — tracks each user's active standup session.
 
 Per-workspace persistent data (members, standups) lives in PostgreSQL via db.py.
-This module holds only the transient DM conversation state needed during a session.
+Active DM conversation state is stored in Redis (with in-memory fallback) via
+session_store so sessions survive pod restarts.
 Cache keys are `team_id:user_id` to support multi-workspace.
 """
 
@@ -11,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Lock
 from typing import Optional
+
+import session_store
 
 
 QUESTIONS = [
@@ -35,11 +38,32 @@ class UserSession:
         return self.cache_key.split(":", 1)[-1]
 
 
+def _serialize(session: "UserSession") -> dict:
+    return {
+        "cache_key": session.cache_key,
+        "team_id": session.team_id,
+        "channel": session.channel,
+        "step": session.step,
+        "answers": session.answers,
+        "questions": session.questions,
+    }
+
+
+def _deserialize(data: dict) -> "UserSession":
+    return UserSession(
+        cache_key=data["cache_key"],
+        team_id=data.get("team_id", ""),
+        channel=data.get("channel", ""),
+        step=data.get("step", 0),
+        answers=data.get("answers", []),
+        questions=data.get("questions", list(QUESTIONS)),
+    )
+
+
 class StateStore:
-    """In-memory store for active standup DM conversations."""
+    """Redis-backed store for active standup DM conversations (in-memory fallback)."""
 
     def __init__(self) -> None:
-        self._sessions: dict[str, UserSession] = {}
         self._lock = Lock()
 
     def start(self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None) -> UserSession:
@@ -54,27 +78,29 @@ class StateStore:
                 channel=channel,
                 questions=list(questions) if questions is not None else list(QUESTIONS),
             )
-            self._sessions[cache_key] = session
+            session_store.set_session(cache_key, _serialize(session))
             return session
 
     def get(self, cache_key: str) -> Optional[UserSession]:
-        return self._sessions.get(cache_key)
+        data = session_store.get_session(cache_key)
+        return _deserialize(data) if data else None
 
     def record_answer(self, cache_key: str, answer: str) -> Optional[UserSession]:
         with self._lock:
-            session = self._sessions.get(cache_key)
-            if not session:
+            data = session_store.get_session(cache_key)
+            if not data:
                 return None
+            session = _deserialize(data)
             session.answers.append(answer)
             session.step += 1
+            session_store.set_session(cache_key, _serialize(session))
             return session
 
     def clear(self, cache_key: str) -> None:
-        with self._lock:
-            self._sessions.pop(cache_key, None)
+        session_store.delete_session(cache_key)
 
     def is_active(self, cache_key: str) -> bool:
-        return cache_key in self._sessions
+        return session_store.has_session(cache_key)
 
 
 state_store = StateStore()
