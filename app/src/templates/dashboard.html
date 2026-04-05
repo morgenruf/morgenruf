@@ -1165,13 +1165,112 @@
           '<div style="font-weight:600;font-size:15px">Primary Standup Config</div>' +
           '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
           '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit Configuration</button>' +
-          '</div>';
+          '</div>' +
+          '<div id="feed-section"></div>' +
+          '<div id="digest-section" style="margin-top:0"></div>';
+        loadFeedSettings(s);
+        loadDigestSettings(s);
       } else {
         el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9881;</div><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
       }
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-dim)">Failed to load settings.</p>';
     }
+  }
+
+  // ── Public Feed ──
+  function loadFeedSettings(standup) {
+    const el = document.getElementById('feed-section');
+    if (!el) return;
+    const feedEnabled = !!standup.feed_public;
+    const feedUrl = standup.feed_token ? (window.location.origin + '/feed/' + standup.feed_token) : '';
+    el.innerHTML =
+      '<div class="stat-card" style="margin-bottom:16px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+          '<div style="font-weight:600;font-size:14px">🔗 Public Standup Feed</div>' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
+            '<input type="checkbox" id="feed-toggle" onchange="toggleFeed(this.checked)" ' + (feedEnabled ? 'checked' : '') + ' style="width:16px;height:16px">' +
+            'Enable public feed' +
+          '</label>' +
+        '</div>' +
+        '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Share a read-only URL showing today\'s standups — no login required.</p>' +
+        (feedEnabled && feedUrl
+          ? '<div style="display:flex;gap:8px;align-items:center">' +
+              '<input id="feed-url-display" class="input" style="flex:1;font-size:12px;background:var(--surface2);color:var(--text-muted)" readonly value="' + esc(feedUrl) + '">' +
+              '<button class="btn btn-secondary btn-sm" onclick="copyFeedUrl()">Copy</button>' +
+            '</div>'
+          : (feedEnabled
+              ? '<button class="btn btn-primary btn-sm" onclick="generateFeedToken()">Generate Feed URL</button>'
+              : '')) +
+      '</div>';
+  }
+
+  async function toggleFeed(enabled) {
+    if (enabled) {
+      await generateFeedToken();
+    } else {
+      await disableFeed();
+    }
+  }
+
+  async function generateFeedToken() {
+    try {
+      const res = await api('POST', '/feed-token');
+      toast('Feed URL generated');
+      await loadSettings();
+    } catch (e) { toast('Failed to generate feed URL', 'error'); }
+  }
+
+  async function disableFeed() {
+    try {
+      await api('DELETE', '/feed-token');
+      toast('Public feed disabled');
+      await loadSettings();
+    } catch (e) { toast('Failed to disable feed', 'error'); }
+  }
+
+  function copyFeedUrl() {
+    const el = document.getElementById('feed-url-display');
+    if (el) {
+      navigator.clipboard.writeText(el.value).then(() => toast('URL copied!')).catch(() => {
+        el.select(); document.execCommand('copy'); toast('URL copied!');
+      });
+    }
+  }
+
+  // ── Manager Digest ──
+  function loadDigestSettings(standup) {
+    const el = document.getElementById('digest-section');
+    if (!el) return;
+    const digestEnabled = !!standup.manager_digest_enabled;
+    const managerEmail = standup.manager_email || '';
+    el.innerHTML =
+      '<div class="stat-card" style="margin-bottom:16px">' +
+        '<div style="font-weight:600;font-size:14px;margin-bottom:8px">📧 Manager Digest Email</div>' +
+        '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Send a daily HTML email with today\'s standup responses to a manager after the standup window.</p>' +
+        '<div style="display:grid;gap:10px">' +
+          '<div>' +
+            '<label style="font-size:12px;color:var(--text-muted)">Manager email</label>' +
+            '<input id="digest-email" class="input" type="email" placeholder="manager@company.com" value="' + esc(managerEmail) + '" style="margin-top:4px;width:100%">' +
+          '</div>' +
+          '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
+            '<input type="checkbox" id="digest-toggle" ' + (digestEnabled ? 'checked' : '') + ' style="width:16px;height:16px">' +
+            'Send daily digest to manager' +
+          '</label>' +
+          '<div><button class="btn btn-primary btn-sm" onclick="saveDigestSettings()">Save</button></div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  async function saveDigestSettings() {
+    const email = (document.getElementById('digest-email') || {}).value || '';
+    const enabled = !!(document.getElementById('digest-toggle') || {}).checked;
+    try {
+      const standups = await api('GET', '/standups');
+      if (!standups.length) { toast('No standup configured', 'error'); return; }
+      await api('PUT', '/standups/' + standups[0].id, { manager_email: email, manager_digest_enabled: enabled });
+      toast('Digest settings saved');
+    } catch (e) { toast('Failed to save digest settings', 'error'); }
   }
 
   // ── Webhooks ──

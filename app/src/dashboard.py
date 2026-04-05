@@ -183,6 +183,10 @@ def _config_to_standup(cfg: dict) -> dict:
         "reminder_minutes": int(cfg.get("reminder_minutes") or 0),
         "ai_summary_enabled": bool(cfg.get("ai_summary_enabled", False)),
         "ai_provider": cfg.get("ai_provider") or "openai",
+        "feed_token": cfg.get("feed_token") or "",
+        "feed_public": bool(cfg.get("feed_public", False)),
+        "manager_email": cfg.get("manager_email") or "",
+        "manager_digest_enabled": bool(cfg.get("manager_digest_enabled", False)),
     }
 
 
