@@ -84,6 +84,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: RESEND_API_KEY
+            - name: APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: APP_URL
           volumeMounts:
             - name: teams-config
               mountPath: /app/teams.yaml
