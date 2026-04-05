@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import re
 
-_JIRA_RE = re.compile(r'\b([A-Z][A-Z0-9]+-\d+)\b')
-_GH_RE = re.compile(r'(?<!\w)#(\d+)\b')
+_JIRA_RE = re.compile(r"\b([A-Z][A-Z0-9]+-\d+)\b")
+_GH_RE = re.compile(r"(?<!\w)#(\d+)\b")
 
 
 def autolink(text: str, config: dict) -> str:
@@ -42,7 +42,7 @@ def autolink(text: str, config: dict) -> str:
 
     # Linear: ENG-123 (if linear_team set, only match that prefix)
     if linear_team:
-        linear_re = re.compile(rf'\b({re.escape(linear_team)}-\d+)\b')
+        linear_re = re.compile(rf"\b({re.escape(linear_team)}-\d+)\b")
         text = linear_re.sub(
             lambda m: f"<https://linear.app/issue/{m.group(1)}|{m.group(1)}>",
             text,

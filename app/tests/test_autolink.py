@@ -10,6 +10,7 @@ from autolink import autolink
 # Jira autolink
 # ---------------------------------------------------------------------------
 
+
 class TestJiraAutolink:
     def test_basic_jira_link(self):
         result = autolink("Fixed PROJ-123 today", {"jira_base_url": "https://acme.atlassian.net"})
@@ -48,6 +49,7 @@ class TestJiraAutolink:
 # GitHub autolink
 # ---------------------------------------------------------------------------
 
+
 class TestGitHubAutolink:
     def test_basic_github_link(self):
         result = autolink("Fixed #42 today", {"github_repo": "acme/myrepo"})
@@ -78,6 +80,7 @@ class TestGitHubAutolink:
 # Linear autolink
 # ---------------------------------------------------------------------------
 
+
 class TestLinearAutolink:
     def test_basic_linear_link(self):
         result = autolink("Done ENG-55", {"linear_team": "ENG"})
@@ -102,6 +105,7 @@ class TestLinearAutolink:
 # Combined / edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestAutolinkCombined:
     def test_empty_string(self):
         assert autolink("", {"jira_base_url": "https://acme.atlassian.net"}) == ""
@@ -113,11 +117,14 @@ class TestAutolinkCombined:
 
     def test_all_three_providers(self):
         text = "PROJ-1 and #2 and ENG-3"
-        result = autolink(text, {
-            "jira_base_url": "https://acme.atlassian.net",
-            "github_repo": "acme/repo",
-            "linear_team": "ENG",
-        })
+        result = autolink(
+            text,
+            {
+                "jira_base_url": "https://acme.atlassian.net",
+                "github_repo": "acme/repo",
+                "linear_team": "ENG",
+            },
+        )
         assert "browse/PROJ-1" in result
         assert "issues/2" in result
         assert "linear.app/issue/ENG-3" in result

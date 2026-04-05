@@ -26,6 +26,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
     """DM participants of a standup schedule (or all active members if no schedule)."""
     try:
         import db  # noqa: PLC0415
+
         if schedule_id:
             schedule = db.get_standup_schedule(team_id, schedule_id)
             if not schedule or not schedule.get("active"):
@@ -34,6 +35,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             questions_raw = schedule.get("questions") or []
             if isinstance(questions_raw, str):
                 import json as _json
+
                 try:
                     questions_raw = _json.loads(questions_raw)
                 except Exception:
@@ -46,6 +48,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             qs = config.get("questions") or []
             if isinstance(qs, str):
                 import json as _json
+
                 try:
                     qs = _json.loads(qs)
                 except Exception:
@@ -74,8 +77,18 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             # Check if user skipped today
             try:
                 import db  # noqa: PLC0415
+
                 if db.is_skipped_today(team_id, user_id):
                     logger.debug("Skipping %s — user opted out today", user_id)
+                    continue
+            except Exception:
+                pass
+
+            try:
+                import db  # noqa: PLC0415
+
+                if db.is_on_vacation(team_id, user_id):
+                    logger.debug("Skipping %s — on vacation", user_id)
                     continue
             except Exception:
                 pass
@@ -98,6 +111,7 @@ def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: 
     """DM active members a heads-up before standup time."""
     try:
         import db  # noqa: PLC0415
+
         members = db.get_active_members(team_id)
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
@@ -107,6 +121,7 @@ def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: 
         user_id = member["user_id"]
         try:
             import db  # noqa: PLC0415
+
             if db.is_skipped_today(team_id, user_id):
                 continue
             dm = client.conversations_open(users=user_id)
@@ -122,6 +137,7 @@ def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: 
     try:
         import db  # noqa: PLC0415
         from workflow import evaluate_rules  # noqa: PLC0415
+
         stats = db.get_participation_stats(team_id, days=1)
         total = len(stats)
         responded = sum(1 for s in stats if (s.get("responses") or 0) > 0)
@@ -136,6 +152,7 @@ def _send_weekly_digest(team_id: str, bot_token: str) -> None:
     try:
         import db  # noqa: PLC0415
         from mailer import send_weekly_digest  # noqa: PLC0415
+
         inst = db.get_installation(team_id)
         if not inst:
             return
@@ -157,6 +174,7 @@ def _send_manager_digest(team_id: str) -> None:
     try:
         import db  # noqa: PLC0415
         from mailer import send_manager_digest  # noqa: PLC0415
+
         config = db.get_workspace_config(team_id)
         if not config:
             return
@@ -215,7 +233,10 @@ def register_workspace_job(
     )
     logger.info(
         "Registered standup job for %s at %s %s (%s)",
-        team_id, schedule_time, schedule_tz, schedule_days,
+        team_id,
+        schedule_time,
+        schedule_tz,
+        schedule_days,
     )
 
     # Reminder job
@@ -298,7 +319,9 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
         name=f"{schedule.get('name', 'Standup')} — {team_id}",
         replace_existing=True,
     )
-    logger.info("Registered schedule job %s (%s) at %s %s", schedule_id, schedule.get("name"), schedule_time, schedule_tz)
+    logger.info(
+        "Registered schedule job %s (%s) at %s %s", schedule_id, schedule.get("name"), schedule_time, schedule_tz
+    )
 
     if reminder_minutes > 0:
         standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
@@ -309,10 +332,26 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
             reminder_days = ",".join(day_map.get(d, d) for d in schedule_days.split(","))
         scheduler.add_job(
             _send_reminder_to_workspace,
-            trigger=CronTrigger(hour=reminder_dt.hour, minute=reminder_dt.minute, day_of_week=reminder_days, timezone=tz),
+            trigger=CronTrigger(
+                hour=reminder_dt.hour, minute=reminder_dt.minute, day_of_week=reminder_days, timezone=tz
+            ),
             args=[team_id, bot_token, reminder_minutes],
             id=f"reminder_schedule_{team_id}_{schedule_id}",
             replace_existing=True,
+        )
+
+    weekend_reminder = bool(schedule.get("weekend_reminder")) or reminder_minutes == -1
+    if weekend_reminder:
+        scheduler.add_job(
+            _send_reminder_to_workspace,
+            trigger=CronTrigger(hour=int(hour), minute=int(minute), day_of_week="fri", timezone=tz),
+            args=[team_id, bot_token, reminder_minutes if reminder_minutes > 0 else 0],
+            id=f"weekend_reminder_schedule_{team_id}_{schedule_id}",
+            name=f"Weekend Reminder — {schedule.get('name', 'Standup')} — {team_id}",
+            replace_existing=True,
+        )
+        logger.info(
+            "Registered weekend reminder job %s (%s) on Fridays at %s", schedule_id, schedule.get("name"), schedule_time
         )
 
 
@@ -327,6 +366,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
     # Register standup_schedules jobs
     try:
         import db  # noqa: PLC0415
+
         all_schedules = db.get_all_active_schedules()
         for sched in all_schedules:
             register_schedule_job(scheduler, sched)

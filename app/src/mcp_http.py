@@ -1,4 +1,5 @@
 """MCP HTTP endpoint — exposes standup data to AI assistants over HTTP."""
+
 from __future__ import annotations
 
 import json
@@ -192,15 +193,17 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
 @mcp_bp.route("/mcp", methods=["GET"])
 def mcp_info():
     """Public info endpoint — shows how to connect."""
-    return jsonify({
-        "name": "Morgenruf MCP Server",
-        "version": "1.0.0",
-        "transport": "http",
-        "endpoint": request.host_url.rstrip("/") + "/mcp",
-        "auth": "Bearer token — generate from your Morgenruf dashboard",
-        "docs": "https://docs.morgenruf.dev/mcp.html",
-        "tools": [t["name"] for t in TOOLS],
-    })
+    return jsonify(
+        {
+            "name": "Morgenruf MCP Server",
+            "version": "1.0.0",
+            "transport": "http",
+            "endpoint": request.host_url.rstrip("/") + "/mcp",
+            "auth": "Bearer token — generate from your Morgenruf dashboard",
+            "docs": "https://docs.morgenruf.dev/mcp.html",
+            "tools": [t["name"] for t in TOOLS],
+        }
+    )
 
 
 @mcp_bp.route("/mcp", methods=["POST"])
@@ -208,14 +211,16 @@ def mcp_endpoint():
     """MCP JSON-RPC 2.0 endpoint."""
     team_id = _auth()
     if not team_id:
-        return jsonify({
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32001,
-                "message": "Unauthorized — provide a valid Bearer API key from your Morgenruf dashboard",
-            },
-            "id": None,
-        }), 401
+        return jsonify(
+            {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32001,
+                    "message": "Unauthorized — provide a valid Bearer API key from your Morgenruf dashboard",
+                },
+                "id": None,
+            }
+        ), 401
 
     body = request.get_json(silent=True) or {}
     method = body.get("method", "")
@@ -229,11 +234,13 @@ def mcp_endpoint():
         return jsonify({"jsonrpc": "2.0", "error": {"code": code, "message": msg}, "id": req_id})
 
     if method == "initialize":
-        return ok({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {}},
-            "serverInfo": MCP_SERVER_INFO,
-        })
+        return ok(
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": MCP_SERVER_INFO,
+            }
+        )
 
     if method == "tools/list":
         return ok({"tools": TOOLS})

@@ -1,4 +1,5 @@
 """Google Chat adapter — uses Chat API v1 with service account auth."""
+
 import json
 import logging
 

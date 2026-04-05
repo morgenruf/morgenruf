@@ -57,6 +57,7 @@ def _is_safe_webhook_url(url: str) -> bool:
 # Auth helpers
 # ---------------------------------------------------------------------------
 
+
 def _login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -65,6 +66,7 @@ def _login_required(f):
                 return jsonify({"error": "Unauthorized"}), 401
             return redirect(url_for("dashboard.login"))
         return f(*args, **kwargs)
+
     return wrapper
 
 
@@ -83,6 +85,7 @@ def _admin_required(f):
             logger.warning("_admin_required DB error: %s", exc)
             return jsonify({"error": "Service unavailable"}), 503
         return f(*args, **kwargs)
+
     return wrapper
 
 
@@ -101,6 +104,7 @@ def _get_bot_token() -> str | None:
 # ---------------------------------------------------------------------------
 # Page routes
 # ---------------------------------------------------------------------------
+
 
 @dashboard_bp.route("/dashboard")
 def dashboard():
@@ -150,6 +154,7 @@ def logout():
 # Each standup_schedules row is one "standup".
 # ---------------------------------------------------------------------------
 
+
 def _schedule_to_standup(row: dict) -> dict:
     """Normalise a standup_schedules row into a standup API object."""
     questions = row.get("questions") or []
@@ -198,6 +203,8 @@ def _schedule_to_standup(row: dict) -> dict:
         "feed_public": bool(row.get("feed_public", False)),
         "manager_email": row.get("manager_email") or "",
         "manager_digest_enabled": bool(row.get("manager_digest_enabled", False)),
+        "post_to_thread": bool(row.get("post_to_thread", False)),
+        "notify_on_report": bool(row.get("notify_on_report", True)),
     }
 
 
@@ -229,10 +236,14 @@ def api_create_standup():
             schedule_time=data.get("schedule_time", "09:00"),
             schedule_tz=data.get("schedule_tz", "UTC"),
             schedule_days=days,
-            questions=data.get("questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]),
+            questions=data.get(
+                "questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]
+            ),
             participants=data.get("participants", []),
             active=data.get("active", True),
             reminder_minutes=int(data.get("reminder_minutes") or 0),
+            post_to_thread=bool(data.get("post_to_thread", False)),
+            notify_on_report=bool(data.get("notify_on_report", True)),
         )
         return jsonify(_schedule_to_standup(row)), 201
     except Exception as exc:
@@ -248,11 +259,27 @@ def api_update_standup(standup_id: str):
     try:
         kwargs: dict = {}
         for field in (
-            "name", "channel_id", "schedule_time", "schedule_tz",
-            "questions", "participants", "active",
-            "report_channel", "report_time", "group_by", "post_as", "sort_order",
-            "edit_window", "display_avatar", "jira_base_url", "zendesk_base_url",
-            "github_repo", "linear_team", "ai_provider", "feed_token", "feed_public",
+            "name",
+            "channel_id",
+            "schedule_time",
+            "schedule_tz",
+            "questions",
+            "participants",
+            "active",
+            "report_channel",
+            "report_time",
+            "group_by",
+            "post_as",
+            "sort_order",
+            "edit_window",
+            "display_avatar",
+            "jira_base_url",
+            "zendesk_base_url",
+            "github_repo",
+            "linear_team",
+            "ai_provider",
+            "feed_token",
+            "feed_public",
             "manager_email",
         ):
             if field in data:
@@ -266,6 +293,10 @@ def api_update_standup(standup_id: str):
             kwargs["ai_summary_enabled"] = bool(data["ai_summary_enabled"])
         if "manager_digest_enabled" in data:
             kwargs["manager_digest_enabled"] = bool(data["manager_digest_enabled"])
+        if "post_to_thread" in data:
+            kwargs["post_to_thread"] = bool(data["post_to_thread"])
+        if "notify_on_report" in data:
+            kwargs["notify_on_report"] = bool(data["notify_on_report"])
         row = db.update_standup_schedule(team_id, int(standup_id), **kwargs)
         return jsonify(_schedule_to_standup(row))
     except Exception as exc:
@@ -289,6 +320,7 @@ def api_delete_standup(standup_id: str):
 # Me / Role API
 # ---------------------------------------------------------------------------
 
+
 @dashboard_bp.route("/dashboard/api/me", methods=["GET"])
 @_login_required
 def api_me():
@@ -298,12 +330,14 @@ def api_me():
         role = db.get_member_role(team_id, user_id)
     except Exception:
         role = "member"
-    return jsonify({
-        "team_id": team_id,
-        "user_id": user_id,
-        "team_name": session.get("team_name", ""),
-        "role": role,
-    })
+    return jsonify(
+        {
+            "team_id": team_id,
+            "user_id": user_id,
+            "team_name": session.get("team_name", ""),
+            "role": role,
+        }
+    )
 
 
 @dashboard_bp.route("/dashboard/api/members/<user_id>/role", methods=["PUT"])
@@ -326,6 +360,7 @@ def api_set_member_role(user_id: str):
 # Members API
 # ---------------------------------------------------------------------------
 
+
 @dashboard_bp.route("/dashboard/api/members", methods=["GET"])
 @_login_required
 def api_members():
@@ -345,6 +380,7 @@ def api_members():
 
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
+
         client = WebClient(token=token)
         result = client.users_list(limit=200)
         members = []
@@ -353,25 +389,35 @@ def api_members():
                 continue
             profile = u.get("profile", {})
             uid = u["id"]
-            members.append({
-                "id": uid,
-                "name": profile.get("real_name") or u.get("name", ""),
-                "display_name": profile.get("display_name") or u.get("name", ""),
-                "avatar": profile.get("image_48", ""),
-                "email": profile.get("email", ""),
-                "tz": u.get("tz", "UTC"),
-                "role": role_map.get(uid, "member"),
-            })
+            members.append(
+                {
+                    "id": uid,
+                    "name": profile.get("real_name") or u.get("name", ""),
+                    "display_name": profile.get("display_name") or u.get("name", ""),
+                    "avatar": profile.get("image_48", ""),
+                    "email": profile.get("email", ""),
+                    "tz": u.get("tz", "UTC"),
+                    "role": role_map.get(uid, "member"),
+                }
+            )
         return jsonify(members)
     except Exception as exc:
         logger.error("api_members error: %s", exc)
         # Fall back to DB members
         try:
             rows = db.get_active_members(team_id)
-            return jsonify([
-                {"id": r["user_id"], "name": r.get("real_name", ""), "email": r.get("email", ""), "tz": r.get("tz", "UTC"), "role": r.get("role", "member")}
-                for r in rows
-            ])
+            return jsonify(
+                [
+                    {
+                        "id": r["user_id"],
+                        "name": r.get("real_name", ""),
+                        "email": r.get("email", ""),
+                        "tz": r.get("tz", "UTC"),
+                        "role": r.get("role", "member"),
+                    }
+                    for r in rows
+                ]
+            )
         except Exception:
             return jsonify([])
 
@@ -392,6 +438,7 @@ def api_invite_admin():
         return jsonify({"error": "No bot token"}), 500
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
+
         client = WebClient(token=token)
         info = client.users_info(user=user_id)
         u = info["user"]
@@ -404,8 +451,9 @@ def api_invite_admin():
             tz=u.get("tz", "UTC"),
         )
         db.set_member_role(team_id, user_id, role)
-        return jsonify({"ok": True, "user_id": user_id, "role": role,
-                        "name": profile.get("real_name") or u.get("name", "")})
+        return jsonify(
+            {"ok": True, "user_id": user_id, "role": role, "name": profile.get("real_name") or u.get("name", "")}
+        )
     except Exception as exc:
         logger.error("api_invite_admin error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -415,6 +463,7 @@ def api_invite_admin():
 # Channels API (helper for dropdowns)
 # ---------------------------------------------------------------------------
 
+
 @dashboard_bp.route("/dashboard/api/channels", methods=["GET"])
 @_login_required
 def api_channels():
@@ -423,6 +472,7 @@ def api_channels():
         return jsonify([])
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
+
         client = WebClient(token=token)
         channels = []
         cursor = None
@@ -446,6 +496,7 @@ def api_channels():
 # Stats API
 # ---------------------------------------------------------------------------
 
+
 @dashboard_bp.route("/dashboard/api/stats", methods=["GET"])
 @_login_required
 def api_stats():
@@ -455,17 +506,76 @@ def api_stats():
         return jsonify(stats)
     except Exception as exc:
         logger.warning("api_stats error: %s", exc)
-        return jsonify({
-            "completion_rate": 0,
-            "active_members": 0,
-            "total_responses": 0,
-            "responses_this_week": 0,
-        })
+        return jsonify(
+            {
+                "completion_rate": 0,
+                "active_members": 0,
+                "total_responses": 0,
+                "responses_this_week": 0,
+            }
+        )
+
+
+@dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
+@_login_required
+def api_reports():
+    """Return standup history with participation stats, filterable by date/member."""
+    team_id = session["team_id"]
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    user_id_filter = request.args.get("user_id")
+    try:
+        standups = db.get_standups(
+            team_id,
+            from_date=date_from or None,
+            to_date=date_to or None,
+            days=30,
+        )
+        if user_id_filter:
+            standups = [s for s in standups if s.get("user_id") == user_id_filter]
+
+        days = 7
+        if date_from:
+            try:
+                from datetime import datetime as _dt
+
+                d = _dt.fromisoformat(date_from)
+                days = max(1, (_dt.utcnow() - d).days + 1)
+            except Exception:
+                pass
+        participation = db.get_participation_stats(team_id, days=days)
+        total_days = days
+
+        member_summary = []
+        for p in participation:
+            responses = int(p.get("responses") or 0)
+            rate = min(5, round((responses / max(1, total_days)) * 5))
+            member_summary.append(
+                {
+                    "user_id": p.get("user_id", ""),
+                    "name": p.get("real_name") or p.get("user_id", ""),
+                    "responses": responses,
+                    "total": total_days,
+                    "stars": rate,
+                }
+            )
+
+        return jsonify(
+            {
+                "standups": standups,
+                "participation": member_summary,
+                "total_days": total_days,
+            }
+        )
+    except Exception as exc:
+        logger.error("api_reports error: %s", exc)
+        return jsonify({"standups": [], "participation": [], "total_days": 7})
 
 
 # ---------------------------------------------------------------------------
 # Webhooks API
 # ---------------------------------------------------------------------------
+
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["GET"])
 @_login_required
@@ -513,6 +623,7 @@ def api_delete_webhook(hook_id: str):
 # Analytics API
 # ---------------------------------------------------------------------------
 
+
 @dashboard_bp.route("/dashboard/api/analytics", methods=["GET"])
 @_login_required
 def api_analytics():
@@ -534,6 +645,7 @@ def api_analytics():
 # ---------------------------------------------------------------------------
 # Kudos API
 # ---------------------------------------------------------------------------
+
 
 @dashboard_bp.route("/dashboard/api/kudos", methods=["GET"])
 @_login_required
@@ -584,20 +696,31 @@ def api_export_csv():
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
-        fieldnames=["standup_date", "user_id", "yesterday", "today", "blockers", "has_blockers", "submitted_at", "mood"],
+        fieldnames=[
+            "standup_date",
+            "user_id",
+            "yesterday",
+            "today",
+            "blockers",
+            "has_blockers",
+            "submitted_at",
+            "mood",
+        ],
     )
     writer.writeheader()
     for row in rows:
-        writer.writerow({
-            "standup_date": row.get("standup_date", ""),
-            "user_id": row.get("user_id", ""),
-            "yesterday": row.get("yesterday", ""),
-            "today": row.get("today", ""),
-            "blockers": row.get("blockers", ""),
-            "has_blockers": row.get("has_blockers", ""),
-            "submitted_at": row.get("submitted_at", ""),
-            "mood": row.get("mood", ""),
-        })
+        writer.writerow(
+            {
+                "standup_date": row.get("standup_date", ""),
+                "user_id": row.get("user_id", ""),
+                "yesterday": row.get("yesterday", ""),
+                "today": row.get("today", ""),
+                "blockers": row.get("blockers", ""),
+                "has_blockers": row.get("has_blockers", ""),
+                "submitted_at": row.get("submitted_at", ""),
+                "mood": row.get("mood", ""),
+            }
+        )
     return Response(
         output.getvalue(),
         mimetype="text/csv",
@@ -607,14 +730,17 @@ def api_export_csv():
 
 # ── Templates API ──────────────────────────────────────────────────────────
 
+
 @dashboard_bp.route("/dashboard/api/templates", methods=["GET"])
 @_login_required
 def api_templates():
     from templates_library import TEMPLATES  # noqa: PLC0415
+
     return jsonify(TEMPLATES)
 
 
 # ── Standup Schedules API ───────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/dashboard/api/schedules", methods=["GET"])
 @_login_required
@@ -644,13 +770,19 @@ def api_create_schedule():
             schedule_time=data.get("schedule_time", "09:00"),
             schedule_tz=data.get("schedule_tz", "UTC"),
             schedule_days=days,
-            questions=data.get("questions", ["What did you complete yesterday?", "What are you working on today?", "Any blockers?"]),
+            questions=data.get(
+                "questions", ["What did you complete yesterday?", "What are you working on today?", "Any blockers?"]
+            ),
             participants=data.get("participants", []),
             reminder_minutes=int(data.get("reminder_minutes") or 0),
             active=data.get("active", True),
+            post_to_thread=bool(data.get("post_to_thread", False)),
+            notify_on_report=bool(data.get("notify_on_report", True)),
+            weekend_reminder=bool(data.get("weekend_reminder", False)),
         )
         try:
             from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+
             inst = db.get_installation(team_id)
             if inst and get_scheduler():
                 sched_with_token = dict(schedule)
@@ -674,11 +806,26 @@ def api_update_schedule(schedule_id: int):
         if isinstance(days, list):
             days = ",".join(days)
         kwargs: dict = {}
-        for field in ("name", "channel_id", "schedule_time", "schedule_tz", "reminder_minutes", "active", "questions", "participants"):
+        for field in (
+            "name",
+            "channel_id",
+            "schedule_time",
+            "schedule_tz",
+            "reminder_minutes",
+            "active",
+            "questions",
+            "participants",
+        ):
             if field in data:
                 kwargs[field] = data[field]
         if days is not None:
             kwargs["schedule_days"] = days
+        if "post_to_thread" in data:
+            kwargs["post_to_thread"] = bool(data["post_to_thread"])
+        if "notify_on_report" in data:
+            kwargs["notify_on_report"] = bool(data["notify_on_report"])
+        if "weekend_reminder" in data:
+            kwargs["weekend_reminder"] = bool(data["weekend_reminder"])
         schedule = db.update_standup_schedule(team_id, schedule_id, **kwargs)
         if not schedule:
             return jsonify({"error": "Not found"}), 404
@@ -701,12 +848,14 @@ def api_delete_schedule(schedule_id: int):
 
 # ── Workflow Rules API ──────────────────────────────────────────────────────
 
+
 @dashboard_bp.route("/dashboard/api/rules", methods=["GET"])
 @_login_required
 def api_list_rules():
     team_id = session["team_id"]
     try:
         from workflow import get_rules  # noqa: PLC0415
+
         rules = get_rules(team_id)
         return jsonify(rules)
     except Exception as exc:
@@ -721,6 +870,7 @@ def api_create_rule():
     data = request.get_json(force=True) or {}
     try:
         from workflow import save_rule  # noqa: PLC0415
+
         rule_id = save_rule(
             team_id=team_id,
             name=data.get("name", ""),
@@ -744,6 +894,7 @@ def api_delete_rule(rule_id: int):
     team_id = session["team_id"]
     try:
         from workflow import delete_rule  # noqa: PLC0415
+
         delete_rule(rule_id, team_id)
         return jsonify({"ok": True})
     except Exception as exc:
@@ -752,9 +903,11 @@ def api_delete_rule(rule_id: int):
 
 # ── Public Feed ─────────────────────────────────────────────────────────────
 
+
 @dashboard_bp.route("/feed/<token>")
 def public_feed(token: str):
     from datetime import date  # noqa: PLC0415
+
     config = db.get_workspace_by_feed_token(token)
     if not config or not config.get("feed_public"):
         return "<h2>Feed not found or not public.</h2>", 404
@@ -787,15 +940,18 @@ def api_disable_feed():
 def api_mcp_config():
     team_id = session["team_id"]
     app_url = os.environ.get("APP_URL", "")
-    return jsonify({
-        "team_id": team_id,
-        "app_url": app_url,
-        "mcp_server_path": "app/src/mcp_server.py",
-        "docs_url": "https://docs.morgenruf.dev/mcp.html",
-    })
+    return jsonify(
+        {
+            "team_id": team_id,
+            "app_url": app_url,
+            "mcp_server_path": "app/src/mcp_server.py",
+            "docs_url": "https://docs.morgenruf.dev/mcp.html",
+        }
+    )
 
 
 # ── MCP API Key management ───────────────────────────────────────────────────
+
 
 @dashboard_bp.route("/dashboard/api/mcp/keys", methods=["GET"])
 @_login_required

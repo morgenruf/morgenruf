@@ -26,11 +26,7 @@ def _format_standup(user_id: str, answers: list[str], mood: str | None = None) -
     today = answers[1] if len(answers) > 1 else "—"
     blockers = answers[2] if len(answers) > 2 else "—"
 
-    blocker_text = (
-        "_None_ ✅"
-        if blockers.strip().lower() in ("none", "no", "nope", "-", "n/a", "")
-        else blockers
-    )
+    blocker_text = "_None_ ✅" if blockers.strip().lower() in ("none", "no", "nope", "-", "n/a", "") else blockers
 
     text = (
         f"📋 *Standup from <@{user_id}>* — {date_str}\n\n"
@@ -47,6 +43,7 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
     """Best-effort persist to DB; log and continue on failure."""
     try:
         import db  # noqa: PLC0415
+
         db.save_standup(
             team_id=team_id,
             user_id=user_id,
@@ -99,11 +96,13 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
     questions = None
     try:
         import db  # noqa: PLC0415
+
         config = db.get_workspace_config(team_id) or {}
         channel = config.get("channel_id", "")
         qs = config.get("questions") or []
         if isinstance(qs, str):
             import json as _json  # noqa: PLC0415
+
             try:
                 qs = _json.loads(qs)
             except Exception:
@@ -154,14 +153,46 @@ def _complete_standup(user_id: str, session, client) -> None:
     channel = session.channel
     if channel:
         try:
+            import db as _db  # noqa: PLC0415
+
+            sched_config = {}
             try:
-                import db as _db  # noqa: PLC0415
+                sched_config = _db.get_standup_schedule_for_channel(session.team_id, channel) or {}
+            except Exception:
+                pass
+
+            notify_on_report = sched_config.get("notify_on_report", True)
+            if not notify_on_report:
+                # Replace Slack mention with plain display name to avoid notifying the user
+                member_name = user_id
+                try:
+                    for m in _db.get_active_members(session.team_id):
+                        if m["user_id"] == user_id:
+                            member_name = m.get("real_name") or user_id
+                            break
+                except Exception:
+                    pass
+                formatted = formatted.replace(f"<@{user_id}>", member_name)
+
+            try:
                 from autolink import autolink  # noqa: PLC0415
+
                 cfg = _db.get_workspace_config(session.team_id) or {}
                 formatted = autolink(formatted, cfg)
             except Exception:
                 pass
-            result = client.chat_postMessage(channel=channel, text=formatted)
+
+            post_to_thread = sched_config.get("post_to_thread", False)
+            if post_to_thread:
+                parent = client.chat_postMessage(channel=channel, text="📋 Standup report ready")
+                result = client.chat_postMessage(
+                    channel=channel,
+                    text=formatted,
+                    thread_ts=parent["ts"],
+                )
+            else:
+                result = client.chat_postMessage(channel=channel, text=formatted)
+
             # React with ✅ to confirm standup posted (like Geekbot)
             try:
                 client.reactions_add(channel=channel, timestamp=result["ts"], name="white_check_mark")
@@ -178,21 +209,26 @@ def _complete_standup(user_id: str, session, client) -> None:
     _persist_standup(session.team_id, user_id, question_answers, mood=mood)
     state_store.clear(f"{session.team_id}:{user_id}")
 
-    fire_webhooks(session.team_id, "standup.completed", {
-        "team_id": session.team_id,
-        "user_id": user_id,
-        "answers": {
-            "yesterday": question_answers[0] if len(question_answers) > 0 else "",
-            "today": question_answers[1] if len(question_answers) > 1 else "",
-            "blockers": question_answers[2] if len(question_answers) > 2 else "",
+    fire_webhooks(
+        session.team_id,
+        "standup.completed",
+        {
+            "team_id": session.team_id,
+            "user_id": user_id,
+            "answers": {
+                "yesterday": question_answers[0] if len(question_answers) > 0 else "",
+                "today": question_answers[1] if len(question_answers) > 1 else "",
+                "blockers": question_answers[2] if len(question_answers) > 2 else "",
+            },
+            "mood": mood,
+            "timestamp": datetime.utcnow().isoformat(),
         },
-        "mood": mood,
-        "timestamp": datetime.utcnow().isoformat(),
-    })
+    )
 
     try:
         import db as _db  # noqa: PLC0415
         from ai_summary import generate_summary  # noqa: PLC0415
+
         config = _db.get_workspace_config(session.team_id) or {}
         if config.get("ai_summary_enabled") and channel:
             today_standups = _db.get_today_standups(session.team_id)
@@ -213,6 +249,7 @@ def _complete_standup(user_id: str, session, client) -> None:
 
     try:
         from workflow import evaluate_rules  # noqa: PLC0415
+
         blocker_text = question_answers[2] if len(question_answers) > 2 else ""
         has_blockers = bool(blocker_text.strip())
         evaluate_rules(
@@ -235,6 +272,7 @@ def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
     """
     try:
         import db  # noqa: PLC0415
+
         webhooks = db.get_webhooks(team_id)
     except Exception as exc:
         logger.warning("Could not fetch webhooks for %s: %s", team_id, exc)
@@ -264,7 +302,9 @@ def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
             resp = requests.post(hook["webhook_url"], data=body, headers=headers, timeout=10)
             logger.info(
                 "Webhook %s fired for %s → HTTP %s",
-                hook["webhook_url"], event_type, resp.status_code,
+                hook["webhook_url"],
+                event_type,
+                resp.status_code,
             )
         except Exception as exc:
             logger.warning("Webhook delivery failed for %s: %s", hook["webhook_url"], exc)
@@ -280,6 +320,7 @@ def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
     """
     try:
         import db  # noqa: PLC0415
+
         standup = db.get_standup_by_id(standup_id)
         if not standup:
             return False
@@ -349,11 +390,20 @@ def register_handlers(app: App) -> None:
         standup_time = ""
         try:
             import db  # noqa: PLC0415
+
             config = db.get_workspace_config(team_id) or {}
             channel_name = config.get("channel_id", "")
             standup_time = config.get("standup_time", "")
             info = client.team_info()
             workspace_name = info.get("team", {}).get("name", "")
+        except Exception:
+            pass
+
+        on_vacation = False
+        try:
+            import db  # noqa: PLC0415
+
+            on_vacation = db.is_on_vacation(team_id, user_id)
         except Exception:
             pass
 
@@ -363,55 +413,87 @@ def register_handlers(app: App) -> None:
             else "⚠️ Not configured — visit the dashboard to set up your standup."
         )
 
+        blocks_to_publish = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "☀️ Morgenruf Standup Bot"},
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (f"*Workspace:* {workspace_name or team_id}\n*Status:* {status_text}"),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Quick actions*\nSend me `standup` in a DM to start your standup manually.",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "🔧 Open Dashboard"},
+                        "url": "https://api.morgenruf.dev/dashboard",
+                        "action_id": "open_dashboard",
+                    }
+                ],
+            },
+        ]
+
+        if on_vacation:
+            blocks_to_publish.insert(
+                -1,
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "🌴 *You're currently on vacation.* I won't send you standup reminders until you're back.",
+                    },
+                    "accessory": {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "I'm back from vacation"},
+                        "action_id": "vacation_return",
+                        "style": "primary",
+                    },
+                },
+            )
+
         try:
             client.views_publish(
                 user_id=user_id,
                 view={
                     "type": "home",
-                    "blocks": [
-                        {
-                            "type": "header",
-                            "text": {"type": "plain_text", "text": "☀️ Morgenruf Standup Bot"},
-                        },
-                        {"type": "divider"},
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": (
-                                    f"*Workspace:* {workspace_name or team_id}\n"
-                                    f"*Status:* {status_text}"
-                                ),
-                            },
-                        },
-                        {"type": "divider"},
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "*Quick actions*\nSend me `standup` in a DM to start your standup manually.",
-                            },
-                        },
-                        {
-                            "type": "actions",
-                            "elements": [
-                                {
-                                    "type": "button",
-                                    "text": {"type": "plain_text", "text": "🔧 Open Dashboard"},
-                                    "url": "https://api.morgenruf.dev/dashboard",
-                                    "action_id": "open_dashboard",
-                                }
-                            ],
-                        },
-                    ],
+                    "blocks": blocks_to_publish,
                 },
             )
         except Exception as exc:
             logger.warning("Failed to publish App Home for %s: %s", user_id, exc)
 
+    @app.action("vacation_return")
+    def handle_vacation_return(ack, body, client):  # noqa: ANN001
+        ack()
+        user_id = body["user"]["id"]
+        team_id = body["user"]["team_id"]
+        try:
+            import db  # noqa: PLC0415
+
+            db.set_vacation(team_id, user_id, False)
+        except Exception:
+            pass
+        handle_app_home({"user": user_id, "team": team_id}, client)
+
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
-        say("👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history.")
+        say(
+            "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
+        )
 
     @app.event("member_joined_channel")
     def handle_member_joined(event, client):  # noqa: ANN001
@@ -422,6 +504,7 @@ def register_handlers(app: App) -> None:
             return
         try:
             import db  # noqa: PLC0415
+
             user_info = client.users_info(user=user_id).get("user", {})
             profile = user_info.get("profile", {})
             db.upsert_member(
@@ -507,6 +590,7 @@ def register_handlers(app: App) -> None:
         team_id: str = body["team_id"]
         try:
             import db  # noqa: PLC0415
+
             db.skip_today(team_id, user_id)
         except Exception:
             pass
@@ -524,18 +608,24 @@ def register_handlers(app: App) -> None:
             text="Morgenruf Help",
             blocks=[
                 {"type": "header", "text": {"type": "plain_text", "text": "🌅 Morgenruf — Commands"}},
-                {"type": "section", "text": {"type": "mrkdwn", "text": (
-                    "*Standup commands:*\n"
-                    "• `/standup` — Start your standup right now\n"
-                    "• `/skip` — Skip today's standup\n"
-                    "• `/kudos @teammate message` — Give a shoutout\n"
-                    "• `/help` — Show this message\n\n"
-                    "*Other ways to interact:*\n"
-                    "• Reply to a standup DM at any time to start\n"
-                    "• Use the *App Home* tab to see your history and settings\n"
-                    "• Mention `@Morgenruf` in any channel for help\n\n"
-                    "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>"
-                )}},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "*Standup commands:*\n"
+                            "• `/standup` — Start your standup right now\n"
+                            "• `/skip` — Skip today's standup\n"
+                            "• `/kudos @teammate message` — Give a shoutout\n"
+                            "• `/help` — Show this message\n\n"
+                            "*Other ways to interact:*\n"
+                            "• Reply to a standup DM at any time to start\n"
+                            "• Use the *App Home* tab to see your history and settings\n"
+                            "• Mention `@Morgenruf` in any channel for help\n\n"
+                            "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>"
+                        ),
+                    },
+                },
             ],
         )
 
@@ -556,6 +646,7 @@ def register_handlers(app: App) -> None:
 
         try:
             import db  # noqa: PLC0415
+
             config = db.get_workspace_config(team_id) or {}
             channel_id = config.get("channel_id")
             if channel_id:
@@ -568,7 +659,6 @@ def register_handlers(app: App) -> None:
             logger.warning("kudos command error: %s", exc)
             client.chat_postMessage(channel=user_id, text="❌ Couldn't send kudos. Please try again.")
 
-
     def handle_edit_standup(ack, body, client):  # noqa: ANN001
         """Handle 'Edit responses' button — open a pre-filled modal within the 30-minute window."""
         ack()
@@ -576,6 +666,7 @@ def register_handlers(app: App) -> None:
         team_id: str = body["team"]["id"]
 
         import db  # noqa: PLC0415
+
         standup = db.get_latest_standup(user_id, team_id)
         if not standup:
             client.chat_postMessage(channel=user_id, text="No standup found to edit.")
@@ -648,6 +739,7 @@ def register_handlers(app: App) -> None:
         today = values["q2"]["answer"]["value"] or ""
         blockers = values["q3"]["answer"]["value"] or ""
         import db  # noqa: PLC0415
+
         db.update_standup(user_id, team_id, yesterday=yesterday, today=today, blockers=blockers)
         client.chat_postMessage(channel=user_id, text="✅ Standup updated!")
 
@@ -674,11 +766,13 @@ def register_handlers(app: App) -> None:
         questions = None
         try:
             import db  # noqa: PLC0415
+
             config = db.get_workspace_config(team_id) or {}
             channel = config.get("channel_id", "")
             qs = config.get("questions") or []
             if isinstance(qs, str):
                 import json as _json
+
                 try:
                     qs = _json.loads(qs)
                 except Exception:
@@ -700,6 +794,7 @@ def register_handlers(app: App) -> None:
         team_id = message.get("team", "")
         try:
             import db  # noqa: PLC0415
+
             db.skip_today(team_id, user_id)
         except Exception:
             pass
@@ -707,6 +802,38 @@ def register_handlers(app: App) -> None:
         cache_key = f"{team_id}:{user_id}"
         state_store.clear(cache_key)
         say("✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
+
+    @app.message(re.compile(r"i'?m back(?: from vacation)?|back from vacation|im back", re.IGNORECASE))
+    def handle_back_from_vacation(message, say):  # noqa: ANN001
+        """Handle messages indicating the user is back from vacation."""
+        if message.get("channel_type") != "im":
+            return
+        user_id = message["user"]
+        team_id = message.get("team", "")
+        try:
+            import db  # noqa: PLC0415
+
+            db.set_vacation(team_id, user_id, False)
+        except Exception:
+            pass
+        say("🎉 Welcome back! You're all set for standups again.")
+
+    @app.message(
+        re.compile(r"i'?m (?:going on vacation|away|on vacation)|going on vacation|on vacation", re.IGNORECASE)
+    )
+    def handle_going_on_vacation(message, say):  # noqa: ANN001
+        """Handle messages indicating the user is going on vacation."""
+        if message.get("channel_type") != "im":
+            return
+        user_id = message["user"]
+        team_id = message.get("team", "")
+        try:
+            import db  # noqa: PLC0415
+
+            db.set_vacation(team_id, user_id, True)
+        except Exception:
+            pass
+        say("🌴 Enjoy your vacation! I won't bother you until you're back. Message me *I'm back* when you return.")
 
     @app.message(re.compile(r"^kudos\s+<@([A-Z0-9]+)>\s+(.+)$", re.IGNORECASE))
     def handle_kudos(message, say, client, context, logger):
@@ -724,20 +851,18 @@ def register_handlers(app: App) -> None:
 
         try:
             import db  # noqa: PLC0415
+
             db.save_kudos(team_id, from_user, to_user, kudos_message, channel_id)
         except Exception as exc:
             logger.warning("Could not save kudos: %s", exc)
 
-        kudos_card = (
-            f"🏆 *Kudos!*\n\n"
-            f"<@{from_user}> gave kudos to <@{to_user}>\n\n"
-            f"> {kudos_message}"
-        )
+        kudos_card = f"🏆 *Kudos!*\n\n<@{from_user}> gave kudos to <@{to_user}>\n\n> {kudos_message}"
 
         try:
             if channel_type == "im":
                 try:
                     import db  # noqa: PLC0415
+
                     config = db.get_workspace_config(team_id) or {}
                     post_channel = config.get("channel_id", "")
                     if post_channel:
@@ -771,6 +896,7 @@ def register_handlers(app: App) -> None:
             return
         try:
             import db  # noqa: PLC0415
+
             db.upsert_member(team_id, user_id, tz=tz_str)
         except Exception as exc:
             say(f"⚠️ Could not save timezone: {exc}")

@@ -20,13 +20,15 @@ def _send(to_email: str, subject: str, html: str) -> None:
         logger.debug("RESEND_API_KEY not configured — skipping email")
         return
     try:
-        resend.Emails.send({
-            "from": "hello@morgenruf.dev",
-            "reply_to": "support@morgenruf.dev",
-            "to": to_email,
-            "subject": subject,
-            "html": html,
-        })
+        resend.Emails.send(
+            {
+                "from": "hello@morgenruf.dev",
+                "reply_to": "support@morgenruf.dev",
+                "to": to_email,
+                "subject": subject,
+                "html": html,
+            }
+        )
         logger.info("Sent email '%s' to %s", subject, to_email)
     except Exception as exc:
         logger.error("Failed to send email to %s: %s", to_email, exc)
@@ -129,12 +131,14 @@ def send_welcome_email(to_email: str, team_name: str, installed_by: str) -> None
         return
 
     try:
-        resend.Emails.send({
-            "from": "hello@morgenruf.dev",
-            "to": to_email,
-            "subject": f"Morgenruf is now active in {team_name}",
-            "html": welcome_email_html(team_name, installed_by),
-        })
+        resend.Emails.send(
+            {
+                "from": "hello@morgenruf.dev",
+                "to": to_email,
+                "subject": f"Morgenruf is now active in {team_name}",
+                "html": welcome_email_html(team_name, installed_by),
+            }
+        )
         logger.info("Sent welcome email to %s for team %s", to_email, team_name)
     except Exception as exc:
         logger.error("Failed to send welcome email to %s: %s", to_email, exc)
@@ -227,6 +231,7 @@ def welcome_email_html(team_name: str, installed_by: str) -> str:
 # Shared HTML helpers
 # ---------------------------------------------------------------------------
 
+
 def _email_wrapper(content: str, footer_extra: str = "") -> str:
     """Wrap content in the dark-theme morgenruf email shell."""
     return (
@@ -241,7 +246,7 @@ def _email_wrapper(content: str, footer_extra: str = "") -> str:
         "  body { background: #0a0a0a; color: #e5e5e5; font-family: 'Inter', sans-serif; }"
         "</style>"
         "</head>"
-        '<body style="background:#0a0a0a;color:#e5e5e5;font-family:\'Inter\',Arial,sans-serif;'
+        "<body style=\"background:#0a0a0a;color:#e5e5e5;font-family:'Inter',Arial,sans-serif;"
         'padding:40px 16px;">'
         '<table width="100%" cellpadding="0" cellspacing="0" role="presentation">'
         "  <tr>"
@@ -258,16 +263,12 @@ def _email_wrapper(content: str, footer_extra: str = "") -> str:
         # Content card
         "        <tr>"
         '          <td style="background:#141414;border-radius:12px;padding:40px;'
-        'border:1px solid #1f1f1f;">'
-        + content
-        + "          </td>"
+        'border:1px solid #1f1f1f;">' + content + "          </td>"
         "        </tr>"
         # Footer
         "        <tr>"
         '          <td style="padding:24px 0;font-size:13px;color:#525252;text-align:center;">'
-        "            "
-        + footer_extra
-        + '<br /><a href="https://morgenruf.dev/unsubscribe" '
+        "            " + footer_extra + '<br /><a href="https://morgenruf.dev/unsubscribe" '
         'style="color:#525252;">Unsubscribe</a>'
         " &nbsp;·&nbsp; "
         '<a href="https://morgenruf.dev" style="color:#525252;">morgenruf.dev</a>'
@@ -286,39 +287,25 @@ def _cta_button(label: str, url: str) -> str:
     return (
         '<a href="' + url + '" '
         'style="display:inline-block;margin-top:28px;padding:12px 28px;'
-        'background:#22c55e;color:#0a0a0a;font-weight:600;font-size:15px;'
-        'border-radius:8px;text-decoration:none;">'
-        + label
-        + "</a>"
+        "background:#22c55e;color:#0a0a0a;font-weight:600;font-size:15px;"
+        'border-radius:8px;text-decoration:none;">' + label + "</a>"
     )
 
 
 def _h1(text: str) -> str:
-    return (
-        '<h1 style="font-size:24px;font-weight:700;color:#e5e5e5;margin-bottom:16px;">'
-        + text
-        + "</h1>"
-    )
+    return '<h1 style="font-size:24px;font-weight:700;color:#e5e5e5;margin-bottom:16px;">' + text + "</h1>"
 
 
 def _p(text: str) -> str:
-    return (
-        '<p style="font-size:15px;line-height:1.7;color:#a3a3a3;margin-bottom:12px;">'
-        + text
-        + "</p>"
-    )
+    return '<p style="font-size:15px;line-height:1.7;color:#a3a3a3;margin-bottom:12px;">' + text + "</p>"
 
 
 def _stat_row(label: str, value: str) -> str:
     return (
-        '<tr>'
-        '<td style="padding:10px 0;font-size:14px;color:#a3a3a3;border-bottom:1px solid #1f1f1f;">'
-        + label
-        + "</td>"
+        "<tr>"
+        '<td style="padding:10px 0;font-size:14px;color:#a3a3a3;border-bottom:1px solid #1f1f1f;">' + label + "</td>"
         '<td style="padding:10px 0;font-size:14px;font-weight:600;color:#e5e5e5;'
-        'text-align:right;border-bottom:1px solid #1f1f1f;">'
-        + value
-        + "</td>"
+        'text-align:right;border-bottom:1px solid #1f1f1f;">' + value + "</td>"
         "</tr>"
     )
 
@@ -326,6 +313,7 @@ def _stat_row(label: str, value: str) -> str:
 # ---------------------------------------------------------------------------
 # 1. First standup created
 # ---------------------------------------------------------------------------
+
 
 def send_first_standup_email(
     to_email: str,
@@ -346,13 +334,15 @@ def send_first_standup_email(
         return
 
     try:
-        resend.Emails.send({
-            "from": "hello@morgenruf.dev",
-            "reply_to": "support@morgenruf.dev",
-            "to": to_email,
-            "subject": "Your first standup is set up \U0001f389",
-            "html": first_standup_email_html(team_name, standup_name, first_standup_time),
-        })
+        resend.Emails.send(
+            {
+                "from": "hello@morgenruf.dev",
+                "reply_to": "support@morgenruf.dev",
+                "to": to_email,
+                "subject": "Your first standup is set up \U0001f389",
+                "html": first_standup_email_html(team_name, standup_name, first_standup_time),
+            }
+        )
         logger.info("Sent first-standup email to %s for team %s", to_email, team_name)
     except Exception as exc:
         logger.error("Failed to send first-standup email to %s: %s", to_email, exc)
@@ -381,14 +371,14 @@ def first_standup_email_html(
     )
     return _email_wrapper(
         content,
-        footer_extra="You're receiving this because you installed Morgenruf in "
-        + team_name + ".",
+        footer_extra="You're receiving this because you installed Morgenruf in " + team_name + ".",
     )
 
 
 # ---------------------------------------------------------------------------
 # 2. Weekly digest
 # ---------------------------------------------------------------------------
+
 
 def send_weekly_digest_email(
     to_email: str,
@@ -413,13 +403,15 @@ def send_weekly_digest_email(
         return
 
     try:
-        resend.Emails.send({
-            "from": "hello@morgenruf.dev",
-            "reply_to": "support@morgenruf.dev",
-            "to": to_email,
-            "subject": "Your week in standups \U0001f4ca",
-            "html": weekly_digest_email_html(team_name, stats),
-        })
+        resend.Emails.send(
+            {
+                "from": "hello@morgenruf.dev",
+                "reply_to": "support@morgenruf.dev",
+                "to": to_email,
+                "subject": "Your week in standups \U0001f4ca",
+                "html": weekly_digest_email_html(team_name, stats),
+            }
+        )
         logger.info("Sent weekly digest email to %s for team %s", to_email, team_name)
     except Exception as exc:
         logger.error("Failed to send weekly digest email to %s: %s", to_email, exc)
@@ -449,6 +441,7 @@ def weekly_digest_email_html(team_name: str, stats: dict) -> str:
 # 3. Inactive nudge
 # ---------------------------------------------------------------------------
 
+
 def send_inactive_nudge_email(
     to_email: str,
     team_name: str,
@@ -467,16 +460,20 @@ def send_inactive_nudge_email(
         return
 
     try:
-        resend.Emails.send({
-            "from": "hello@morgenruf.dev",
-            "reply_to": "support@morgenruf.dev",
-            "to": to_email,
-            "subject": "Your team hasn't standup'd in " + str(days_inactive) + " days",
-            "html": inactive_nudge_email_html(team_name, days_inactive),
-        })
+        resend.Emails.send(
+            {
+                "from": "hello@morgenruf.dev",
+                "reply_to": "support@morgenruf.dev",
+                "to": to_email,
+                "subject": "Your team hasn't standup'd in " + str(days_inactive) + " days",
+                "html": inactive_nudge_email_html(team_name, days_inactive),
+            }
+        )
         logger.info(
             "Sent inactive nudge email to %s for team %s (%d days)",
-            to_email, team_name, days_inactive,
+            to_email,
+            team_name,
+            days_inactive,
         )
     except Exception as exc:
         logger.error("Failed to send inactive nudge email to %s: %s", to_email, exc)
@@ -488,8 +485,7 @@ def inactive_nudge_email_html(team_name: str, days_inactive: int) -> str:
         _h1("It's been " + days_str + " days \U0001f4ac")
         + _p(
             "<strong style='color:#e5e5e5;'>" + team_name + "</strong> hasn't had any "
-            "standup responses in <strong style='color:#22c55e;'>" + days_str
-            + " days</strong>."
+            "standup responses in <strong style='color:#22c55e;'>" + days_str + " days</strong>."
         )
         + _p(
             "Consistent standups keep teams aligned and unblock work faster. "
@@ -506,6 +502,7 @@ def inactive_nudge_email_html(team_name: str, days_inactive: int) -> str:
 # ---------------------------------------------------------------------------
 # 4. Release announcement
 # ---------------------------------------------------------------------------
+
 
 def send_release_announcement_email(
     to_email: str,
@@ -526,16 +523,20 @@ def send_release_announcement_email(
         return
 
     try:
-        resend.Emails.send({
-            "from": "hello@morgenruf.dev",
-            "reply_to": "support@morgenruf.dev",
-            "to": to_email,
-            "subject": "Morgenruf " + version + " is here \u2728",
-            "html": release_announcement_email_html(team_name, version, changelog_url),
-        })
+        resend.Emails.send(
+            {
+                "from": "hello@morgenruf.dev",
+                "reply_to": "support@morgenruf.dev",
+                "to": to_email,
+                "subject": "Morgenruf " + version + " is here \u2728",
+                "html": release_announcement_email_html(team_name, version, changelog_url),
+            }
+        )
         logger.info(
             "Sent release announcement email to %s for team %s (v%s)",
-            to_email, team_name, version,
+            to_email,
+            team_name,
+            version,
         )
     except Exception as exc:
         logger.error("Failed to send release announcement email to %s: %s", to_email, exc)
@@ -549,8 +550,7 @@ def release_announcement_email_html(
     content = (
         _h1("Morgenruf " + version + " is here \u2728")
         + _p(
-            "Hi <strong style='color:#e5e5e5;'>" + team_name
-            + "</strong> — we just shipped a new version of Morgenruf."
+            "Hi <strong style='color:#e5e5e5;'>" + team_name + "</strong> — we just shipped a new version of Morgenruf."
         )
         + _p(
             "This release includes improvements and fixes to make your daily standups "
@@ -567,6 +567,7 @@ def release_announcement_email_html(
 # ---------------------------------------------------------------------------
 # Manager digest
 # ---------------------------------------------------------------------------
+
 
 def send_manager_digest(manager_email: str, workspace_name: str, standups: list, date_str: str) -> None:
     """Send daily standup digest email to manager."""
@@ -590,10 +591,7 @@ def send_manager_digest(manager_email: str, workspace_name: str, standups: list,
             "</tr>"
         )
 
-    blocker_notice = (
-        f" · <span style='color:#e67e22'>⚠️ {len(blockers)} blocker(s)</span>"
-        if blockers else ""
-    )
+    blocker_notice = f" · <span style='color:#e67e22'>⚠️ {len(blockers)} blocker(s)</span>" if blockers else ""
 
     html = f"""<!DOCTYPE html>
 <html><body style="font-family:-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:20px">

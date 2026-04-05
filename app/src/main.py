@@ -47,6 +47,7 @@ def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
     """Load all active installations and their configs from DB."""
     try:
         import db  # noqa: PLC0415
+
         installations = db.get_all_installations()
         jobs = []
         for inst in installations:
@@ -89,12 +90,14 @@ def create_app() -> tuple[App, Flask]:
     flask_app.register_blueprint(oauth_bp)
     flask_app.register_blueprint(dashboard_bp)
     from mcp_http import mcp_bp  # noqa: PLC0415
+
     flask_app.register_blueprint(mcp_bp)
     logger.info("MCP HTTP endpoint enabled at /mcp")
 
     if os.environ.get("GOOGLE_CREDENTIALS"):
         try:
             from google_chat_handler import google_chat_bp  # noqa: PLC0415
+
             flask_app.register_blueprint(google_chat_bp)
             logger.info("Google Chat integration enabled")
         except Exception as exc:

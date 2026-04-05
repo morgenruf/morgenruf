@@ -1,4 +1,5 @@
 """Session store — Redis-backed with in-memory fallback."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 _redis = None
 _memory: dict[str, dict] = {}
 
+
 def _get_redis():
     global _redis
     if _redis is not None:
@@ -19,6 +21,7 @@ def _get_redis():
         return None
     try:
         import redis
+
         _redis = redis.from_url(url, decode_responses=True, socket_timeout=2)
         _redis.ping()
         logger.info("Redis session store connected")
@@ -27,7 +30,9 @@ def _get_redis():
         _redis = None
     return _redis
 
+
 SESSION_TTL = 4 * 3600  # 4 hours
+
 
 def get_session(user_id: str) -> dict | None:
     r = _get_redis()
@@ -39,6 +44,7 @@ def get_session(user_id: str) -> dict | None:
             logger.warning("Redis get error: %s", e)
     return _memory.get(user_id)
 
+
 def set_session(user_id: str, data: dict) -> None:
     r = _get_redis()
     if r:
@@ -49,6 +55,7 @@ def set_session(user_id: str, data: dict) -> None:
             logger.warning("Redis set error: %s", e)
     _memory[user_id] = data
 
+
 def delete_session(user_id: str) -> None:
     r = _get_redis()
     if r:
@@ -57,6 +64,7 @@ def delete_session(user_id: str) -> None:
         except Exception as e:
             logger.warning("Redis delete error: %s", e)
     _memory.pop(user_id, None)
+
 
 def has_session(user_id: str) -> bool:
     return get_session(user_id) is not None

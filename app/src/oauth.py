@@ -179,6 +179,7 @@ def oauth_callback():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str) -> None:
     if not user_id:
         return
@@ -200,6 +201,7 @@ def _make_login_token(team_id: str, user_id: str = "") -> str:
     payload = f"{ts}.{team_id}|{user_id}"
     sig = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
     import base64
+
     return base64.urlsafe_b64encode(f"{payload}.{sig}".encode()).decode()
 
 
@@ -211,6 +213,7 @@ def verify_login_token(token: str) -> tuple[str, str] | None:
     """
     try:
         import base64
+
         decoded = base64.urlsafe_b64decode(token.encode()).decode()
         ts_str, team_user, sig = decoded.split(".", 2)
         payload = f"{ts_str}.{team_user}"
