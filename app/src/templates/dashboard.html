@@ -1597,6 +1597,11 @@
       ai_summary_enabled: document.getElementById('f-ai-summary-toggle').classList.contains('on'),
       ai_provider: document.getElementById('f-ai-provider').value,
     };
+    try {
+      let updated;
+      const idx = state.standups.findIndex(s => s.id === id);
+      if (id) {
+        updated = await api('PUT', `/standups/${id}`, body);
         if (idx >= 0) state.standups[idx] = updated;
       } else {
         updated = await api('POST', '/standups', body);
