@@ -702,7 +702,129 @@
     </div>
   </div>
 
-  <!-- ── Standup Modal ── -->
+    <!-- MCP -->
+    <div id="section-mcp" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">🔌 MCP — Connect AI Assistants</div>
+          <div class="page-subtitle">Let Claude, Cursor, and GitHub Copilot query your standup data via <code>https://api.morgenruf.dev/mcp</code></div>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateKeyModal()">+ Generate New Key</button>
+      </div>
+      <div style="max-width:800px">
+
+        <!-- Keys table -->
+        <div class="stat-card" style="margin-bottom:20px">
+          <div class="stat-label" style="margin-bottom:12px">API Keys</div>
+          <div id="mcp-keys-list"><div class="loading-center"><div class="spinner"></div></div></div>
+        </div>
+
+        <!-- Config snippets -->
+        <div class="stat-card">
+          <div class="stat-label" style="margin-bottom:14px">Client Configuration</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+            <button class="btn btn-secondary" id="tab-claude" onclick="showMCPTab('claude')" style="font-size:0.82rem">Claude Desktop</button>
+            <button class="btn btn-secondary" id="tab-cursor" onclick="showMCPTab('cursor')" style="font-size:0.82rem">Cursor</button>
+            <button class="btn btn-secondary" id="tab-vscode" onclick="showMCPTab('vscode')" style="font-size:0.82rem">VS Code</button>
+            <button class="btn btn-secondary" id="tab-http" onclick="showMCPTab('http')" style="font-size:0.82rem">HTTP / curl</button>
+          </div>
+
+          <div id="mcp-tab-claude">
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></p>
+            <pre id="snippet-claude" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
+  "mcpServers": {
+    "morgenruf": {
+      "url": "https://api.morgenruf.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer mrn_YOUR_KEY_HERE"
+      }
+    }
+  }
+}</pre>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('claude')">📋 Copy</button>
+          </div>
+
+          <div id="mcp-tab-cursor" style="display:none">
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Add to <code>~/.cursor/mcp.json</code></p>
+            <pre id="snippet-cursor" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
+  "mcpServers": {
+    "morgenruf": {
+      "url": "https://api.morgenruf.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer mrn_YOUR_KEY_HERE"
+      }
+    }
+  }
+}</pre>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('cursor')">📋 Copy</button>
+          </div>
+
+          <div id="mcp-tab-vscode" style="display:none">
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Add to <code>.vscode/mcp.json</code> (workspace) or user settings</p>
+            <pre id="snippet-vscode" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
+  "servers": {
+    "morgenruf": {
+      "type": "http",
+      "url": "https://api.morgenruf.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer mrn_YOUR_KEY_HERE"
+      }
+    }
+  }
+}</pre>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('vscode')">📋 Copy</button>
+          </div>
+
+          <div id="mcp-tab-http" style="display:none">
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Raw HTTP — useful for testing or custom integrations</p>
+            <pre id="snippet-http" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">curl -X POST https://api.morgenruf.dev/mcp \
+  -H "Authorization: Bearer mrn_YOUR_KEY_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'</pre>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('http')">📋 Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MCP Create Key Modal -->
+  <div class="modal-overlay" id="mcp-key-modal" style="display:none">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-header">
+        <div class="modal-title">Generate MCP API Key</div>
+        <button class="modal-close" onclick="closeMCPKeyModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="mcp-key-form-wrap">
+          <div class="form-group" style="margin-bottom:16px">
+            <label>Key Name</label>
+            <input id="mcp-key-name" class="input" placeholder="e.g. Claude Desktop" style="width:100%;margin-top:4px">
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-secondary" onclick="closeMCPKeyModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="createMCPKey()">Generate</button>
+          </div>
+        </div>
+        <div id="mcp-key-result-wrap" style="display:none">
+          <div style="background:var(--surface2);border-radius:8px;padding:14px;margin-bottom:12px">
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:6px">Your new API key:</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <code id="mcp-new-key" style="font-size:0.85rem;word-break:break-all;flex:1"></code>
+              <button class="btn btn-secondary" style="font-size:0.78rem;white-space:nowrap" onclick="copyNewKey()">📋 Copy</button>
+            </div>
+          </div>
+          <div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:10px 14px;font-size:0.83rem;margin-bottom:16px">
+            ⚠️ <strong>Save this key — it won't be shown again!</strong>
+          </div>
+          <div style="text-align:right">
+            <button class="btn btn-primary" onclick="closeMCPKeyModal()">Done</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="modal-overlay" id="standup-modal">
     <div class="modal">
       <div class="modal-header">
@@ -975,6 +1097,7 @@
       if (sec === 'schedules') loadSchedules();
       if (sec === 'kudos') loadKudos();
       if (sec === 'automation') loadRules();
+      if (sec === 'mcp') loadMCPKeys();
     }
   }
 
@@ -2063,6 +2186,92 @@
     const el = document.getElementById(id);
     if (!el) return;
     navigator.clipboard.writeText(el.textContent.trim()).then(() => toast('Copied!'));
+  }
+
+  // ── MCP ──
+  let _mcpLoaded = false;
+
+  function loadMCPKeys() {
+    if (_mcpLoaded) return;
+    _mcpLoaded = true;
+    fetch('/dashboard/api/mcp/keys')
+      .then(r => r.json())
+      .then(data => renderMCPKeys(data.keys || []))
+      .catch(() => { document.getElementById('mcp-keys-list').innerHTML = '<p style="color:var(--text-muted)">Could not load keys.</p>'; });
+  }
+
+  function renderMCPKeys(keys) {
+    const el = document.getElementById('mcp-keys-list');
+    if (!keys.length) {
+      el.innerHTML = '<p style="font-size:0.88rem;color:var(--text-muted)">No API keys yet. Generate one to connect an AI assistant.</p>';
+      return;
+    }
+    const rows = keys.map(k => `
+      <tr>
+        <td><code style="font-size:0.82rem">${k.key_prefix}...</code></td>
+        <td>${k.name || '—'}</td>
+        <td style="font-size:0.8rem;color:var(--text-muted)">${k.created_at ? new Date(k.created_at).toLocaleDateString() : '—'}</td>
+        <td style="font-size:0.8rem;color:var(--text-muted)">${k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</td>
+        <td><button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#dc2626" onclick="revokeMCPKey(${k.id})">Revoke</button></td>
+      </tr>`).join('');
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.88rem">
+      <thead><tr style="text-align:left;color:var(--text-muted);font-size:0.78rem">
+        <th style="padding:6px 8px">Prefix</th><th style="padding:6px 8px">Name</th>
+        <th style="padding:6px 8px">Created</th><th style="padding:6px 8px">Last Used</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function openCreateKeyModal() {
+    document.getElementById('mcp-key-form-wrap').style.display = '';
+    document.getElementById('mcp-key-result-wrap').style.display = 'none';
+    document.getElementById('mcp-key-name').value = '';
+    document.getElementById('mcp-key-modal').style.display = 'flex';
+  }
+
+  function closeMCPKeyModal() {
+    document.getElementById('mcp-key-modal').style.display = 'none';
+    _mcpLoaded = false;
+    loadMCPKeys();
+  }
+
+  async function createMCPKey() {
+    const name = document.getElementById('mcp-key-name').value.trim() || 'Default';
+    try {
+      const res = await fetch('/dashboard/api/mcp/keys', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name}),
+      });
+      const data = await res.json();
+      document.getElementById('mcp-new-key').textContent = data.key;
+      document.getElementById('mcp-key-form-wrap').style.display = 'none';
+      document.getElementById('mcp-key-result-wrap').style.display = '';
+    } catch(e) { toast('Failed to generate key', 'error'); }
+  }
+
+  async function revokeMCPKey(id) {
+    if (!confirm('Revoke this key? Connections using it will stop working.')) return;
+    await fetch(`/dashboard/api/mcp/keys/${id}`, {method: 'DELETE'});
+    _mcpLoaded = false;
+    loadMCPKeys();
+    toast('Key revoked');
+  }
+
+  function copyNewKey() {
+    navigator.clipboard.writeText(document.getElementById('mcp-new-key').textContent);
+    toast('Key copied!');
+  }
+
+  function showMCPTab(tab) {
+    ['claude','cursor','vscode','http'].forEach(t => {
+      document.getElementById(`mcp-tab-${t}`).style.display = t === tab ? '' : 'none';
+    });
+  }
+
+  function copyConfig(tab) {
+    const text = document.getElementById(`snippet-${tab}`).textContent;
+    navigator.clipboard.writeText(text);
+    toast('Copied!');
   }
 
   // ── Boot ──
