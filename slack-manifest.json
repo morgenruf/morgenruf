@@ -1,8 +1,9 @@
 {
   "display_information": {
     "name": "Morgenruf",
-    "description": "Self-hosted daily standup bot - AI summaries, analytics, and MCP for AI tools",
-    "background_color": "#0d1117"
+    "description": "Self-hosted daily standup bot - structured updates, per-project tracking, blocker detection.",
+    "background_color": "#0d1117",
+    "long_description": "Morgenruf runs your team's daily standups directly in Slack — no expensive SaaS required.\r\n \r\nEach day at your configured time, it DMs team members 3 questions, \r\ncollects answers privately, and posts a clean summary to your team channel.\r\n \r\n Features:\r\n • Configurable schedule (time, timezone, days)\r\n • Per-project tagging for automated reporting\r\n • Blocker detection and highlighting\r\n • Open source (MIT) — self-host or use our hosted version at morgenruf.dev"
   },
   "features": {
     "app_home": {
@@ -13,62 +14,52 @@
     "bot_user": {
       "display_name": "Morgenruf",
       "always_online": true
-    },
-    "slash_commands": [
-      {
-        "command": "/standup",
-        "description": "Start your daily standup now"
-      },
-      {
-        "command": "/skip",
-        "description": "Skip today's standup"
-      },
-      {
-        "command": "/kudos",
-        "description": "Give a shoutout to a teammate",
-        "usage_hint": "@teammate [message]"
-      },
-      {
-        "command": "/help",
-        "description": "Show Morgenruf commands and help"
-      }
-    ]
+    }
   },
   "oauth_config": {
     "redirect_urls": [
       "https://api.morgenruf.dev/oauth/callback"
     ],
     "scopes": {
+      "user": [
+        "admin.apps:write",
+        "admin.apps:read"
+      ],
       "bot": [
         "chat:write",
+        "chat:write.public",
         "im:history",
         "im:read",
         "im:write",
         "channels:read",
+        "channels:join",
         "channels:history",
         "groups:read",
         "reactions:write",
         "users:read",
         "users:read.email",
-        "team:read"
+        "team:read",
+        "app_mentions:read"
       ]
-    }
+    },
+    "pkce_enabled": false
   },
   "settings": {
     "event_subscriptions": {
+      "request_url": "https://api.morgenruf.dev/slack/events",
       "bot_events": [
-        "message.im",
-        "app_mention",
         "app_home_opened",
+        "app_mention",
+        "message.im",
         "member_joined_channel"
-      ],
-      "request_url": "https://api.morgenruf.dev/slack/events"
+      ]
     },
     "interactivity": {
       "is_enabled": true,
-      "request_url": "https://api.morgenruf.dev/slack/events"
+      "request_url": "https://api.morgenruf.dev/slack/interactions"
     },
     "org_deploy_enabled": false,
-    "socket_mode_enabled": false
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
   }
 }
