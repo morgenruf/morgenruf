@@ -471,6 +471,9 @@
     <div class="nav-item active" data-section="standups">
       <span class="nav-icon">&#9201;</span> Standups
     </div>
+    <div class="nav-item" data-section="schedules">
+      <span class="nav-icon">&#128197;</span> Schedules
+    </div>
     <div class="nav-item" data-section="members">
       <span class="nav-icon">&#128101;</span> Members
     </div>
@@ -486,6 +489,9 @@
     </div>
     <div class="nav-item" data-section="webhooks">
       <span class="nav-icon">&#128279;</span> Webhooks
+    </div>
+    <div class="nav-item" data-section="kudos">
+      <span class="nav-icon">&#127942;</span> Kudos
     </div>
     <div class="sidebar-footer">
       <div class="workspace-pill">
@@ -511,6 +517,18 @@
       </div>
       <div id="stats-grid" class="stats-grid"></div>
       <div id="standups-list" class="standups-grid"></div>
+    </div>
+
+    <!-- Schedules -->
+    <div id="section-schedules" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Schedules</div>
+          <div class="page-subtitle">Multiple named standup schedules per workspace</div>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateScheduleModal()">&#43; New Schedule</button>
+      </div>
+      <div id="schedules-list" class="standups-grid"></div>
     </div>
 
     <!-- Members -->
@@ -572,6 +590,32 @@
         </div>
       </div>
       <div id="webhooks-content"></div>
+    </div>
+
+    <!-- Kudos -->
+    <div id="section-kudos" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">🏆 Kudos &amp; Recognition</div>
+          <div class="page-subtitle">Celebrate your teammates' great work</div>
+        </div>
+      </div>
+      <div style="max-width:760px">
+        <div class="stat-card" style="margin-bottom:20px">
+          <div class="stat-label" style="margin-bottom:12px">How to give kudos</div>
+          <p style="font-size:0.92rem;color:var(--text-muted)">DM the bot: <code style="background:var(--surface2);padding:2px 7px;border-radius:5px;font-size:0.88rem">kudos @teammate Great work on the deploy! 🚀</code></p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="stat-card">
+            <div class="stat-label" style="margin-bottom:12px">🥇 Leaderboard — last 30 days</div>
+            <div id="kudos-board"><div class="loading-center"><div class="spinner"></div></div></div>
+          </div>
+          <div>
+            <div class="stat-label" style="margin-bottom:12px;padding-left:2px">Recent Kudos</div>
+            <div id="kudos-feed"><div class="loading-center"><div class="spinner"></div></div></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -646,6 +690,12 @@
         </div>
 
         <div class="form-section-title">Questions</div>
+        <div style="margin-bottom:10px">
+          <button class="btn btn-ghost btn-sm" type="button" onclick="toggleTemplateGallery()">&#9733; Use a template</button>
+        </div>
+        <div id="template-gallery" style="display:none;margin-bottom:12px">
+          <div id="template-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;max-height:260px;overflow-y:auto;padding:4px 0"></div>
+        </div>
         <div class="questions-list" id="questions-list"></div>
         <button class="btn-add-q" onclick="addQuestion()">&#43; Add question</button>
 
@@ -706,6 +756,7 @@
               </select>
             </div>
           </div>
+          <div class="form-section-title" style="border-top:none;padding-top:0">Integration Autolinks</div>
           <div class="form-grid">
             <div class="form-group">
               <label>Jira Base URL</label>
@@ -714,6 +765,14 @@
             <div class="form-group">
               <label>Zendesk Base URL</label>
               <input type="url" id="f-zendesk" placeholder="https://yourteam.zendesk.com"/>
+            </div>
+            <div class="form-group">
+              <label>GitHub Repo (org/repo)</label>
+              <input type="text" id="f-github-repo" placeholder="org/repo"/>
+            </div>
+            <div class="form-group">
+              <label>Linear Team Prefix</label>
+              <input type="text" id="f-linear-team" placeholder="ENG"/>
             </div>
           </div>
           <div class="form-group" style="display:flex;align-items:center;gap:10px">
@@ -737,11 +796,13 @@
   const state = {
     section: 'standups',
     standups: [],
+    schedules: [],
     members: [],
     channels: [],
     stats: {},
     webhooks: [],
     participants: [],
+    templates: null,
     loaded: {}
   };
 
@@ -765,6 +826,7 @@
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
       if (sec === 'analytics') loadAnalytics(7);
+      if (sec === 'kudos') loadKudos();
     }
   }
 
@@ -1283,6 +1345,52 @@
   // ── Utilities ──
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Kudos ──
+  async function loadKudos() {
+    const [kudos, board] = await Promise.all([
+      fetch('/dashboard/api/kudos').then(r => r.json()).catch(() => []),
+      fetch('/dashboard/api/kudos/leaderboard').then(r => r.json()).catch(() => [])
+    ]);
+    renderKudosBoard(board);
+    renderKudosFeed(kudos);
+  }
+
+  function renderKudosBoard(board) {
+    const el = document.getElementById('kudos-board');
+    if (!el) return;
+    if (!board.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No kudos given yet. Be the first! 🏆</p>'; return; }
+    const medals = ['🥇','🥈','🥉'];
+    el.innerHTML = board.slice(0,10).map((r,i) =>
+      '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
+      '<span style="font-size:1.2rem;">' + (medals[i] || '🏅') + '</span>' +
+      '<span style="flex:1;font-weight:600;">@' + esc(r.to_user) + '</span>' +
+      '<span style="background:rgba(245,158,11,0.15);color:#d97706;padding:2px 10px;border-radius:99px;font-size:0.82rem;font-weight:700;">' + r.received + ' kudos</span>' +
+      '</div>'
+    ).join('');
+  }
+
+  function renderKudosFeed(kudos) {
+    const el = document.getElementById('kudos-feed');
+    if (!el) return;
+    if (!kudos.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No kudos yet — give some! DM the bot: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">kudos @teammate Great job!</code></p>'; return; }
+    el.innerHTML = kudos.map(k => {
+      const ago = timeAgo(k.created_at);
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;">' +
+        '<div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:6px;">🏆 <strong style="color:var(--text);">@' + esc(k.from_user) + '</strong> → <strong style="color:#818cf8;">@' + esc(k.to_user) + '</strong> · ' + ago + '</div>' +
+        '<div style="font-size:0.95rem;color:var(--text-muted);font-style:italic;">"' + esc(k.message) + '"</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
   }
 
   // ── Boot ──
