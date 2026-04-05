@@ -573,9 +573,13 @@
       <div class="topbar">
         <div>
           <div class="page-title">Reports</div>
-          <div class="page-subtitle">Standup completion stats — last 7 days</div>
+          <div class="page-subtitle">Standup history — filter by date, member, or question</div>
         </div>
-        <button class="btn btn-secondary" onclick="exportCSV()">&#8659; Export CSV</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="reportState.dateFrom=dateNDaysAgo(7);reportState.dateTo='';loadReports()">7d</button>
+          <button class="btn btn-secondary btn-sm" onclick="reportState.dateFrom=dateNDaysAgo(30);reportState.dateTo='';loadReports()">30d</button>
+          <button class="btn btn-secondary" onclick="exportCSV()">&#8659; Export CSV</button>
+        </div>
       </div>
       <div id="reports-content"></div>
     </div>
@@ -940,8 +944,19 @@
 
         <div class="form-section-title">Reminder</div>
         <div class="form-group" style="max-width:260px">
-          <label>Minutes before standup (0 = no reminder)</label>
-          <input type="number" id="f-reminder" min="0" max="1440" value="0" placeholder="e.g. 15"/>
+          <label>Remind participants before standup</label>
+          <select id="f-reminder" class="form-input">
+            <option value="0">No reminder</option>
+            <option value="30">30 minutes before</option>
+            <option value="60">1 hour before</option>
+            <option value="120">2 hours before</option>
+            <option value="180">3 hours before</option>
+            <option value="240">4 hours before</option>
+            <option value="480">8 hours before</option>
+            <option value="960">16 hours before</option>
+            <option value="1200">20 hours before</option>
+            <option value="-1">The weekend (~2.5 days)</option>
+          </select>
         </div>
 
         <div class="form-section-title">Report</div>
@@ -964,6 +979,22 @@
           <span class="accordion-arrow" id="adv-arrow">&#8964;</span>
         </div>
         <div class="accordion-body" id="adv-body">
+          <div class="form-group">
+            <label class="form-label">Send standup report</label>
+            <div style="display:flex;gap:16px;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                <input type="radio" name="f-post-mode" value="channel" id="f-post-channel" checked /> Directly to the channel
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                <input type="radio" name="f-post-mode" value="thread" id="f-post-thread" /> As a Slack thread
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notify users when report posts</label>
+            <div id="f-notify-toggle" class="toggle on" onclick="this.classList.toggle('on')"></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">@mention team members in the report post</div>
+          </div>
           <div class="form-grid">
             <div class="form-group">
               <label>Group Report By</label>
@@ -1398,21 +1429,115 @@
   }
 
   // ── Reports ──
-  async function loadReports() {
+  let reportState = { dateFrom: '', dateTo: '', userId: '' };
+
+  function dateNDaysAgo(n) {
+    const d = new Date(); d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  async function loadReports(opts = {}) {
+    if (!state.members?.length) await loadMembers();
     const el = document.getElementById('reports-content');
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+    const params = new URLSearchParams();
+    if (reportState.dateFrom) params.set('date_from', reportState.dateFrom);
+    if (reportState.dateTo) params.set('date_to', reportState.dateTo);
+    if (reportState.userId) params.set('user_id', reportState.userId);
+
     try {
-      const s = await api('GET', '/stats');
-      el.innerHTML =
-        '<div class="stats-grid" style="margin-bottom:24px">' +
-        '<div class="stat-card"><div class="stat-label">Completion Rate (7d)</div><div class="stat-value">' + (s.completion_rate || 0) + '%</div></div>' +
-        '<div class="stat-card"><div class="stat-label">Active Members</div><div class="stat-value">' + (s.active_members || 0) + '</div></div>' +
-        '<div class="stat-card"><div class="stat-label">Total Responses</div><div class="stat-value">' + (s.total_responses || 0) + '</div></div>' +
-        '<div class="stat-card"><div class="stat-label">Total Members</div><div class="stat-value">' + (s.total_members || 0) + '</div></div>' +
-        '</div>' +
-        '<div class="chart-placeholder">&#128202; Detailed charts coming soon — connect more responses to see trends.</div>';
+      const data = await fetch(`/dashboard/api/reports?${params}`, {
+        headers: { 'X-Team-Id': state.teamId || '' }
+      }).then(r => r.json());
+
+      const { standups = [], participation = [], total_days = 7 } = data;
+
+      const starsHtml = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+      const participationRows = participation.map(p => `
+        <tr>
+          <td style="padding:6px 8px">${esc(p.name)}</td>
+          <td style="padding:6px 8px;color:var(--text-muted)">(${p.responses}/${p.total})</td>
+          <td style="padding:6px 8px;color:#f59e0b;letter-spacing:2px;font-size:16px">${starsHtml(p.stars)}</td>
+        </tr>
+      `).join('');
+
+      const memberOptions = (state.members || []).map(m =>
+        `<option value="${m.id}" ${reportState.userId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`
+      ).join('');
+
+      const byDate = {};
+      for (const s of standups) {
+        const d = s.standup_date || s.submitted_at?.slice(0, 10) || 'Unknown';
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(s);
+      }
+
+      const responseRows = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, entries]) => `
+        <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${date}</td></tr>
+        ${entries.map(s => `
+          <tr>
+            <td style="width:140px;vertical-align:top;padding:8px 12px;font-weight:500">${esc(s.user_name || s.user_id || '')}</td>
+            <td style="padding:8px 12px">
+              ${s.yesterday ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Yesterday:</span> ${esc(s.yesterday)}</div>` : ''}
+              ${s.today ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Today:</span> ${esc(s.today)}</div>` : ''}
+              ${s.blockers && s.blockers.toLowerCase() !== 'none' ? `<div style="color:var(--danger)"><span style="font-weight:600;font-size:12px">🚧 Blockers:</span> ${esc(s.blockers)}</div>` : ''}
+            </td>
+          </tr>
+        `).join('')}
+      `).join('');
+
+      el.innerHTML = `
+        <!-- Filter bar -->
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;align-items:center">
+            <span style="font-size:12px;color:var(--text-muted)">From</span>
+            <input type="date" class="form-input" style="width:150px;padding:6px 10px;font-size:13px"
+                   value="${reportState.dateFrom}" onchange="reportState.dateFrom=this.value;loadReports()"/>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span style="font-size:12px;color:var(--text-muted)">To</span>
+            <input type="date" class="form-input" style="width:150px;padding:6px 10px;font-size:13px"
+                   value="${reportState.dateTo}" onchange="reportState.dateTo=this.value;loadReports()"/>
+          </div>
+          <select class="form-input" style="width:180px;padding:6px 10px;font-size:13px"
+                  onchange="reportState.userId=this.value;loadReports()">
+            <option value="">All members</option>
+            ${memberOptions}
+          </select>
+          <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px"
+                  onclick="reportState={dateFrom:'',dateTo:'',userId:''};loadReports()">Reset</button>
+        </div>
+
+        <!-- Participation summary -->
+        ${participation.length ? `
+        <div class="stat-card" style="margin-bottom:20px">
+          <div class="stat-label" style="margin-bottom:12px">Participation — last ${total_days} days</div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Name</th>
+              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Participation</th>
+              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Recently Completed</th>
+            </tr></thead>
+            <tbody>${participationRows}</tbody>
+          </table>
+        </div>` : ''}
+
+        <!-- Response history -->
+        <div class="stat-card">
+          <div class="stat-label" style="margin-bottom:12px">Standup Responses</div>
+          ${standups.length ? `
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="text-align:left;padding:6px 12px;font-size:12px;color:var(--text-muted);font-weight:500;width:140px">Member</th>
+              <th style="text-align:left;padding:6px 12px;font-size:12px;color:var(--text-muted);font-weight:500">Response</th>
+            </tr></thead>
+            <tbody>${responseRows}</tbody>
+          </table>` : '<p style="color:var(--text-muted);padding:12px 0;font-size:13px">No responses found for the selected filters.</p>'}
+        </div>
+      `;
     } catch (e) {
-      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load stats.</p>';
+      el.innerHTML = '<p style="color:var(--text-muted);padding:24px">Failed to load reports.</p>';
     }
   }
 
@@ -1610,6 +1735,8 @@
     document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
     document.getElementById('f-reminder').value = '0';
+    document.getElementById('f-post-channel').checked = true;
+    document.getElementById('f-notify-toggle').classList.add('on');
     document.getElementById('f-ai-summary-toggle').classList.remove('on');
     document.getElementById('f-ai-provider').value = 'openai';
     selectDays(['mon','tue','wed','thu','fri']);
@@ -1639,7 +1766,10 @@
     document.getElementById('f-github-repo').value = s.github_repo || '';
     document.getElementById('f-linear-team').value = s.linear_team || '';
     document.getElementById('f-avatar-toggle').classList.toggle('on', s.display_avatar !== false);
-    document.getElementById('f-reminder').value = s.reminder_minutes || 0;
+    document.getElementById('f-reminder').value = String(s.reminder_minutes || 0);
+    document.getElementById(s.post_to_thread ? 'f-post-thread' : 'f-post-channel').checked = true;
+    const notifyToggle = document.getElementById('f-notify-toggle');
+    if (s.notify_on_report !== false) notifyToggle.classList.add('on'); else notifyToggle.classList.remove('on');
     document.getElementById('f-ai-summary-toggle').classList.toggle('on', !!s.ai_summary_enabled);
     document.getElementById('f-ai-provider').value = s.ai_provider || 'openai';
     selectDays(s.schedule_days || []);
@@ -1680,6 +1810,8 @@
       github_repo: document.getElementById('f-github-repo').value.trim(),
       linear_team: document.getElementById('f-linear-team').value.trim(),
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
+      post_to_thread: document.getElementById('f-post-thread').checked,
+      notify_on_report: document.getElementById('f-notify-toggle').classList.contains('on'),
       ai_summary_enabled: document.getElementById('f-ai-summary-toggle').classList.contains('on'),
       ai_provider: document.getElementById('f-ai-provider').value,
     };
@@ -1985,6 +2117,8 @@
     document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
     document.getElementById('f-reminder').value = '0';
+    document.getElementById('f-post-channel').checked = true;
+    document.getElementById('f-notify-toggle').classList.add('on');
     document.getElementById('f-ai-summary-toggle').classList.remove('on');
     document.getElementById('f-ai-provider').value = 'openai';
     selectDays(['mon','tue','wed','thu','fri']);
@@ -2015,7 +2149,10 @@
     document.getElementById('f-github-repo').value = '';
     document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
-    document.getElementById('f-reminder').value = s.reminder_minutes || 0;
+    document.getElementById('f-reminder').value = String(s.reminder_minutes || 0);
+    document.getElementById(s.post_to_thread ? 'f-post-thread' : 'f-post-channel').checked = true;
+    const notifyToggleS = document.getElementById('f-notify-toggle');
+    if (s.notify_on_report !== false) notifyToggleS.classList.add('on'); else notifyToggleS.classList.remove('on');
     document.getElementById('f-ai-summary-toggle').classList.remove('on');
     document.getElementById('f-ai-provider').value = 'openai';
     selectDays((s.schedule_days || 'mon,tue,wed,thu,fri').split(','));
@@ -2098,6 +2235,9 @@
       questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
       participants: state.participants,
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
+      post_to_thread: document.getElementById('f-post-thread').checked,
+      notify_on_report: document.getElementById('f-notify-toggle').classList.contains('on'),
+      weekend_reminder: parseInt(document.getElementById('f-reminder').value) === -1,
     };
     try {
       let updated;

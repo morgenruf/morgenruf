@@ -24,10 +24,10 @@ QUESTIONS = [
 
 @dataclass
 class UserSession:
-    cache_key: str          # "team_id:user_id"
+    cache_key: str  # "team_id:user_id"
     team_id: str
-    channel: str            # target channel for the summary post
-    step: int = 0           # 0=sent q1, 1=sent q2, 2=sent q3, 3=mood, 4=done
+    channel: str  # target channel for the summary post
+    step: int = 0  # 0=sent q1, 1=sent q2, 2=sent q3, 3=mood, 4=done
     answers: list[str] = field(default_factory=list)
     started_at: datetime = field(default_factory=datetime.utcnow)
     questions: list[str] = field(default_factory=lambda: list(QUESTIONS))
@@ -65,7 +65,9 @@ class StateStore:
     def __init__(self) -> None:
         self._lock = Lock()
 
-    def start(self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None) -> UserSession:
+    def start(
+        self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None
+    ) -> UserSession:
         """Begin a new standup session. cache_key should be 'team_id:user_id'."""
         if not team_id:
             # Derive team_id from cache_key when not provided explicitly

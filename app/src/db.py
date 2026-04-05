@@ -61,6 +61,7 @@ def db_conn() -> Generator[Any, None, None]:
 # Installations
 # ---------------------------------------------------------------------------
 
+
 def save_installation(
     team_id: str,
     team_name: str,
@@ -115,12 +116,31 @@ def get_all_installations() -> list[dict]:
 # Workspace config
 # ---------------------------------------------------------------------------
 
+
 def upsert_workspace_config(team_id: str, **kwargs: Any) -> None:
     """Insert or update workspace config. Pass only columns you want to set."""
-    allowed = {"channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "active", "reminder_minutes", "edit_window_hours", "jira_base_url", "github_repo", "linear_team", "ai_summary_enabled", "ai_provider", "feed_token", "feed_public", "manager_email", "manager_digest_enabled"}
+    allowed = {
+        "channel_id",
+        "schedule_time",
+        "schedule_tz",
+        "schedule_days",
+        "questions",
+        "active",
+        "reminder_minutes",
+        "edit_window_hours",
+        "jira_base_url",
+        "github_repo",
+        "linear_team",
+        "ai_summary_enabled",
+        "ai_provider",
+        "feed_token",
+        "feed_public",
+        "manager_email",
+        "manager_digest_enabled",
+    }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     for col in fields:
-        if not re.match(r'^[a-z_]+$', col):
+        if not re.match(r"^[a-z_]+$", col):
             raise ValueError(f"Invalid column name: {col}")
 
     if not fields:
@@ -226,6 +246,7 @@ def get_standups(
 # Members
 # ---------------------------------------------------------------------------
 
+
 def get_active_members(team_id: str) -> list[dict]:
     """Return active members for a workspace."""
     sql = "SELECT * FROM members WHERE team_id = %s AND active = TRUE ORDER BY real_name"
@@ -261,6 +282,7 @@ def upsert_member(
 # ---------------------------------------------------------------------------
 # Standups
 # ---------------------------------------------------------------------------
+
 
 def save_standup(
     team_id: str,
@@ -300,6 +322,7 @@ def get_today_standups(team_id: str) -> list[dict]:
 # Dashboard stats
 # ---------------------------------------------------------------------------
 
+
 def get_dashboard_stats(team_id: str) -> dict:
     """Return completion rate, active member count, and response counts."""
     sql_responses = """
@@ -332,10 +355,10 @@ def get_dashboard_stats(team_id: str) -> dict:
     }
 
 
-
 # ---------------------------------------------------------------------------
 # Webhooks
 # ---------------------------------------------------------------------------
+
 
 def get_webhooks(team_id: str) -> list[dict]:
     """Return all webhooks registered for a team."""
@@ -383,6 +406,7 @@ def delete_webhook(team_id: str, webhook_id: int) -> bool:
 # Standup lookup
 # ---------------------------------------------------------------------------
 
+
 def get_standup_by_id(standup_id: int) -> dict | None:
     """Return a single standup row by primary key, or None."""
     sql = "SELECT * FROM standups WHERE id = %s"
@@ -396,6 +420,7 @@ def get_standup_by_id(standup_id: int) -> dict | None:
 # ---------------------------------------------------------------------------
 # Skip today
 # ---------------------------------------------------------------------------
+
 
 def skip_today(team_id: str, user_id: str) -> None:
     """Mark user as skipping today's standup."""
@@ -418,9 +443,32 @@ def is_skipped_today(team_id: str, user_id: str) -> bool:
             return cur.fetchone() is not None
 
 
+def set_vacation(team_id: str, user_id: str, on_vacation: bool) -> None:
+    """Mark a member as on vacation (or back from vacation)."""
+    sql = """
+        INSERT INTO members (team_id, user_id, on_vacation)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (team_id, user_id) DO UPDATE SET on_vacation = EXCLUDED.on_vacation
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id, on_vacation))
+
+
+def is_on_vacation(team_id: str, user_id: str) -> bool:
+    """Return True if this member is currently marked as on vacation."""
+    sql = "SELECT on_vacation FROM members WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return bool(row[0]) if row else False
+
+
 # ---------------------------------------------------------------------------
 # Analytics
 # ---------------------------------------------------------------------------
+
 
 def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
     """Return per-member participation stats for the last N days."""
@@ -450,6 +498,7 @@ def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
 # CSV export
 # ---------------------------------------------------------------------------
 
+
 def export_standups(team_id: str, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return standup rows for export, optionally filtered by date range."""
     conditions = ["team_id = %s"]
@@ -472,6 +521,7 @@ def export_standups(team_id: str, from_date: str | None = None, to_date: str | N
 # Member email lookup
 # ---------------------------------------------------------------------------
 
+
 def get_member_email(team_id: str, user_id: str) -> str | None:
     """Return email for a member, or None."""
     sql = "SELECT email FROM members WHERE team_id=%s AND user_id=%s"
@@ -486,6 +536,7 @@ def get_member_email(team_id: str, user_id: str) -> str | None:
 # Standup schedules
 # ---------------------------------------------------------------------------
 
+
 def get_standup_schedules(team_id: str) -> list[dict]:
     """Return all active standup schedules for a workspace."""
     sql = "SELECT * FROM standup_schedules WHERE team_id = %s ORDER BY created_at"
@@ -498,7 +549,22 @@ def get_standup_schedules(team_id: str) -> list[dict]:
 
 def create_standup_schedule(team_id: str, **kwargs) -> dict:
     """Insert a new standup schedule row and return it."""
-    allowed = {"name", "channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "participants", "reminder_minutes", "active"}
+    allowed = {
+        "name",
+        "channel_id",
+        "schedule_time",
+        "schedule_tz",
+        "schedule_days",
+        "questions",
+        "participants",
+        "reminder_minutes",
+        "active",
+        "post_to_thread",
+        "notify_on_report",
+        "weekend_reminder",
+        "report_channel",
+        "report_time",
+    }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
         fields["questions"] = json.dumps(fields["questions"])
@@ -516,9 +582,34 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
+def get_standup_schedule_for_channel(team_id: str, channel_id: str) -> dict | None:
+    """Return the first active standup schedule for a given channel (scoped to team_id)."""
+    sql = "SELECT * FROM standup_schedules WHERE team_id = %s AND channel_id = %s AND active = TRUE LIMIT 1"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, channel_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | None:
     """Update a standup schedule by id (scoped to team_id)."""
-    allowed = {"name", "channel_id", "schedule_time", "schedule_tz", "schedule_days", "questions", "participants", "reminder_minutes", "active"}
+    allowed = {
+        "name",
+        "channel_id",
+        "schedule_time",
+        "schedule_tz",
+        "schedule_days",
+        "questions",
+        "participants",
+        "reminder_minutes",
+        "active",
+        "post_to_thread",
+        "notify_on_report",
+        "weekend_reminder",
+        "report_channel",
+        "report_time",
+    }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
         return get_standup_schedule(team_id, schedule_id)
@@ -570,6 +661,7 @@ def get_all_active_schedules() -> list[dict]:
 # ---------------------------------------------------------------------------
 # Kudos
 # ---------------------------------------------------------------------------
+
 
 def save_kudos(team_id: str, from_user: str, to_user: str, message: str, channel_id: str = "") -> dict:
     """Save a kudos entry and return it."""
@@ -625,6 +717,7 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
 # Role-based access control
 # ---------------------------------------------------------------------------
 
+
 def get_member_role(team_id: str, user_id: str) -> str:
     """Return 'admin' or 'member' for a user. Defaults to 'member' if not found."""
     sql = "SELECT role FROM members WHERE team_id = %s AND user_id = %s"
@@ -661,6 +754,7 @@ def ensure_admin(team_id: str, user_id: str) -> None:
 # Standup editing helpers
 # ---------------------------------------------------------------------------
 
+
 def get_latest_standup(user_id: str, team_id: str) -> dict | None:
     """Return the most recent standup for a user/team, or None."""
     sql = """
@@ -688,9 +782,7 @@ def update_standup(user_id: str, team_id: str, **kwargs: Any) -> None:
         return
     if "blockers" in updates:
         blocker_val: str = updates["blockers"] or ""
-        updates["has_blockers"] = blocker_val.strip().lower() not in (
-            "none", "no", "nope", "-", "n/a", ""
-        )
+        updates["has_blockers"] = blocker_val.strip().lower() not in ("none", "no", "nope", "-", "n/a", "")
     set_clause = ", ".join(f"{k} = %s" for k in updates)
     values: list[Any] = list(updates.values())
     sql = f"""

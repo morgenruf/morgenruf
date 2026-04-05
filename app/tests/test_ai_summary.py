@@ -11,6 +11,7 @@ from ai_summary import _plain_summary, generate_summary
 # Plain summary (no AI key)
 # ---------------------------------------------------------------------------
 
+
 class TestPlainSummary:
     def test_single_standup_no_blockers(self):
         standups = [{"user_id": "U1", "yesterday": "shipped feature", "today": "review PRs", "has_blockers": False}]
@@ -59,6 +60,7 @@ class TestPlainSummary:
 # generate_summary — routing and fallbacks
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateSummary:
     def test_empty_standups_returns_empty(self):
         assert generate_summary([]) == ""
@@ -75,9 +77,7 @@ class TestGenerateSummary:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Great work by the team today!"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Great work by the team today!"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.post", return_value=mock_response):
@@ -90,9 +90,7 @@ class TestGenerateSummary:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "content": [{"text": "The team made solid progress."}]
-        }
+        mock_response.json.return_value = {"content": [{"text": "The team made solid progress."}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.post", return_value=mock_response):

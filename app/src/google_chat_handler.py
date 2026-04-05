@@ -1,4 +1,5 @@
 """Google Chat webhook handler."""
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,7 @@ def _get_adapter():
         return None
     try:
         from adapters.google_chat import GoogleChatAdapter
+
         return GoogleChatAdapter(creds)
     except Exception as exc:
         logger.error("Failed to init GoogleChatAdapter: %s", exc)
@@ -77,12 +79,16 @@ def _handle_message(payload: dict):
         return jsonify({"text": "✅ You're skipped for today's standup."})
 
     elif text.startswith("/help") or text == "help":
-        return jsonify({"text": (
-            "*Morgenruf Standup Bot* 🌅\n"
-            "• `/standup` — start your standup\n"
-            "• `/skip` — skip today\n"
-            "• `/help` — show this message"
-        )})
+        return jsonify(
+            {
+                "text": (
+                    "*Morgenruf Standup Bot* 🌅\n"
+                    "• `/standup` — start your standup\n"
+                    "• `/skip` — skip today\n"
+                    "• `/help` — show this message"
+                )
+            }
+        )
 
     # Handle active standup session
     elif state_store.is_active(cache_key):
@@ -111,6 +117,7 @@ def _handle_message(payload: dict):
 
             # Post summary to space
             from datetime import datetime
+
             date_str = datetime.utcnow().strftime("%B %d, %Y")
             summary = (
                 f"📋 *Standup from {user_id}* — {date_str}\n\n"

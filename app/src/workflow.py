@@ -16,6 +16,7 @@ def get_rules(team_id: str) -> list[dict]:
     """Fetch active workflow rules for a team."""
     try:
         import db  # noqa: PLC0415
+
         if db._pool is None:
             return []
         sql = """
@@ -27,6 +28,7 @@ def get_rules(team_id: str) -> list[dict]:
         """
         with db.db_conn() as conn:
             import psycopg2.extras  # noqa: PLC0415
+
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(sql, (team_id,))
                 rows = cur.fetchall()
@@ -48,6 +50,7 @@ def save_rule(
     """Insert a new workflow rule and return its id."""
     try:
         import db  # noqa: PLC0415
+
         if db._pool is None:
             return None
         sql = """
@@ -71,6 +74,7 @@ def delete_rule(rule_id: int, team_id: str) -> None:
     """Soft-delete a workflow rule (set active=False)."""
     try:
         import db  # noqa: PLC0415
+
         if db._pool is None:
             return
         sql = "UPDATE workflow_rules SET active = FALSE WHERE id = %s AND team_id = %s"

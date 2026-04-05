@@ -69,22 +69,23 @@ server = Server("morgenruf")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _team(args: dict) -> str:
     """Resolve team_id from args or default."""
     tid = args.get("team_id") or _DEFAULT_TEAM_ID
     if not tid:
-        raise ValueError(
-            "team_id is required. Set MCP_TEAM_ID env var or pass team_id argument."
-        )
+        raise ValueError("team_id is required. Set MCP_TEAM_ID env var or pass team_id argument.")
     return tid
 
 
 def _fmt(obj: Any) -> str:
     """JSON-serialise with date/datetime support."""
+
     def default(o):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
         return str(o)
+
     return json.dumps(obj, indent=2, default=default)
 
 
@@ -212,6 +213,7 @@ TOOLS = [
 # Tool handlers
 # ---------------------------------------------------------------------------
 
+
 @server.list_tools()
 async def list_tools() -> ListToolsResult:
     return ListToolsResult(tools=TOOLS)
@@ -267,8 +269,7 @@ async def _get_standups(args: dict) -> CallToolResult:
             f"── {r.get('standup_date')} · {r.get('user_id')}\n"
             f"  Yesterday: {r.get('yesterday', '')}\n"
             f"  Today:     {r.get('today', '')}\n"
-            f"  Blockers:  {r.get('blockers', '')}\n"
-            + (f"  Mood:      {r.get('mood', '')}\n" if r.get("mood") else "")
+            f"  Blockers:  {r.get('blockers', '')}\n" + (f"  Mood:      {r.get('mood', '')}\n" if r.get("mood") else "")
         )
     return _text("\n".join(lines))
 
@@ -284,8 +285,7 @@ async def _get_today_standups(args: dict) -> CallToolResult:
             f"── {r.get('user_id')}\n"
             f"  Yesterday: {r.get('yesterday', '')}\n"
             f"  Today:     {r.get('today', '')}\n"
-            f"  Blockers:  {r.get('blockers', '')}\n"
-            + (f"  Mood:      {r.get('mood', '')}\n" if r.get("mood") else "")
+            f"  Blockers:  {r.get('blockers', '')}\n" + (f"  Mood:      {r.get('mood', '')}\n" if r.get("mood") else "")
         )
     return _text("\n".join(lines))
 
@@ -303,10 +303,7 @@ async def _get_blockers(args: dict) -> CallToolResult:
 
     lines = [f"🚧 Blockers in the last {days} days — {len(blocked)} entries\n"]
     for r in blocked:
-        lines.append(
-            f"── {r.get('standup_date')} · {r.get('user_id')}\n"
-            f"  {r.get('blockers', '')}\n"
-        )
+        lines.append(f"── {r.get('standup_date')} · {r.get('user_id')}\n  {r.get('blockers', '')}\n")
     return _text("\n".join(lines))
 
 
@@ -352,7 +349,8 @@ async def _search_standups(args: dict) -> CallToolResult:
     rows = db.export_standups(team_id, from_date)
 
     matches = [
-        r for r in rows
+        r
+        for r in rows
         if query in (r.get("yesterday") or "").lower()
         or query in (r.get("today") or "").lower()
         or query in (r.get("blockers") or "").lower()
@@ -380,7 +378,7 @@ async def _get_workspace_summary(args: dict) -> CallToolResult:
     members = db.get_active_members(team_id)
 
     team_name = (inst or {}).get("team_name", team_id)
-    schedule = f"{config.get('schedule_time','?')} {config.get('schedule_tz','UTC')} on {config.get('schedule_days','weekdays')}"
+    schedule = f"{config.get('schedule_time', '?')} {config.get('schedule_tz', 'UTC')} on {config.get('schedule_days', 'weekdays')}"
     channel = config.get("channel_id", "not configured")
 
     summary = (
@@ -435,6 +433,7 @@ async def _get_mood_summary(args: dict) -> CallToolResult:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 async def main() -> None:
     logger.info("Starting Morgenruf MCP server (team_id=%s)", _DEFAULT_TEAM_ID or "dynamic")
     async with stdio_server() as streams:
@@ -443,4 +442,5 @@ async def main() -> None:
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

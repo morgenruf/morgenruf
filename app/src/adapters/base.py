@@ -10,8 +10,10 @@ class PlatformAdapter(ABC):
 
     @abstractmethod
     def get_user_info(self, user_id: str) -> dict: ...
+
     # returns {"id": str, "name": str, "email": str, "tz": str}
 
     @abstractmethod
     def get_platform(self) -> str: ...
+
     # returns "slack" | "google_chat" | "teams"

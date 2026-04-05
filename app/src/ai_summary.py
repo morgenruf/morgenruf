@@ -39,9 +39,9 @@ def generate_summary(standups: list[dict], team_name: str = "") -> str:
         name = s.get("user_id", "Unknown")
         lines.append(
             f"{name}:\n"
-            f"  Yesterday: {s.get('yesterday','')}\n"
-            f"  Today: {s.get('today','')}\n"
-            f"  Blockers: {s.get('blockers','')}"
+            f"  Yesterday: {s.get('yesterday', '')}\n"
+            f"  Today: {s.get('today', '')}\n"
+            f"  Blockers: {s.get('blockers', '')}"
         )
     standup_text = "\n\n".join(lines)
 
@@ -57,6 +57,7 @@ def generate_summary(standups: list[dict], team_name: str = "") -> str:
 def _openai_summary(text: str, team_name: str, api_key: str) -> str:
     try:
         import httpx
+
         response = httpx.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -81,6 +82,7 @@ def _openai_summary(text: str, team_name: str, api_key: str) -> str:
 def _anthropic_summary(text: str, team_name: str, api_key: str) -> str:
     try:
         import httpx
+
         response = httpx.post(
             "https://api.anthropic.com/v1/messages",
             headers={

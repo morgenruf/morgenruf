@@ -8,6 +8,7 @@ import re
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _time_options() -> list[dict]:
     """96 options — 00:00 to 23:45 in 15-minute increments."""
     options = []
@@ -84,10 +85,7 @@ def _timezone_options() -> list[dict]:
         ("Pacific/Fiji", "Pacific/Fiji (FJT)"),
         ("Pacific/Guam", "Pacific/Guam (ChST)"),
     ]
-    return [
-        {"text": {"type": "plain_text", "text": label}, "value": value}
-        for value, label in zones
-    ]
+    return [{"text": {"type": "plain_text", "text": label}, "value": value} for value, label in zones]
 
 
 def _reminder_options() -> list[dict]:
@@ -123,6 +121,7 @@ def _find_option(options: list[dict], value: str) -> dict | None:
 # Modal: Create / Edit standup
 # ---------------------------------------------------------------------------
 
+
 def create_standup_modal(existing_config: dict | None = None) -> dict:
     """
     Full 'Create a standup' modal matching Standup & Prosper UX.
@@ -141,9 +140,7 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
 
     selected_time = _find_option(time_options, cfg.get("report_time", "09:00")) or time_options[36]
     selected_tz = _find_option(tz_options, cfg.get("timezone", "UTC")) or tz_options[0]
-    selected_reminder = (
-        _find_option(reminder_options, str(cfg.get("reminder_minutes", 60))) or reminder_options[3]
-    )
+    selected_reminder = _find_option(reminder_options, str(cfg.get("reminder_minutes", 60))) or reminder_options[3]
 
     active_days = cfg.get("days", ["mon", "tue", "wed", "thu", "fri"])
     initial_days = [opt for opt in day_options if opt["value"] in active_days]
@@ -153,17 +150,14 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
         {"text": {"type": "plain_text", "text": "As a thread reply"}, "value": "thread"},
     ]
     selected_dest = (
-        _find_option(report_dest_options, cfg.get("report_destination", "channel"))
-        or report_dest_options[0]
+        _find_option(report_dest_options, cfg.get("report_destination", "channel")) or report_dest_options[0]
     )
 
     group_by_options = [
         {"text": {"type": "plain_text", "text": "Team Member"}, "value": "member"},
         {"text": {"type": "plain_text", "text": "Project"}, "value": "project"},
     ]
-    selected_group = (
-        _find_option(group_by_options, cfg.get("group_by", "member")) or group_by_options[0]
-    )
+    selected_group = _find_option(group_by_options, cfg.get("group_by", "member")) or group_by_options[0]
 
     blocks = [
         # Channel
@@ -351,6 +345,7 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
 # DM: Standup prompt sent to user at standup time
 # ---------------------------------------------------------------------------
 
+
 def standup_dm_message(questions: list[str], standup_name: str) -> dict:
     """DM message sent to user when it is standup time."""
     first_question = questions[0] if questions else "What did you do yesterday?"
@@ -423,6 +418,7 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
 # Modal: Fill-in standup form (all questions at once)
 # ---------------------------------------------------------------------------
 
+
 def standup_form_modal(questions: list[str], standup_name: str) -> dict:
     """Modal opened when user clicks 'Fill in form'."""
     blocks = []
@@ -455,6 +451,7 @@ def standup_form_modal(questions: list[str], standup_name: str) -> dict:
 # ---------------------------------------------------------------------------
 # Channel message: Standup summary
 # ---------------------------------------------------------------------------
+
 
 def standup_summary_message(
     standup_name: str,
@@ -549,6 +546,7 @@ def standup_summary_message(
 # ---------------------------------------------------------------------------
 # App Home tab
 # ---------------------------------------------------------------------------
+
 
 def app_home_view(standups: list[dict], user_id: str) -> dict:
     """App Home tab view listing all standups with create/edit/delete actions."""
@@ -687,6 +685,7 @@ def app_home_view(standups: list[dict], user_id: str) -> dict:
 # DM: Away confirmation
 # ---------------------------------------------------------------------------
 
+
 def away_confirmation_message(until: str = "tomorrow") -> dict:
     """Simple DM confirming user is marked as away."""
     return {
@@ -706,6 +705,7 @@ def away_confirmation_message(until: str = "tomorrow") -> dict:
 # Issue auto-linking
 # ---------------------------------------------------------------------------
 
+
 def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "") -> str:
     """Replace {PROJ-123} and {ZD-123} patterns with Slack mrkdwn links.
 
@@ -718,6 +718,7 @@ def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "
         zendesk_base_url: e.g. ``"https://myorg.zendesk.com"``.
     """
     if zendesk_base_url:
+
         def _zd(m: re.Match) -> str:  # type: ignore[type-arg]
             num = m.group(1)
             return f"<{zendesk_base_url}/agent/tickets/{num}|ZD-{num}>"
@@ -725,6 +726,7 @@ def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "
         text = re.sub(r"\{ZD-(\d+)\}", _zd, text)
 
     if jira_base_url:
+
         def _jira(m: re.Match) -> str:  # type: ignore[type-arg]
             key = m.group(1)
             return f"<{jira_base_url}/browse/{key}|{key}>"
@@ -737,6 +739,7 @@ def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "
 # ---------------------------------------------------------------------------
 # Summary builders (by-member and by-question)
 # ---------------------------------------------------------------------------
+
 
 def build_summary_by_member(
     responses: list[dict],
@@ -756,11 +759,15 @@ def build_summary_by_member(
     user_profiles = user_profiles or {}
     edit_window_open = edit_window_open or set()
 
-    q_labels = list(questions) if questions else [
-        "What did you complete yesterday?",
-        "What are you working on today?",
-        "Any blockers?",
-    ]
+    q_labels = (
+        list(questions)
+        if questions
+        else [
+            "What did you complete yesterday?",
+            "What are you working on today?",
+            "Any blockers?",
+        ]
+    )
     answer_keys = ["yesterday", "today", "blockers"]
 
     blocks: list[dict] = [
@@ -780,11 +787,13 @@ def build_summary_by_member(
         # Context block: avatar + name
         context_elements: list[dict] = []
         if avatar_url:
-            context_elements.append({
-                "type": "image",
-                "image_url": avatar_url,
-                "alt_text": display_name,
-            })
+            context_elements.append(
+                {
+                    "type": "image",
+                    "image_url": avatar_url,
+                    "alt_text": display_name,
+                }
+            )
         context_elements.append({"type": "mrkdwn", "text": f"*{display_name}*"})
         blocks.append({"type": "context", "elements": context_elements})
 
@@ -796,23 +805,29 @@ def build_summary_by_member(
             label = q_labels[idx] if idx < len(q_labels) else key.capitalize()
             qa_lines.append(f"*{label}*\n{linked}")
 
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n\n".join(qa_lines)},
-        })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "\n\n".join(qa_lines)},
+            }
+        )
 
         # Edit button (only if within window)
         if user_id in edit_window_open:
-            blocks.append({
-                "type": "actions",
-                "elements": [{
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "✏️ Edit my standup", "emoji": True},
-                    "action_id": "standup_edit",
-                    "value": str(resp.get("id", "")),
-                    "style": "primary",
-                }],
-            })
+            blocks.append(
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "✏️ Edit my standup", "emoji": True},
+                            "action_id": "standup_edit",
+                            "value": str(resp.get("id", "")),
+                            "style": "primary",
+                        }
+                    ],
+                }
+            )
 
         blocks.append({"type": "divider"})
 
@@ -836,11 +851,15 @@ def build_summary_by_question(
     """
     user_profiles = user_profiles or {}
 
-    q_labels = list(questions) if questions else [
-        "What did you complete yesterday?",
-        "What are you working on today?",
-        "Any blockers?",
-    ]
+    q_labels = (
+        list(questions)
+        if questions
+        else [
+            "What did you complete yesterday?",
+            "What are you working on today?",
+            "Any blockers?",
+        ]
+    )
     answer_keys = ["yesterday", "today", "blockers"]
 
     blocks: list[dict] = [
@@ -853,10 +872,12 @@ def build_summary_by_question(
 
     for idx, key in enumerate(answer_keys):
         label = q_labels[idx] if idx < len(q_labels) else key.capitalize()
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*{label}*"},
-        })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*{label}*"},
+            }
+        )
 
         for resp in responses:
             user_id: str = resp["user_id"]
@@ -869,15 +890,19 @@ def build_summary_by_question(
 
             context_elements: list[dict] = []
             if avatar_url:
-                context_elements.append({
-                    "type": "image",
-                    "image_url": avatar_url,
-                    "alt_text": display_name,
-                })
-            context_elements.append({
-                "type": "mrkdwn",
-                "text": f"*{display_name}*: {linked}",
-            })
+                context_elements.append(
+                    {
+                        "type": "image",
+                        "image_url": avatar_url,
+                        "alt_text": display_name,
+                    }
+                )
+            context_elements.append(
+                {
+                    "type": "mrkdwn",
+                    "text": f"*{display_name}*: {linked}",
+                }
+            )
             blocks.append({"type": "context", "elements": context_elements})
 
         blocks.append({"type": "divider"})
