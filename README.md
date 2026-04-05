@@ -5,6 +5,7 @@
 A self-hosted, open-source Slack standup bot. Ask structured daily questions, post formatted summaries to team channels, and keep full ownership of your standup data — no SaaS subscription required.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Status](https://img.shields.io/badge/status-operational-brightgreen)](https://status.morgenruf.dev)
 [![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
 [![Docker](https://img.shields.io/badge/Docker-ghcr.io-blue)](https://ghcr.io/morgenruf/morgenruf)
 

@@ -89,6 +89,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: APP_URL
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: SENTRY_DSN
+            - name: SENTRY_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: SENTRY_ENV
           volumeMounts:
             - name: teams-config
               mountPath: /app/teams.yaml
