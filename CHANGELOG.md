@@ -5,6 +5,30 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-04-05 🎉 First stable release
+
+### Added
+- 🔐 Full OAuth 2.0 install flow with persistent token store
+- 📊 Web dashboard (React) — manage standups, schedules, team settings
+- 🤖 MCP server at `/mcp` — connect Claude, Cursor, Copilot directly
+- 📡 Public status page at [status.morgenruf.dev](https://status.morgenruf.dev) with live service health checks
+- 📖 Full documentation site at [docs.morgenruf.dev](https://docs.morgenruf.dev)
+- 🧪 80-test Playwright E2E suite (smoke + full) running on every push
+- 🔄 Dependabot enabled for pip, Docker, GitHub Actions, Helm
+
+### Infrastructure
+- Kubernetes (k3s) production deployment with Helm chart
+- Cloudflare-proxied custom domains with enforced HTTPS
+- GitHub Actions CI/CD: Docker build → DockerHub push → k8s rollout
+- Netlify-hosted marketing website
+
+### Fixed
+- Status page HTTPS certificate provisioned (Cloudflare DNS-only mode)
+- Dashboard 302 redirect now correctly reported as "operational" in health checks
+- Microsoft Teams icon CDN 404 (cdn.simpleicons.org removed the slug)
+- Dependabot config not activating (`.yaml` → `.yml` rename)
+- Node.js 20 deprecation warnings in CI (upgraded to Node.js 22)
+
 ## [0.4.0] — 2026-04-05
 ### Added
 - ⚡ Workflow automation rules engine (blocker/participation triggers → post/DM/webhook)
@@ -48,7 +72,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 - PostgreSQL persistence
 - Helm chart
 
-[Unreleased]: https://github.com/morgenruf/morgenruf/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/morgenruf/morgenruf/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/morgenruf/morgenruf/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/morgenruf/morgenruf/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/morgenruf/morgenruf/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/morgenruf/morgenruf/compare/v0.1.0...v0.2.0
