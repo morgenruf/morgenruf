@@ -31,15 +31,22 @@ morgenruf/
 
 - 📅 **Configurable schedule** — per-team times, timezones, and days
 - 💬 **DM-based collection** — bot DMs each member individually
-- 🏗️ **Per-project format** — prefix updates with project names (e.g. `Proj-X: ...`)
+- ❓ **Custom questions** — fully editable from the dashboard (not hardcoded)
+- ⏭️ **Skip today** — DM `skip` to opt out for the day
+- ⏰ **Pre-standup reminder** — configurable minutes before standup time
+- 🌍 **Per-user timezone** — DM `timezone America/New_York` to set personal timezone
 - 🚧 **Blocker detection** — highlights blockers in summaries
 - 🤖 **Manual trigger** — type `standup` in DM anytime
+- 🎭 **Mood tracking** — 4th question captures team sentiment (😊/😐/😔)
 - 🔗 **Auto-linking** — Jira/GitHub issue references become clickable links
-- 🪝 **Webhooks** — fire HTTP webhooks on standup submission
+- 🪝 **Webhooks** — HMAC-signed HTTP webhooks on `standup.completed`
 - ✏️ **Edit window** — members can edit responses within a configurable time window
-- 📊 **Web dashboard** — manage teams, view history at `/dashboard`
-- 🐳 **Kubernetes-ready** — production Helm chart included
+- 📊 **Web dashboard** — Analytics tab, participation stats, CSV export
+- 📧 **Welcome email + weekly digest** — via Resend
+- 🏠 **App Home tab** — shows workspace status in Slack Home
+- 🐳 **Kubernetes-ready** — production Helm chart at `charts.morgenruf.dev`
 - ☁️ **Cloudflare Zero Trust** — works behind CF tunnel (no ingress controller needed)
+- 🗃️ **PostgreSQL** — full standup history, migrations auto-applied on startup
 
 ---
 
@@ -70,12 +77,13 @@ See [**Kubernetes Deployment**](#kubernetes-deployment) below.
 
 ## Standup Format
 
-The bot DMs each member 3 questions:
+The bot DMs each member 4 questions:
 
 ```
 ✅ What did you complete yesterday?
 🎯 What are you working on today?
 🚧 Any blockers?
+🎭 How are you feeling today? (😊 Great / 😐 Okay / 😔 Struggling)
 ```
 
 Then posts a formatted summary to the configured channel:
@@ -84,14 +92,27 @@ Then posts a formatted summary to the configured channel:
 📋 Standup — Alice  |  April 5, 2026
 
 ✅ Yesterday
-  Proj-Bridj: deployed Terraform module, PR #42 merged
+  Deployed Terraform module, PR #42 merged
 
 🎯 Today
-  Proj-Bridj: load balancer configuration
+  Load balancer configuration
 
 🚧 Blockers
   Waiting on AWS quota approval
+
+🎭 Mood: 😊
 ```
+
+---
+
+## DM Commands
+
+| Command | Description |
+|---------|-------------|
+| `standup` | Start your standup now |
+| `skip` | Skip today's standup |
+| `timezone <tz>` | Set your personal timezone (e.g. `timezone Europe/London`) |
+| `help` | Show available commands |
 
 ---
 
@@ -225,12 +246,17 @@ app/helm/morgenruf/
 - [x] Jira/GitHub auto-linking
 - [x] Edit window for responses
 - [x] Email notifications (Resend)
+- [x] Custom questions
+- [x] Skip today
+- [x] Pre-standup reminders
+- [x] Per-user timezone
+- [x] Mood tracking
+- [x] Analytics dashboard + CSV export
+- [x] Weekly digest email
+- [ ] Multiple standup schedules per workspace
+- [ ] Jira/Linear/GitHub integration
 - [ ] Microsoft Teams support *(coming soon)*
-- [ ] Google Chat support *(coming soon)*
-- [ ] MCP / AI Integration *(coming soon)*
-- [ ] Per-project standup reports
-- [ ] Public REST API (v0.3)
-- [ ] Slack App Directory listing
+- [ ] Public REST API
 
 ---
 
