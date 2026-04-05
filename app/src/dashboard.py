@@ -21,6 +21,7 @@ from flask import (
 )
 
 import db
+from oauth import verify_login_token
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,23 @@ def _get_bot_token() -> str | None:
 # ---------------------------------------------------------------------------
 
 @dashboard_bp.route("/dashboard")
-@_login_required
 def dashboard():
+    # Accept one-time login token from OAuth redirect to bootstrap session
+    token = request.args.get("t")
+    if token:
+        team_id = verify_login_token(token)
+        if team_id:
+            session["team_id"] = team_id
+            try:
+                inst = db.get_installation(team_id)
+                session["team_name"] = inst["team_name"] if inst else team_id
+            except Exception:
+                session["team_name"] = team_id
+            return redirect(url_for("dashboard.dashboard"))
+
+    if not session.get("team_id"):
+        return redirect(url_for("dashboard.login"))
+
     team_id = session["team_id"]
     try:
         inst = db.get_installation(team_id)

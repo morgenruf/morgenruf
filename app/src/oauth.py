@@ -160,10 +160,11 @@ def oauth_callback():
     _schedule_workspace(team_id, bot_token)
 
     logger.info("Installation complete for team %s (%s)", team_id, team_name)
-    # Store team in session and redirect to dashboard
+    # Set session and pass team_id in URL as fallback for proxies that drop cookies
     session["team_id"] = team_id
     session["team_name"] = team_name
-    return redirect(f"{_APP_URL}/dashboard")
+    token = _make_login_token(team_id)
+    return redirect(f"{_APP_URL}/dashboard?t={token}")
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +184,32 @@ def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str) -> Non
             send_welcome_email(to_email=email, team_name=team_name, installed_by=real_name)
     except Exception as exc:
         logger.warning("Could not retrieve user email for welcome message: %s", exc)
+
+
+def _make_login_token(team_id: str) -> str:
+    """Short-lived HMAC token to bootstrap dashboard session via URL."""
+    ts = str(int(time.time()))
+    payload = f"{ts}.{team_id}"
+    sig = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
+    import base64
+    return base64.urlsafe_b64encode(f"{payload}.{sig}".encode()).decode()
+
+
+def verify_login_token(token: str) -> str | None:
+    """Verify login token, return team_id if valid (5 min window)."""
+    try:
+        import base64
+        decoded = base64.urlsafe_b64decode(token.encode()).decode()
+        ts_str, team_id, sig = decoded.split(".", 2)
+        payload = f"{ts_str}.{team_id}"
+        expected = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        if int(time.time()) - int(ts_str) > 300:
+            return None
+        return team_id
+    except Exception:
+        return None
 
 
 def _schedule_workspace(team_id: str, bot_token: str) -> None:
