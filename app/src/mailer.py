@@ -34,20 +34,86 @@ def send_welcome_email(to_email: str, team_name: str, installed_by: str) -> None
 
 
 def welcome_email_html(team_name: str, installed_by: str) -> str:
-    return f"""
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2>Good morning! ☀️</h2>
-      <p>Morgenruf has been successfully installed in <strong>{team_name}</strong> by {installed_by}.</p>
-      <h3>What happens next?</h3>
-      <ul>
-        <li>Each morning, team members will receive a DM with 3 standup questions</li>
-        <li>Answers are posted as a clean summary to your configured channel</li>
-        <li>Tag responses with <code>Proj-X:</code> for per-project tracking</li>
-      </ul>
-      <p><a href="https://morgenruf.dev/docs" style="color: #e8a838;">Read the docs →</a></p>
-      <p>— The Morgenruf team</p>
-    </div>
-    """
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:#4f46e5;padding:32px 40px;text-align:center;">
+              <div style="font-size:32px;margin-bottom:8px;">🌅</div>
+              <div style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.5px;">Morgenruf</div>
+              <div style="color:#c7d2fe;font-size:13px;margin-top:4px;">Your daily standup bot</div>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="font-size:20px;font-weight:700;color:#1a1a1a;margin:0 0 8px;">Good morning! ☀️</p>
+              <p style="font-size:15px;color:#555;margin:0 0 28px;line-height:1.6;">
+                Morgenruf has been successfully installed in <strong style="color:#1a1a1a;">{team_name}</strong> by {installed_by}.
+              </p>
+
+              <p style="font-size:13px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 16px;">What happens next</p>
+
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding:12px 16px;background:#f8f7ff;border-radius:8px;margin-bottom:8px;">
+                    <table><tr>
+                      <td style="font-size:20px;padding-right:12px;">💬</td>
+                      <td style="font-size:14px;color:#333;line-height:1.5;">Team members receive a DM each morning with their standup questions</td>
+                    </tr></table>
+                  </td>
+                </tr>
+                <tr><td style="height:8px;"></td></tr>
+                <tr>
+                  <td style="padding:12px 16px;background:#f8f7ff;border-radius:8px;">
+                    <table><tr>
+                      <td style="font-size:20px;padding-right:12px;">📋</td>
+                      <td style="font-size:14px;color:#333;line-height:1.5;">Responses are collected and posted as a clean summary to your team channel</td>
+                    </tr></table>
+                  </td>
+                </tr>
+                <tr><td style="height:8px;"></td></tr>
+                <tr>
+                  <td style="padding:12px 16px;background:#f8f7ff;border-radius:8px;">
+                    <table><tr>
+                      <td style="font-size:20px;padding-right:12px;">⚙️</td>
+                      <td style="font-size:14px;color:#333;line-height:1.5;">Configure your schedule, channel, and team from the dashboard</td>
+                    </tr></table>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="margin-top:32px;text-align:center;">
+                <a href="https://api.morgenruf.dev/dashboard"
+                   style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;text-decoration:none;">
+                  Open Dashboard →
+                </a>
+              </div>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px;background:#f8f8f8;border-top:1px solid #eee;text-align:center;">
+              <p style="font-size:12px;color:#999;margin:0;">
+                The Morgenruf team · <a href="https://morgenruf.dev" style="color:#4f46e5;text-decoration:none;">morgenruf.dev</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
 
 
 # ---------------------------------------------------------------------------

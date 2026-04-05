@@ -973,7 +973,7 @@
     const rows = state.webhooks.map(h =>
       '<tr><td class="webhook-url">' + esc(h.url) + '</td>' +
       '<td style="color:var(--text-dim);font-size:12px">' + (h.created_at ? new Date(h.created_at).toLocaleDateString() : '') + '</td>' +
-      '<td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteWebhook('' + esc(h.id) + '')">Delete</button></td></tr>'
+      '<td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteWebhook(' + h.id + ')">Delete</button></td></tr>'
     ).join('');
 
     el.innerHTML =
