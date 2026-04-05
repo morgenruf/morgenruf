@@ -4,6 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Morgenruf Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌅</text></svg>"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -1149,7 +1150,7 @@
   function populateParticipantsDropdown() {
     const dd = document.getElementById('participants-dropdown');
     dd.innerHTML = state.members.map(m =>
-      '<div class="multi-opt" data-id="' + esc(m.id) + '" onclick="toggleParticipant('' + esc(m.id) + '', '' + esc(m.name || m.display_name || m.id) + '')">' +
+      '<div class="multi-opt" data-id="' + esc(m.id) + '" onclick="toggleParticipant(&quot;' + esc(m.id) + '&quot;, &quot;' + esc(m.name || m.display_name || m.id) + '&quot;)">' +
       '<div class="chk">&#10003;</div>' +
       '<span>' + esc(m.name || m.display_name || m.id) + '</span></div>'
     ).join('');
@@ -1178,7 +1179,7 @@
     disp.innerHTML = state.participants.map(id => {
       const m = state.members.find(x => x.id === id);
       const name = m ? (m.name || m.display_name || id) : id;
-      return '<span class="tag-pill">' + esc(name) + '<span class="del" onclick="event.stopPropagation();toggleParticipant('' + esc(id) + '','')">&times;</span></span>';
+      return '<span class="tag-pill">' + esc(name) + '<span class="del" onclick="event.stopPropagation();toggleParticipant(&quot;' + esc(id) + '&quot;,&quot;&quot;)">&times;</span></span>';
     }).join('');
   }
 
