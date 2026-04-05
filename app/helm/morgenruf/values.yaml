@@ -37,9 +37,13 @@ app:
   url: "https://api.morgenruf.dev"
   port: "3000"
 
-# PostgreSQL — bundled (set enabled: false to use external)
+# PostgreSQL — bundled sub-chart
+# Recommended for quick testing only. For production, set enabled: false
+# and provide an external DATABASE_URL (managed RDS, CloudNativePG, etc.)
+# NOTE: Bitnami images were removed from Docker Hub; you may need to configure
+#       a custom registry mirror or use an external database instead.
 postgresql:
-  enabled: true
+  enabled: false
   auth:
     username: morgenruf
     password: ""          # auto-generated if empty
@@ -49,11 +53,15 @@ postgresql:
       enabled: true
       size: 5Gi
   image:
+    registry: registry-1.docker.io
+    repository: bitnami/postgresql
     tag: "16"
 
-# External PostgreSQL (used when postgresql.enabled: false)
+# External PostgreSQL (recommended for production)
+# Set postgresql.enabled: false and provide this URL.
+# Works with: RDS, Cloud SQL, CloudNativePG, Supabase, Neon, plain postgres:16
 externalDatabase:
-  url: ""   # postgresql://user:pass@host:5432/db
+  url: ""   # postgresql://user:pass@host:5432/dbname
 
 # Resend (optional — welcome emails)
 resend:

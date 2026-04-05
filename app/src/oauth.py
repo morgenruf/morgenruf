@@ -11,7 +11,7 @@ from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import db
-from email import send_welcome_email
+from mailer import send_welcome_email
 
 logger = logging.getLogger(__name__)
 

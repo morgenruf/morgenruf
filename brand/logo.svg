@@ -1,39 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="400" height="400">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0d1b4e"/>
-      <stop offset="100%" stop-color="#1a1a3e"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3730a3"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
     </linearGradient>
-    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFD166"/>
-      <stop offset="100%" stop-color="#F4845F"/>
+    <linearGradient id="sunGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fde68a"/>
     </linearGradient>
-    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#1a1a3e"/>
-      <stop offset="40%" stop-color="#F4845F" stop-opacity="0.7"/>
-      <stop offset="60%" stop-color="#F4845F" stop-opacity="0.7"/>
-      <stop offset="100%" stop-color="#1a1a3e"/>
-    </linearGradient>
-    <clipPath id="above"><rect x="0" y="0" width="512" height="295"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="90" fill="url(#bg)"/>
-  <ellipse cx="256" cy="295" rx="230" ry="45" fill="url(#glow)" opacity="0.9"/>
-  <circle cx="256" cy="295" r="115" fill="url(#sun)" clip-path="url(#above)"/>
-  <g stroke="#FFD166" stroke-width="9" stroke-linecap="round" opacity="0.9">
-    <line x1="256" y1="148" x2="256" y2="118"/>
-    <line x1="324" y1="167" x2="344" y2="142"/>
-    <line x1="370" y1="226" x2="400" y2="211"/>
-    <line x1="188" y1="167" x2="168" y2="142"/>
-    <line x1="142" y1="226" x2="112" y2="211"/>
-    <line x1="350" y1="192" x2="376" y2="168"/>
-    <line x1="162" y1="192" x2="136" y2="168"/>
+
+  <rect width="100" height="100" rx="24" fill="url(#bg)"/>
+
+  <g transform="translate(50, 32)">
+    <g stroke="#fde68a" stroke-width="2" stroke-linecap="round" opacity="0.9">
+      <line x1="0" y1="-19" x2="0" y2="-23"/>
+      <line x1="11" y1="-15" x2="13.5" y2="-18"/>
+      <line x1="-11" y1="-15" x2="-13.5" y2="-18"/>
+      <line x1="17" y1="-6" x2="20" y2="-7"/>
+      <line x1="-17" y1="-6" x2="-20" y2="-7"/>
+    </g>
+    <path d="M-14 0 A14 14 0 0 1 14 0 Z" fill="url(#sunGrad)"/>
+    <line x1="-18" y1="0" x2="18" y2="0" stroke="#fde68a" stroke-width="1.5" opacity="0.6"/>
   </g>
-  <line x1="50" y1="295" x2="462" y2="295" stroke="#F4845F" stroke-width="2.5" opacity="0.5"/>
-  <g stroke="#F4845F" stroke-linecap="round" opacity="0.4">
-    <line x1="185" y1="322" x2="327" y2="322" stroke-width="7"/>
-    <line x1="208" y1="343" x2="304" y2="343" stroke-width="5"/>
-    <line x1="228" y1="361" x2="284" y2="361" stroke-width="3.5"/>
-  </g>
-  <text x="256" y="458" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif"
-        font-size="56" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="-1.5">Morgenruf</text>
+
+  <rect x="22" y="38" width="56" height="46" rx="12" fill="white" opacity="0.96"/>
+
+  <rect x="33" y="50" width="12" height="10" rx="4" fill="#4f46e5"/>
+  <rect x="55" y="50" width="12" height="10" rx="4" fill="#4f46e5"/>
+
+  <circle cx="37" cy="53" r="2" fill="white"/>
+  <circle cx="59" cy="53" r="2" fill="white"/>
+
+  <path d="M36 68 Q50 77 64 68" stroke="#4f46e5" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <line x1="50" y1="38" x2="50" y2="30" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="50" cy="29" r="3" fill="#fde68a"/>
 </svg>

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from slack_bolt.oauth.installation_store import InstallationStore
+from slack_sdk.oauth.installation_store import InstallationStore
 from slack_sdk.oauth.installation_store import Installation, Bot
 
 import db

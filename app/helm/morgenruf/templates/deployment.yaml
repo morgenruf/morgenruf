@@ -17,6 +17,27 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "src/migrate.py"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: DATABASE_URL
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: morgenruf
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -33,21 +54,36 @@ spec:
           env:
             - name: PORT
               value: "3000"
-            - name: SLACK_BOT_TOKEN
+            - name: SLACK_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
-                  key: slack-bot-token
+                  key: SLACK_CLIENT_ID
+            - name: SLACK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: SLACK_CLIENT_SECRET
             - name: SLACK_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
-                  key: slack-signing-secret
+                  key: SLACK_SIGNING_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: DATABASE_URL
             - name: FLASK_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: FLASK_SECRET_KEY
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: RESEND_API_KEY
           volumeMounts:
             - name: teams-config
               mountPath: /app/teams.yaml

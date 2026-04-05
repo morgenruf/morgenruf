@@ -1,35 +1,45 @@
 # Morgenruf 🌅
 
+> **German:** *Morgenruf* — "morning call"
+
+A self-hosted, open-source Slack standup bot. Ask structured daily questions, post formatted summaries to team channels, and keep full ownership of your standup data — no SaaS subscription required.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
+[![Docker](https://img.shields.io/badge/Docker-ghcr.io-blue)](https://ghcr.io/morgenruf/morgenruf)
+
+---
+
 ## Repository Structure
 
 ```
 morgenruf/
-├── app/        ← Slack bot (Python, Helm chart, Dockerfile)
-├── website/    ← Marketing website (Netlify)
-├── LICENSE
+├── app/
+│   ├── src/            ← Python bot (Flask + slack-bolt)
+│   ├── migrations/     ← SQL migration files (auto-applied on start)
+│   ├── helm/morgenruf/ ← Production Helm chart
+│   └── Dockerfile
+├── brand/              ← Logo & brand assets
+├── slack-manifest.yaml ← Slack app manifest
+├── CHANGELOG.md
 └── README.md
 ```
 
 ---
 
-
-> **German:** *Morgenruf* — "morning call"
-
-A self-hosted Slack standup bot that asks your team structured daily standup questions, posts formatted summaries to team channels, and enables per-project reporting.
-
-Built for teams who want full control over their standup data without paying for SaaS tools.
-
----
-
 ## Features
 
-- 📅 **Configurable schedule per team** — different times, timezones, days
-- 💬 **DM-based collection** — bot DMs each member, posts structured summary to channel
-- 🏗️ **Per-project format** — team prefixes updates with project names (e.g. `Proj-Bridj: ...`)
-- 🚧 **Blocker detection** — highlights blockers in each standup
-- 🤖 **Manual trigger** — team members can type `standup` in DM anytime
-- 🐳 **Kubernetes-ready** — Helm chart included
-- ☁️ **Cloudflare Zero Trust compatible** — works behind CF tunnel
+- 📅 **Configurable schedule** — per-team times, timezones, and days
+- 💬 **DM-based collection** — bot DMs each member individually
+- 🏗️ **Per-project format** — prefix updates with project names (e.g. `Proj-X: ...`)
+- 🚧 **Blocker detection** — highlights blockers in summaries
+- 🤖 **Manual trigger** — type `standup` in DM anytime
+- 🔗 **Auto-linking** — Jira/GitHub issue references become clickable links
+- 🪝 **Webhooks** — fire HTTP webhooks on standup submission
+- ✏️ **Edit window** — members can edit responses within a configurable time window
+- 📊 **Web dashboard** — manage teams, view history at `/dashboard`
+- 🐳 **Kubernetes-ready** — production Helm chart included
+- ☁️ **Cloudflare Zero Trust** — works behind CF tunnel (no ingress controller needed)
 
 ---
 
@@ -37,154 +47,183 @@ Built for teams who want full control over their standup data without paying for
 
 ### 1. Create a Slack App
 
-1. Go to https://api.slack.com/apps → **Create New App** → From manifest
+1. Go to [https://api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → From manifest
 2. Paste the manifest from [`slack-manifest.yaml`](./slack-manifest.yaml)
-3. Install to workspace
-4. Copy **Bot Token** (`xoxb-...`) and **Signing Secret**
+3. Under **OAuth & Permissions**, add your redirect URL: `https://<your-domain>/oauth/callback`
+4. Copy **Client ID**, **Client Secret**, and **Signing Secret**
 
-### 2. Configure teams
-
-```bash
-cp teams.yaml.example teams.yaml
-# Edit teams.yaml with your team's Slack IDs and schedule
-```
-
-### 3. Run locally
+### 2. Run locally
 
 ```bash
-pip install -r requirements.txt
+cd app
 cp .env.example .env
-# Fill in .env
+# Fill in SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_SIGNING_SECRET, DATABASE_URL
+pip install -r src/requirements.txt
 python src/main.py
 ```
 
-### 4. Deploy to Kubernetes
+### 3. Deploy to Kubernetes
 
-```bash
-helm upgrade --install morgenruf ./helm/morgenruf \
-  --namespace morgenruf \
-  --create-namespace \
-  -f helm/morgenruf/values.yaml \
-  --set secret.slackBotToken="xoxb-..." \
-  --set secret.slackSigningSecret="..."
-```
+See [**Kubernetes Deployment**](#kubernetes-deployment) below.
 
 ---
 
 ## Standup Format
 
-The bot asks 3 questions via DM:
+The bot DMs each member 3 questions:
 
 ```
 ✅ What did you complete yesterday?
-   > Proj-Bridj: deployed Terraform module, PR #42 merged
-   > Proj-Isec: reviewed IAM policies
-
 🎯 What are you working on today?
-   > Proj-Bridj: load balancer configuration
-   > Proj-Isec: fix SSL cert issue
-
 🚧 Any blockers?
-   > Waiting on AWS quota approval
 ```
 
-The bot then posts a formatted summary to the team channel:
+Then posts a formatted summary to the configured channel:
 
 ```
-📋 Standup from @alice — April 4, 2026
+📋 Standup — Alice  |  April 5, 2026
 
-✅ Yesterday:
-Proj-Bridj: deployed Terraform module, PR #42 merged
-Proj-Isec: reviewed IAM policies
+✅ Yesterday
+  Proj-Bridj: deployed Terraform module, PR #42 merged
 
-🎯 Today:
-Proj-Bridj: load balancer configuration
-Proj-Isec: fix SSL cert issue
+🎯 Today
+  Proj-Bridj: load balancer configuration
 
-🚧 Blockers:
-Waiting on AWS quota approval
+🚧 Blockers
+  Waiting on AWS quota approval
 ```
 
 ---
 
-## Configuration
-
-### `teams.yaml`
-
-```yaml
-teams:
-  - name: my-team
-    channel: "#team-myteam"
-    standup_time: "09:00"      # 24h format
-    timezone: "Asia/Kolkata"   # pytz timezone
-    days: "mon-fri"            # APScheduler day format
-    members:
-      - slack_id: "U123ABC"
-        name: Alice
-      - slack_id: "U456DEF"
-        name: Bob
-```
-
-### Environment variables
+## Environment Variables
 
 | Variable | Required | Description |
-|---------|----------|-------------|
-| `SLACK_BOT_TOKEN` | ✅ | Bot token (`xoxb-...`) |
-| `SLACK_SIGNING_SECRET` | ✅ | App signing secret |
+|----------|----------|-------------|
+| `SLACK_CLIENT_ID` | ✅ | Slack app client ID |
+| `SLACK_CLIENT_SECRET` | ✅ | Slack app client secret |
+| `SLACK_SIGNING_SECRET` | ✅ | Request signing secret |
+| `DATABASE_URL` | ✅ | PostgreSQL connection URL |
+| `APP_URL` | ✅ | Public base URL (e.g. `https://api.morgenruf.dev`) |
+| `FLASK_SECRET_KEY` | ✅ | Random secret for session cookies |
 | `PORT` | | HTTP port (default: `3000`) |
-
----
-
-## Required Slack Scopes
-
-```
-chat:write          Post messages
-im:history          Read DM history
-im:read             Read DM metadata
-im:write            Open DM channels
-channels:read       List channels
-users:read          Resolve user info
-```
-
-Event subscriptions:
-```
-message.im          DM messages
-app_mention         Bot mentions
-```
-
-Request URL: `https://api.morgenruf.dev/slack/events`
+| `RESEND_API_KEY` | | For welcome emails (optional) |
 
 ---
 
 ## Kubernetes Deployment
 
-Morgenruf ships with a production-ready Helm chart:
+Morgenruf ships a production-ready Helm chart at `app/helm/morgenruf/`.
+
+### Database (recommended: external PostgreSQL)
+
+> **We recommend using an external PostgreSQL instance** rather than the bundled sub-chart.
+> The bundled sub-chart is convenient for testing but adds operational complexity in production.
+> Bitnami images were also removed from Docker Hub, which can cause pull failures.
+
+**Good options:**
+- [CloudNativePG](https://cloudnative-pg.io/) operator (k8s-native)
+- [Supabase](https://supabase.com) / [Neon](https://neon.tech) (managed, free tiers)
+- AWS RDS / Google Cloud SQL / Azure Database
+- Plain `postgres:16` StatefulSet in your cluster
+
+Once you have a database, create the database and user:
+
+```sql
+CREATE DATABASE morgenruf;
+CREATE USER morgenruf WITH PASSWORD 'strongpassword';
+GRANT ALL PRIVILEGES ON DATABASE morgenruf TO morgenruf;
+```
+
+### Install
+
+```bash
+helm repo add morgenruf https://charts.morgenruf.dev
+helm repo update
+
+helm upgrade --install morgenruf morgenruf/morgenruf \
+  --namespace morgenruf \
+  --create-namespace \
+  --set slack.clientId="YOUR_CLIENT_ID" \
+  --set slack.clientSecret="YOUR_CLIENT_SECRET" \
+  --set slack.signingSecret="YOUR_SIGNING_SECRET" \
+  --set externalDatabase.url="postgresql://morgenruf:pass@host:5432/morgenruf" \
+  --set flaskSecretKey="$(openssl rand -hex 32)" \
+  --set app.url="https://api.your-domain.com"
+```
+
+> **Migrations** run automatically as an init container on every pod start — idempotent and safe.
+
+### Cloudflare Zero Trust (no ingress controller)
+
+If you use Cloudflare Tunnel instead of an ingress controller:
+
+```bash
+# Disable ingress in Helm
+--set ingress.enabled=false
+
+# Then add a Public Hostname in Cloudflare Zero Trust dashboard:
+# Hostname: api.your-domain.com
+# Service:  http://morgenruf.morgenruf.svc.cluster.local:3000
+```
+
+### values.yaml reference
+
+```yaml
+slack:
+  clientId: ""
+  clientSecret: ""
+  signingSecret: ""
+
+externalDatabase:
+  url: ""              # postgresql://user:pass@host:5432/db
+
+flaskSecretKey: ""     # openssl rand -hex 32
+
+app:
+  url: "https://api.morgenruf.dev"
+
+resend:
+  apiKey: ""           # optional — for welcome emails
+
+ingress:
+  enabled: true        # set false for Cloudflare Tunnel
+  className: "nginx"
+  hosts:
+    - host: api.morgenruf.dev
+```
+
+---
+
+## Helm Chart Structure
 
 ```
-helm/morgenruf/
+app/helm/morgenruf/
 ├── Chart.yaml
 ├── values.yaml
 └── templates/
-    ├── deployment.yaml
+    ├── deployment.yaml   ← init container runs migrations
     ├── service.yaml
     ├── ingress.yaml
     ├── configmap.yaml
     └── secret.yaml
 ```
 
-Works with Cloudflare Zero Trust tunnel — point your CF tunnel to the service on port 3000.
-
-> **Migrations:** Database migrations run automatically as a Helm pre-install/pre-upgrade hook. No manual migration steps required.
-
 ---
 
 ## Roadmap
 
-- [ ] Per-project standup reports (`morgenruf report --project <name>`)
-- [ ] Missed standup reminders
-- [ ] Weekly summaries
-- [ ] Webhook to external tools (Jira, GitHub)
-- [ ] Web dashboard
+- [x] Multi-workspace Slack OAuth
+- [x] Web dashboard (`/dashboard`)
+- [x] Webhooks with HMAC signing
+- [x] Jira/GitHub auto-linking
+- [x] Edit window for responses
+- [x] Email notifications (Resend)
+- [ ] Microsoft Teams support *(coming soon)*
+- [ ] Google Chat support *(coming soon)*
+- [ ] MCP / AI Integration *(coming soon)*
+- [ ] Per-project standup reports
+- [ ] Public REST API (v0.3)
+- [ ] Slack App Directory listing
 
 ---
 

@@ -6,4 +6,4 @@ metadata:
     {{- include "morgenruf.labels" . | nindent 4 }}
 data:
   teams.yaml: |
-    {{- .Values.teamsConfig | nindent 4 }}
+    {{- .Values.teamsConfig | default "" | nindent 4 }}
