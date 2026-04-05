@@ -7,7 +7,7 @@ A self-hosted, open-source Slack standup bot. Ask structured daily questions, po
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-operational-brightgreen)](https://status.morgenruf.dev)
 [![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
-[![Docker](https://img.shields.io/badge/Docker-ghcr.io-blue)](https://ghcr.io/morgenruf/morgenruf)
+[![Docker](https://img.shields.io/badge/Docker-DockerHub-blue)](https://hub.docker.com/r/morgenruf/morgenruf)
 
 ---
 
@@ -75,6 +75,27 @@ python src/main.py
 See [**Kubernetes Deployment**](#kubernetes-deployment) below.
 
 ---
+
+## Docker Image
+
+Available on DockerHub: [`morgenruf/morgenruf`](https://hub.docker.com/r/morgenruf/morgenruf)
+
+```bash
+docker pull morgenruf/morgenruf:latest
+```
+
+Also mirrored at `ghcr.io/morgenruf/morgenruf:latest`
+
+### GitHub Actions / CI
+
+The image is automatically built and pushed on every push to `main` and on version tags (`v*`) via `.github/workflows/docker-publish.yml`.
+
+If you fork this repo, add the following secrets under **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|---|---|
+| `DOCKERHUB_USERNAME` | `morgenruf` |
+| `DOCKERHUB_TOKEN` | Your DockerHub access token |
 
 ## Docker / Mac Quickstart
 
