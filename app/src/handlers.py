@@ -210,6 +210,28 @@ def register_handlers(app: App) -> None:
                 "timestamp": datetime.utcnow().isoformat(),
             })
 
+            # Post AI summary if enabled and all members have submitted
+            try:
+                import db as _db
+                from ai_summary import generate_summary
+                config = _db.get_workspace_config(session.team_id) or {}
+                if config.get("ai_summary_enabled") and channel:
+                    today_standups = _db.get_today_standups(session.team_id)
+                    active_members = _db.get_active_members(session.team_id)
+                    submitted_users = {s["user_id"] for s in today_standups}
+                    all_submitted = all(m["user_id"] in submitted_users for m in active_members)
+                    if all_submitted and len(today_standups) > 1:
+                        inst = _db.get_installation(session.team_id)
+                        team_name = (inst or {}).get("team_name", "")
+                        summary_text = generate_summary(today_standups, team_name)
+                        if summary_text:
+                            client.chat_postMessage(
+                                channel=channel,
+                                text=f"✨ *AI Summary*\n\n{summary_text}",
+                            )
+            except Exception as exc:
+                logger.warning("AI summary failed: %s", exc)
+
     @app.event("app_home_opened")
     def handle_app_home(event, client):  # noqa: ANN001
         """Render the App Home tab when a user opens it."""

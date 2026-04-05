@@ -826,6 +826,7 @@
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
       if (sec === 'analytics') loadAnalytics(7);
+      if (sec === 'schedules') loadSchedules();
       if (sec === 'kudos') loadKudos();
     }
   }
@@ -1115,6 +1116,8 @@
     document.getElementById('f-edit-window').value = 'report';
     document.getElementById('f-jira').value = '';
     document.getElementById('f-zendesk').value = '';
+    document.getElementById('f-github-repo').value = '';
+    document.getElementById('f-linear-team').value = '';
     document.getElementById('f-avatar-toggle').classList.add('on');
     document.getElementById('f-reminder').value = '0';
     selectDays(['mon','tue','wed','thu','fri']);
@@ -1141,6 +1144,8 @@
     document.getElementById('f-edit-window').value = s.edit_window || 'report';
     document.getElementById('f-jira').value = s.jira_base_url || '';
     document.getElementById('f-zendesk').value = s.zendesk_base_url || '';
+    document.getElementById('f-github-repo').value = s.github_repo || '';
+    document.getElementById('f-linear-team').value = s.linear_team || '';
     document.getElementById('f-avatar-toggle').classList.toggle('on', s.display_avatar !== false);
     document.getElementById('f-reminder').value = s.reminder_minutes || 0;
     selectDays(s.schedule_days || []);
@@ -1178,6 +1183,8 @@
       display_avatar: document.getElementById('f-avatar-toggle').classList.contains('on'),
       jira_base_url: document.getElementById('f-jira').value.trim(),
       zendesk_base_url: document.getElementById('f-zendesk').value.trim(),
+      github_repo: document.getElementById('f-github-repo').value.trim(),
+      linear_team: document.getElementById('f-linear-team').value.trim(),
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
     };
     try {
@@ -1391,6 +1398,223 @@
     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
+  }
+
+  // ── Schedules ──
+  async function loadSchedules() {
+    const el = document.getElementById('schedules-list');
+    if (!el) return;
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    if (!state.channels.length) await loadChannels();
+    try {
+      state.schedules = await api('GET', '/schedules');
+      renderSchedules();
+    } catch (e) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load schedules.</p>';
+    }
+  }
+
+  function renderSchedules() {
+    const el = document.getElementById('schedules-list');
+    if (!el) return;
+    if (!state.schedules || !state.schedules.length) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No schedules yet</h3><p>Create named schedules with custom questions and participant lists.</p><button class="btn btn-primary" onclick="openCreateScheduleModal()">&#43; New Schedule</button></div>';
+      return;
+    }
+    el.innerHTML = state.schedules.map(s => {
+      const chName = channelName(s.channel_id);
+      const days = (s.schedule_days || '').split(',').join(', ');
+      const participants = (s.participants || []).length;
+      const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
+      return '<div class="standup-card" id="sched-' + s.id + '">' +
+        '<div class="standup-icon">&#128197;</div>' +
+        '<div class="standup-info">' +
+        '<div class="standup-name">' + esc(s.name || 'Daily Standup') + '</div>' +
+        '<div class="standup-meta">' +
+        (s.channel_id ? '<span>#' + esc(chName) + '</span>' : '') +
+        '<span>' + esc(s.schedule_time || '09:00') + ' ' + esc(s.schedule_tz || 'UTC') + '</span>' +
+        '<span>' + esc(days) + '</span>' +
+        '<span>' + participants + ' participant' + (participants === 1 ? '' : 's') + '</span>' +
+        badge +
+        '</div></div>' +
+        '<div class="standup-actions">' +
+        '<button class="toggle ' + (s.active ? 'on' : '') + '" onclick="toggleSchedule(' + s.id + ', this)" title="Toggle active"></button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="openEditScheduleModal(' + s.id + ')">Edit</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteSchedule(' + s.id + ')">Delete</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  async function toggleSchedule(id, btn) {
+    const sched = (state.schedules || []).find(s => s.id === id);
+    if (!sched) return;
+    const newActive = !sched.active;
+    try {
+      await api('PUT', '/schedules/' + id, { active: newActive });
+      sched.active = newActive;
+      btn.classList.toggle('on', newActive);
+      renderSchedules();
+      toast(newActive ? 'Schedule activated' : 'Schedule paused');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm('Delete this schedule?')) return;
+    try {
+      await api('DELETE', '/schedules/' + id);
+      state.schedules = (state.schedules || []).filter(s => s.id !== id);
+      renderSchedules();
+      toast('Schedule deleted');
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function openCreateScheduleModal() {
+    if (!state.members.length) loadMembers();
+    document.getElementById('modal-title').textContent = 'New Schedule';
+    document.getElementById('modal-standup-id').value = '';
+    document.getElementById('modal-standup-id').dataset.mode = 'schedule';
+    document.getElementById('f-name').value = 'Daily Standup';
+    document.getElementById('f-channel').value = '';
+    document.getElementById('f-time').value = '09:00';
+    document.getElementById('f-tz').value = 'UTC';
+    document.getElementById('f-report-channel').value = '';
+    document.getElementById('f-report-time').value = '';
+    document.getElementById('f-group-by').value = 'member';
+    document.getElementById('f-post-as').value = 'combined';
+    document.getElementById('f-sort-order').value = 'chronological';
+    document.getElementById('f-edit-window').value = 'report';
+    document.getElementById('f-jira').value = '';
+    document.getElementById('f-zendesk').value = '';
+    document.getElementById('f-github-repo').value = '';
+    document.getElementById('f-linear-team').value = '';
+    document.getElementById('f-avatar-toggle').classList.add('on');
+    document.getElementById('f-reminder').value = '0';
+    selectDays(['mon','tue','wed','thu','fri']);
+    setQuestions(['What did you complete yesterday?','What are you working on today?','Any blockers?']);
+    clearParticipants();
+    document.getElementById('standup-modal').classList.add('open');
+  }
+
+  function openEditScheduleModal(id) {
+    const s = (state.schedules || []).find(x => x.id === id);
+    if (!s) return;
+    if (!state.members.length) loadMembers();
+    document.getElementById('modal-title').textContent = 'Edit Schedule';
+    document.getElementById('modal-standup-id').value = id;
+    document.getElementById('modal-standup-id').dataset.mode = 'schedule';
+    document.getElementById('f-name').value = s.name || '';
+    document.getElementById('f-channel').value = s.channel_id || '';
+    document.getElementById('f-time').value = s.schedule_time || '09:00';
+    document.getElementById('f-tz').value = s.schedule_tz || 'UTC';
+    document.getElementById('f-report-channel').value = '';
+    document.getElementById('f-report-time').value = '';
+    document.getElementById('f-group-by').value = 'member';
+    document.getElementById('f-post-as').value = 'combined';
+    document.getElementById('f-sort-order').value = 'chronological';
+    document.getElementById('f-edit-window').value = 'report';
+    document.getElementById('f-jira').value = '';
+    document.getElementById('f-zendesk').value = '';
+    document.getElementById('f-github-repo').value = '';
+    document.getElementById('f-linear-team').value = '';
+    document.getElementById('f-avatar-toggle').classList.add('on');
+    document.getElementById('f-reminder').value = s.reminder_minutes || 0;
+    selectDays((s.schedule_days || 'mon,tue,wed,thu,fri').split(','));
+    const qs = Array.isArray(s.questions) ? s.questions : [];
+    setQuestions(qs.length ? qs : ['What did you complete yesterday?','What are you working on today?','Any blockers?']);
+    setParticipants(s.participants || []);
+    document.getElementById('standup-modal').classList.add('open');
+  }
+
+  // ── Templates ──
+  async function fetchTemplates() {
+    if (state.templates) return state.templates;
+    try {
+      state.templates = await api('GET', '/templates');
+    } catch (e) { state.templates = []; }
+    return state.templates;
+  }
+
+  async function toggleTemplateGallery() {
+    const gallery = document.getElementById('template-gallery');
+    if (gallery.style.display === 'none') {
+      gallery.style.display = 'block';
+      const templates = await fetchTemplates();
+      renderTemplateGrid(templates);
+    } else {
+      gallery.style.display = 'none';
+    }
+  }
+
+  function renderTemplateGrid(templates) {
+    const grid = document.getElementById('template-grid');
+    if (!templates || !templates.length) {
+      grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px">No templates available.</p>';
+      return;
+    }
+    grid.innerHTML = templates.map(t => {
+      const tJson = JSON.stringify(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      return '<div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:12px;cursor:pointer;transition:border-color 0.12s" ' +
+        'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border2)\'" ' +
+        'onclick=\'applyTemplate(' + tJson + ')\'>' +
+        '<div style="font-size:20px;margin-bottom:6px">' + esc(t.icon || '\uD83D\uDCCB') + '</div>' +
+        '<div style="font-weight:600;font-size:13px;margin-bottom:4px">' + esc(t.name) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-dim);line-height:1.4">' + esc(t.description) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function applyTemplate(t) {
+    if (t.questions && t.questions.length) {
+      setQuestions(t.questions);
+    }
+    if (t.name && !document.getElementById('f-name').value) {
+      document.getElementById('f-name').value = t.name;
+    }
+    document.getElementById('template-gallery').style.display = 'none';
+    toast('Template applied: ' + t.name);
+  }
+
+  // ── Save standup / schedule (mode-aware) ──
+  const _origSaveStandup = saveStandup;
+  saveStandup = async function() {
+    const modeEl = document.getElementById('modal-standup-id');
+    if (modeEl.dataset.mode === 'schedule') {
+      return saveSchedule();
+    }
+    modeEl.dataset.mode = '';
+    return _origSaveStandup();
+  };
+
+  async function saveSchedule() {
+    const id = document.getElementById('modal-standup-id').value;
+    const days = Array.from(document.querySelectorAll('.day-chip.selected')).map(d => d.dataset.day);
+    const questions = Array.from(document.querySelectorAll('.question-input')).map(i => i.value.trim()).filter(Boolean);
+    const body = {
+      name: document.getElementById('f-name').value.trim() || 'Daily Standup',
+      channel_id: document.getElementById('f-channel').value,
+      schedule_time: document.getElementById('f-time').value,
+      schedule_tz: document.getElementById('f-tz').value,
+      schedule_days: days,
+      questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
+      participants: state.participants,
+      reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
+    };
+    try {
+      let updated;
+      if (id) {
+        updated = await api('PUT', '/schedules/' + id, body);
+        const idx = (state.schedules || []).findIndex(s => s.id == id);
+        if (idx >= 0) state.schedules[idx] = updated;
+      } else {
+        updated = await api('POST', '/schedules', body);
+        if (!state.schedules) state.schedules = [];
+        state.schedules.push(updated);
+      }
+      renderSchedules();
+      closeModal();
+      document.getElementById('modal-standup-id').dataset.mode = '';
+      toast(id ? 'Schedule updated' : 'Schedule created');
+    } catch (e) { toast(e.message, 'error'); }
   }
 
   // ── Boot ──
