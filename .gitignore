@@ -9,3 +9,5 @@ venv/
 dist/
 *.egg-info/
 .DS_Store
+.netlify/
+app/helm/morgenruf/charts/

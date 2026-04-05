@@ -182,6 +182,77 @@ def register_handlers(app: App) -> None:
                 "timestamp": datetime.utcnow().isoformat(),
             })
 
+    @app.event("app_home_opened")
+    def handle_app_home(event, client):  # noqa: ANN001
+        """Render the App Home tab when a user opens it."""
+        user_id = event["user"]
+        team_id = event.get("team", "")
+
+        workspace_name = ""
+        channel_name = ""
+        standup_time = ""
+        try:
+            import db  # noqa: PLC0415
+            config = db.get_workspace_config(team_id) or {}
+            channel_name = config.get("channel_id", "")
+            standup_time = config.get("standup_time", "")
+            info = client.team_info()
+            workspace_name = info.get("team", {}).get("name", "")
+        except Exception:
+            pass
+
+        status_text = (
+            f"✅ Active — posting to <#{channel_name}> at *{standup_time}*"
+            if channel_name and standup_time
+            else "⚠️ Not configured — visit the dashboard to set up your standup."
+        )
+
+        try:
+            client.views_publish(
+                user_id=user_id,
+                view={
+                    "type": "home",
+                    "blocks": [
+                        {
+                            "type": "header",
+                            "text": {"type": "plain_text", "text": "☀️ Morgenruf Standup Bot"},
+                        },
+                        {"type": "divider"},
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": (
+                                    f"*Workspace:* {workspace_name or team_id}\n"
+                                    f"*Status:* {status_text}"
+                                ),
+                            },
+                        },
+                        {"type": "divider"},
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "*Quick actions*\nSend me `standup` in a DM to start your standup manually.",
+                            },
+                        },
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": {"type": "plain_text", "text": "🔧 Open Dashboard"},
+                                    "url": "https://api.morgenruf.dev/dashboard",
+                                    "action_id": "open_dashboard",
+                                }
+                            ],
+                        },
+                    ],
+                },
+            )
+        except Exception as exc:
+            logger.warning("Failed to publish App Home for %s: %s", user_id, exc)
+
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
         say("👋 I'm the standup bot! I'll DM you at your team's standup time. Type `help` in a DM to me for more info.")
@@ -193,13 +264,10 @@ def register_handlers(app: App) -> None:
         say(
             "🤖 *Standup Bot Help*\n\n"
             "I'll DM you at your scheduled standup time with 3 questions:\n"
-            "1. What did you complete yesterday? _(list by project)_\n"
-            "2. What are you working on today? _(list by project)_\n"
+            "1. What did you complete yesterday?\n"
+            "2. What are you working on today?\n"
             "3. Any blockers?\n\n"
-            "*Format tip:* prefix each item with your project name:\n"
-            "> `Proj-Bridj: deployed Terraform module`\n"
-            "> `Proj-Isec: reviewed IAM policies`\n\n"
-            "This lets Jarvis generate per-project reports automatically. 🚀"
+            "Type `standup` here anytime to start a standup manually. 🚀"
         )
 
     @app.message("standup")
