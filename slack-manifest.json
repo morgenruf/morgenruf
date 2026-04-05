@@ -2,8 +2,7 @@
   "display_information": {
     "name": "Morgenruf",
     "description": "Self-hosted daily standup bot \u2014 AI summaries, analytics, and MCP for AI tools",
-    "background_color": "#0d1117",
-    "long_description": "Morgenruf runs your team's daily standups directly in Slack. At your configured time, it DMs each team member privately with structured questions (Yesterday / Today / Blockers / Mood), then posts a clean formatted summary to your channel \u2014 with optional AI-generated paragraph summary powered by GPT-4o-mini or Claude.\n\nKey features:\n\u2022 AI standup summaries (OpenAI / Anthropic)\n\u2022 Analytics dashboard with participation charts\n\u2022 Multiple schedules per workspace\n\u2022 Per-user timezone support\n\u2022 Skip today, edit window, mood tracking\n\u2022 Kudos / peer recognition with leaderboard\n\u2022 Jira, GitHub, Linear issue auto-linking\n\u2022 Webhook integrations\n\u2022 MCP server \u2014 connect Claude, Cursor, or GitHub Copilot directly to your standup data\n\u2022 Role-based access control\n\u2022 Weekly digest emails\n\u2022 Self-host on Kubernetes, Docker Compose, or AWS\n\nMIT licensed. Free forever. No data leaves your infra.\n\nDocs: https://docs.morgenruf.dev"
+    "background_color": "#0d1117"
   },
   "features": {
     "app_home": {
@@ -18,20 +17,24 @@
     "slash_commands": [
       {
         "command": "/standup",
-        "description": "Start your daily standup now"
+        "description": "Start your daily standup now",
+        "url": "https://api.morgenruf.dev/slack/events"
       },
       {
         "command": "/skip",
-        "description": "Skip today's standup"
+        "description": "Skip today's standup",
+        "url": "https://api.morgenruf.dev/slack/events"
       },
       {
         "command": "/kudos",
         "description": "Give a shoutout to a teammate",
-        "usage_hint": "@teammate [message]"
+        "usage_hint": "@teammate [message]",
+        "url": "https://api.morgenruf.dev/slack/events"
       },
       {
         "command": "/help",
-        "description": "Show Morgenruf commands and help"
+        "description": "Show Morgenruf commands and help",
+        "url": "https://api.morgenruf.dev/slack/events"
       }
     ]
   },
@@ -57,7 +60,6 @@
   },
   "settings": {
     "event_subscriptions": {
-      "request_url": "https://api.morgenruf.dev/slack/events",
       "bot_events": [
         "message.im",
         "app_mention",
@@ -66,8 +68,7 @@
       ]
     },
     "interactivity": {
-      "is_enabled": true,
-      "request_url": "https://api.morgenruf.dev/slack/events"
+      "is_enabled": true
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": false
