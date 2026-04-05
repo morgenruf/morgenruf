@@ -1,7 +1,7 @@
 """Tests for session_store.py — Redis-backed session management with in-memory fallback."""
 
-import sys
 import os
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest

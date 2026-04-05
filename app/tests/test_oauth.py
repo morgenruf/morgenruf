@@ -84,6 +84,7 @@ class TestOAuthStateToken:
         monkeypatch.setenv("FLASK_SECRET_KEY", "different-secret")
         # Reimport to pick up new secret
         import importlib
+
         import oauth as oauth_mod
         importlib.reload(oauth_mod)
         assert oauth_mod._verify_state(state) is False

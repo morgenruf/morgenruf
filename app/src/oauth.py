@@ -122,8 +122,9 @@ def oauth_callback():
     authed_user_id: str = resp.get("authed_user", {}).get("id", "")
 
     # Persist installation
+    is_new_install = False
     try:
-        db.save_installation(
+        is_new_install = db.save_installation(
             team_id=team_id,
             team_name=team_name,
             bot_token=bot_token,
@@ -143,8 +144,8 @@ def oauth_callback():
         except Exception as exc:
             logger.warning("Could not set admin role: %s", exc)
 
-    # Send welcome DM to the installing user
-    if authed_user_id:
+    # Send welcome DM and email only on first install, not on reinstall
+    if is_new_install and authed_user_id:
         try:
             bot_client = WebClient(token=bot_token)
             dm = bot_client.conversations_open(users=authed_user_id)
@@ -159,8 +160,8 @@ def oauth_callback():
         except Exception as exc:
             logger.warning("Could not send welcome DM to %s: %s", authed_user_id, exc)
 
-    # Send welcome email (best-effort)
-    _try_send_welcome_email(bot_token, team_name, authed_user_id)
+        # Send welcome email (best-effort)
+        _try_send_welcome_email(bot_token, team_name, authed_user_id)
 
     # Register scheduler job for this workspace
     _schedule_workspace(team_id, bot_token)
