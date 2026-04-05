@@ -73,6 +73,14 @@ def create_app() -> tuple[App, Flask]:
     flask_app.register_blueprint(oauth_bp)
     flask_app.register_blueprint(dashboard_bp)
 
+    if os.environ.get("GOOGLE_CREDENTIALS"):
+        try:
+            from google_chat_handler import google_chat_bp  # noqa: PLC0415
+            flask_app.register_blueprint(google_chat_bp)
+            logger.info("Google Chat integration enabled")
+        except Exception as exc:
+            logger.warning("Could not register Google Chat blueprint: %s", exc)
+
     handler = SlackRequestHandler(slack_app)
 
     @flask_app.route("/slack/events", methods=["POST"])
