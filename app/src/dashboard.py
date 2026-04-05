@@ -653,3 +653,54 @@ def api_delete_schedule(schedule_id: int):
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+# ── Workflow Rules API ──────────────────────────────────────────────────────
+
+@dashboard_bp.route("/dashboard/api/rules", methods=["GET"])
+@_login_required
+def api_list_rules():
+    team_id = session["team_id"]
+    try:
+        from workflow import get_rules  # noqa: PLC0415
+        rules = get_rules(team_id)
+        return jsonify(rules)
+    except Exception as exc:
+        logger.error("api_list_rules: %s", exc)
+        return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/rules", methods=["POST"])
+@_login_required
+def api_create_rule():
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+    try:
+        from workflow import save_rule  # noqa: PLC0415
+        rule_id = save_rule(
+            team_id=team_id,
+            name=data.get("name", ""),
+            trigger=data.get("trigger", ""),
+            condition_value=data.get("condition_value") or None,
+            action=data.get("action", ""),
+            action_target=data.get("action_target", ""),
+            action_message=data.get("action_message") or None,
+        )
+        if rule_id is None:
+            return jsonify({"error": "Could not save rule"}), 500
+        return jsonify({"id": rule_id}), 201
+    except Exception as exc:
+        logger.error("api_create_rule: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/rules/<int:rule_id>", methods=["DELETE"])
+@_login_required
+def api_delete_rule(rule_id: int):
+    team_id = session["team_id"]
+    try:
+        from workflow import delete_rule  # noqa: PLC0415
+        delete_rule(rule_id, team_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500

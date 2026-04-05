@@ -232,6 +232,26 @@ def register_handlers(app: App) -> None:
             except Exception as exc:
                 logger.warning("AI summary failed: %s", exc)
 
+            # Evaluate workflow rules
+            try:
+                from workflow import evaluate_rules  # noqa: PLC0415
+                blocker_text = question_answers[2] if len(question_answers) > 2 else ""
+                has_blockers = bool(blocker_text.strip())
+                evaluate_rules(
+                    session.team_id,
+                    "blocker_detected",
+                    {"has_blockers": has_blockers, "blockers": blocker_text, "team": session.team_id},
+                    client,
+                )
+                evaluate_rules(
+                    session.team_id,
+                    "standup_complete",
+                    {"team": session.team_id},
+                    client,
+                )
+            except Exception as exc:
+                logger.warning("Workflow rules evaluation failed: %s", exc)
+
     @app.event("app_home_opened")
     def handle_app_home(event, client):  # noqa: ANN001
         """Render the App Home tab when a user opens it."""
