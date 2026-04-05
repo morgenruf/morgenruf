@@ -159,6 +159,33 @@ def get_workspace_config(team_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+def get_workspace_by_feed_token(token: str) -> dict | None:
+    """Return workspace_config row matching feed_token, or None."""
+    sql = "SELECT * FROM workspace_config WHERE feed_token = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (token,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def get_standups(team_id: str, days: int = 1) -> list[dict]:
+    """Return standup submissions for the last N days (default: today only)."""
+    sql = """
+        SELECT s.*, m.real_name AS user_name
+        FROM standups s
+        LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
+        WHERE s.team_id = %s
+          AND s.standup_date >= CURRENT_DATE - ((%s - 1) * INTERVAL '1 day')
+        ORDER BY s.standup_date DESC, s.submitted_at
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, days))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Members
 # ---------------------------------------------------------------------------
@@ -592,3 +619,55 @@ def ensure_admin(team_id: str, user_id: str) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id))
+
+
+# ---------------------------------------------------------------------------
+# Standup editing helpers
+# ---------------------------------------------------------------------------
+
+def get_latest_standup(user_id: str, team_id: str) -> dict | None:
+    """Return the most recent standup for a user/team, or None."""
+    sql = """
+        SELECT * FROM standups
+        WHERE team_id = %s AND user_id = %s
+        ORDER BY submitted_at DESC
+        LIMIT 1
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def update_standup(user_id: str, team_id: str, **kwargs: Any) -> None:
+    """Update the most recent standup for a user/team with the provided fields.
+
+    Accepted keyword arguments: yesterday, today, blockers, mood.
+    Automatically recomputes ``has_blockers`` when ``blockers`` is updated.
+    """
+    allowed = {"yesterday", "today", "blockers", "mood"}
+    updates: dict[str, Any] = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return
+    if "blockers" in updates:
+        blocker_val: str = updates["blockers"] or ""
+        updates["has_blockers"] = blocker_val.strip().lower() not in (
+            "none", "no", "nope", "-", "n/a", ""
+        )
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
+    values: list[Any] = list(updates.values())
+    sql = f"""
+        UPDATE standups SET {set_clause}
+        WHERE id = (
+            SELECT id FROM standups
+            WHERE team_id = %s AND user_id = %s
+            ORDER BY submitted_at DESC
+            LIMIT 1
+        )
+    """
+    values.extend([team_id, user_id])
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, values)
+    logger.info("Updated standup for %s / %s", team_id, user_id)
