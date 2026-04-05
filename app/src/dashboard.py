@@ -113,16 +113,8 @@ def dashboard():
 def login():
     if session.get("team_id"):
         return redirect(url_for("dashboard.dashboard"))
-    state = os.urandom(16).hex()
-    session["oauth_state"] = state
-    slack_oauth_url = (
-        "https://slack.com/oauth/v2/authorize"
-        f"?client_id={_CLIENT_ID}"
-        f"&scope={_SCOPES}"
-        f"&redirect_uri={_APP_URL}/oauth/callback"
-        f"&state={state}"
-    )
-    return render_template("login.html", slack_oauth_url=slack_oauth_url)
+    # Use /install which generates a proper HMAC state
+    return redirect(url_for("oauth.install"))
 
 
 @dashboard_bp.route("/dashboard/logout")
