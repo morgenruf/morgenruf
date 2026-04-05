@@ -197,12 +197,16 @@ def register_workspace_job(
     if reminder_minutes > 0:
         standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
         reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
+        reminder_days = schedule_days
+        if reminder_dt.date() < standup_dt.date():
+            day_map = {"mon": "sun", "tue": "mon", "wed": "tue", "thu": "wed", "fri": "thu", "sat": "fri", "sun": "sat"}
+            reminder_days = ",".join(day_map.get(d, d) for d in schedule_days.split(","))
         scheduler.add_job(
             _send_reminder_to_workspace,
             trigger=CronTrigger(
                 hour=reminder_dt.hour,
                 minute=reminder_dt.minute,
-                day_of_week=schedule_days,
+                day_of_week=reminder_days,
                 timezone=tz,
             ),
             args=[team_id, bot_token, reminder_minutes],
@@ -256,9 +260,13 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     if reminder_minutes > 0:
         standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
         reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
+        reminder_days = schedule_days
+        if reminder_dt.date() < standup_dt.date():
+            day_map = {"mon": "sun", "tue": "mon", "wed": "tue", "thu": "wed", "fri": "thu", "sat": "fri", "sun": "sat"}
+            reminder_days = ",".join(day_map.get(d, d) for d in schedule_days.split(","))
         scheduler.add_job(
             _send_reminder_to_workspace,
-            trigger=CronTrigger(hour=reminder_dt.hour, minute=reminder_dt.minute, day_of_week=schedule_days, timezone=tz),
+            trigger=CronTrigger(hour=reminder_dt.hour, minute=reminder_dt.minute, day_of_week=reminder_days, timezone=tz),
             args=[team_id, bot_token, reminder_minutes],
             id=f"reminder_schedule_{team_id}_{schedule_id}",
             replace_existing=True,

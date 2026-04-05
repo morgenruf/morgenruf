@@ -71,6 +71,7 @@ def _openai_summary(text: str, team_name: str, api_key: str) -> str:
             },
             timeout=15,
         )
+        response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"].strip()
     except Exception as exc:
         logger.warning("OpenAI summary failed: %s", exc)
@@ -97,6 +98,7 @@ def _anthropic_summary(text: str, team_name: str, api_key: str) -> str:
             },
             timeout=15,
         )
+        response.raise_for_status()
         return response.json()["content"][0]["text"].strip()
     except Exception as exc:
         logger.warning("Anthropic summary failed: %s", exc)

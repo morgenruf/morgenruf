@@ -80,8 +80,9 @@ def _admin_required(f):
             role = db.get_member_role(team_id, user_id or "")
             if role != "admin":
                 return jsonify({"error": "Admin required"}), 403
-        except Exception:
-            pass  # fail open if DB error
+        except Exception as exc:
+            logger.warning("_admin_required DB error: %s", exc)
+            return jsonify({"error": "Service unavailable"}), 503
         return f(*args, **kwargs)
     return wrapper
 
@@ -458,7 +459,7 @@ def api_add_webhook():
 def api_delete_webhook(hook_id: str):
     team_id = session["team_id"]
     try:
-        db.delete_webhook(team_id, hook_id)
+        db.delete_webhook(team_id, int(hook_id))
         return jsonify({"ok": True})
     except Exception as exc:
         logger.error("api_delete_webhook error: %s", exc)
