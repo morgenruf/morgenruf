@@ -1,12 +1,10 @@
 """Tests for autolink.py — issue reference → Slack hyperlink conversion."""
 
-import pytest
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 from autolink import autolink
-
 
 # ---------------------------------------------------------------------------
 # Jira autolink
