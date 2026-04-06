@@ -1390,19 +1390,19 @@
     if (!q || q.length < 2) { document.getElementById('invite-results').style.display = 'none'; return; }
     const all = state.members || [];
     const matches = all.filter(m =>
-      m.name.toLowerCase().includes(q.toLowerCase()) ||
+      (m.name || '').toLowerCase().includes(q.toLowerCase()) ||
       (m.email || '').toLowerCase().includes(q.toLowerCase())
     ).slice(0, 8);
     const el = document.getElementById('invite-results');
     if (!matches.length) { el.style.display = 'none'; return; }
     el.innerHTML = matches.map(m => `
-      <div onclick="selectInviteMember('${m.id}','${m.name.replace(/'/g,"\\'")}','${m.email||''}','${m.avatar||''}')"
+      <div onclick="selectInviteMember('${esc(m.id)}','${esc(m.name||'')}','${esc(m.email||'')}','${esc(m.avatar||'')}')"
            style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px"
            onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
-        ${m.avatar ? `<img src="${m.avatar}" style="width:24px;height:24px;border-radius:50%"/>` : ''}
+        ${m.avatar ? `<img src="${esc(m.avatar)}" style="width:24px;height:24px;border-radius:50%"/>` : ''}
         <div>
-          <div style="font-size:13px;font-weight:500">${m.name}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${m.email||''}</div>
+          <div style="font-size:13px;font-weight:500">${esc(m.name||'')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${esc(m.email||'')}</div>
         </div>
       </div>
     `).join('');

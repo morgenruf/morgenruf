@@ -178,7 +178,7 @@ def _complete_standup(user_id: str, session, client) -> None:
                     {
                         "type": "button",
                         "text": {"type": "plain_text", "text": "✏️ Edit responses"},
-                        "action_id": "edit_standup",
+                        "action_id": "standup_edit",
                         "style": "primary",
                     }
                 ],
@@ -768,75 +768,6 @@ def register_handlers(app: App) -> None:
         except Exception as exc:
             logger.warning("kudos command error: %s", exc)
             client.chat_postMessage(channel=user_id, text="❌ Couldn't send kudos. Please try again.")
-
-    def handle_edit_standup(ack, body, client):  # noqa: ANN001
-        """Handle 'Edit responses' button — open a pre-filled modal within the 30-minute window."""
-        ack()
-        user_id: str = body["user"]["id"]
-        team_id: str = body["team"]["id"]
-
-        import db  # noqa: PLC0415
-
-        standup = db.get_latest_standup(user_id, team_id)
-        if not standup:
-            client.chat_postMessage(channel=user_id, text="No standup found to edit.")
-            return
-
-        submitted = standup.get("submitted_at")
-        if submitted:
-            if submitted.tzinfo is None:
-                submitted = submitted.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) - submitted > timedelta(minutes=30):
-                client.chat_postMessage(
-                    channel=user_id,
-                    text="⏰ Edit window has closed (30 minutes after submission).",
-                )
-                return
-
-        client.views_open(
-            trigger_id=body["trigger_id"],
-            view={
-                "type": "modal",
-                "callback_id": "edit_standup_modal",
-                "title": {"type": "plain_text", "text": "Edit Standup"},
-                "submit": {"type": "plain_text", "text": "Save"},
-                "blocks": [
-                    {
-                        "type": "input",
-                        "block_id": "q1",
-                        "element": {
-                            "type": "plain_text_input",
-                            "action_id": "answer",
-                            "initial_value": standup.get("yesterday") or "",
-                            "multiline": True,
-                        },
-                        "label": {"type": "plain_text", "text": "Yesterday"},
-                    },
-                    {
-                        "type": "input",
-                        "block_id": "q2",
-                        "element": {
-                            "type": "plain_text_input",
-                            "action_id": "answer",
-                            "initial_value": standup.get("today") or "",
-                            "multiline": True,
-                        },
-                        "label": {"type": "plain_text", "text": "Today"},
-                    },
-                    {
-                        "type": "input",
-                        "block_id": "q3",
-                        "element": {
-                            "type": "plain_text_input",
-                            "action_id": "answer",
-                            "initial_value": standup.get("blockers") or "",
-                            "multiline": True,
-                        },
-                        "label": {"type": "plain_text", "text": "Blockers"},
-                    },
-                ],
-            },
-        )
 
     @app.view("edit_standup_modal")
     def handle_edit_modal_submit(ack, body, client):  # noqa: ANN001

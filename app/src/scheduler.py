@@ -102,9 +102,28 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             dm = client.conversations_open(users=user_id)
             dm_channel = dm["channel"]["id"]
 
+            client.chat_postMessage(channel=dm_channel, text="📋 Starting your standup!")
+            # Send first question as Block Kit input (same UX as /standup command)
             client.chat_postMessage(
-                channel=dm_channel,
-                text=f"👋 *Good morning!* Time for your daily standup.\n\n{session.questions[0]}",
+                channel=user_id,
+                text=session.questions[0],
+                blocks=[
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": f"*{session.questions[0]}*"},
+                    },
+                    {
+                        "type": "input",
+                        "dispatch_action": True,
+                        "element": {
+                            "type": "plain_text_input",
+                            "action_id": f"standup_answer_0",
+                            "multiline": True,
+                            "placeholder": {"type": "plain_text", "text": "Your answer"},
+                        },
+                        "label": {"type": "plain_text", "text": "Your answer"},
+                    },
+                ],
             )
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
         except Exception as exc:
