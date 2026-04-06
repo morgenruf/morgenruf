@@ -860,3 +860,17 @@ def verify_mcp_key(key: str) -> str | None:
             cur.execute(sql, (key_hash,))
             row = cur.fetchone()
     return row[0] if row else None
+
+
+def delete_installation(team_id: str) -> bool:
+    """Delete a workspace installation and all cascading data (members, standups, config, etc.).
+
+    All child tables reference installations(team_id) with ON DELETE CASCADE,
+    so a single DELETE removes all workspace data.
+    Returns True if a row was deleted, False if team_id was not found.
+    """
+    sql = "DELETE FROM installations WHERE team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            return cur.rowcount > 0

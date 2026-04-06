@@ -128,10 +128,10 @@ Slack requires at least **3 screenshots** (1280×800 px or 2560×1600 px @2x, PN
 
 ### Additional Technical Checks
 - [ ] Verify `token_rotation_enabled: true` is handled in code (token refresh logic implemented)
-- [ ] Confirm `SLACK_SIGNING_SECRET` verification is applied to all incoming requests
-- [ ] Confirm HTTPS is enforced on all endpoints (`/slack/events`, `/slack/interactions`, `/oauth/callback`)
+- [x] Confirm `SLACK_SIGNING_SECRET` verification is applied to all incoming requests
+- [x] Confirm HTTPS is enforced on all endpoints (`/slack/events`, `/slack/interactions`, `/oauth/callback`)
 - [ ] Confirm rate limiting and error handling for Slack API calls
-- [ ] Confirm graceful handling of `app_uninstalled` / `tokens_revoked` events (data cleanup)
+- [x] Confirm graceful handling of `app_uninstalled` / `tokens_revoked` events (data cleanup) — handlers added, cascading DB delete implemented
 
 ---
 
@@ -188,11 +188,12 @@ Slack requires at least **3 screenshots** (1280×800 px or 2560×1600 px @2x, PN
 | Banner image ready (1200×600) | ⬜ |
 | Privacy policy URL live | ✅ |
 | Support URL live | ✅ |
-| Terms of service URL live | ⬜ |
-| Data retention policy documented | ⬜ |
+| Terms of service URL live | ✅ |
+| Data retention policy documented | ✅ |
 | All OAuth scopes justified | ✅ |
 | All events justified | ✅ |
 | Token rotation handled in code | ⬜ |
+| `app_uninstalled` / `tokens_revoked` handlers | ✅ |
 | Fresh install tested | ⬜ |
 | All DM commands tested | ⬜ |
 | OAuth + uninstall/reinstall tested | ⬜ |
