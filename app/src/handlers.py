@@ -19,6 +19,43 @@ logger = logging.getLogger(__name__)
 _MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
 
 
+def _send_mood_block(client, user_id: str) -> None:
+    """Send the mood question as Block Kit buttons."""
+    client.chat_postMessage(
+        channel=user_id,
+        text=_MOOD_QUESTION,
+        blocks=[
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "🎭 *How are you feeling today?*"},
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "😊 Great"},
+                        "action_id": "mood_great",
+                        "value": "great",
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "😐 Okay"},
+                        "action_id": "mood_okay",
+                        "value": "okay",
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "😔 Rough"},
+                        "action_id": "mood_rough",
+                        "value": "rough",
+                    },
+                ],
+            },
+        ],
+    )
+
+
 def _format_standup(user_id: str, answers: list[str], mood: str | None = None) -> str:
     """Format collected answers into a structured standup post."""
     date_str = datetime.utcnow().strftime("%B %d, %Y")
@@ -403,8 +440,8 @@ def register_handlers(app: App) -> None:
             # Still collecting question answers — send next question as Block Kit
             _send_question_block(client, user_id, session.questions[session.step], session.step)
         elif session.step == n_questions:
-            # All questions answered — ask mood (plain text, no block needed)
-            say(_MOOD_QUESTION)
+            # All questions answered — ask mood
+            _send_mood_block(client, user_id)
         else:
             # Mood answered — finalize
             _complete_standup(user_id, session, client)
@@ -600,9 +637,25 @@ def register_handlers(app: App) -> None:
         if session.step < n_questions:
             _send_question_block(client, user_id, session.questions[session.step], session.step)
         elif session.step == n_questions:
-            # All main questions answered — ask mood as plain text
-            client.chat_postMessage(channel=user_id, text=_MOOD_QUESTION)
-        # else: mood comes via plain-text DM (handle_dm fallback)
+            # All main questions answered — ask mood
+            _send_mood_block(client, user_id)
+        # else: mood comes via button click or plain-text DM fallback
+
+    @app.action(re.compile(r"mood_(great|okay|rough)"))
+    def handle_mood_button(ack, body, client):  # noqa: ANN001
+        """Handle mood button click to finalize standup."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        mood: str = body["actions"][0].get("value", "")
+
+        cache_key = f"{team_id}:{user_id}"
+        session = state_store.get(cache_key)
+        if not session:
+            return
+
+        session = state_store.record_answer(cache_key, mood)
+        _complete_standup(user_id, session, client)
 
     @app.command("/standup")
     def handle_standup_command(ack, body, client):  # noqa: ANN001
