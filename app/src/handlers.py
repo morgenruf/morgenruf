@@ -244,6 +244,23 @@ def _complete_standup(user_id: str, session, client) -> None:
             )
 
     _persist_standup(session.team_id, user_id, question_answers, mood=mood)
+
+    # Ensure member exists in DB for reports/participation
+    try:
+        import db  # noqa: PLC0415
+
+        user_info = client.users_info(user=user_id).get("user", {})
+        profile = user_info.get("profile", {})
+        db.upsert_member(
+            team_id=session.team_id,
+            user_id=user_id,
+            real_name=profile.get("real_name", ""),
+            email=profile.get("email", ""),
+            tz=user_info.get("tz", "UTC"),
+        )
+    except Exception as e:
+        logger.warning("Could not upsert member during standup: %s", e)
+
     state_store.clear(f"{session.team_id}:{user_id}")
 
     fire_webhooks(
@@ -559,7 +576,7 @@ def register_handlers(app: App) -> None:
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
         say(
-            "👋 I'm Morgenruf, your standup bot! Use `/morgenruf` to see available commands or check your *App Home* tab for settings and history."
+            "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
         )
 
     @app.event("member_joined_channel")
@@ -586,7 +603,7 @@ def register_handlers(app: App) -> None:
                 text=(
                     "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
                     "I'll DM you each morning with a few quick questions to share with your team. "
-                    "Use `/standup` to try a standup now, or `/morgenruf` to learn more."
+                    "Use `/standup` to try a standup now, or `/help` to learn more."
                 ),
             )
         except Exception as exc:
@@ -681,7 +698,7 @@ def register_handlers(app: App) -> None:
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
-    @app.command("/morgenruf")
+    @app.command("/help")
     def handle_help_command(ack, body, client):  # noqa: ANN001
         """Slash command to show available commands and help."""
         ack()
@@ -700,7 +717,7 @@ def register_handlers(app: App) -> None:
                             "• `/standup` — Start your standup right now\n"
                             "• `/skip` — Skip today's standup\n"
                             "• `/kudos @teammate message` — Give a shoutout\n"
-                            "• `/morgenruf` — Show this message\n\n"
+                            "• `/help` — Show this message\n\n"
                             "*Other ways to interact:*\n"
                             "• Reply to a standup DM at any time to start\n"
                             "• Use the *App Home* tab to see your history and settings\n"
@@ -727,11 +744,21 @@ def register_handlers(app: App) -> None:
             )
             return
 
+        # Parse @mention and message from text (e.g. "@user Great job!")
+        mention_match = re.match(r"<@([A-Z0-9]+)(?:\|[^>]*)?>\s+(.+)", text)
+        to_user = mention_match.group(1) if mention_match else ""
+        kudos_message = mention_match.group(2).strip() if mention_match else text
+
         try:
             import db  # noqa: PLC0415
 
             config = db.get_workspace_config(team_id) or {}
-            channel_id = config.get("channel_id")
+            channel_id = config.get("channel_id", "")
+
+            # Persist kudos to database
+            if to_user:
+                db.save_kudos(team_id, user_id, to_user, kudos_message, channel_id)
+
             if channel_id:
                 client.chat_postMessage(
                     channel=channel_id,

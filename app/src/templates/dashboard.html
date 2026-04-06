@@ -1453,10 +1453,15 @@
 
       const { standups = [], participation = [], total_days = 7 } = data;
 
+      // Build member lookup map for resolving user IDs to names
+      const memberMap = {};
+      (state.members || []).forEach(m => { memberMap[m.id] = m.name || m.display_name || m.id; });
+      const resolveName = (id, fallback) => memberMap[id] || fallback || id || '';
+
       const starsHtml = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
       const participationRows = participation.map(p => `
         <tr>
-          <td style="padding:6px 8px">${esc(p.name)}</td>
+          <td style="padding:6px 8px">${esc(resolveName(p.user_id, p.name))}</td>
           <td style="padding:6px 8px;color:var(--text-muted)">(${p.responses}/${p.total})</td>
           <td style="padding:6px 8px;color:#f59e0b;letter-spacing:2px;font-size:16px">${starsHtml(p.stars)}</td>
         </tr>
@@ -1477,7 +1482,7 @@
         <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${date}</td></tr>
         ${entries.map(s => `
           <tr>
-            <td style="width:140px;vertical-align:top;padding:8px 12px;font-weight:500">${esc(s.user_name || s.user_id || '')}</td>
+            <td style="width:140px;vertical-align:top;padding:8px 12px;font-weight:500">${esc(resolveName(s.user_id, s.user_name))}</td>
             <td style="padding:8px 12px">
               ${s.yesterday ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Yesterday:</span> ${esc(s.yesterday)}</div>` : ''}
               ${s.today ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Today:</span> ${esc(s.today)}</div>` : ''}
