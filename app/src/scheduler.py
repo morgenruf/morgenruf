@@ -117,7 +117,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                         "dispatch_action": True,
                         "element": {
                             "type": "plain_text_input",
-                            "action_id": f"standup_answer_0",
+                            "action_id": "standup_answer_0",
                             "multiline": True,
                             "placeholder": {"type": "plain_text", "text": "Your answer"},
                         },
