@@ -375,8 +375,8 @@ def api_members():
         db_members = db.get_active_members(team_id)
         for r in db_members:
             role_map[r["user_id"]] = r.get("role", "member")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unexpected error in api_members loading role map: %s", e)
 
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
@@ -541,8 +541,8 @@ def api_reports():
 
                 d = _dt.fromisoformat(date_from)
                 days = max(1, (_dt.utcnow() - d).days + 1)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Unexpected error in api_reports parsing date_from: %s", e)
         participation = db.get_participation_stats(team_id, days=days)
         total_days = days
 
