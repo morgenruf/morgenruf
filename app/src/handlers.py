@@ -522,7 +522,7 @@ def register_handlers(app: App) -> None:
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
         say(
-            "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
+            "👋 I'm Morgenruf, your standup bot! Use `/morgenruf` to see available commands or check your *App Home* tab for settings and history."
         )
 
     @app.event("member_joined_channel")
@@ -549,7 +549,7 @@ def register_handlers(app: App) -> None:
                 text=(
                     "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
                     "I'll DM you each morning with a few quick questions to share with your team. "
-                    "Use `/standup` to try a standup now, or `/help` to learn more."
+                    "Use `/standup` to try a standup now, or `/morgenruf` to learn more."
                 ),
             )
         except Exception as exc:
@@ -628,7 +628,7 @@ def register_handlers(app: App) -> None:
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
-    @app.command("/help")
+    @app.command("/morgenruf")
     def handle_help_command(ack, body, client):  # noqa: ANN001
         """Slash command to show available commands and help."""
         ack()
@@ -647,7 +647,7 @@ def register_handlers(app: App) -> None:
                             "• `/standup` — Start your standup right now\n"
                             "• `/skip` — Skip today's standup\n"
                             "• `/kudos @teammate message` — Give a shoutout\n"
-                            "• `/help` — Show this message\n\n"
+                            "• `/morgenruf` — Show this message\n\n"
                             "*Other ways to interact:*\n"
                             "• Reply to a standup DM at any time to start\n"
                             "• Use the *App Home* tab to see your history and settings\n"

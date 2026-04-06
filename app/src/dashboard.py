@@ -31,7 +31,7 @@ dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
 
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
-_SCOPES = "channels:read,chat:write,im:history,im:read,im:write,users:read,users:read.email"
+_SCOPES = "channels:read,commands,groups:read,chat:write,im:history,im:read,im:write,users:read,users:read.email"
 
 
 def _is_safe_webhook_url(url: str) -> bool:
@@ -469,6 +469,7 @@ def api_invite_admin():
 def api_channels():
     token = _get_bot_token()
     if not token:
+        logger.warning("api_channels: no bot token found for team %s", session.get("team_id"))
         return jsonify([])
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
@@ -477,7 +478,7 @@ def api_channels():
         channels = []
         cursor = None
         while True:
-            kwargs = {"types": "public_channel", "exclude_archived": True, "limit": 200}
+            kwargs = {"types": "public_channel,private_channel", "exclude_archived": True, "limit": 200}
             if cursor:
                 kwargs["cursor"] = cursor
             result = client.conversations_list(**kwargs)
