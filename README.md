@@ -1,6 +1,6 @@
 # Morgenruf 🌅
 
-> **German:** *Morgenruf* — "morning call"
+> **German:** *Morgenruf* — "morning call" · Built with ☕ in Toronto 🇨🇦
 
 [![Release](https://img.shields.io/github/v/release/morgenruf/morgenruf?label=latest&color=brightgreen)](https://github.com/morgenruf/morgenruf/releases)
 [![Tests](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml)
@@ -399,3 +399,7 @@ app/helm/morgenruf/
 ## Contributing
 
 PRs welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+---
+
+
