@@ -1171,10 +1171,19 @@
   document.getElementById('ws-avatar').textContent = (teamName || 'M')[0].toUpperCase();
 
   // ── API helpers ──
+  function checkAuth(res) {
+    if (res.status === 401) { window.location.href = '/dashboard/login'; throw new Error('Session expired'); }
+    return res;
+  }
+
   async function api(method, path, body) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch('/dashboard/api' + path, opts);
+    if (res.status === 401) {
+      window.location.href = '/dashboard/login';
+      throw new Error('Session expired');
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || res.statusText);
@@ -1449,7 +1458,7 @@
     try {
       const data = await fetch(`/dashboard/api/reports?${params}`, {
         headers: { 'X-Team-Id': state.teamId || '' }
-      }).then(r => r.json());
+      }).then(checkAuth).then(r => r.json());
 
       const { standups = [], participation = [], total_days = 7 } = data;
 
@@ -1804,6 +1813,15 @@
     const id = document.getElementById('modal-standup-id').value;
     const days = Array.from(document.querySelectorAll('.day-chip.selected')).map(d => d.dataset.day);
     const questions = Array.from(document.querySelectorAll('.question-input')).map(i => i.value.trim()).filter(Boolean);
+    if (!document.getElementById('f-channel').value) {
+      toast('Please select a channel', 'error'); return;
+    }
+    if (!days.length) {
+      toast('Please select at least one day', 'error'); return;
+    }
+    if (!document.getElementById('f-time').value) {
+      toast('Please set a standup time', 'error'); return;
+    }
     const body = {
       name: document.getElementById('f-name').value.trim() || 'Morning Standup',
       channel_id: document.getElementById('f-channel').value,
@@ -1854,7 +1872,7 @@
     document.getElementById('ana-btn-7').className = 'btn ' + (days === 7 ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
     document.getElementById('ana-btn-30').className = 'btn ' + (days === 30 ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
     try {
-      const data = await fetch('/dashboard/api/analytics?days=' + days).then(r => r.json());
+      const data = await fetch('/dashboard/api/analytics?days=' + days).then(checkAuth).then(r => r.json());
       renderAnalytics(data, days);
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load analytics.</p>';
@@ -1999,8 +2017,8 @@
   // ── Kudos ──
   async function loadKudos() {
     const [kudos, board] = await Promise.all([
-      fetch('/dashboard/api/kudos').then(r => r.json()).catch(() => []),
-      fetch('/dashboard/api/kudos/leaderboard').then(r => r.json()).catch(() => [])
+      fetch('/dashboard/api/kudos').then(checkAuth).then(r => r.json()).catch(() => []),
+      fetch('/dashboard/api/kudos/leaderboard').then(checkAuth).then(r => r.json()).catch(() => [])
     ]);
     renderKudosBoard(board);
     renderKudosFeed(kudos);
@@ -2276,7 +2294,7 @@
     const el = document.getElementById('rules-list');
     if (!el) return;
     try {
-      const rules = await fetch('/dashboard/api/rules').then(r => r.json()).catch(() => []);
+      const rules = await fetch('/dashboard/api/rules').then(checkAuth).then(r => r.json()).catch(() => []);
       renderRules(rules);
     } catch(e) {
       el.innerHTML = '<p style="color:var(--text-muted)">Failed to load rules.</p>';
@@ -2440,7 +2458,7 @@
     if (_mcpLoaded) return;
     _mcpLoaded = true;
     fetch('/dashboard/api/mcp/keys')
-      .then(r => r.json())
+      .then(checkAuth).then(r => r.json())
       .then(data => renderMCPKeys(data.keys || []))
       .catch(() => { document.getElementById('mcp-keys-list').innerHTML = '<p style="color:var(--text-muted)">Could not load keys.</p>'; });
   }
@@ -2487,16 +2505,21 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({name}),
       });
+      checkAuth(res);
+      if (!res.ok) throw new Error('Failed to create key');
       const data = await res.json();
+      if (!data.key) throw new Error('No key returned');
       document.getElementById('mcp-new-key').textContent = data.key;
       document.getElementById('mcp-key-form-wrap').style.display = 'none';
       document.getElementById('mcp-key-result-wrap').style.display = '';
-    } catch(e) { toast('Failed to generate key', 'error'); }
+    } catch(e) { toast(e.message || 'Failed to generate key', 'error'); }
   }
 
   async function revokeMCPKey(id) {
     if (!confirm('Revoke this key? Connections using it will stop working.')) return;
-    await fetch(`/dashboard/api/mcp/keys/${id}`, {method: 'DELETE'});
+    const res = await fetch(`/dashboard/api/mcp/keys/${id}`, {method: 'DELETE'});
+    checkAuth(res);
+    if (!res.ok) { toast('Failed to revoke key', 'error'); return; }
     _mcpLoaded = false;
     loadMCPKeys();
     toast('Key revoked');

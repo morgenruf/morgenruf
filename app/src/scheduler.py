@@ -64,7 +64,14 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
         return
 
     logger.info("Triggering standup for team %s (%d members)", team_id, len(members))
+
+    # Verify bot token is still valid before DMing members
     client = WebClient(token=bot_token)
+    try:
+        client.auth_test()
+    except Exception as exc:
+        logger.error("Bot token invalid for team %s — skipping standup: %s", team_id, exc)
+        return
 
     for member in members:
         user_id = member["user_id"]
