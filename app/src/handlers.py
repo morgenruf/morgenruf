@@ -349,6 +349,36 @@ def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
 def register_handlers(app: App) -> None:
     """Register all Slack event handlers."""
 
+    @app.event("tokens_revoked")
+    def handle_tokens_revoked(event, logger) -> None:  # noqa: ANN001
+        """Handle token revocation — remove workspace installation and all data."""
+        import db  # noqa: PLC0415
+
+        team_id = event.get("team_id") or (event.get("authorizations") or [{}])[0].get("team_id", "")
+        if not team_id:
+            logger.warning("tokens_revoked received with no team_id: %s", event)
+            return
+        deleted = db.delete_installation(team_id)
+        if deleted:
+            logger.info("tokens_revoked: deleted installation and all data for team %s", team_id)
+        else:
+            logger.warning("tokens_revoked: no installation found for team %s", team_id)
+
+    @app.event("app_uninstalled")
+    def handle_app_uninstalled(event, logger) -> None:  # noqa: ANN001
+        """Handle app uninstall — remove workspace installation and all data."""
+        import db  # noqa: PLC0415
+
+        team_id = event.get("team_id", "")
+        if not team_id:
+            logger.warning("app_uninstalled received with no team_id: %s", event)
+            return
+        deleted = db.delete_installation(team_id)
+        if deleted:
+            logger.info("app_uninstalled: deleted installation and all data for team %s", team_id)
+        else:
+            logger.warning("app_uninstalled: no installation found for team %s", team_id)
+
     @app.event("message")
     def handle_dm(event, say, client, logger):  # noqa: ANN001
         """Handle incoming DMs — collect standup answers step by step."""
