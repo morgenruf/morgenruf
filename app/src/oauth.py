@@ -26,6 +26,8 @@ _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _SCOPES = [
     "channels:read",
     "chat:write",
+    "commands",
+    "groups:read",
     "im:history",
     "im:read",
     "im:write",

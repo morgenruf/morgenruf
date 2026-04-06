@@ -1715,8 +1715,8 @@
   }
 
   // ── Modal ──
-  function openCreateModal() {
-    if (!state.members.length) loadMembers();
+  async function openCreateModal() {
+    if (!state.members.length) await loadMembers();
     document.getElementById('modal-title').textContent = 'New Standup';
     document.getElementById('modal-standup-id').value = '';
     document.getElementById('f-name').value = 'Morning Standup';
@@ -1745,10 +1745,10 @@
     document.getElementById('standup-modal').classList.add('open');
   }
 
-  function openEditModal(id) {
+  async function openEditModal(id) {
     const s = state.standups.find(x => x.id === id);
     if (!s) return;
-    if (!state.members.length) loadMembers();
+    if (!state.members.length) await loadMembers();
     document.getElementById('modal-title').textContent = 'Edit Standup';
     document.getElementById('modal-standup-id').value = id;
     document.getElementById('f-name').value = s.name || '';
