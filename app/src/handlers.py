@@ -109,8 +109,8 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
                 qs = []
         if qs:
             questions = qs
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unexpected error in _start_standup_session loading config: %s", e)
 
     session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
     client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
@@ -158,8 +158,8 @@ def _complete_standup(user_id: str, session, client) -> None:
             sched_config = {}
             try:
                 sched_config = _db.get_standup_schedule_for_channel(session.team_id, channel) or {}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Unexpected error in _complete_standup fetching schedule config: %s", e)
 
             notify_on_report = sched_config.get("notify_on_report", True)
             if not notify_on_report:
@@ -170,8 +170,8 @@ def _complete_standup(user_id: str, session, client) -> None:
                         if m["user_id"] == user_id:
                             member_name = m.get("real_name") or user_id
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Unexpected error in _complete_standup resolving member name: %s", e)
                 formatted = formatted.replace(f"<@{user_id}>", member_name)
 
             try:
@@ -179,8 +179,8 @@ def _complete_standup(user_id: str, session, client) -> None:
 
                 cfg = _db.get_workspace_config(session.team_id) or {}
                 formatted = autolink(formatted, cfg)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Unexpected error in _complete_standup applying autolink: %s", e)
 
             post_to_thread = sched_config.get("post_to_thread", False)
             if post_to_thread:
@@ -196,8 +196,8 @@ def _complete_standup(user_id: str, session, client) -> None:
             # React with ✅ to confirm standup posted (like Geekbot)
             try:
                 client.reactions_add(channel=channel, timestamp=result["ts"], name="white_check_mark")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Unexpected error in _complete_standup adding reaction: %s", e)
             logger.info("Posted standup for %s to %s", user_id, channel)
         except Exception as exc:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
@@ -396,16 +396,16 @@ def register_handlers(app: App) -> None:
             standup_time = config.get("standup_time", "")
             info = client.team_info()
             workspace_name = info.get("team", {}).get("name", "")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_app_home loading workspace info: %s", e)
 
         on_vacation = False
         try:
             import db  # noqa: PLC0415
 
             on_vacation = db.is_on_vacation(team_id, user_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_app_home checking vacation status: %s", e)
 
         status_text = (
             f"✅ Active — posting to <#{channel_name}> at *{standup_time}*"
@@ -485,8 +485,8 @@ def register_handlers(app: App) -> None:
             import db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_vacation_return clearing vacation: %s", e)
         handle_app_home({"user": user_id, "team": team_id}, client)
 
     @app.event("app_mention")
@@ -592,8 +592,8 @@ def register_handlers(app: App) -> None:
             import db  # noqa: PLC0415
 
             db.skip_today(team_id, user_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_skip_action recording skip: %s", e)
         cache_key = f"{team_id}:{user_id}"
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
@@ -779,8 +779,8 @@ def register_handlers(app: App) -> None:
                     qs = []
             if qs:
                 questions = qs
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_edit_standup loading config: %s", e)
 
         session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
         say(f"✏️ Let's update your standup!\n\n{session.questions[0]}")
@@ -796,8 +796,8 @@ def register_handlers(app: App) -> None:
             import db  # noqa: PLC0415
 
             db.skip_today(team_id, user_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_skip recording skip: %s", e)
         # Also clear any active session
         cache_key = f"{team_id}:{user_id}"
         state_store.clear(cache_key)
@@ -814,8 +814,8 @@ def register_handlers(app: App) -> None:
             import db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_back_from_vacation clearing vacation: %s", e)
         say("🎉 Welcome back! You're all set for standups again.")
 
     @app.message(
@@ -831,8 +831,8 @@ def register_handlers(app: App) -> None:
             import db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Unexpected error in handle_going_on_vacation setting vacation: %s", e)
         say("🌴 Enjoy your vacation! I won't bother you until you're back. Message me *I'm back* when you return.")
 
     @app.message(re.compile(r"^kudos\s+<@([A-Z0-9]+)>\s+(.+)$", re.IGNORECASE))

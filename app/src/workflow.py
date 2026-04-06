@@ -94,8 +94,8 @@ def _render_message(template: str | None, default: str, context: dict) -> str:
         msg = msg.replace("{trigger}", str(context.get("trigger", "")))
         msg = msg.replace("{blockers}", str(context.get("blockers", "")))
         msg = msg.replace("{participation}", str(context.get("participation_pct", "")))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Unexpected error in _render_message applying template: %s", e)
     return msg
 
 
