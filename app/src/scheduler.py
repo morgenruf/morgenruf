@@ -82,7 +82,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     logger.debug("Skipping %s — user opted out today", user_id)
                     continue
             except Exception as e:
-                logger.warning("Unexpected error in _send_standup_to_workspace checking skip status for %s: %s", user_id, e)
+                logger.warning(
+                    "Unexpected error in _send_standup_to_workspace checking skip status for %s: %s", user_id, e
+                )
 
             try:
                 import db  # noqa: PLC0415
@@ -91,7 +93,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     logger.debug("Skipping %s — on vacation", user_id)
                     continue
             except Exception as e:
-                logger.warning("Unexpected error in _send_standup_to_workspace checking vacation for %s: %s", user_id, e)
+                logger.warning(
+                    "Unexpected error in _send_standup_to_workspace checking vacation for %s: %s", user_id, e
+                )
 
             session = state_store.start(cache_key, channel_id, team_id=team_id, questions=questions)
 
