@@ -110,28 +110,11 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             dm_channel = dm["channel"]["id"]
 
             client.chat_postMessage(channel=dm_channel, text="📋 Starting your standup!")
-            # Send first question as Block Kit input (same UX as /standup command)
-            client.chat_postMessage(
-                channel=user_id,
-                text=session.questions[0],
-                blocks=[
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": f"*{session.questions[0]}*"},
-                    },
-                    {
-                        "type": "input",
-                        "dispatch_action": True,
-                        "element": {
-                            "type": "plain_text_input",
-                            "action_id": "standup_answer_0",
-                            "multiline": True,
-                            "placeholder": {"type": "plain_text", "text": "Your answer"},
-                        },
-                        "label": {"type": "plain_text", "text": "Your answer"},
-                    },
-                ],
-            )
+            # Send first question via the shared helper so the Submit-button
+            # UX stays consistent with the /standup command path.
+            from handlers import _send_question_block  # noqa: PLC0415
+
+            _send_question_block(client, user_id, session.questions[0], 0)
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
         except Exception as exc:
             logger.error("Failed to DM %s / %s: %s", team_id, user_id, exc)

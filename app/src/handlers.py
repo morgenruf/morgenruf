@@ -94,7 +94,12 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
 
 
 def _send_question_block(client, user_id: str, question: str, step: int) -> None:
-    """Send a standup question as a Block Kit input block with dispatch_action."""
+    """Send a standup question as a Block Kit input block plus a Submit button.
+
+    Multiline plain_text_input does NOT dispatch on Enter (Enter inserts a
+    newline), so we render an explicit Submit button. The handler reads the
+    answer out of state.values rather than action.value.
+    """
     client.chat_postMessage(
         channel=user_id,
         text=question,  # fallback for notifications
@@ -106,7 +111,6 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
             {
                 "type": "input",
                 "block_id": f"answer_{step}",
-                "dispatch_action": True,
                 "element": {
                     "type": "plain_text_input",
                     "action_id": f"standup_answer_{step}",
@@ -114,6 +118,18 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
                     "multiline": True,
                 },
                 "label": {"type": "plain_text", "text": "Your answer"},
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Submit"},
+                        "action_id": f"submit_answer_{step}",
+                        "value": str(step),
+                        "style": "primary",
+                    }
+                ],
             },
         ],
     )
@@ -634,18 +650,44 @@ def register_handlers(app: App) -> None:
         team_id: str = message.get("team", "")
         _start_standup_session(user_id, team_id, client)
 
-    @app.action(re.compile(r"standup_answer_\d+"))
-    def handle_standup_answer(ack, body, client):  # noqa: ANN001
-        """Handle Block Kit input submission for each standup question."""
+    @app.action(re.compile(r"submit_answer_\d+"))
+    def handle_submit_answer(ack, body, client):  # noqa: ANN001
+        """Handle Submit button click for each standup question.
+
+        The typed answer lives in body['state']['values'][block_id][action_id]['value']
+        because the dispatching element is the button, not the input itself.
+        """
         ack()
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
         action = body["actions"][0]
-        answer: str = action.get("value", "")
+        try:
+            step = int(action.get("value", "0"))
+        except (TypeError, ValueError):
+            step = 0
+
+        block_id = f"answer_{step}"
+        input_action_id = f"standup_answer_{step}"
+        answer = ""
+        try:
+            answer = (
+                body.get("state", {})
+                .get("values", {})
+                .get(block_id, {})
+                .get(input_action_id, {})
+                .get("value")
+                or ""
+            )
+        except Exception as e:
+            logger.warning("submit_answer: could not read input value: %s", e)
 
         cache_key = f"{team_id}:{user_id}"
         session = state_store.get(cache_key)
         if not session:
+            client.chat_postMessage(
+                channel=user_id,
+                text="⚠️ Your standup session expired. Run `/standup` to start a new one.",
+            )
             return
 
         session = state_store.record_answer(cache_key, answer)
@@ -657,6 +699,12 @@ def register_handlers(app: App) -> None:
             # All main questions answered — ask mood
             _send_mood_block(client, user_id)
         # else: mood comes via button click or plain-text DM fallback
+
+    # Backwards-compat: older messages still in user DMs use the old action_id
+    # via dispatch_action. Accept those events so they don't 404 against Bolt.
+    @app.action(re.compile(r"standup_answer_\d+"))
+    def handle_standup_answer_legacy(ack):  # noqa: ANN001
+        ack()
 
     @app.action(re.compile(r"mood_(great|okay|rough)"))
     def handle_mood_button(ack, body, client):  # noqa: ANN001
