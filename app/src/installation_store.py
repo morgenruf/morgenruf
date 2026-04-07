@@ -33,7 +33,8 @@ class PostgresInstallationStore(InstallationStore):
         *,
         enterprise_id: Optional[str],
         team_id: Optional[str],
-        is_enterprise_install: bool = False,
+        user_id: Optional[str] = None,
+        is_enterprise_install: Optional[bool] = False,
     ) -> Optional[Installation]:
         if not team_id:
             return None
@@ -59,6 +60,7 @@ class PostgresInstallationStore(InstallationStore):
         *,
         enterprise_id: Optional[str],
         team_id: Optional[str],
+        is_enterprise_install: Optional[bool] = False,
     ) -> Optional[Bot]:
         if not team_id:
             return None
