@@ -99,6 +99,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: SENTRY_ENV
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: REDIS_URL
           volumeMounts:
             - name: teams-config
               mountPath: /app/teams.yaml

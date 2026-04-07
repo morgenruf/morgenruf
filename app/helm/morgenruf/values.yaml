@@ -91,10 +91,38 @@ resend:
   apiKey: ""
 
 # ---------------------------------------------------------------------------
-# Optional: Redis URL for persistent sessions
-# redis:
-#   url: ""
+# Redis — backs morgenruf's active standup DM session store.
+#
+# Without Redis, sessions live in-memory and are wiped on every pod restart
+# (kubectl rollout, node drain, OOM, etc.) — any user mid-standup will see a
+# "session expired" message and have to start over. For multi-replica setups
+# Redis is mandatory because the in-memory store is per-pod.
+#
+# Two options:
+#   1. Bundled (redis.enabled: true) — chart deploys a tiny redis:7-alpine
+#      Deployment + Service. Memory-only (no PVC); 4h session TTL means a
+#      restart drops at most a few hours of in-flight standups, which is
+#      acceptable for almost all installs. Recommended default.
+#   2. External (externalRedis.url) — point at a managed Redis (ElastiCache,
+#      Upstash, Memorystore, etc.) for HA and durability.
 # ---------------------------------------------------------------------------
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  maxmemory: "128mb"
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 192Mi
+
+externalRedis:
+  url: ""   # e.g. redis://default:password@redis-host:6379/0
 
 # ---------------------------------------------------------------------------
 # Optional: Sentry error monitoring
