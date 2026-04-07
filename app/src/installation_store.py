@@ -44,9 +44,11 @@ class PostgresInstallationStore(InstallationStore):
                 return None
             return Installation(
                 app_id=row["app_id"],
+                enterprise_id=None,
                 team_id=row["team_id"],
                 team_name=row["team_name"],
                 bot_token=row["bot_token"],
+                bot_id=row.get("bot_id") or "",
                 bot_user_id=row["bot_user_id"],
                 user_id=row.get("installed_by_user_id") or "",
                 installed_at=row.get("installed_at"),
@@ -70,9 +72,11 @@ class PostgresInstallationStore(InstallationStore):
                 return None
             return Bot(
                 app_id=row["app_id"],
+                enterprise_id=None,
                 team_id=row["team_id"],
                 team_name=row["team_name"],
                 bot_token=row["bot_token"],
+                bot_id=row.get("bot_id") or "",
                 bot_user_id=row["bot_user_id"],
                 installed_at=row.get("installed_at"),
             )
