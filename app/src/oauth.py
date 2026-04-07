@@ -72,7 +72,7 @@ def _verify_state(state: str) -> bool:
 
 @oauth_bp.route("/")
 def index():
-    return jsonify({"name": "morgenruf", "version": "1.1.2", "status": "ok"})
+    return jsonify({"name": "morgenruf", "version": "1.1.3", "status": "ok"})
 
 
 @oauth_bp.route("/install")
