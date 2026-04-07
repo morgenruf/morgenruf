@@ -1,0 +1,98 @@
+{{- if .Values.redis.enabled }}
+# Tiny in-cluster Redis used by morgenruf for active standup DM sessions.
+# Sessions are short-lived (4h TTL) so no PVC is necessary — Redis is run
+# with --save "" --appendonly no, all data lives in memory and is allowed
+# to disappear on pod restart. If you need durability, point morgenruf at
+# an external Redis via .Values.externalRedis.url instead.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "morgenruf.fullname" . }}-redis
+  labels:
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    app.kubernetes.io/name: {{ include "morgenruf.fullname" . }}-redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "morgenruf.fullname" . }}-redis
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "morgenruf.fullname" . }}-redis
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          args:
+            - "--save"
+            - ""
+            - "--appendonly"
+            - "no"
+            - "--maxmemory"
+            - "{{ .Values.redis.maxmemory }}"
+            - "--maxmemory-policy"
+            - "allkeys-lru"
+          ports:
+            - name: redis
+              containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "morgenruf.fullname" . }}-redis
+  labels:
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+    app.kubernetes.io/name: {{ include "morgenruf.fullname" . }}-redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ include "morgenruf.fullname" . }}-redis
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: redis
+{{- end }}
