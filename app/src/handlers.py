@@ -711,8 +711,8 @@ def register_handlers(app: App) -> None:
         user_id: str = body["user"]["id"]
         team_id: str = body["user"]["team_id"]
         try:
-            import db  # noqa: PLC0415
             import blocks as _blocks  # noqa: PLC0415
+            import db  # noqa: PLC0415
 
             standups = db.get_standups(team_id, days=14)
             user_standups = [s for s in standups if s["user_id"] == user_id]
@@ -737,8 +737,8 @@ def register_handlers(app: App) -> None:
         standup_id = body["actions"][0].get("value", "")
         team_id = body["user"]["team_id"]
         try:
-            import db  # noqa: PLC0415
             import blocks as _blocks  # noqa: PLC0415
+            import db  # noqa: PLC0415
 
             schedule = db.get_standup_schedule(team_id, int(standup_id))
             if schedule:
