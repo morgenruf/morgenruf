@@ -731,7 +731,16 @@ def register_handlers(app: App) -> None:
         ack()
         import blocks as _blocks  # noqa: PLC0415
 
-        modal = _blocks.create_standup_modal()
+        # Default new standup timezone to user's Slack timezone
+        user_tz = ""
+        try:
+            user_id = body["user"]["id"]
+            user_info = client.users_info(user=user_id)
+            user_tz = user_info.get("user", {}).get("tz", "")
+        except Exception:
+            pass
+
+        modal = _blocks.create_standup_modal(existing_config={"timezone": user_tz} if user_tz else None)
         client.views_open(trigger_id=body["trigger_id"], view=modal)
 
     @app.action("open_dashboard")
