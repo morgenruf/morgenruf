@@ -155,7 +155,7 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
 
     group_by_options = [
         {"text": {"type": "plain_text", "text": "Team Member"}, "value": "member"},
-        {"text": {"type": "plain_text", "text": "Project"}, "value": "project"},
+        {"text": {"type": "plain_text", "text": "Question"}, "value": "question"},
     ]
     selected_group = _find_option(group_by_options, cfg.get("group_by", "member")) or group_by_options[0]
 
@@ -321,7 +321,82 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
                 **({"initial_value": cfg["standup_name"]} if cfg.get("standup_name") else {}),
             },
         },
+        # Answer prepopulation
+        {
+            "type": "input",
+            "block_id": "prepopulate_answers",
+            "label": {"type": "plain_text", "text": "Answer prepopulation"},
+            "optional": True,
+            "element": {
+                "type": "checkboxes",
+                "action_id": "prepopulate_answers",
+                "options": [
+                    {
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "Pre-fill standup form with each member's previous answers",
+                        },
+                        "value": "prepopulate",
+                    }
+                ],
+                **(
+                    {
+                        "initial_options": [
+                            {
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": "Pre-fill standup form with each member's previous answers",
+                                },
+                                "value": "prepopulate",
+                            }
+                        ]
+                    }
+                    if cfg.get("prepopulate_answers")
+                    else {}
+                ),
+            },
+        },
     ]
+
+    # Edit-only fields
+    if is_edit:
+        _prepop_text = "Allow members to edit responses after the report is posted"
+        blocks.append(
+            {
+                "type": "input",
+                "block_id": "allow_edit_after_report",
+                "label": {"type": "plain_text", "text": "Edit window"},
+                "optional": True,
+                "element": {
+                    "type": "checkboxes",
+                    "action_id": "allow_edit_after_report",
+                    "options": [{"text": {"type": "mrkdwn", "text": _prepop_text}, "value": "allow"}],
+                    **(
+                        {"initial_options": [{"text": {"type": "mrkdwn", "text": _prepop_text}, "value": "allow"}]}
+                        if cfg.get("allow_edit_after_report")
+                        else {}
+                    ),
+                },
+            }
+        )
+        active_options = [
+            {"text": {"type": "plain_text", "text": "Enabled"}, "value": "true"},
+            {"text": {"type": "plain_text", "text": "Disabled"}, "value": "false"},
+        ]
+        current_active = "true" if cfg.get("active", True) else "false"
+        blocks.append(
+            {
+                "type": "input",
+                "block_id": "standup_active",
+                "label": {"type": "plain_text", "text": "Enable the standup"},
+                "element": {
+                    "type": "static_select",
+                    "action_id": "standup_active",
+                    "options": active_options,
+                    "initial_option": _find_option(active_options, current_active),
+                },
+            }
+        )
 
     modal: dict = {
         "type": "modal",
@@ -608,15 +683,21 @@ def app_home_view(
             },
             {
                 "type": "button",
-                "action_id": "open_create_standup",
+                "action_id": "open_configure_mode",
                 "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
-                "value": "create",
+                "value": "configure",
             },
             {
                 "type": "button",
                 "action_id": "open_dashboard",
                 "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
                 "url": "https://api.morgenruf.dev/dashboard",
+            },
+            {
+                "type": "button",
+                "action_id": "app_home_help",
+                "text": {"type": "plain_text", "text": "📖 Help!", "emoji": True},
+                "value": "help",
             },
         ]
     else:
@@ -629,15 +710,21 @@ def app_home_view(
             },
             {
                 "type": "button",
-                "action_id": "open_create_standup",
+                "action_id": "open_configure_mode",
                 "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
-                "value": "create",
+                "value": "configure",
             },
             {
                 "type": "button",
                 "action_id": "open_dashboard",
                 "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
                 "url": "https://api.morgenruf.dev/dashboard",
+            },
+            {
+                "type": "button",
+                "action_id": "app_home_help",
+                "text": {"type": "plain_text", "text": "📖 Help!", "emoji": True},
+                "value": "help",
             },
         ]
     blocks.append({"type": "actions", "block_id": "home_actions", "elements": top_actions})
@@ -842,6 +929,259 @@ def app_home_view(
     )
 
     return {"type": "home", "blocks": blocks}
+
+
+# ---------------------------------------------------------------------------
+# App Home: Configure mode
+# ---------------------------------------------------------------------------
+
+
+def app_home_configure_view(
+    standups: list[dict],
+    user_id: str,
+    workspace_name: str = "",
+) -> dict:
+    """App Home tab — Standup Configuration mode matching competitor."""
+    blocks: list[dict] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "⚙️ Standup Configuration", "emoji": True},
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "action_id": "close_configure_mode",
+                    "text": {"type": "plain_text", "text": "x Close Configuration"},
+                    "value": "close",
+                },
+            ],
+        },
+        {"type": "divider"},
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "*Standups you can configure:*\nOr create a new standup 👉"},
+            "accessory": {
+                "type": "button",
+                "action_id": "open_create_standup",
+                "text": {"type": "plain_text", "text": "📬 Create a standup", "emoji": True},
+                "style": "primary",
+                "value": "create",
+            },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    "Don't see the standup you are looking for? That means you "
+                    "probably are not a part of it. You can easily join an existing "
+                    "standup and edit it in the <https://api.morgenruf.dev/dashboard|Standup Portal>. 👉"
+                ),
+            },
+            "accessory": {
+                "type": "button",
+                "action_id": "open_dashboard",
+                "text": {"type": "plain_text", "text": "Go to Standup Portal 🔗", "emoji": True},
+                "url": "https://api.morgenruf.dev/dashboard",
+            },
+        },
+        {"type": "divider"},
+    ]
+
+    if not standups:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "No standups configured yet. Create your first one above!"},
+            }
+        )
+    else:
+        for standup in standups:
+            standup_id = standup.get("standup_id") or standup.get("id", "")
+            name = standup.get("standup_name") or standup.get("name") or "Team Standup"
+            channel = standup.get("channel_id", "")
+            report_time = standup.get("report_time") or standup.get("schedule_time", "09:00")
+            tz = standup.get("timezone") or standup.get("schedule_tz", "UTC")
+            members = standup.get("members") or standup.get("participants") or []
+            days = standup.get("days") or []
+            if isinstance(days, str):
+                days = [d.strip() for d in days.split(",") if d.strip()]
+            member_count = len(members) if isinstance(members, list) else 0
+            active = standup.get("active", True)
+            questions = standup.get("questions") or []
+            q_count = len(questions) if isinstance(questions, list) else 0
+
+            days_label = (
+                "Weekdays"
+                if set(days) == {"mon", "tue", "wed", "thu", "fri"}
+                else ", ".join(d.capitalize() for d in days)
+            )
+
+            ws = f" - *{workspace_name}*" if workspace_name else ""
+            detail_lines = [
+                f"<#{channel}>{ws} | {name} |",
+                f"{member_count} participant{'s' if member_count != 1 else ''} · {q_count} question{'s' if q_count != 1 else ''}",
+                f"{days_label} @ {report_time} ({tz})",
+            ]
+            if not active:
+                detail_lines.append("*Paused*")
+
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(detail_lines)}})
+
+            row = [
+                {
+                    "type": "button",
+                    "action_id": "edit_standup",
+                    "text": {"type": "plain_text", "text": "Configure"},
+                    "value": str(standup_id),
+                },
+            ]
+            if active:
+                row.append(
+                    {
+                        "type": "button",
+                        "action_id": "standup_overflow",
+                        "text": {"type": "plain_text", "text": "Pause"},
+                        "value": f"pause_{standup_id}",
+                    }
+                )
+            else:
+                row.append(
+                    {
+                        "type": "button",
+                        "action_id": "standup_overflow",
+                        "text": {"type": "plain_text", "text": "Enable"},
+                        "style": "primary",
+                        "value": f"enable_{standup_id}",
+                    }
+                )
+            row.append(
+                {
+                    "type": "button",
+                    "action_id": "open_dashboard",
+                    "text": {"type": "plain_text", "text": "Details 🔗", "emoji": True},
+                    "url": "https://api.morgenruf.dev/dashboard",
+                }
+            )
+            row.append(
+                {
+                    "type": "button",
+                    "action_id": "delete_standup",
+                    "text": {"type": "plain_text", "text": "Delete"},
+                    "style": "danger",
+                    "value": str(standup_id),
+                    "confirm": {
+                        "title": {"type": "plain_text", "text": "Delete standup?"},
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"Permanently delete '{name}'? This cannot be undone.",
+                        },
+                        "confirm": {"type": "plain_text", "text": "Yes, delete"},
+                        "deny": {"type": "plain_text", "text": "Cancel"},
+                    },
+                }
+            )
+            blocks.append({"type": "actions", "elements": row})
+            blocks.append({"type": "divider"})
+
+    return {"type": "home", "blocks": blocks}
+
+
+# ---------------------------------------------------------------------------
+# Modal: Help
+# ---------------------------------------------------------------------------
+
+
+def help_modal() -> dict:
+    """Help modal shown from App Home."""
+    return {
+        "type": "modal",
+        "title": {"type": "plain_text", "text": "Morgenruf Help"},
+        "close": {"type": "plain_text", "text": "Close"},
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "🌅 Getting Started", "emoji": True},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "*Morgenruf* runs async standups in Slack. "
+                        "At your scheduled time, each member gets a DM with your standup questions. "
+                        "Answers are collected and posted as a threaded summary in your standup channel."
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "💬 DM Commands", "emoji": True},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "• `standup` — Start a standup manually\n"
+                        "• `skip` — Skip today's standup\n"
+                        "• `I'm away` — Go on vacation (stops DMs)\n"
+                        "• `I'm back` — Return from vacation\n"
+                        "• `timezone America/New_York` — Set your personal timezone\n"
+                        "• `edit` — Edit your last standup (within 30 min)"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "⚙️ Configuration", "emoji": True},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "• Click *Configure standups* in App Home to manage standups\n"
+                        "• Use the *Configure* button on any standup card to edit settings\n"
+                        "• Visit the <https://api.morgenruf.dev/dashboard|Web Dashboard> for advanced analytics and management"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "📊 Features", "emoji": True},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "• *Streaks* — Track consecutive standup days\n"
+                        "• *Mood tracking* — Team health check after each standup\n"
+                        "• *Answer prefill* — Yesterday's answers auto-fill today's form\n"
+                        "• *Channel sync* — Auto-add channel members to standups\n"
+                        "• *Webhooks* — Push standup data to external systems\n"
+                        "• *CSV export* — Download standup data from the dashboard"
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "Need more help? Visit <https://docs.morgenruf.dev|docs.morgenruf.dev> or <https://api.morgenruf.dev/support|contact support>",
+                    }
+                ],
+            },
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------

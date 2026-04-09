@@ -611,6 +611,8 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
         "report_time",
         "sync_with_channel",
         "group_by",
+        "prepopulate_answers",
+        "allow_edit_after_report",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
@@ -658,6 +660,8 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         "report_time",
         "sync_with_channel",
         "group_by",
+        "prepopulate_answers",
+        "allow_edit_after_report",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
