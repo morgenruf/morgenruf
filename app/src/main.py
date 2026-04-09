@@ -124,4 +124,36 @@ if __name__ == "__main__":
     _, flask_app = create_app()
     port = int(os.environ.get("PORT", "3000"))
     logger.info("Starting standup bot on port %d", port)
-    flask_app.run(host="0.0.0.0", port=port)
+
+    # Use gunicorn in production, Flask dev server only when DEBUG
+    if os.environ.get("FLASK_DEBUG") or os.environ.get("LOG_LEVEL", "").upper() == "DEBUG":
+        flask_app.run(host="0.0.0.0", port=port, debug=True)
+    else:
+        from gunicorn.app.base import BaseApplication
+
+        class StandaloneApplication(BaseApplication):
+            def __init__(self, app, options=None):
+                self.options = options or {}
+                self.application = app
+                super().__init__()
+
+            def load_config(self):
+                for key, value in self.options.items():
+                    if key in self.cfg.settings and value is not None:
+                        self.cfg.set(key.lower(), value)
+
+            def load(self):
+                return self.application
+
+        StandaloneApplication(
+            flask_app,
+            {
+                "bind": f"0.0.0.0:{port}",
+                "workers": 1,
+                "threads": 4,
+                "timeout": 120,
+                "accesslog": "-",
+                "errorlog": "-",
+                "loglevel": "info",
+            },
+        ).run()
