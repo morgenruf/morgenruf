@@ -31,6 +31,7 @@ class UserSession:
     answers: list[str] = field(default_factory=list)
     started_at: datetime = field(default_factory=datetime.utcnow)
     questions: list[str] = field(default_factory=lambda: list(QUESTIONS))
+    standup_name: str = "Team Standup"
 
     @property
     def user_id(self) -> str:
@@ -45,6 +46,7 @@ def _serialize(session: "UserSession") -> dict:
         "step": session.step,
         "answers": session.answers,
         "questions": session.questions,
+        "standup_name": session.standup_name,
     }
 
 
@@ -56,6 +58,7 @@ def _deserialize(data: dict) -> "UserSession":
         step=data.get("step", 0),
         answers=data.get("answers", []),
         questions=data.get("questions", list(QUESTIONS)),
+        standup_name=data.get("standup_name", "Team Standup"),
     )
 
 
@@ -66,7 +69,7 @@ class StateStore:
         self._lock = Lock()
 
     def start(
-        self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None
+        self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None, standup_name: str = "Team Standup"
     ) -> UserSession:
         """Begin a new standup session. cache_key should be 'team_id:user_id'."""
         if not team_id:
@@ -78,6 +81,7 @@ class StateStore:
                 team_id=team_id,
                 channel=channel,
                 questions=list(questions) if questions is not None else list(QUESTIONS),
+                standup_name=standup_name,
             )
             session_store.set_session(cache_key, _serialize(session))
             return session

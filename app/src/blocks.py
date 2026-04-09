@@ -419,21 +419,30 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def standup_form_modal(questions: list[str], standup_name: str) -> dict:
-    """Modal opened when user clicks 'Fill in form'."""
+def standup_form_modal(questions: list[str], standup_name: str, previous_answers: list[str] | None = None) -> dict:
+    """Modal opened when user clicks 'Fill in form'.
+
+    If *previous_answers* is provided, the corresponding fields are
+    pre-filled so the user can quickly update rather than retype.
+    """
+    previous_answers = previous_answers or []
     blocks = []
     for i, question in enumerate(questions):
+        prev = previous_answers[i] if i < len(previous_answers) else ""
+        element: dict = {
+            "type": "plain_text_input",
+            "action_id": f"answer_{i}",
+            "multiline": True,
+            "placeholder": {"type": "plain_text", "text": "Type your answer…"},
+        }
+        if prev:
+            element["initial_value"] = prev
         blocks.append(
             {
                 "type": "input",
                 "block_id": f"question_{i}",
                 "label": {"type": "plain_text", "text": question},
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": f"answer_{i}",
-                    "multiline": True,
-                    "placeholder": {"type": "plain_text", "text": "Type your answer…"},
-                },
+                "element": element,
                 "optional": False,
             }
         )
@@ -548,34 +557,75 @@ def standup_summary_message(
 # ---------------------------------------------------------------------------
 
 
-def app_home_view(standups: list[dict], user_id: str) -> dict:
-    """App Home tab view listing all standups with create/edit/delete actions."""
+def app_home_view(
+    standups: list[dict],
+    user_id: str,
+    on_vacation: bool = False,
+    streak: int = 0,
+    workspace_name: str = "",
+) -> dict:
+    """App Home tab view with rich standup cards, streak, and away toggle."""
     blocks: list[dict] = [
         {
             "type": "header",
             "text": {"type": "plain_text", "text": "🌅 Morgenruf", "emoji": True},
         },
         {
-            "type": "actions",
-            "block_id": "home_actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "action_id": "open_create_standup",
-                    "text": {"type": "plain_text", "text": "➕ Create a standup", "emoji": True},
-                    "style": "primary",
-                    "value": "create",
-                },
-                {
-                    "type": "button",
-                    "action_id": "im_away",
-                    "text": {"type": "plain_text", "text": "🏖️ I'm away today", "emoji": True},
-                    "value": "away_today",
-                },
-            ],
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"Hello! I'm *Morgenruf*, your standup bot{' for ' + workspace_name if workspace_name else ''}.",
+            },
         },
-        {"type": "divider"},
     ]
+
+    # Vacation banner
+    if on_vacation:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "🌴 *You're currently on vacation.* I won't send you standup reminders until you're back.",
+                },
+                "accessory": {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "I'm back!", "emoji": True},
+                    "action_id": "vacation_return",
+                    "style": "primary",
+                },
+            }
+        )
+
+    # Action buttons
+    action_elements = [
+        {
+            "type": "button",
+            "action_id": "open_create_standup",
+            "text": {"type": "plain_text", "text": "➕ Create a standup", "emoji": True},
+            "style": "primary",
+            "value": "create",
+        },
+    ]
+    if not on_vacation:
+        action_elements.append(
+            {
+                "type": "button",
+                "action_id": "im_away",
+                "text": {"type": "plain_text", "text": "🏖️ I'm away", "emoji": True},
+                "value": "away_today",
+            }
+        )
+    action_elements.append(
+        {
+            "type": "button",
+            "action_id": "open_dashboard",
+            "text": {"type": "plain_text", "text": "🔧 Dashboard", "emoji": True},
+            "url": "https://api.morgenruf.dev/dashboard",
+        }
+    )
+    blocks.append({"type": "actions", "block_id": "home_actions", "elements": action_elements})
+    blocks.append({"type": "divider"})
 
     if not standups:
         blocks += [
@@ -585,35 +635,48 @@ def app_home_view(standups: list[dict], user_id: str) -> dict:
                     "type": "mrkdwn",
                     "text": "*No standups yet.*\nCreate your first standup to get started.",
                 },
-                "accessory": {
-                    "type": "button",
-                    "action_id": "open_create_standup",
-                    "text": {"type": "plain_text", "text": "Create standup", "emoji": True},
-                    "style": "primary",
-                    "value": "create",
-                },
             }
         ]
     else:
+        # Streak display
+        if streak > 0:
+            streak_emoji = "🔥" if streak >= 5 else "✨"
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"{streak_emoji} *Current standup streak: {streak}* day{'s' if streak != 1 else ''}",
+                    },
+                }
+            )
+
         blocks.append(
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*{len(standups)} active standup{'s' if len(standups) != 1 else ''}*",
+                    "text": f"*Your standups:*",
                 },
             }
         )
+
         for standup in standups:
-            standup_id = standup.get("standup_id", "")
-            name = standup.get("standup_name") or "Team Standup"
+            standup_id = standup.get("standup_id") or standup.get("id", "")
+            name = standup.get("standup_name") or standup.get("name") or "Team Standup"
             channel = standup.get("channel_id", "")
-            report_time = standup.get("report_time", "09:00")
-            timezone = standup.get("timezone", "UTC")
-            members = standup.get("members", [])
-            days = standup.get("days", [])
-            days_str = ", ".join(d.capitalize() for d in days) if days else "No days set"
-            member_count = len(members)
+            report_time = standup.get("report_time") or standup.get("schedule_time", "09:00")
+            timezone = standup.get("timezone") or standup.get("schedule_tz", "UTC")
+            members = standup.get("members") or standup.get("participants") or []
+            days = standup.get("days") or []
+            if isinstance(days, str):
+                days = [d.strip() for d in days.split(",") if d.strip()]
+            days_str = ", ".join(d.capitalize() for d in days) if days else "Weekdays"
+            member_count = len(members) if isinstance(members, list) else 0
+            active = standup.get("active", True)
+
+            status = "Active" if active else "Paused"
+            status_icon = "🟢" if active else "⏸️"
 
             blocks.append(
                 {
@@ -621,9 +684,9 @@ def app_home_view(standups: list[dict], user_id: str) -> dict:
                     "text": {
                         "type": "mrkdwn",
                         "text": (
-                            f"*{name}*\n"
-                            f"<#{channel}> · {report_time} {timezone}\n"
-                            f"{days_str} · {member_count} member{'s' if member_count != 1 else ''}"
+                            f"{status_icon} *{name}*\n"
+                            f"<#{channel}> · {report_time} ({timezone})\n"
+                            f"{days_str} · {member_count} member{'s' if member_count != 1 else ''} · {status}"
                         ),
                     },
                     "accessory": {
@@ -631,15 +694,15 @@ def app_home_view(standups: list[dict], user_id: str) -> dict:
                         "action_id": "standup_overflow",
                         "options": [
                             {
-                                "text": {"type": "plain_text", "text": "✏️ Edit", "emoji": True},
+                                "text": {"type": "plain_text", "text": "✏️ Edit"},
                                 "value": f"edit_{standup_id}",
                             },
                             {
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": "🗑️ Delete",
-                                    "emoji": True,
-                                },
+                                "text": {"type": "plain_text", "text": "⏸️ Pause" if active else "▶️ Enable"},
+                                "value": f"pause_{standup_id}" if active else f"enable_{standup_id}",
+                            },
+                            {
+                                "text": {"type": "plain_text", "text": "🗑️ Delete"},
                                 "value": f"delete_{standup_id}",
                             },
                         ],
@@ -647,38 +710,95 @@ def app_home_view(standups: list[dict], user_id: str) -> dict:
                 }
             )
 
+            # Quick action buttons per standup
+            standup_actions = [
+                {
+                    "type": "button",
+                    "action_id": "start_standup_now",
+                    "text": {"type": "plain_text", "text": "📝 Start standup", "emoji": True},
+                    "value": str(standup_id),
+                },
+                {
+                    "type": "button",
+                    "action_id": "view_previous_standups",
+                    "text": {"type": "plain_text", "text": "📅 Previous standups", "emoji": True},
+                    "value": str(standup_id),
+                },
+            ]
+            blocks.append({"type": "actions", "elements": standup_actions})
+            blocks.append({"type": "divider"})
+
+    # Footer
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "💡 Send me `standup` in a DM to start manually · `skip` to skip today · `I'm away` to go on vacation",
+                }
+            ],
+        }
+    )
+
+    return {"type": "home", "blocks": blocks}
+
+
+# ---------------------------------------------------------------------------
+# Modal: Previous standups history
+# ---------------------------------------------------------------------------
+
+
+def previous_standups_modal(standups: list[dict], standup_name: str = "Standup") -> dict:
+    """Modal showing recent standup history for the current user."""
+    blocks: list[dict] = []
+
+    if not standups:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "_No previous standups found._"},
+            }
+        )
+    else:
+        for s in standups[:10]:  # Show last 10
+            date_str = str(s.get("standup_date", ""))
+            yesterday = s.get("yesterday", "") or "—"
+            today = s.get("today", "") or "—"
+            blockers = s.get("blockers", "") or "None"
+            mood = s.get("mood", "")
+            mood_str = f"  |  🎭 {mood}" if mood else ""
+
             blocks.append(
                 {
-                    "type": "actions",
-                    "elements": [
-                        {
-                            "type": "button",
-                            "action_id": "edit_standup",
-                            "text": {"type": "plain_text", "text": "Edit", "emoji": True},
-                            "value": standup_id,
-                        },
-                        {
-                            "type": "button",
-                            "action_id": "delete_standup",
-                            "text": {"type": "plain_text", "text": "Delete", "emoji": True},
-                            "style": "danger",
-                            "value": standup_id,
-                            "confirm": {
-                                "title": {"type": "plain_text", "text": "Delete standup?"},
-                                "text": {
-                                    "type": "plain_text",
-                                    "text": f"Permanently delete '{name}'? This cannot be undone.",
-                                },
-                                "confirm": {"type": "plain_text", "text": "Yes, delete"},
-                                "deny": {"type": "plain_text", "text": "Cancel"},
-                            },
-                        },
-                    ],
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{date_str}*{mood_str}",
+                    },
+                }
+            )
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"*Yesterday:* {yesterday}\n"
+                            f"*Today:* {today}\n"
+                            f"*Blockers:* {blockers}"
+                        ),
+                    },
                 }
             )
             blocks.append({"type": "divider"})
 
-    return {"type": "home", "blocks": blocks}
+    return {
+        "type": "modal",
+        "title": {"type": "plain_text", "text": f"📅 {standup_name[:20]}"},
+        "close": {"type": "plain_text", "text": "Close"},
+        "blocks": blocks,
+    }
 
 
 # ---------------------------------------------------------------------------
