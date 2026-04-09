@@ -563,6 +563,14 @@ def register_handlers(app: App) -> None:
                 if isinstance(days, str):
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
+                # Parse questions from DB (stored as JSON string or list)
+                raw_q = s.get("questions") or []
+                if isinstance(raw_q, str):
+                    try:
+                        raw_q = json.loads(raw_q)
+                    except Exception:
+                        raw_q = []
+
                 standups.append(
                     {
                         "standup_id": str(s["id"]),
@@ -573,6 +581,7 @@ def register_handlers(app: App) -> None:
                         "days": days,
                         "members": participants,
                         "active": s.get("active", True),
+                        "questions": raw_q,
                     }
                 )
 
@@ -584,12 +593,21 @@ def register_handlers(app: App) -> None:
         except Exception as e:
             logger.warning("handle_app_home error loading data: %s", e)
 
+        # Fetch user timezone from Slack profile
+        user_tz = ""
+        try:
+            user_info = client.users_info(user=user_id)
+            user_tz = user_info.get("user", {}).get("tz", "")
+        except Exception:
+            pass
+
         view = _blocks.app_home_view(
             standups=standups,
             user_id=user_id,
             on_vacation=on_vacation,
             streak=streak,
             workspace_name=workspace_name,
+            user_tz=user_tz,
         )
 
         try:
@@ -805,9 +823,11 @@ def register_handlers(app: App) -> None:
 
     @app.action("standup_overflow")
     def handle_standup_overflow(ack, body, client):  # noqa: ANN001
-        """Handle overflow menu clicks on App Home standup cards."""
+        """Handle overflow menu or button clicks on App Home standup cards."""
         ack()
-        action_value = body["actions"][0].get("selected_option", {}).get("value", "")
+        action = body["actions"][0]
+        # Support both overflow menu (selected_option.value) and button (value)
+        action_value = action.get("value", "") or action.get("selected_option", {}).get("value", "")
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
 
