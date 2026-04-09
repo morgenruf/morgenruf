@@ -563,101 +563,149 @@ def app_home_view(
     on_vacation: bool = False,
     streak: int = 0,
     workspace_name: str = "",
+    user_tz: str = "",
 ) -> dict:
-    """App Home tab view with rich standup cards, streak, and away toggle."""
+    """App Home tab — rich standup cards matching Standup & Prosper quality."""
+    from datetime import datetime
+
+    import pytz as _pytz
+
+    # Compute local time string for the user
+    local_time_str = ""
+    if user_tz:
+        try:
+            tz = _pytz.timezone(user_tz)
+            now = datetime.now(tz)
+            local_time_str = now.strftime("%A, %-d %B at %-I:%M %p")
+        except Exception:
+            pass
+
     blocks: list[dict] = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "🌅 Morgenruf", "emoji": True},
+            "text": {"type": "plain_text", "text": "🌅 My home", "emoji": True},
         },
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"Hello! I'm *Morgenruf*, your standup bot{' for ' + workspace_name if workspace_name else ''}.",
+                "text": (
+                    "Hello there, I'm *Morgenruf*, and this is my home.\n"
+                    "If you want to message me, click the *Messages* tab 👆"
+                ),
             },
         },
     ]
 
+    # Top action bar — I'm away, Configure, Get support, Help
+    if on_vacation:
+        top_actions = [
+            {
+                "type": "button",
+                "action_id": "vacation_return",
+                "text": {"type": "plain_text", "text": "🏖️ I'm back", "emoji": True},
+                "style": "primary",
+            },
+            {
+                "type": "button",
+                "action_id": "open_create_standup",
+                "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
+                "value": "create",
+            },
+            {
+                "type": "button",
+                "action_id": "open_dashboard",
+                "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
+                "url": "https://api.morgenruf.dev/dashboard",
+            },
+        ]
+    else:
+        top_actions = [
+            {
+                "type": "button",
+                "action_id": "im_away",
+                "text": {"type": "plain_text", "text": "🏖️ I'm away", "emoji": True},
+                "value": "away_today",
+            },
+            {
+                "type": "button",
+                "action_id": "open_create_standup",
+                "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
+                "value": "create",
+            },
+            {
+                "type": "button",
+                "action_id": "open_dashboard",
+                "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
+                "url": "https://api.morgenruf.dev/dashboard",
+            },
+        ]
+    blocks.append({"type": "actions", "block_id": "home_actions", "elements": top_actions})
+
+    # Timezone context
+    if local_time_str:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"According to Slack and your configured timezone, for you currently it is: *{local_time_str}*.\nIf this is not correct, please correct your Slack timezone setting.",
+                    }
+                ],
+            }
+        )
+
     # Vacation banner
     if on_vacation:
+        blocks.append({"type": "divider"})
         blocks.append(
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "🌴 *You're currently on vacation.* I won't send you standup reminders until you're back.",
+                    "text": (
+                        "I hope you'll be awesome when you get back. I won't bother you again until "
+                        "then. If you are already back, just send me a message or click *I'm back*. 🏖️"
+                    ),
                 },
                 "accessory": {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "I'm back!", "emoji": True},
+                    "text": {"type": "plain_text", "text": "I'm back ▶️", "emoji": True},
                     "action_id": "vacation_return",
                     "style": "primary",
                 },
             }
         )
 
-    # Action buttons
-    action_elements = [
-        {
-            "type": "button",
-            "action_id": "open_create_standup",
-            "text": {"type": "plain_text", "text": "➕ Create a standup", "emoji": True},
-            "style": "primary",
-            "value": "create",
-        },
-    ]
-    if not on_vacation:
-        action_elements.append(
-            {
-                "type": "button",
-                "action_id": "im_away",
-                "text": {"type": "plain_text", "text": "🏖️ I'm away", "emoji": True},
-                "value": "away_today",
-            }
-        )
-    action_elements.append(
-        {
-            "type": "button",
-            "action_id": "open_dashboard",
-            "text": {"type": "plain_text", "text": "🔧 Dashboard", "emoji": True},
-            "url": "https://api.morgenruf.dev/dashboard",
-        }
-    )
-    blocks.append({"type": "actions", "block_id": "home_actions", "elements": action_elements})
     blocks.append({"type": "divider"})
 
+    # Standups section
     if not standups:
-        blocks += [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*No standups yet.*\nCreate your first standup to get started.",
-                },
-            }
-        ]
-    else:
-        # Streak display
-        if streak > 0:
-            streak_emoji = "🔥" if streak >= 5 else "✨"
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"{streak_emoji} *Current standup streak: {streak}* day{'s' if streak != 1 else ''}",
-                    },
-                }
-            )
-
         blocks.append(
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Your standups:*",
+                    "text": (
+                        "*No standups yet.*\n"
+                        "Create your first standup to get started, or ask your team admin to add you."
+                    ),
                 },
+                "accessory": {
+                    "type": "button",
+                    "action_id": "open_create_standup",
+                    "text": {"type": "plain_text", "text": "➕ Create a standup", "emoji": True},
+                    "style": "primary",
+                    "value": "create",
+                },
+            }
+        )
+    else:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Your standups:*"},
             }
         )
 
@@ -671,47 +719,43 @@ def app_home_view(
             days = standup.get("days") or []
             if isinstance(days, str):
                 days = [d.strip() for d in days.split(",") if d.strip()]
-            days_str = ", ".join(d.capitalize() for d in days) if days else "Weekdays"
             member_count = len(members) if isinstance(members, list) else 0
             active = standup.get("active", True)
+            questions = standup.get("questions") or []
+            q_count = len(questions) if isinstance(questions, list) else 0
 
-            status = "Active" if active else "Paused"
-            status_icon = "🟢" if active else "⏸️"
+            # Build schedule description like competitor
+            days_label = (
+                "Weekdays"
+                if set(days) == {"mon", "tue", "wed", "thu", "fri"}
+                else ", ".join(d.capitalize() for d in days)
+            )
+
+            # Streak per standup
+            streak_text = ""
+            if streak > 0:
+                streak_emoji = "🔥" if streak >= 5 else "✨"
+                streak_text = f"\nCurrent standup streak: {streak} {streak_emoji}"
+
+            detail_lines = [
+                f"<#{channel}> - *{workspace_name}* | {name} |" if workspace_name else f"<#{channel}> | {name} |",
+                f"{member_count} participant{'s' if member_count != 1 else ''} · {q_count} question{'s' if q_count != 1 else ''}",
+                f"{days_label} @ {report_time} ({timezone})",
+            ]
+            if not active:
+                detail_lines.append("⏸️ *Paused*")
+
+            detail_text = "\n".join(detail_lines) + streak_text
 
             blocks.append(
                 {
                     "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            f"{status_icon} *{name}*\n"
-                            f"<#{channel}> · {report_time} ({timezone})\n"
-                            f"{days_str} · {member_count} member{'s' if member_count != 1 else ''} · {status}"
-                        ),
-                    },
-                    "accessory": {
-                        "type": "overflow",
-                        "action_id": "standup_overflow",
-                        "options": [
-                            {
-                                "text": {"type": "plain_text", "text": "✏️ Edit"},
-                                "value": f"edit_{standup_id}",
-                            },
-                            {
-                                "text": {"type": "plain_text", "text": "⏸️ Pause" if active else "▶️ Enable"},
-                                "value": f"pause_{standup_id}" if active else f"enable_{standup_id}",
-                            },
-                            {
-                                "text": {"type": "plain_text", "text": "🗑️ Delete"},
-                                "value": f"delete_{standup_id}",
-                            },
-                        ],
-                    },
+                    "text": {"type": "mrkdwn", "text": detail_text},
                 }
             )
 
-            # Quick action buttons per standup
-            standup_actions = [
+            # Action buttons row — matching competitor layout
+            row1 = [
                 {
                     "type": "button",
                     "action_id": "start_standup_now",
@@ -725,7 +769,63 @@ def app_home_view(
                     "value": str(standup_id),
                 },
             ]
-            blocks.append({"type": "actions", "elements": standup_actions})
+            blocks.append({"type": "actions", "elements": row1})
+
+            # Configure / Pause / Details / Delete row
+            row2 = [
+                {
+                    "type": "button",
+                    "action_id": "edit_standup",
+                    "text": {"type": "plain_text", "text": "Configure"},
+                    "value": str(standup_id),
+                },
+            ]
+            if active:
+                row2.append(
+                    {
+                        "type": "button",
+                        "action_id": "standup_overflow",
+                        "text": {"type": "plain_text", "text": "Pause"},
+                        "value": f"pause_{standup_id}",
+                    }
+                )
+            else:
+                row2.append(
+                    {
+                        "type": "button",
+                        "action_id": "standup_overflow",
+                        "text": {"type": "plain_text", "text": "Enable"},
+                        "style": "primary",
+                        "value": f"enable_{standup_id}",
+                    }
+                )
+            row2.append(
+                {
+                    "type": "button",
+                    "action_id": "open_dashboard",
+                    "text": {"type": "plain_text", "text": "Details 🔗", "emoji": True},
+                    "url": "https://api.morgenruf.dev/dashboard",
+                }
+            )
+            row2.append(
+                {
+                    "type": "button",
+                    "action_id": "delete_standup",
+                    "text": {"type": "plain_text", "text": "Delete", "emoji": True},
+                    "style": "danger",
+                    "value": str(standup_id),
+                    "confirm": {
+                        "title": {"type": "plain_text", "text": "Delete standup?"},
+                        "text": {
+                            "type": "plain_text",
+                            "text": f"Permanently delete '{name}'? This cannot be undone.",
+                        },
+                        "confirm": {"type": "plain_text", "text": "Yes, delete"},
+                        "deny": {"type": "plain_text", "text": "Cancel"},
+                    },
+                }
+            )
+            blocks.append({"type": "actions", "elements": row2})
             blocks.append({"type": "divider"})
 
     # Footer
