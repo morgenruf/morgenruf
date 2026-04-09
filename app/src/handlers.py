@@ -239,16 +239,18 @@ def _complete_standup(user_id: str, session, client) -> None:
                 logger.warning("Unexpected error in _complete_standup applying autolink: %s", e)
 
             # Always post individual standups in a daily thread
-            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            now_utc = datetime.now(timezone.utc)
+            today_str = now_utc.strftime("%Y-%m-%d")
             thread_key = f"{session.team_id}:{channel}:{today_str}"
             parent_ts = _daily_thread_cache.get(thread_key)
 
             if not parent_ts:
-                # Create or find parent message for today's thread
+                # Create parent message for today's thread — polished like competitors
                 standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
+                display_date = now_utc.strftime("%a, %b %d.")
                 parent = client.chat_postMessage(
                     channel=channel,
-                    text=f"📋 *{standup_name}* — {today_str}",
+                    text=f"✨ {standup_name} Completed - {display_date} ✨",
                 )
                 parent_ts = parent["ts"]
                 _daily_thread_cache[thread_key] = parent_ts
@@ -257,13 +259,8 @@ def _complete_standup(user_id: str, session, client) -> None:
                 channel=channel,
                 text=formatted,
                 thread_ts=parent_ts,
+                unfurl_links=False,
             )
-
-            # React with ✅ on the parent to show activity
-            try:
-                client.reactions_add(channel=channel, timestamp=parent_ts, name="white_check_mark")
-            except Exception:
-                pass  # Already reacted or no permission
             logger.info("Posted standup for %s to %s (thread)", user_id, channel)
         except Exception as exc:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
