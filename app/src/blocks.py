@@ -783,11 +783,7 @@ def previous_standups_modal(standups: list[dict], standup_name: str = "Standup")
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": (
-                            f"*Yesterday:* {yesterday}\n"
-                            f"*Today:* {today}\n"
-                            f"*Blockers:* {blockers}"
-                        ),
+                        "text": (f"*Yesterday:* {yesterday}\n*Today:* {today}\n*Blockers:* {blockers}"),
                     },
                 }
             )

@@ -563,16 +563,18 @@ def register_handlers(app: App) -> None:
                 if isinstance(days, str):
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
-                standups.append({
-                    "standup_id": str(s["id"]),
-                    "standup_name": s.get("name", "Team Standup"),
-                    "channel_id": s.get("channel_id", ""),
-                    "report_time": s.get("schedule_time", "09:00"),
-                    "timezone": s.get("schedule_tz", "UTC"),
-                    "days": days,
-                    "members": participants,
-                    "active": s.get("active", True),
-                })
+                standups.append(
+                    {
+                        "standup_id": str(s["id"]),
+                        "standup_name": s.get("name", "Team Standup"),
+                        "channel_id": s.get("channel_id", ""),
+                        "report_time": s.get("schedule_time", "09:00"),
+                        "timezone": s.get("schedule_tz", "UTC"),
+                        "days": days,
+                        "members": participants,
+                        "active": s.get("active", True),
+                    }
+                )
 
             try:
                 info = client.team_info()
@@ -678,7 +680,9 @@ def register_handlers(app: App) -> None:
         except Exception as e:
             logger.warning("fill_in_form: could not load previous answers: %s", e)
 
-        modal = _blocks.standup_form_modal(session.questions, session.standup_name or "Standup", previous_answers=previous_answers)
+        modal = _blocks.standup_form_modal(
+            session.questions, session.standup_name or "Standup", previous_answers=previous_answers
+        )
         modal["private_metadata"] = cache_key
         client.views_open(trigger_id=body["trigger_id"], view=modal)
 
@@ -948,12 +952,7 @@ def register_handlers(app: App) -> None:
         answer = ""
         try:
             answer = (
-                body.get("state", {})
-                .get("values", {})
-                .get(block_id, {})
-                .get(input_action_id, {})
-                .get("value")
-                or ""
+                body.get("state", {}).get("values", {}).get(block_id, {}).get(input_action_id, {}).get("value") or ""
             )
         except Exception as e:
             logger.warning("submit_answer: could not read input value: %s", e)
@@ -1106,13 +1105,20 @@ def register_handlers(app: App) -> None:
         channel_id = values.get("standup_channel", {}).get("standup_channel", {}).get("selected_channel", "")
         questions_text = values.get("questions", {}).get("questions", {}).get("value", "")
         questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
-        report_time = values.get("report_time", {}).get("report_time", {}).get("selected_option", {}).get("value", "09:00")
+        report_time = (
+            values.get("report_time", {}).get("report_time", {}).get("selected_option", {}).get("value", "09:00")
+        )
         timezone = values.get("timezone", {}).get("timezone", {}).get("selected_option", {}).get("value", "UTC")
         reminder_val = values.get("reminder", {}).get("reminder", {}).get("selected_option", {}).get("value", "0")
         members = values.get("members", {}).get("members", {}).get("selected_users", [])
         days_opts = values.get("days", {}).get("days", {}).get("selected_options", [])
         days = [o["value"] for o in days_opts]
-        report_dest = values.get("report_destination", {}).get("report_destination", {}).get("selected_option", {}).get("value", "channel")
+        report_dest = (
+            values.get("report_destination", {})
+            .get("report_destination", {})
+            .get("selected_option", {})
+            .get("value", "channel")
+        )
         group_by = values.get("group_by", {}).get("group_by", {}).get("selected_option", {}).get("value", "member")
         standup_name = values.get("standup_name", {}).get("standup_name", {}).get("value", "") or "Team Standup"
         sync_opts = values.get("sync_channel", {}).get("sync_channel", {}).get("selected_options", [])
