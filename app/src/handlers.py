@@ -16,6 +16,9 @@ from state import state_store
 
 logger = logging.getLogger(__name__)
 
+# Cache daily thread parent message ts per channel: "team:channel:YYYY-MM-DD" -> ts
+_daily_thread_cache: dict[str, str] = {}
+
 _MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
 
 
@@ -235,23 +238,33 @@ def _complete_standup(user_id: str, session, client) -> None:
             except Exception as e:
                 logger.warning("Unexpected error in _complete_standup applying autolink: %s", e)
 
-            post_to_thread = sched_config.get("post_to_thread", False)
-            if post_to_thread:
-                parent = client.chat_postMessage(channel=channel, text="📋 Standup report ready")
-                result = client.chat_postMessage(
-                    channel=channel,
-                    text=formatted,
-                    thread_ts=parent["ts"],
-                )
-            else:
-                result = client.chat_postMessage(channel=channel, text=formatted)
+            # Always post individual standups in a daily thread
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            thread_key = f"{session.team_id}:{channel}:{today_str}"
+            parent_ts = _daily_thread_cache.get(thread_key)
 
-            # React with ✅ to confirm standup posted (like Geekbot)
+            if not parent_ts:
+                # Create or find parent message for today's thread
+                standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
+                parent = client.chat_postMessage(
+                    channel=channel,
+                    text=f"📋 *{standup_name}* — {today_str}",
+                )
+                parent_ts = parent["ts"]
+                _daily_thread_cache[thread_key] = parent_ts
+
+            client.chat_postMessage(
+                channel=channel,
+                text=formatted,
+                thread_ts=parent_ts,
+            )
+
+            # React with ✅ on the parent to show activity
             try:
-                client.reactions_add(channel=channel, timestamp=result["ts"], name="white_check_mark")
-            except Exception as e:
-                logger.warning("Unexpected error in _complete_standup adding reaction: %s", e)
-            logger.info("Posted standup for %s to %s", user_id, channel)
+                client.reactions_add(channel=channel, timestamp=parent_ts, name="white_check_mark")
+            except Exception:
+                pass  # Already reacted or no permission
+            logger.info("Posted standup for %s to %s (thread)", user_id, channel)
         except Exception as exc:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
             client.chat_postMessage(
@@ -344,11 +357,15 @@ def _complete_standup(user_id: str, session, client) -> None:
                         today_standups, questions, user_profiles=user_profiles
                     )
 
-                post_to_thread = sched_cfg.get("post_to_thread", False)
-                if post_to_thread:
-                    parent = client.chat_postMessage(channel=channel, text="📋 Daily Standup Summary")
+                # Post summary in the same daily thread
+                summary_thread_key = f"{session.team_id}:{channel}:{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                summary_parent_ts = _daily_thread_cache.get(summary_thread_key)
+                if summary_parent_ts:
                     client.chat_postMessage(
-                        channel=channel, text="📋 Daily Standup Summary", blocks=summary_blocks, thread_ts=parent["ts"]
+                        channel=channel,
+                        text="📋 Daily Standup Summary",
+                        blocks=summary_blocks,
+                        thread_ts=summary_parent_ts,
                     )
                 else:
                     client.chat_postMessage(channel=channel, text="📋 Daily Standup Summary", blocks=summary_blocks)
@@ -365,10 +382,12 @@ def _complete_standup(user_id: str, session, client) -> None:
                     team_name = (inst or {}).get("team_name", "")
                     summary_text = generate_summary(today_standups, team_name)
                     if summary_text:
-                        client.chat_postMessage(
-                            channel=channel,
-                            text=f"✨ *AI Summary*\n\n{summary_text}",
-                        )
+                        ai_thread_key = f"{session.team_id}:{channel}:{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                        ai_parent_ts = _daily_thread_cache.get(ai_thread_key)
+                        kwargs = {"channel": channel, "text": f"✨ *AI Summary*\n\n{summary_text}"}
+                        if ai_parent_ts:
+                            kwargs["thread_ts"] = ai_parent_ts
+                        client.chat_postMessage(**kwargs)
             except Exception as exc:
                 logger.warning("AI summary failed: %s", exc)
     except Exception as exc:
