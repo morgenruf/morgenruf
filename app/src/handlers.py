@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Cache daily thread parent message ts per channel: "team:channel:YYYY-MM-DD" -> ts
 _daily_thread_cache: dict[str, str] = {}
 
+# Track which users are in configure mode: "team_id:user_id"
+_configure_mode_users: set[str] = {}
+
 _MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
 
 
@@ -699,18 +702,20 @@ def register_handlers(app: App) -> None:
 
         import blocks as _blocks  # noqa: PLC0415
 
-        # Try to prefill with previous answers
+        # Try to prefill with previous answers (if enabled for this standup)
         previous_answers = []
         try:
             import db  # noqa: PLC0415
 
-            prev = db.get_latest_standup(user_id, team_id)
-            if prev:
-                previous_answers = [
-                    prev.get("yesterday", ""),
-                    prev.get("today", ""),
-                    prev.get("blockers", ""),
-                ]
+            sched = db.get_standup_schedule_for_channel(team_id, session.channel)
+            if sched and sched.get("prepopulate_answers", False):
+                prev = db.get_latest_standup(user_id, team_id)
+                if prev:
+                    previous_answers = [
+                        prev.get("yesterday", ""),
+                        prev.get("today", ""),
+                        prev.get("blockers", ""),
+                    ]
         except Exception as e:
             logger.warning("fill_in_form: could not load previous answers: %s", e)
 
@@ -733,6 +738,86 @@ def register_handlers(app: App) -> None:
     def handle_open_dashboard(ack):  # noqa: ANN001
         """Acknowledge dashboard link button (URL buttons still need ack)."""
         ack()
+
+    @app.action("open_configure_mode")
+    def handle_open_configure_mode(ack, body, client):  # noqa: ANN001
+        """Switch App Home to configuration mode."""
+        ack()
+        user_id = body["user"]["id"]
+        team_id = body["user"]["team_id"]
+        _configure_mode_users.add(f"{team_id}:{user_id}")
+        _publish_configure_view(team_id, user_id, client)
+
+    @app.action("close_configure_mode")
+    def handle_close_configure_mode(ack, body, client):  # noqa: ANN001
+        """Switch App Home back to normal mode."""
+        ack()
+        user_id = body["user"]["id"]
+        team_id = body["user"]["team_id"]
+        _configure_mode_users.discard(f"{team_id}:{user_id}")
+        handle_app_home({"user": user_id, "team": team_id}, client)
+
+    @app.action("app_home_help")
+    def handle_app_home_help(ack, body, client):  # noqa: ANN001
+        """Open help modal from App Home."""
+        ack()
+        import blocks as _blocks  # noqa: PLC0415
+
+        client.views_open(trigger_id=body["trigger_id"], view=_blocks.help_modal())
+
+    def _refresh_home(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
+        """Refresh App Home — respects configure mode."""
+        if f"{team_id}:{user_id}" in _configure_mode_users:
+            _publish_configure_view(team_id, user_id, client)
+        else:
+            handle_app_home({"user": user_id, "team": team_id}, client)
+
+    def _publish_configure_view(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
+        """Render and publish the configure mode App Home."""
+        import blocks as _blocks  # noqa: PLC0415
+        import db  # noqa: PLC0415
+
+        standups: list[dict] = []
+        workspace_name = ""
+        try:
+            schedules = db.get_standup_schedules(team_id)
+            for s in schedules:
+                days = s.get("schedule_days", "mon,tue,wed,thu,fri")
+                if isinstance(days, str):
+                    days = [d.strip() for d in days.split(",") if d.strip()]
+                participants = s.get("participants") or []
+                raw_q = s.get("questions") or []
+                if isinstance(raw_q, str):
+                    try:
+                        raw_q = json.loads(raw_q)
+                    except Exception:
+                        raw_q = []
+                standups.append(
+                    {
+                        "standup_id": str(s["id"]),
+                        "standup_name": s.get("name", "Team Standup"),
+                        "channel_id": s.get("channel_id", ""),
+                        "report_time": s.get("schedule_time", "09:00"),
+                        "timezone": s.get("schedule_tz", "UTC"),
+                        "days": days,
+                        "members": participants,
+                        "active": s.get("active", True),
+                        "questions": raw_q,
+                    }
+                )
+            try:
+                info = client.team_info()
+                workspace_name = info.get("team", {}).get("name", "")
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("_publish_configure_view error: %s", e)
+
+        view = _blocks.app_home_configure_view(standups, user_id, workspace_name)
+        try:
+            client.views_publish(user_id=user_id, view=view)
+        except Exception as exc:
+            logger.warning("Failed to publish configure view for %s: %s", user_id, exc)
 
     @app.action("start_standup_now")
     def handle_start_standup_now(ack, body, client):  # noqa: ANN001
@@ -802,6 +887,9 @@ def register_handlers(app: App) -> None:
                     "report_destination": "thread" if schedule.get("post_to_thread") else "channel",
                     "group_by": schedule.get("group_by", "member"),
                     "standup_name": schedule.get("name", ""),
+                    "prepopulate_answers": schedule.get("prepopulate_answers", False),
+                    "allow_edit_after_report": schedule.get("allow_edit_after_report", False),
+                    "active": schedule.get("active", True),
                 }
                 modal = _blocks.create_standup_modal(cfg)
                 client.views_open(trigger_id=body["trigger_id"], view=modal)
@@ -832,8 +920,8 @@ def register_handlers(app: App) -> None:
                             pass
             except Exception:
                 pass
-            # Refresh App Home
-            handle_app_home({"user": user_id, "team": team_id}, client)
+            # Refresh App Home (respects configure mode)
+            _refresh_home(team_id, user_id, client)
         except Exception as exc:
             logger.warning("delete_standup_button error: %s", exc)
 
@@ -853,7 +941,7 @@ def register_handlers(app: App) -> None:
                 import db  # noqa: PLC0415
 
                 db.delete_standup_schedule(team_id, int(standup_id))
-                handle_app_home({"user": user_id, "team": team_id}, client)
+                _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow delete error: %s", exc)
         elif action_value.startswith("pause_"):
@@ -875,7 +963,7 @@ def register_handlers(app: App) -> None:
                                 pass
                 except Exception:
                     pass
-                handle_app_home({"user": user_id, "team": team_id}, client)
+                _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow pause error: %s", exc)
         elif action_value.startswith("enable_"):
@@ -897,7 +985,7 @@ def register_handlers(app: App) -> None:
                             register_schedule_job(sched_obj, sched_with_token)
                     except Exception:
                         pass
-                handle_app_home({"user": user_id, "team": team_id}, client)
+                _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow enable error: %s", exc)
         elif action_value.startswith("edit_"):
@@ -1160,6 +1248,19 @@ def register_handlers(app: App) -> None:
         sync_opts = values.get("sync_channel", {}).get("sync_channel", {}).get("selected_options", [])
         sync_with_channel = bool(sync_opts)
 
+        # Prepopulate answers (available in both create and edit)
+        prepop_opts = values.get("prepopulate_answers", {}).get("prepopulate_answers", {}).get("selected_options", [])
+        prepopulate_answers = bool(prepop_opts)
+
+        # Edit-only fields
+        allow_edit_opts = (
+            values.get("allow_edit_after_report", {}).get("allow_edit_after_report", {}).get("selected_options", [])
+        )
+        allow_edit_after_report = bool(allow_edit_opts)
+        active_val = (
+            values.get("standup_active", {}).get("standup_active", {}).get("selected_option", {}).get("value", "true")
+        )
+
         try:
             import db  # noqa: PLC0415
 
@@ -1175,10 +1276,13 @@ def register_handlers(app: App) -> None:
                 "post_to_thread": report_dest == "thread",
                 "group_by": group_by,
                 "sync_with_channel": sync_with_channel,
+                "prepopulate_answers": prepopulate_answers,
             }
 
             if private_metadata:
-                # Editing existing schedule
+                # Editing existing schedule — include edit-only fields
+                kwargs["allow_edit_after_report"] = allow_edit_after_report
+                kwargs["active"] = active_val == "true"
                 schedule = db.update_standup_schedule(team_id, int(private_metadata), **kwargs)
             else:
                 # Creating new schedule
@@ -1213,8 +1317,8 @@ def register_handlers(app: App) -> None:
                     except Exception:
                         pass
 
-            # Refresh App Home
-            handle_app_home({"user": user_id, "team": team_id}, client)
+            # Refresh App Home (respects configure mode)
+            _refresh_home(team_id, user_id, client)
         except Exception as exc:
             logger.error("create_standup_modal error: %s", exc)
 
