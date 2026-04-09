@@ -656,7 +656,7 @@ def app_home_view(
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*Your standups:*",
+                    "text": "*Your standups:*",
                 },
             }
         )
