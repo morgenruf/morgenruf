@@ -297,25 +297,82 @@ def _complete_standup(user_id: str, session, client) -> None:
 
     try:
         import db as _db  # noqa: PLC0415
-        from ai_summary import generate_summary  # noqa: PLC0415
 
-        config = _db.get_workspace_config(session.team_id) or {}
-        if config.get("ai_summary_enabled") and channel:
-            today_standups = _db.get_today_standups(session.team_id)
-            active_members = _db.get_active_members(session.team_id)
-            submitted_users = {s["user_id"] for s in today_standups}
-            all_submitted = all(m["user_id"] in submitted_users for m in active_members)
-            if all_submitted and len(today_standups) > 1:
-                inst = _db.get_installation(session.team_id)
-                team_name = (inst or {}).get("team_name", "")
-                summary_text = generate_summary(today_standups, team_name)
-                if summary_text:
-                    client.chat_postMessage(
-                        channel=channel,
-                        text=f"✨ *AI Summary*\n\n{summary_text}",
+        today_standups = _db.get_today_standups(session.team_id)
+        active_members = _db.get_active_members(session.team_id)
+        submitted_users = {s["user_id"] for s in today_standups}
+        all_submitted = all(m["user_id"] in submitted_users for m in active_members)
+
+        if all_submitted and len(today_standups) > 1 and channel:
+            # Post grouped summary when all members have submitted
+            try:
+                import blocks as _blocks  # noqa: PLC0415
+
+                sched_cfg = {}
+                try:
+                    sched_cfg = _db.get_standup_schedule_for_channel(session.team_id, channel) or {}
+                except Exception:
+                    pass
+                group_by = sched_cfg.get("group_by", "member")
+                config = _db.get_workspace_config(session.team_id) or {}
+                questions = config.get("questions") or []
+                if isinstance(questions, str):
+                    try:
+                        questions = json.loads(questions)
+                    except Exception:
+                        questions = []
+
+                # Build user profiles for rich display
+                user_profiles = {}
+                for m in active_members:
+                    try:
+                        info = client.users_info(user=m["user_id"]).get("user", {})
+                        profile = info.get("profile", {})
+                        user_profiles[m["user_id"]] = {
+                            "display_name": profile.get("real_name") or m.get("real_name", ""),
+                            "avatar_url": profile.get("image_48", ""),
+                        }
+                    except Exception:
+                        user_profiles[m["user_id"]] = {"display_name": m.get("real_name", ""), "avatar_url": ""}
+
+                if group_by == "question":
+                    summary_blocks = _blocks.build_summary_by_question(
+                        today_standups, questions, user_profiles=user_profiles
                     )
+                else:
+                    summary_blocks = _blocks.build_summary_by_member(
+                        today_standups, questions, user_profiles=user_profiles
+                    )
+
+                post_to_thread = sched_cfg.get("post_to_thread", False)
+                if post_to_thread:
+                    parent = client.chat_postMessage(channel=channel, text="📋 Daily Standup Summary")
+                    client.chat_postMessage(
+                        channel=channel, text="📋 Daily Standup Summary", blocks=summary_blocks, thread_ts=parent["ts"]
+                    )
+                else:
+                    client.chat_postMessage(channel=channel, text="📋 Daily Standup Summary", blocks=summary_blocks)
+            except Exception as exc:
+                logger.warning("Grouped summary failed: %s", exc)
+
+            # AI summary
+            try:
+                from ai_summary import generate_summary  # noqa: PLC0415
+
+                config = _db.get_workspace_config(session.team_id) or {}
+                if config.get("ai_summary_enabled"):
+                    inst = _db.get_installation(session.team_id)
+                    team_name = (inst or {}).get("team_name", "")
+                    summary_text = generate_summary(today_standups, team_name)
+                    if summary_text:
+                        client.chat_postMessage(
+                            channel=channel,
+                            text=f"✨ *AI Summary*\n\n{summary_text}",
+                        )
+            except Exception as exc:
+                logger.warning("AI summary failed: %s", exc)
     except Exception as exc:
-        logger.warning("AI summary failed: %s", exc)
+        logger.warning("Post-standup summary/AI failed: %s", exc)
 
     try:
         from workflow import evaluate_rules  # noqa: PLC0415
@@ -485,94 +542,56 @@ def register_handlers(app: App) -> None:
         user_id = event["user"]
         team_id = event.get("team", "")
 
+        import blocks as _blocks  # noqa: PLC0415
+
         workspace_name = ""
-        channel_name = ""
-        standup_time = ""
-        try:
-            import db  # noqa: PLC0415
-
-            config = db.get_workspace_config(team_id) or {}
-            channel_name = config.get("channel_id", "")
-            standup_time = config.get("standup_time", "")
-            info = client.team_info()
-            workspace_name = info.get("team", {}).get("name", "")
-        except Exception as e:
-            logger.warning("Unexpected error in handle_app_home loading workspace info: %s", e)
-
         on_vacation = False
+        streak = 0
+        standups: list[dict] = []
+
         try:
             import db  # noqa: PLC0415
 
             on_vacation = db.is_on_vacation(team_id, user_id)
-        except Exception as e:
-            logger.warning("Unexpected error in handle_app_home checking vacation status: %s", e)
+            streak = db.get_standup_streak(team_id, user_id)
 
-        status_text = (
-            f"✅ Active — posting to <#{channel_name}> at *{standup_time}*"
-            if channel_name and standup_time
-            else "⚠️ Not configured — visit the dashboard to set up your standup."
+            # Load standup schedules for this workspace
+            schedules = db.get_standup_schedules(team_id)
+            for s in schedules:
+                # Parse schedule_days into a list
+                days = s.get("schedule_days", "mon,tue,wed,thu,fri")
+                if isinstance(days, str):
+                    days = [d.strip() for d in days.split(",") if d.strip()]
+                participants = s.get("participants") or []
+                standups.append({
+                    "standup_id": str(s["id"]),
+                    "standup_name": s.get("name", "Team Standup"),
+                    "channel_id": s.get("channel_id", ""),
+                    "report_time": s.get("schedule_time", "09:00"),
+                    "timezone": s.get("schedule_tz", "UTC"),
+                    "days": days,
+                    "members": participants,
+                    "active": s.get("active", True),
+                })
+
+            try:
+                info = client.team_info()
+                workspace_name = info.get("team", {}).get("name", "")
+            except Exception:
+                pass
+        except Exception as e:
+            logger.warning("handle_app_home error loading data: %s", e)
+
+        view = _blocks.app_home_view(
+            standups=standups,
+            user_id=user_id,
+            on_vacation=on_vacation,
+            streak=streak,
+            workspace_name=workspace_name,
         )
 
-        blocks_to_publish = [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "☀️ Morgenruf Standup Bot"},
-            },
-            {"type": "divider"},
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (f"*Workspace:* {workspace_name or team_id}\n*Status:* {status_text}"),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Quick actions*\nSend me `standup` in a DM to start your standup manually.",
-                },
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "🔧 Open Dashboard"},
-                        "url": "https://api.morgenruf.dev/dashboard",
-                        "action_id": "open_dashboard",
-                    }
-                ],
-            },
-        ]
-
-        if on_vacation:
-            blocks_to_publish.insert(
-                -1,
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": "🌴 *You're currently on vacation.* I won't send you standup reminders until you're back.",
-                    },
-                    "accessory": {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "I'm back from vacation"},
-                        "action_id": "vacation_return",
-                        "style": "primary",
-                    },
-                },
-            )
-
         try:
-            client.views_publish(
-                user_id=user_id,
-                view={
-                    "type": "home",
-                    "blocks": blocks_to_publish,
-                },
-            )
+            client.views_publish(user_id=user_id, view=view)
         except Exception as exc:
             logger.warning("Failed to publish App Home for %s: %s", user_id, exc)
 
@@ -588,6 +607,264 @@ def register_handlers(app: App) -> None:
         except Exception as e:
             logger.warning("Unexpected error in handle_vacation_return clearing vacation: %s", e)
         handle_app_home({"user": user_id, "team": team_id}, client)
+
+    @app.action("im_away")
+    def handle_im_away(ack, body, client):  # noqa: ANN001
+        """Handle 'I'm away' button from DM or App Home."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["user"]["team_id"]
+        try:
+            import db  # noqa: PLC0415
+
+            db.set_vacation(team_id, user_id, True)
+        except Exception as e:
+            logger.warning("im_away handler error: %s", e)
+        # Clear any active session
+        cache_key = f"{team_id}:{user_id}"
+        state_store.clear(cache_key)
+        client.chat_postMessage(
+            channel=user_id,
+            text="🏖️ Got it! You're marked as away. I won't send you standups until you're back.\nMessage me *I'm back* or click the button in App Home when you return.",
+        )
+        # Refresh App Home to show "I'm back" state
+        handle_app_home({"user": user_id, "team": team_id}, client)
+
+    @app.action("skip_standup")
+    def handle_skip_standup_button(ack, body, client):  # noqa: ANN001
+        """Handle 'Skip today' button from standup DM."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        try:
+            import db  # noqa: PLC0415
+
+            db.skip_today(team_id, user_id)
+        except Exception as e:
+            logger.warning("skip_standup button error: %s", e)
+        cache_key = f"{team_id}:{user_id}"
+        state_store.clear(cache_key)
+        client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
+
+    @app.action("fill_in_form")
+    def handle_fill_in_form(ack, body, client):  # noqa: ANN001
+        """Handle 'Fill in form' button — open modal with all questions at once."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        cache_key = f"{team_id}:{user_id}"
+        session = state_store.get(cache_key)
+        if not session:
+            client.chat_postMessage(
+                channel=user_id,
+                text="⚠️ Your standup session expired. Run `/standup` to start a new one.",
+            )
+            return
+
+        import blocks as _blocks  # noqa: PLC0415
+
+        # Try to prefill with previous answers
+        previous_answers = []
+        try:
+            import db  # noqa: PLC0415
+
+            prev = db.get_latest_standup(user_id, team_id)
+            if prev:
+                previous_answers = [
+                    prev.get("yesterday", ""),
+                    prev.get("today", ""),
+                    prev.get("blockers", ""),
+                ]
+        except Exception as e:
+            logger.warning("fill_in_form: could not load previous answers: %s", e)
+
+        modal = _blocks.standup_form_modal(session.questions, session.standup_name or "Standup", previous_answers=previous_answers)
+        modal["private_metadata"] = cache_key
+        client.views_open(trigger_id=body["trigger_id"], view=modal)
+
+    @app.action("open_create_standup")
+    def handle_open_create_standup(ack, body, client):  # noqa: ANN001
+        """Handle 'Create a standup' button from App Home."""
+        ack()
+        import blocks as _blocks  # noqa: PLC0415
+
+        modal = _blocks.create_standup_modal()
+        client.views_open(trigger_id=body["trigger_id"], view=modal)
+
+    @app.action("open_dashboard")
+    def handle_open_dashboard(ack):  # noqa: ANN001
+        """Acknowledge dashboard link button (URL buttons still need ack)."""
+        ack()
+
+    @app.action("start_standup_now")
+    def handle_start_standup_now(ack, body, client):  # noqa: ANN001
+        """Handle 'Start standup' button from App Home."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["user"]["team_id"]
+        _start_standup_session(user_id, team_id, client)
+
+    @app.action("view_previous_standups")
+    def handle_view_previous_standups(ack, body, client):  # noqa: ANN001
+        """Handle 'Previous standups' button — open modal with recent history."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["user"]["team_id"]
+        try:
+            import db  # noqa: PLC0415
+            import blocks as _blocks  # noqa: PLC0415
+
+            standups = db.get_standups(team_id, days=14)
+            user_standups = [s for s in standups if s["user_id"] == user_id]
+            standup_name = "Standup"
+            schedule_id = body["actions"][0].get("value", "")
+            if schedule_id:
+                try:
+                    sched = db.get_standup_schedule(team_id, int(schedule_id))
+                    if sched:
+                        standup_name = sched.get("name", "Standup")
+                except Exception:
+                    pass
+            modal = _blocks.previous_standups_modal(user_standups, standup_name)
+            client.views_open(trigger_id=body["trigger_id"], view=modal)
+        except Exception as exc:
+            logger.warning("view_previous_standups error: %s", exc)
+
+    @app.action("edit_standup")
+    def handle_edit_standup_button(ack, body, client):  # noqa: ANN001
+        """Handle 'Edit' button on App Home standup card."""
+        ack()
+        standup_id = body["actions"][0].get("value", "")
+        team_id = body["user"]["team_id"]
+        try:
+            import db  # noqa: PLC0415
+            import blocks as _blocks  # noqa: PLC0415
+
+            schedule = db.get_standup_schedule(team_id, int(standup_id))
+            if schedule:
+                questions = schedule.get("questions") or []
+                if isinstance(questions, str):
+                    try:
+                        questions = json.loads(questions)
+                    except Exception:
+                        questions = []
+                days = schedule.get("schedule_days", "mon,tue,wed,thu,fri")
+                if isinstance(days, str):
+                    days = [d.strip() for d in days.split(",") if d.strip()]
+                cfg = {
+                    "standup_id": str(schedule["id"]),
+                    "channel_id": schedule.get("channel_id", ""),
+                    "questions": questions,
+                    "report_time": schedule.get("schedule_time", "09:00"),
+                    "timezone": schedule.get("schedule_tz", "UTC"),
+                    "reminder_minutes": schedule.get("reminder_minutes", 0),
+                    "days": days,
+                    "members": schedule.get("participants") or [],
+                    "sync_with_channel": schedule.get("sync_with_channel", False),
+                    "report_destination": "thread" if schedule.get("post_to_thread") else "channel",
+                    "group_by": schedule.get("group_by", "member"),
+                    "standup_name": schedule.get("name", ""),
+                }
+                modal = _blocks.create_standup_modal(cfg)
+                client.views_open(trigger_id=body["trigger_id"], view=modal)
+        except Exception as exc:
+            logger.warning("edit_standup_button error: %s", exc)
+
+    @app.action("delete_standup")
+    def handle_delete_standup_button(ack, body, client):  # noqa: ANN001
+        """Handle 'Delete' button on App Home standup card."""
+        ack()
+        standup_id = body["actions"][0].get("value", "")
+        user_id = body["user"]["id"]
+        team_id = body["user"]["team_id"]
+        try:
+            import db  # noqa: PLC0415
+
+            db.delete_standup_schedule(team_id, int(standup_id))
+            # Remove from scheduler
+            try:
+                from scheduler import get_scheduler  # noqa: PLC0415
+
+                sched_obj = get_scheduler()
+                if sched_obj:
+                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
+                        try:
+                            sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            # Refresh App Home
+            handle_app_home({"user": user_id, "team": team_id}, client)
+        except Exception as exc:
+            logger.warning("delete_standup_button error: %s", exc)
+
+    @app.action("standup_overflow")
+    def handle_standup_overflow(ack, body, client):  # noqa: ANN001
+        """Handle overflow menu clicks on App Home standup cards."""
+        ack()
+        action_value = body["actions"][0].get("selected_option", {}).get("value", "")
+        user_id = body["user"]["id"]
+        team_id = body["user"]["team_id"]
+
+        if action_value.startswith("delete_"):
+            standup_id = action_value.split("_", 1)[1]
+            try:
+                import db  # noqa: PLC0415
+
+                db.delete_standup_schedule(team_id, int(standup_id))
+                handle_app_home({"user": user_id, "team": team_id}, client)
+            except Exception as exc:
+                logger.warning("overflow delete error: %s", exc)
+        elif action_value.startswith("pause_"):
+            standup_id = action_value.split("_", 1)[1]
+            try:
+                import db  # noqa: PLC0415
+
+                db.update_standup_schedule(team_id, int(standup_id), active=False)
+                # Remove from scheduler
+                try:
+                    from scheduler import get_scheduler  # noqa: PLC0415
+
+                    sched_obj = get_scheduler()
+                    if sched_obj:
+                        for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
+                            try:
+                                sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                handle_app_home({"user": user_id, "team": team_id}, client)
+            except Exception as exc:
+                logger.warning("overflow pause error: %s", exc)
+        elif action_value.startswith("enable_"):
+            standup_id = action_value.split("_", 1)[1]
+            try:
+                import db  # noqa: PLC0415
+
+                schedule = db.update_standup_schedule(team_id, int(standup_id), active=True)
+                # Re-register in scheduler
+                if schedule:
+                    try:
+                        from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+
+                        inst = db.get_installation(team_id)
+                        sched_obj = get_scheduler()
+                        if inst and sched_obj:
+                            sched_with_token = dict(schedule)
+                            sched_with_token["bot_token"] = inst["bot_token"]
+                            register_schedule_job(sched_obj, sched_with_token)
+                    except Exception:
+                        pass
+                handle_app_home({"user": user_id, "team": team_id}, client)
+            except Exception as exc:
+                logger.warning("overflow enable error: %s", exc)
+        elif action_value.startswith("edit_"):
+            standup_id = action_value.split("_", 1)[1]
+            # Trigger the edit flow
+            body["actions"][0]["value"] = standup_id
+            handle_edit_standup_button(lambda: None, body, client)
 
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
@@ -816,6 +1093,115 @@ def register_handlers(app: App) -> None:
         except Exception as exc:
             logger.warning("kudos command error: %s", exc)
             client.chat_postMessage(channel=user_id, text="❌ Couldn't send kudos. Please try again.")
+
+    @app.view("create_standup_modal")
+    def handle_create_standup_modal(ack, body, client):  # noqa: ANN001
+        """Handle submission of the create/edit standup modal from App Home."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        values = body["view"]["state"]["values"]
+        private_metadata = body["view"].get("private_metadata", "")
+
+        channel_id = values.get("standup_channel", {}).get("standup_channel", {}).get("selected_channel", "")
+        questions_text = values.get("questions", {}).get("questions", {}).get("value", "")
+        questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
+        report_time = values.get("report_time", {}).get("report_time", {}).get("selected_option", {}).get("value", "09:00")
+        timezone = values.get("timezone", {}).get("timezone", {}).get("selected_option", {}).get("value", "UTC")
+        reminder_val = values.get("reminder", {}).get("reminder", {}).get("selected_option", {}).get("value", "0")
+        members = values.get("members", {}).get("members", {}).get("selected_users", [])
+        days_opts = values.get("days", {}).get("days", {}).get("selected_options", [])
+        days = [o["value"] for o in days_opts]
+        report_dest = values.get("report_destination", {}).get("report_destination", {}).get("selected_option", {}).get("value", "channel")
+        group_by = values.get("group_by", {}).get("group_by", {}).get("selected_option", {}).get("value", "member")
+        standup_name = values.get("standup_name", {}).get("standup_name", {}).get("value", "") or "Team Standup"
+        sync_opts = values.get("sync_channel", {}).get("sync_channel", {}).get("selected_options", [])
+        sync_with_channel = bool(sync_opts)
+
+        try:
+            import db  # noqa: PLC0415
+
+            kwargs = {
+                "name": standup_name,
+                "channel_id": channel_id,
+                "schedule_time": report_time,
+                "schedule_tz": timezone,
+                "schedule_days": ",".join(days) if days else "mon,tue,wed,thu,fri",
+                "questions": questions,
+                "participants": members,
+                "reminder_minutes": int(reminder_val),
+                "post_to_thread": report_dest == "thread",
+                "group_by": group_by,
+                "sync_with_channel": sync_with_channel,
+            }
+
+            if private_metadata:
+                # Editing existing schedule
+                schedule = db.update_standup_schedule(team_id, int(private_metadata), **kwargs)
+            else:
+                # Creating new schedule
+                schedule = db.create_standup_schedule(team_id, **kwargs)
+
+            # Register/update in scheduler
+            if schedule:
+                try:
+                    from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+
+                    inst = db.get_installation(team_id)
+                    sched_obj = get_scheduler()
+                    if inst and sched_obj:
+                        sched_with_token = dict(schedule)
+                        sched_with_token["bot_token"] = inst["bot_token"]
+                        register_schedule_job(sched_obj, sched_with_token)
+                except Exception as exc2:
+                    logger.warning("Could not register schedule job from modal: %s", exc2)
+
+                # Ensure members are in the DB
+                for uid in members:
+                    try:
+                        user_info = client.users_info(user=uid).get("user", {})
+                        profile = user_info.get("profile", {})
+                        db.upsert_member(
+                            team_id=team_id,
+                            user_id=uid,
+                            real_name=profile.get("real_name", ""),
+                            email=profile.get("email", ""),
+                            tz=user_info.get("tz", "UTC"),
+                        )
+                    except Exception:
+                        pass
+
+            # Refresh App Home
+            handle_app_home({"user": user_id, "team": team_id}, client)
+        except Exception as exc:
+            logger.error("create_standup_modal error: %s", exc)
+
+    @app.view("standup_form_modal")
+    def handle_standup_form_submit(ack, body, client):  # noqa: ANN001
+        """Handle submission of the fill-in standup form modal."""
+        ack()
+        user_id: str = body["user"]["id"]
+        team_id: str = body["team"]["id"]
+        values = body["view"]["state"]["values"]
+        cache_key = body["view"].get("private_metadata", f"{team_id}:{user_id}")
+
+        session = state_store.get(cache_key)
+        if not session:
+            client.chat_postMessage(
+                channel=user_id,
+                text="⚠️ Your standup session expired. Run `/standup` to start a new one.",
+            )
+            return
+
+        # Collect answers from all question fields
+        for i in range(len(session.questions)):
+            block_id = f"question_{i}"
+            action_id = f"answer_{i}"
+            answer = values.get(block_id, {}).get(action_id, {}).get("value", "")
+            session = state_store.record_answer(cache_key, answer)
+
+        # Ask mood after form submission
+        _send_mood_block(client, user_id)
 
     @app.view("edit_standup_modal")
     def handle_edit_modal_submit(ack, body, client):  # noqa: ANN001

@@ -43,6 +43,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             questions = questions_raw if questions_raw else None
             participants_filter = schedule.get("participants") or []
             channel_id = schedule.get("channel_id") or channel_id
+            standup_name = schedule.get("name", "Team Standup")
         else:
             config = db.get_workspace_config(team_id) or {}
             qs = config.get("questions") or []
@@ -55,6 +56,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     qs = []
             questions = qs if qs else None
             participants_filter = []
+            standup_name = config.get("standup_name", "Team Standup")
 
         members = db.get_active_members(team_id)
         if participants_filter:
@@ -72,6 +74,31 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
     except Exception as exc:
         logger.error("Bot token invalid for team %s — skipping standup: %s", team_id, exc)
         return
+
+    # Channel member sync: auto-add/remove participants based on Slack channel membership
+    if schedule_id and channel_id:
+        try:
+            schedule = db.get_standup_schedule(team_id, schedule_id)
+            if schedule and schedule.get("sync_with_channel"):
+                resp = client.conversations_members(channel=channel_id, limit=500)
+                channel_members = set(resp.get("members", []))
+                # Filter out bots by checking each user (cached per team)
+                for uid in channel_members:
+                    try:
+                        db.upsert_member(team_id, uid)
+                    except Exception:
+                        pass
+                # Update participants list to match channel
+                if channel_members:
+                    db.update_standup_schedule(
+                        team_id, schedule_id,
+                        participants=list(channel_members),
+                    )
+                    members = db.get_active_members(team_id)
+                    members = [m for m in members if m["user_id"] in channel_members]
+                logger.info("Synced %d channel members for schedule %s", len(channel_members), schedule_id)
+        except Exception as exc:
+            logger.warning("Channel member sync failed for %s/%s: %s", team_id, schedule_id, exc)
 
     for member in members:
         user_id = member["user_id"]
@@ -104,17 +131,16 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     "Unexpected error in _send_standup_to_workspace checking vacation for %s: %s", user_id, e
                 )
 
-            session = state_store.start(cache_key, channel_id, team_id=team_id, questions=questions)
+            session = state_store.start(cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name)
 
             dm = client.conversations_open(users=user_id)
             dm_channel = dm["channel"]["id"]
 
-            client.chat_postMessage(channel=dm_channel, text="📋 Starting your standup!")
-            # Send first question via the shared helper so the Submit-button
-            # UX stays consistent with the /standup command path.
-            from handlers import _send_question_block  # noqa: PLC0415
+            # Send rich Block Kit DM with Fill-in-form / Skip / I'm away buttons
+            from blocks import standup_dm_message  # noqa: PLC0415
 
-            _send_question_block(client, user_id, session.questions[0], 0)
+            dm_msg = standup_dm_message(session.questions, standup_name)
+            client.chat_postMessage(channel=dm_channel, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg)
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
         except Exception as exc:
             logger.error("Failed to DM %s / %s: %s", team_id, user_id, exc)

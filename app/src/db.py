@@ -470,6 +470,51 @@ def is_on_vacation(team_id: str, user_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def get_standup_streak(team_id: str, user_id: str) -> int:
+    """Return the current consecutive standup streak (number of working days in a row).
+
+    Counts backwards from today (or the most recent standup date) through
+    consecutive weekdays where the user submitted a standup.
+    """
+    sql = """
+        WITH dates AS (
+            SELECT DISTINCT standup_date
+            FROM standups
+            WHERE team_id = %s AND user_id = %s
+            ORDER BY standup_date DESC
+        ),
+        numbered AS (
+            SELECT standup_date,
+                   standup_date - (ROW_NUMBER() OVER (ORDER BY standup_date DESC))::int AS grp
+            FROM dates
+        )
+        SELECT COUNT(*) AS streak
+        FROM numbered
+        WHERE grp = (SELECT grp FROM numbered LIMIT 1)
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return int(row[0]) if row and row[0] else 0
+
+
+def get_user_last_standup_answers(team_id: str, user_id: str) -> dict | None:
+    """Return the most recent standup answers for prefilling the form."""
+    sql = """
+        SELECT yesterday, today, blockers
+        FROM standups
+        WHERE team_id = %s AND user_id = %s
+        ORDER BY submitted_at DESC
+        LIMIT 1
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
     """Return per-member participation stats for the last N days."""
     sql = """
@@ -564,6 +609,8 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
         "weekend_reminder",
         "report_channel",
         "report_time",
+        "sync_with_channel",
+        "group_by",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
@@ -609,6 +656,8 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         "weekend_reminder",
         "report_channel",
         "report_time",
+        "sync_with_channel",
+        "group_by",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:

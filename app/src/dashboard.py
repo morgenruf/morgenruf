@@ -827,9 +827,33 @@ def api_update_schedule(schedule_id: int):
             kwargs["notify_on_report"] = bool(data["notify_on_report"])
         if "weekend_reminder" in data:
             kwargs["weekend_reminder"] = bool(data["weekend_reminder"])
+        if "sync_with_channel" in data:
+            kwargs["sync_with_channel"] = bool(data["sync_with_channel"])
+        if "group_by" in data:
+            kwargs["group_by"] = data["group_by"]
         schedule = db.update_standup_schedule(team_id, schedule_id, **kwargs)
         if not schedule:
             return jsonify({"error": "Not found"}), 404
+        # Refresh the running scheduler so the new time/days take effect immediately
+        try:
+            from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+
+            inst = db.get_installation(team_id)
+            sched_obj = get_scheduler()
+            if inst and sched_obj:
+                if schedule.get("active", True):
+                    sched_with_token = dict(schedule)
+                    sched_with_token["bot_token"] = inst["bot_token"]
+                    register_schedule_job(sched_obj, sched_with_token)
+                else:
+                    # Deactivated — remove jobs from scheduler
+                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
+                        try:
+                            sched_obj.remove_job(f"{prefix}{team_id}_{schedule_id}")
+                        except Exception:
+                            pass
+        except Exception as exc2:
+            logger.warning("Could not refresh schedule job in scheduler: %s", exc2)
         return jsonify(schedule)
     except Exception as exc:
         logger.error("api_update_schedule: %s", exc)
@@ -842,6 +866,19 @@ def api_delete_schedule(schedule_id: int):
     team_id = session["team_id"]
     try:
         db.delete_standup_schedule(team_id, schedule_id)
+        # Remove jobs from the running scheduler
+        try:
+            from scheduler import get_scheduler  # noqa: PLC0415
+
+            sched_obj = get_scheduler()
+            if sched_obj:
+                for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
+                    try:
+                        sched_obj.remove_job(f"{prefix}{team_id}_{schedule_id}")
+                    except Exception:
+                        pass
+        except Exception as exc2:
+            logger.warning("Could not remove schedule job from scheduler: %s", exc2)
         return jsonify({"ok": True})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
