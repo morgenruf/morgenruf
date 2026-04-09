@@ -91,7 +91,8 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                 # Update participants list to match channel
                 if channel_members:
                     db.update_standup_schedule(
-                        team_id, schedule_id,
+                        team_id,
+                        schedule_id,
                         participants=list(channel_members),
                     )
                     members = db.get_active_members(team_id)
@@ -131,7 +132,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     "Unexpected error in _send_standup_to_workspace checking vacation for %s: %s", user_id, e
                 )
 
-            session = state_store.start(cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name)
+            session = state_store.start(
+                cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name
+            )
 
             dm = client.conversations_open(users=user_id)
             dm_channel = dm["channel"]["id"]

@@ -69,7 +69,13 @@ class StateStore:
         self._lock = Lock()
 
     def start(
-        self, cache_key: str, channel: str, *, team_id: str = "", questions: list[str] | None = None, standup_name: str = "Team Standup"
+        self,
+        cache_key: str,
+        channel: str,
+        *,
+        team_id: str = "",
+        questions: list[str] | None = None,
+        standup_name: str = "Team Standup",
     ) -> UserSession:
         """Begin a new standup session. cache_key should be 'team_id:user_id'."""
         if not team_id:
