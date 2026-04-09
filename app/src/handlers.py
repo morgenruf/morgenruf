@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _daily_thread_cache: dict[str, str] = {}
 
 # Track which users are in configure mode: "team_id:user_id"
-_configure_mode_users: set[str] = {}
+_configure_mode_users: set[str] = set()
 
 _MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
 
