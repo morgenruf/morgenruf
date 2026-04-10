@@ -122,6 +122,17 @@ def oauth_callback():
     bot_user_id: str = resp["bot_user_id"]
     app_id: str = resp["app_id"]
     authed_user_id: str = resp.get("authed_user", {}).get("id", "")
+    refresh_token: str = resp.get("refresh_token", "")
+    expires_in: int = resp.get("expires_in", 0)
+
+    # Compute absolute expiry timestamp
+    expires_at_str = None
+    if expires_in > 0:
+        from datetime import datetime, timezone as tz
+
+        expires_at_str = datetime.fromtimestamp(
+            time.time() + expires_in, tz=tz.utc
+        ).isoformat()
 
     # Persist installation
     is_new_install = False
@@ -133,6 +144,8 @@ def oauth_callback():
             bot_user_id=bot_user_id,
             app_id=app_id,
             installed_by_user_id=authed_user_id,
+            bot_refresh_token=refresh_token or None,
+            bot_token_expires_at=expires_at_str,
         )
         db.upsert_workspace_config(team_id)
     except Exception as exc:

@@ -69,23 +69,29 @@ def save_installation(
     bot_user_id: str,
     app_id: str,
     installed_by_user_id: str | None = None,
+    bot_refresh_token: str | None = None,
+    bot_token_expires_at: str | None = None,
 ) -> bool:
     """Insert or update an OAuth installation record. Returns True if this is a new installation."""
     sql = """
-        INSERT INTO installations (team_id, team_name, bot_token, bot_user_id, app_id, installed_by_user_id, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        INSERT INTO installations (team_id, team_name, bot_token, bot_user_id, app_id,
+            installed_by_user_id, bot_refresh_token, bot_token_expires_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (team_id) DO UPDATE SET
             team_name = EXCLUDED.team_name,
             bot_token = EXCLUDED.bot_token,
             bot_user_id = EXCLUDED.bot_user_id,
             app_id = EXCLUDED.app_id,
             installed_by_user_id = EXCLUDED.installed_by_user_id,
+            bot_refresh_token = EXCLUDED.bot_refresh_token,
+            bot_token_expires_at = EXCLUDED.bot_token_expires_at,
             updated_at = NOW()
         RETURNING (xmax = 0) AS is_new
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, team_name, bot_token, bot_user_id, app_id, installed_by_user_id))
+            cur.execute(sql, (team_id, team_name, bot_token, bot_user_id, app_id,
+                              installed_by_user_id, bot_refresh_token, bot_token_expires_at))
             row = cur.fetchone()
             is_new = bool(row[0]) if row else False
     logger.info("Saved installation for team %s (%s) (new=%s)", team_id, team_name, is_new)

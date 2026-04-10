@@ -62,11 +62,15 @@ def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
 
 def create_app() -> tuple[App, Flask]:
     signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
+    client_id = os.environ.get("SLACK_CLIENT_ID", "")
+    client_secret = os.environ.get("SLACK_CLIENT_SECRET", "")
     installation_store = PostgresInstallationStore()
 
     slack_app = App(
         signing_secret=signing_secret,
         installation_store=installation_store,
+        client_id=client_id or None,
+        client_secret=client_secret or None,
     )
 
     register_handlers(slack_app)
