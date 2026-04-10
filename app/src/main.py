@@ -33,6 +33,7 @@ from oauth import oauth_bp
 from scheduler import build_scheduler
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
+from slack_bolt.oauth.oauth_settings import OAuthSettings
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 log_level = logging.DEBUG if os.environ.get("LOG_LEVEL", "").upper() == "DEBUG" else logging.INFO
@@ -66,11 +67,18 @@ def create_app() -> tuple[App, Flask]:
     client_secret = os.environ.get("SLACK_CLIENT_SECRET", "")
     installation_store = PostgresInstallationStore()
 
+    oauth_settings = None
+    if client_id and client_secret:
+        oauth_settings = OAuthSettings(
+            client_id=client_id,
+            client_secret=client_secret,
+            installation_store=installation_store,
+        )
+
     slack_app = App(
         signing_secret=signing_secret,
         installation_store=installation_store,
-        client_id=client_id or None,
-        client_secret=client_secret or None,
+        oauth_settings=oauth_settings,
     )
 
     register_handlers(slack_app)
