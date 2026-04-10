@@ -7,6 +7,7 @@ import hmac
 import logging
 import os
 import time
+from datetime import datetime, timezone as tz
 
 import db
 from flask import Blueprint, jsonify, redirect, request, session
@@ -128,8 +129,6 @@ def oauth_callback():
     # Compute absolute expiry timestamp
     expires_at_str = None
     if expires_in > 0:
-        from datetime import datetime, timezone as tz
-
         expires_at_str = datetime.fromtimestamp(
             time.time() + expires_in, tz=tz.utc
         ).isoformat()
