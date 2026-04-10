@@ -620,6 +620,13 @@ def register_handlers(app: App) -> None:
         except Exception:
             pass
 
+        # Check admin role for showing configure button
+        is_admin = False
+        try:
+            is_admin = db.get_member_role(team_id, user_id) == "admin"
+        except Exception:
+            pass
+
         view = _blocks.app_home_view(
             standups=standups,
             user_id=user_id,
@@ -627,6 +634,7 @@ def register_handlers(app: App) -> None:
             streak=streak,
             workspace_name=workspace_name,
             user_tz=user_tz,
+            is_admin=is_admin,
         )
 
         try:
@@ -750,10 +758,15 @@ def register_handlers(app: App) -> None:
 
     @app.action("open_configure_mode")
     def handle_open_configure_mode(ack, body, client):  # noqa: ANN001
-        """Switch App Home to configuration mode."""
+        """Switch App Home to configuration mode (admin only)."""
         ack()
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
+
+        import db as _db  # noqa: PLC0415
+
+        if _db.get_member_role(team_id, user_id) != "admin":
+            return
         _configure_mode_users.add(f"{team_id}:{user_id}")
         _publish_configure_view(team_id, user_id, client)
 
