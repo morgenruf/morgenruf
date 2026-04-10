@@ -639,6 +639,7 @@ def app_home_view(
     streak: int = 0,
     workspace_name: str = "",
     user_tz: str = "",
+    is_admin: bool = False,
 ) -> dict:
     """App Home tab — rich standup cards matching Standup & Prosper quality."""
     from datetime import datetime
@@ -672,7 +673,13 @@ def app_home_view(
         },
     ]
 
-    # Top action bar — I'm away, Configure, Get support, Help
+    # Top action bar — I'm away, Configure (admin only), Get support, Help
+    configure_btn = {
+        "type": "button",
+        "action_id": "open_configure_mode",
+        "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
+        "value": "configure",
+    }
     if on_vacation:
         top_actions = [
             {
@@ -681,12 +688,7 @@ def app_home_view(
                 "text": {"type": "plain_text", "text": "🏖️ I'm back", "emoji": True},
                 "style": "primary",
             },
-            {
-                "type": "button",
-                "action_id": "open_configure_mode",
-                "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
-                "value": "configure",
-            },
+            *([] if not is_admin else [configure_btn]),
             {
                 "type": "button",
                 "action_id": "open_dashboard",
@@ -708,12 +710,7 @@ def app_home_view(
                 "text": {"type": "plain_text", "text": "🏖️ I'm away", "emoji": True},
                 "value": "away_today",
             },
-            {
-                "type": "button",
-                "action_id": "open_configure_mode",
-                "text": {"type": "plain_text", "text": "⚙️ Configure standups", "emoji": True},
-                "value": "configure",
-            },
+            *([] if not is_admin else [configure_btn]),
             {
                 "type": "button",
                 "action_id": "open_dashboard",
