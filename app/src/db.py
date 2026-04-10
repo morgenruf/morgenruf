@@ -90,8 +90,19 @@ def save_installation(
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, team_name, bot_token, bot_user_id, app_id,
-                              installed_by_user_id, bot_refresh_token, bot_token_expires_at))
+            cur.execute(
+                sql,
+                (
+                    team_id,
+                    team_name,
+                    bot_token,
+                    bot_user_id,
+                    app_id,
+                    installed_by_user_id,
+                    bot_refresh_token,
+                    bot_token_expires_at,
+                ),
+            )
             row = cur.fetchone()
             is_new = bool(row[0]) if row else False
     logger.info("Saved installation for team %s (%s) (new=%s)", team_id, team_name, is_new)
