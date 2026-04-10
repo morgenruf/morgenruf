@@ -20,9 +20,7 @@ class PostgresInstallationStore(InstallationStore):
             # Compute token expiry timestamp from expires_at (epoch) if available
             expires_at_str = None
             if installation.bot_token_expires_at and installation.bot_token_expires_at > 0:
-                expires_at_str = datetime.fromtimestamp(
-                    installation.bot_token_expires_at, tz=timezone.utc
-                ).isoformat()
+                expires_at_str = datetime.fromtimestamp(installation.bot_token_expires_at, tz=timezone.utc).isoformat()
 
             db.save_installation(
                 team_id=installation.team_id or "",

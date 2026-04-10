@@ -130,9 +130,7 @@ def oauth_callback():
     # Compute absolute expiry timestamp
     expires_at_str = None
     if expires_in > 0:
-        expires_at_str = datetime.fromtimestamp(
-            time.time() + expires_in, tz=tz.utc
-        ).isoformat()
+        expires_at_str = datetime.fromtimestamp(time.time() + expires_in, tz=tz.utc).isoformat()
 
     # Persist installation
     is_new_install = False
