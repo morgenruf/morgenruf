@@ -18,7 +18,7 @@ jobs:
           cache: pip
       - run: pip install pytest pytest-mock pytest-cov -r app/requirements.txt
       - run: python -m pytest app/tests/ -v --tb=short --cov=app/src --cov-report=xml
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           flags: unittests
