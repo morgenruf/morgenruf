@@ -110,7 +110,7 @@ redis:
   enabled: true
   image:
     repository: redis
-    tag: "7-alpine"
+    tag: "8"
     pullPolicy: IfNotPresent
   maxmemory: "128mb"
   resources:
