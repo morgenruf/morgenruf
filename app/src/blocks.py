@@ -805,117 +805,105 @@ def app_home_view(
             channel = standup.get("channel_id", "")
             report_time = standup.get("report_time") or standup.get("schedule_time", "09:00")
             timezone = standup.get("timezone") or standup.get("schedule_tz", "UTC")
-            members = standup.get("members") or standup.get("participants") or []
-            days = standup.get("days") or []
-            if isinstance(days, str):
-                days = [d.strip() for d in days.split(",") if d.strip()]
-            member_count = len(members) if isinstance(members, list) else 0
             active = standup.get("active", True)
-            questions = standup.get("questions") or []
-            q_count = len(questions) if isinstance(questions, list) else 0
+            responded_today = standup.get("user_responded_today", False)
+            response_time = standup.get("user_last_response_time")
 
-            # Build schedule description like competitor
-            days_label = (
-                "Weekdays"
-                if set(days) == {"mon", "tue", "wed", "thu", "fri"}
-                else ", ".join(d.capitalize() for d in days)
-            )
+            # Status indicator
+            if not active:
+                status_icon = "⏸️"
+                status_text = "Paused"
+            elif responded_today:
+                status_icon = "✅"
+                status_text = "Completed"
+            else:
+                status_icon = "⏳"
+                status_text = "Pending"
 
-            # Streak per standup
-            streak_text = ""
+            # Header line: channel - workspace | name | status
+            header = f"<#{channel}>"
+            if workspace_name:
+                header += f" - *{workspace_name}*"
+            header += f" | {name} | {status_icon}"
+
+            # Detail lines
+            detail_lines = [header, f"*{status_text}*"]
+            if responded_today and response_time:
+                detail_lines.append(f"Reported at {response_time} today.")
+            elif active:
+                detail_lines.append(f"Reports at {report_time} today.")
+
+            # Streak
             if streak > 0:
                 streak_emoji = "🔥" if streak >= 5 else "✨"
-                streak_text = f"\nCurrent standup streak: {streak} {streak_emoji}"
-
-            detail_lines = [
-                f"<#{channel}> - *{workspace_name}* | {name} |" if workspace_name else f"<#{channel}> | {name} |",
-                f"{member_count} participant{'s' if member_count != 1 else ''} · {q_count} question{'s' if q_count != 1 else ''}",
-                f"{days_label} @ {report_time} ({timezone})",
-            ]
-            if not active:
-                detail_lines.append("⏸️ *Paused*")
-
-            detail_text = "\n".join(detail_lines) + streak_text
+                detail_lines.append(f"Current standup streak: {streak} {streak_emoji}")
 
             blocks.append(
                 {
                     "type": "section",
-                    "text": {"type": "mrkdwn", "text": detail_text},
-                }
-            )
-
-            # Action buttons row — matching competitor layout
-            row1 = [
-                {
-                    "type": "button",
-                    "action_id": "start_standup_now",
-                    "text": {"type": "plain_text", "text": "📝 Start standup", "emoji": True},
-                    "value": str(standup_id),
-                },
-                {
-                    "type": "button",
-                    "action_id": "view_previous_standups",
-                    "text": {"type": "plain_text", "text": "📅 Previous standups", "emoji": True},
-                    "value": str(standup_id),
-                },
-            ]
-            blocks.append({"type": "actions", "elements": row1})
-
-            # Configure / Pause / Details / Delete row
-            row2 = [
-                {
-                    "type": "button",
-                    "action_id": "edit_standup",
-                    "text": {"type": "plain_text", "text": "Configure"},
-                    "value": str(standup_id),
-                },
-            ]
-            if active:
-                row2.append(
-                    {
+                    "text": {"type": "mrkdwn", "text": "\n".join(detail_lines)},
+                    "accessory": {
                         "type": "button",
-                        "action_id": "standup_overflow",
-                        "text": {"type": "plain_text", "text": "Pause"},
-                        "value": f"pause_{standup_id}",
-                    }
-                )
-            else:
-                row2.append(
-                    {
-                        "type": "button",
-                        "action_id": "standup_overflow",
-                        "text": {"type": "plain_text", "text": "Enable"},
-                        "style": "primary",
-                        "value": f"enable_{standup_id}",
-                    }
-                )
-            row2.append(
-                {
-                    "type": "button",
-                    "action_id": "open_dashboard",
-                    "text": {"type": "plain_text", "text": "Details 🔗", "emoji": True},
-                    "url": "https://api.morgenruf.dev/dashboard",
-                }
-            )
-            row2.append(
-                {
-                    "type": "button",
-                    "action_id": "delete_standup",
-                    "text": {"type": "plain_text", "text": "Delete", "emoji": True},
-                    "style": "danger",
-                    "value": str(standup_id),
-                    "confirm": {
-                        "title": {"type": "plain_text", "text": "Delete standup?"},
-                        "text": {
-                            "type": "plain_text",
-                            "text": f"Permanently delete '{name}'? This cannot be undone.",
-                        },
-                        "confirm": {"type": "plain_text", "text": "Yes, delete"},
-                        "deny": {"type": "plain_text", "text": "Cancel"},
+                        "action_id": "view_previous_standups",
+                        "text": {"type": "plain_text", "text": "Previous standups 📅", "emoji": True},
+                        "value": str(standup_id),
                     },
                 }
             )
-            blocks.append({"type": "actions", "elements": row2})
+
+            # Action buttons — context-aware
+            actions = []
+            if active and responded_today:
+                actions.append(
+                    {
+                        "type": "button",
+                        "action_id": "start_standup_now",
+                        "text": {"type": "plain_text", "text": "🔄 Edit standup", "emoji": True},
+                        "value": str(standup_id),
+                    }
+                )
+            elif active:
+                actions.append(
+                    {
+                        "type": "button",
+                        "action_id": "start_standup_now",
+                        "text": {"type": "plain_text", "text": "📝 Start standup", "emoji": True},
+                        "style": "primary",
+                        "value": str(standup_id),
+                    }
+                )
+
+            if is_admin:
+                actions.append(
+                    {
+                        "type": "button",
+                        "action_id": "edit_standup",
+                        "text": {"type": "plain_text", "text": "Configure"},
+                        "value": str(standup_id),
+                    }
+                )
+                if active:
+                    actions.append(
+                        {
+                            "type": "button",
+                            "action_id": "standup_overflow",
+                            "text": {"type": "plain_text", "text": "Pause"},
+                            "value": f"pause_{standup_id}",
+                        }
+                    )
+                else:
+                    actions.append(
+                        {
+                            "type": "button",
+                            "action_id": "standup_overflow",
+                            "text": {"type": "plain_text", "text": "Enable"},
+                            "style": "primary",
+                            "value": f"enable_{standup_id}",
+                        }
+                    )
+
+            if actions:
+                blocks.append({"type": "actions", "elements": actions})
             blocks.append({"type": "divider"})
 
     # Footer
@@ -1266,7 +1254,7 @@ def away_confirmation_message(until: str = "tomorrow") -> dict:
 
 
 def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "") -> str:
-    """Replace {PROJ-123} and {ZD-123} patterns with Slack mrkdwn links.
+    """Replace issue patterns and URLs with Slack mrkdwn links, and normalise bullets.
 
     Zendesk tickets are matched first (``{ZD-NNN}``) so they are not
     consumed by the generic Jira pattern.
@@ -1291,6 +1279,15 @@ def linkify_issues(text: str, jira_base_url: str = "", zendesk_base_url: str = "
             return f"<{jira_base_url}/browse/{key}|{key}>"
 
         text = re.sub(r"\{([A-Z][A-Z0-9_]+-\d+)\}", _jira, text)
+
+    # Convert markdown-style links [text](url) → Slack mrkdwn <url|text>
+    text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r"<\2|\1>", text)
+
+    # Auto-link bare URLs not already inside < > brackets
+    text = re.sub(r"(?<![<|])(https?://[^\s>]+)", r"<\1>", text)
+
+    # Normalise bullet points: lines starting with - or * → •
+    text = re.sub(r"(?m)^[\-\*]\s+", "• ", text)
 
     return text
 

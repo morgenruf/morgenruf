@@ -390,6 +390,17 @@
     .multi-opt .chk { width: 14px; height: 14px; border: 1px solid var(--border2); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; }
     .multi-opt.selected .chk { background: var(--accent); border-color: var(--accent); color: #000; }
     .placeholder-text { color: var(--text-dim); font-size: 13px; }
+    .tz-search-wrap { position: relative; }
+    .tz-search-input { width: 100%; box-sizing: border-box; }
+    .tz-dropdown {
+      position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+      background: var(--surface); border: 1px solid var(--border2); border-radius: 7px;
+      max-height: 200px; overflow-y: auto; z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none;
+    }
+    .tz-dropdown.open { display: block; }
+    .tz-option { padding: 7px 12px; cursor: pointer; font-size: 13px; }
+    .tz-option:hover, .tz-option.highlighted { background: var(--surface2); }
 
     /* Members */
     .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -915,22 +926,10 @@
           </div>
           <div class="form-group">
             <label>Timezone</label>
-            <select id="f-tz">
-              <option value="UTC">UTC</option>
-              <option value="America/New_York">America/New_York</option>
-              <option value="America/Chicago">America/Chicago</option>
-              <option value="America/Denver">America/Denver</option>
-              <option value="America/Los_Angeles">America/Los_Angeles</option>
-              <option value="Europe/London">Europe/London</option>
-              <option value="Europe/Berlin">Europe/Berlin</option>
-              <option value="Europe/Paris">Europe/Paris</option>
-              <option value="Europe/Amsterdam">Europe/Amsterdam</option>
-              <option value="Asia/Tokyo">Asia/Tokyo</option>
-              <option value="Asia/Shanghai">Asia/Shanghai</option>
-              <option value="Asia/Kolkata">Asia/Kolkata</option>
-              <option value="Australia/Sydney">Australia/Sydney</option>
-              <option value="Pacific/Auckland">Pacific/Auckland</option>
-            </select>
+            <div class="tz-search-wrap" id="tz-search-wrap">
+              <input type="text" id="f-tz" class="tz-search-input" placeholder="Search timezone..." autocomplete="off" value="UTC"/>
+              <div class="tz-dropdown" id="tz-dropdown"></div>
+            </div>
           </div>
         </div>
         <div class="form-group">
@@ -1292,7 +1291,12 @@
       el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9201;</div><h3>No standups yet</h3><p>Create your first standup to get your team going.</p><button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button></div>';
       return;
     }
-    el.innerHTML = state.standups.map(s => {
+    const sorted = [...state.standups].sort((a, b) => {
+      const nameA = (a.name || 'Morning Standup').toLowerCase();
+      const nameB = (b.name || 'Morning Standup').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+    el.innerHTML = sorted.map(s => {
       const chName = channelName(s.channel_id);
       const dayChips = (s.schedule_days || []).map(d => '<span class="day-chip">' + esc(d) + '</span>').join('');
       const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
@@ -1876,6 +1880,9 @@
       renderStandups();
       closeModal();
       toast(id ? 'Standup updated' : 'Standup created');
+      // Auto-refresh related data
+      loadStats().catch(() => {});
+      loadMembers().catch(() => {});
     } catch (e) { toast(e.message, 'error'); }
   }
 
@@ -2068,6 +2075,46 @@
     state.participants = ids || [];
     refreshParticipantDisplay();
   }
+
+  // ── Timezone search ──
+  const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone');
+  const tzInput = document.getElementById('f-tz');
+  const tzDropdown = document.getElementById('tz-dropdown');
+  let tzHighlightIdx = -1;
+
+  function renderTzOptions(filter) {
+    const q = (filter || '').toLowerCase();
+    const matches = q ? ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q)) : ALL_TIMEZONES;
+    tzHighlightIdx = -1;
+    if (!matches.length) {
+      tzDropdown.innerHTML = '<div class="tz-option" style="color:var(--text-dim)">No match</div>';
+    } else {
+      tzDropdown.innerHTML = matches.slice(0, 50).map((tz, i) =>
+        '<div class="tz-option" data-tz="' + esc(tz) + '" onmousedown="selectTz(\'' + esc(tz) + '\')">' + esc(tz) + '</div>'
+      ).join('');
+    }
+    tzDropdown.classList.add('open');
+  }
+
+  function selectTz(tz) {
+    tzInput.value = tz;
+    tzDropdown.classList.remove('open');
+  }
+
+  tzInput.addEventListener('focus', () => renderTzOptions(tzInput.value));
+  tzInput.addEventListener('input', () => renderTzOptions(tzInput.value));
+  tzInput.addEventListener('blur', () => setTimeout(() => tzDropdown.classList.remove('open'), 150));
+  tzInput.addEventListener('keydown', (e) => {
+    const opts = tzDropdown.querySelectorAll('.tz-option[data-tz]');
+    if (e.key === 'ArrowDown') { e.preventDefault(); tzHighlightIdx = Math.min(tzHighlightIdx + 1, opts.length - 1); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); tzHighlightIdx = Math.max(tzHighlightIdx - 1, 0); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (tzHighlightIdx >= 0 && opts[tzHighlightIdx]) selectTz(opts[tzHighlightIdx].dataset.tz); }
+    else if (e.key === 'Escape') { tzDropdown.classList.remove('open'); }
+  });
+
+  document.addEventListener('click', e => {
+    if (!document.getElementById('tz-search-wrap').contains(e.target)) tzDropdown.classList.remove('open');
+  });
 
   // ── Utilities ──
   function esc(s) {
@@ -2346,6 +2393,7 @@
       closeModal();
       document.getElementById('modal-standup-id').dataset.mode = '';
       toast(id ? 'Schedule updated' : 'Schedule created');
+      loadStats().catch(() => {});
     } catch (e) { toast(e.message, 'error'); }
   }
 
