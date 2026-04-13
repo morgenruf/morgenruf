@@ -623,8 +623,8 @@ def register_handlers(app: App) -> None:
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
                 is_participant = not participants or user_id in participants
-                # Only show standups the user is part of (admins see all)
-                if not is_participant and not is_admin:
+                # Only show standups the user is part of
+                if not is_participant:
                     continue
                 # Parse questions from DB (stored as JSON string or list)
                 raw_q = s.get("questions") or []
