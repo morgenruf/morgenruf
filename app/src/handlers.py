@@ -619,9 +619,7 @@ def register_handlers(app: App) -> None:
                 if isinstance(days, str):
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
-                # Only show standups the user is a participant of (or all if no participants set)
-                if participants and user_id not in participants:
-                    continue
+                is_participant = not participants or user_id in participants
                 # Parse questions from DB (stored as JSON string or list)
                 raw_q = s.get("questions") or []
                 if isinstance(raw_q, str):
@@ -641,7 +639,8 @@ def register_handlers(app: App) -> None:
                         "members": participants,
                         "active": s.get("active", True),
                         "questions": raw_q,
-                        "user_responded_today": user_responded_today,
+                        "is_participant": is_participant,
+                        "user_responded_today": user_responded_today if is_participant else False,
                         "user_last_response_time": (
                             user_last_response["submitted_at"].strftime("%-I:%M %p")
                             if user_last_response and user_last_response.get("submitted_at")
