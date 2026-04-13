@@ -2078,13 +2078,41 @@
 
   // ── Timezone search ──
   const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone');
+  // Common timezone aliases (old name → current IANA name)
+  const TZ_ALIASES = {
+    'calcutta': 'Asia/Kolkata', 'kolkata': 'Asia/Kolkata',
+    'bombay': 'Asia/Kolkata', 'mumbai': 'Asia/Kolkata',
+    'madras': 'Asia/Chennai', 'chennai': 'Asia/Chennai',
+    'saigon': 'Asia/Ho_Chi_Minh', 'rangoon': 'Asia/Yangon',
+    'ist': 'Asia/Kolkata', 'pst': 'America/Los_Angeles',
+    'est': 'America/New_York', 'cst': 'America/Chicago',
+    'mst': 'America/Denver', 'gmt': 'Europe/London',
+    'bst': 'Europe/London', 'cet': 'Europe/Paris',
+    'jst': 'Asia/Tokyo', 'kst': 'Asia/Seoul',
+    'aest': 'Australia/Sydney', 'nzst': 'Pacific/Auckland',
+    'india': 'Asia/Kolkata', 'japan': 'Asia/Tokyo',
+    'china': 'Asia/Shanghai', 'korea': 'Asia/Seoul',
+  };
   const tzInput = document.getElementById('f-tz');
   const tzDropdown = document.getElementById('tz-dropdown');
   let tzHighlightIdx = -1;
 
   function renderTzOptions(filter) {
     const q = (filter || '').toLowerCase();
-    const matches = q ? ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q)) : ALL_TIMEZONES;
+    let matches;
+    if (!q) {
+      matches = ALL_TIMEZONES;
+    } else {
+      // Check aliases first, then filter normally
+      const aliasMatch = TZ_ALIASES[q];
+      matches = ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q));
+      if (aliasMatch && !matches.includes(aliasMatch)) matches.unshift(aliasMatch);
+      // Also match alias keys that start with q
+      if (!matches.length) {
+        const partialAlias = Object.entries(TZ_ALIASES).filter(([k]) => k.includes(q)).map(([,v]) => v);
+        matches = [...new Set(partialAlias)].filter(tz => ALL_TIMEZONES.includes(tz));
+      }
+    }
     tzHighlightIdx = -1;
     if (!matches.length) {
       tzDropdown.innerHTML = '<div class="tz-option" style="color:var(--text-dim)">No match</div>';

@@ -239,6 +239,85 @@ def _send_manager_digest(team_id: str) -> None:
         logger.warning("Manager digest failed for %s: %s", team_id, exc)
 
 
+def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
+    """Post the standup report at the scheduled report_time, regardless of completion."""
+    try:
+        import json as _json
+
+        import db  # noqa: PLC0415
+
+        today_standups = db.get_today_standups(team_id)
+        if not today_standups:
+            logger.info("No submissions for team %s — skipping report", team_id)
+            return
+
+        client = WebClient(token=bot_token)
+        try:
+            client.auth_test()
+        except Exception as exc:
+            logger.error("Bot token invalid for report %s: %s", team_id, exc)
+            return
+
+        sched_cfg = {}
+        if schedule_id:
+            sched_cfg = db.get_standup_schedule(team_id, schedule_id) or {}
+        if not sched_cfg:
+            try:
+                sched_cfg = db.get_standup_schedule_for_channel(team_id, channel_id) or {}
+            except Exception:
+                pass
+
+        group_by = sched_cfg.get("group_by", "member")
+        config = db.get_workspace_config(team_id) or {}
+        questions = config.get("questions") or []
+        if isinstance(questions, str):
+            try:
+                questions = _json.loads(questions)
+            except Exception:
+                questions = []
+
+        active_members = db.get_active_members(team_id)
+        user_profiles = {}
+        for m in active_members:
+            try:
+                info = client.users_info(user=m["user_id"]).get("user", {})
+                profile = info.get("profile", {})
+                user_profiles[m["user_id"]] = {
+                    "display_name": profile.get("real_name") or m.get("real_name", ""),
+                    "avatar_url": profile.get("image_48", ""),
+                }
+            except Exception:
+                user_profiles[m["user_id"]] = {"display_name": m.get("real_name", ""), "avatar_url": ""}
+
+        import blocks as _blocks  # noqa: PLC0415
+
+        if group_by == "question":
+            summary_blocks = _blocks.build_summary_by_question(today_standups, questions, user_profiles=user_profiles)
+        else:
+            summary_blocks = _blocks.build_summary_by_member(today_standups, questions, user_profiles=user_profiles)
+
+        client.chat_postMessage(channel=channel_id, text="📋 Daily Standup Summary", blocks=summary_blocks)
+        logger.info(
+            "Posted scheduled report for team %s to %s (%d submissions)", team_id, channel_id, len(today_standups)
+        )
+
+        # AI summary
+        try:
+            from ai_summary import generate_summary  # noqa: PLC0415
+
+            if config.get("ai_summary_enabled"):
+                inst = db.get_installation(team_id)
+                team_name = (inst or {}).get("team_name", "")
+                summary_text = generate_summary(today_standups, team_name)
+                if summary_text:
+                    client.chat_postMessage(channel=channel_id, text=f"✨ *AI Summary*\n\n{summary_text}")
+        except Exception as exc:
+            logger.warning("AI summary in scheduled report failed: %s", exc)
+
+    except Exception as exc:
+        logger.error("Scheduled report failed for %s: %s", team_id, exc)
+
+
 def register_workspace_job(
     scheduler: BackgroundScheduler,
     team_id: str,
@@ -332,6 +411,27 @@ def register_workspace_job(
         replace_existing=True,
     )
 
+    # Scheduled report job — posts summary at report_time regardless of completion
+    report_time = config.get("report_time") or schedule_time
+    try:
+        r_hour, r_minute = report_time.split(":")
+    except Exception:
+        r_hour, r_minute = hour, minute
+    scheduler.add_job(
+        _post_scheduled_report,
+        trigger=CronTrigger(
+            hour=int(r_hour),
+            minute=int(r_minute),
+            day_of_week=schedule_days,
+            timezone=tz,
+        ),
+        args=[team_id, bot_token, channel_id],
+        id=f"report_{team_id}",
+        name=f"Report — {team_id}",
+        replace_existing=True,
+    )
+    logger.info("Registered report job for %s at %s %s", team_id, report_time, schedule_tz)
+
 
 def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> None:
     """Register a cron job for a standup_schedules row."""
@@ -395,6 +495,27 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
         logger.info(
             "Registered weekend reminder job %s (%s) on Fridays at %s", schedule_id, schedule.get("name"), schedule_time
         )
+
+    # Scheduled report job — posts summary at report_time regardless of completion
+    report_time = schedule.get("report_time") or schedule_time
+    try:
+        r_hour, r_minute = report_time.split(":")
+    except Exception:
+        r_hour, r_minute = hour, minute
+    scheduler.add_job(
+        _post_scheduled_report,
+        trigger=CronTrigger(
+            hour=int(r_hour),
+            minute=int(r_minute),
+            day_of_week=schedule_days,
+            timezone=tz,
+        ),
+        args=[team_id, bot_token, channel_id, schedule_id],
+        id=f"report_schedule_{team_id}_{schedule_id}",
+        name=f"Report — {schedule.get('name', 'Standup')} — {team_id}",
+        replace_existing=True,
+    )
+    logger.info("Registered report job for schedule %s at %s %s", schedule_id, report_time, schedule_tz)
 
 
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:

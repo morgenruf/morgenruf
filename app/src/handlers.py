@@ -151,7 +151,10 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
                 "element": {
                     "type": "plain_text_input",
                     "action_id": f"standup_answer_{step}",
-                    "placeholder": {"type": "plain_text", "text": "Type your answer..."},
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "Type your answer... (*bold*, _italic_, ~strike~, • bullets)",
+                    },
                     "multiline": True,
                 },
                 "label": {"type": "plain_text", "text": "Your answer"},
@@ -339,90 +342,8 @@ def _complete_standup(user_id: str, session, client) -> None:
         },
     )
 
-    try:
-        import db as _db  # noqa: PLC0415
-
-        today_standups = _db.get_today_standups(session.team_id)
-        active_members = _db.get_active_members(session.team_id)
-        submitted_users = {s["user_id"] for s in today_standups}
-        all_submitted = all(m["user_id"] in submitted_users for m in active_members)
-
-        if all_submitted and len(today_standups) > 1 and channel:
-            # Post grouped summary when all members have submitted
-            try:
-                import blocks as _blocks  # noqa: PLC0415
-
-                sched_cfg = {}
-                try:
-                    sched_cfg = _db.get_standup_schedule_for_channel(session.team_id, channel) or {}
-                except Exception:
-                    pass
-                group_by = sched_cfg.get("group_by", "member")
-                config = _db.get_workspace_config(session.team_id) or {}
-                questions = config.get("questions") or []
-                if isinstance(questions, str):
-                    try:
-                        questions = json.loads(questions)
-                    except Exception:
-                        questions = []
-
-                # Build user profiles for rich display
-                user_profiles = {}
-                for m in active_members:
-                    try:
-                        info = client.users_info(user=m["user_id"]).get("user", {})
-                        profile = info.get("profile", {})
-                        user_profiles[m["user_id"]] = {
-                            "display_name": profile.get("real_name") or m.get("real_name", ""),
-                            "avatar_url": profile.get("image_48", ""),
-                        }
-                    except Exception:
-                        user_profiles[m["user_id"]] = {"display_name": m.get("real_name", ""), "avatar_url": ""}
-
-                if group_by == "question":
-                    summary_blocks = _blocks.build_summary_by_question(
-                        today_standups, questions, user_profiles=user_profiles
-                    )
-                else:
-                    summary_blocks = _blocks.build_summary_by_member(
-                        today_standups, questions, user_profiles=user_profiles
-                    )
-
-                # Post summary in the same daily thread
-                summary_thread_key = f"{session.team_id}:{channel}:{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-                summary_parent_ts = _daily_thread_cache.get(summary_thread_key)
-                if summary_parent_ts:
-                    client.chat_postMessage(
-                        channel=channel,
-                        text="📋 Daily Standup Summary",
-                        blocks=summary_blocks,
-                        thread_ts=summary_parent_ts,
-                    )
-                else:
-                    client.chat_postMessage(channel=channel, text="📋 Daily Standup Summary", blocks=summary_blocks)
-            except Exception as exc:
-                logger.warning("Grouped summary failed: %s", exc)
-
-            # AI summary
-            try:
-                from ai_summary import generate_summary  # noqa: PLC0415
-
-                config = _db.get_workspace_config(session.team_id) or {}
-                if config.get("ai_summary_enabled"):
-                    inst = _db.get_installation(session.team_id)
-                    team_name = (inst or {}).get("team_name", "")
-                    summary_text = generate_summary(today_standups, team_name)
-                    if summary_text:
-                        ai_thread_key = f"{session.team_id}:{channel}:{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
-                        ai_parent_ts = _daily_thread_cache.get(ai_thread_key)
-                        kwargs = {"channel": channel, "text": f"✨ *AI Summary*\n\n{summary_text}"}
-                        if ai_parent_ts:
-                            kwargs["thread_ts"] = ai_parent_ts
-                        client.chat_postMessage(**kwargs)
-            except Exception as exc:
-                logger.warning("AI summary failed: %s", exc)
-    except Exception as exc:
-        logger.warning("Post-standup summary/AI failed: %s", exc)
+    # Report posting is handled by the scheduled report job (_post_scheduled_report)
+    # which fires at report_time regardless of whether all members submitted.
 
     try:
         from workflow import evaluate_rules  # noqa: PLC0415

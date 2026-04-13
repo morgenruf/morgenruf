@@ -521,7 +521,7 @@ def standup_form_modal(questions: list[str], standup_name: str, previous_answers
             "type": "plain_text_input",
             "action_id": f"answer_{i}",
             "multiline": True,
-            "placeholder": {"type": "plain_text", "text": "Type your answer…"},
+            "placeholder": {"type": "plain_text", "text": "Type your answer… (*bold*, _italic_, • bullets)"},
         }
         if prev:
             element["initial_value"] = prev
