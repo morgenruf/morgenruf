@@ -1270,7 +1270,7 @@ def register_handlers(app: App) -> None:
         private_metadata = body["view"].get("private_metadata", "")
 
         standup_ch = values.get("standup_channel", {}).get("standup_channel", {})
-        channel_id = standup_ch.get("selected_channel") or standup_ch.get("selected_conversation") or ""
+        channel_id = standup_ch.get("selected_conversation") or standup_ch.get("selected_channel") or ""
         questions_text = values.get("questions", {}).get("questions", {}).get("value", "")
         questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
         report_time = (
