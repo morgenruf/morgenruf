@@ -64,12 +64,18 @@ def _send_mood_block(client, user_id: str) -> None:
 
 def _format_standup(user_id: str, answers: list[str], mood: str | None = None) -> str:
     """Format collected answers into a structured standup post."""
-    date_str = datetime.utcnow().strftime("%B %d, %Y")
-    yesterday = answers[0] if len(answers) > 0 else "—"
-    today = answers[1] if len(answers) > 1 else "—"
-    blockers = answers[2] if len(answers) > 2 else "—"
+    import blocks as _blocks  # noqa: PLC0415
 
-    blocker_text = "_None_ ✅" if blockers.strip().lower() in ("none", "no", "nope", "-", "n/a", "") else blockers
+    date_str = datetime.utcnow().strftime("%B %d, %Y")
+    yesterday = _blocks.linkify_issues(answers[0]) if len(answers) > 0 else "—"
+    today = _blocks.linkify_issues(answers[1]) if len(answers) > 1 else "—"
+    raw_blockers = answers[2] if len(answers) > 2 else "—"
+
+    blocker_text = (
+        "_None_ ✅"
+        if raw_blockers.strip().lower() in ("none", "no", "nope", "-", "n/a", "")
+        else _blocks.linkify_issues(raw_blockers)
+    )
 
     text = (
         f"📋 *Standup from <@{user_id}>* — {date_str}\n\n"
@@ -574,6 +580,12 @@ def register_handlers(app: App) -> None:
             on_vacation = db.is_on_vacation(team_id, user_id)
             streak = db.get_standup_streak(team_id, user_id)
 
+            # Get today's submissions for this user
+            today_standups = db.get_today_standups(team_id)
+            user_today = [s for s in today_standups if s.get("user_id") == user_id]
+            user_responded_today = len(user_today) > 0
+            user_last_response = user_today[-1] if user_today else None
+
             # Load standup schedules for this workspace
             schedules = db.get_standup_schedules(team_id)
             for s in schedules:
@@ -582,6 +594,9 @@ def register_handlers(app: App) -> None:
                 if isinstance(days, str):
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
+                # Only show standups the user is a participant of (or all if no participants set)
+                if participants and user_id not in participants:
+                    continue
                 # Parse questions from DB (stored as JSON string or list)
                 raw_q = s.get("questions") or []
                 if isinstance(raw_q, str):
@@ -601,6 +616,12 @@ def register_handlers(app: App) -> None:
                         "members": participants,
                         "active": s.get("active", True),
                         "questions": raw_q,
+                        "user_responded_today": user_responded_today,
+                        "user_last_response_time": (
+                            user_last_response["submitted_at"].strftime("%-I:%M %p")
+                            if user_last_response and user_last_response.get("submitted_at")
+                            else None
+                        ),
                     }
                 )
 
