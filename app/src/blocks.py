@@ -804,7 +804,6 @@ def app_home_view(
             name = standup.get("standup_name") or standup.get("name") or "Team Standup"
             channel = standup.get("channel_id", "")
             report_time = standup.get("report_time") or standup.get("schedule_time", "09:00")
-            timezone = standup.get("timezone") or standup.get("schedule_tz", "UTC")
             active = standup.get("active", True)
             responded_today = standup.get("user_responded_today", False)
             response_time = standup.get("user_last_response_time")
