@@ -62,6 +62,27 @@ def _send_mood_block(client, user_id: str) -> None:
     )
 
 
+def _get_bot_channels(client) -> list[dict]:
+    """Return channels where the bot is a member: [{"id": ..., "name": ...}]."""
+    channels = []
+    cursor = None
+    try:
+        while True:
+            kwargs = {"types": "public_channel,private_channel", "exclude_archived": True, "limit": 200}
+            if cursor:
+                kwargs["cursor"] = cursor
+            result = client.conversations_list(**kwargs)
+            for c in result.get("channels", []):
+                if c.get("is_member"):
+                    channels.append({"id": c["id"], "name": c["name"]})
+            cursor = result.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+    except Exception as exc:
+        logger.warning("_get_bot_channels error: %s", exc)
+    return channels
+
+
 def _format_standup(user_id: str, answers: list[str], mood: str | None = None) -> str:
     """Format collected answers into a structured standup post."""
     import blocks as _blocks  # noqa: PLC0415
@@ -769,7 +790,11 @@ def register_handlers(app: App) -> None:
         except Exception:
             pass
 
-        modal = _blocks.create_standup_modal(existing_config={"timezone": user_tz} if user_tz else None)
+        bot_channels = _get_bot_channels(client)
+        modal = _blocks.create_standup_modal(
+            existing_config={"timezone": user_tz} if user_tz else None,
+            bot_channels=bot_channels,
+        )
         client.views_open(trigger_id=body["trigger_id"], view=modal)
 
     @app.action("open_dashboard")
@@ -934,7 +959,8 @@ def register_handlers(app: App) -> None:
                     "allow_edit_after_report": schedule.get("allow_edit_after_report", False),
                     "active": schedule.get("active", True),
                 }
-                modal = _blocks.create_standup_modal(cfg)
+                bot_channels = _get_bot_channels(client)
+                modal = _blocks.create_standup_modal(cfg, bot_channels=bot_channels)
                 client.views_open(trigger_id=body["trigger_id"], view=modal)
         except Exception as exc:
             logger.warning("edit_standup_button error: %s", exc)
@@ -1270,7 +1296,12 @@ def register_handlers(app: App) -> None:
         private_metadata = body["view"].get("private_metadata", "")
 
         standup_ch = values.get("standup_channel", {}).get("standup_channel", {})
-        channel_id = standup_ch.get("selected_conversation") or standup_ch.get("selected_channel") or ""
+        channel_id = (
+            standup_ch.get("selected_option", {}).get("value")
+            or standup_ch.get("selected_conversation")
+            or standup_ch.get("selected_channel")
+            or ""
+        )
         questions_text = values.get("questions", {}).get("questions", {}).get("value", "")
         questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
         report_time = (

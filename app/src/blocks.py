@@ -122,10 +122,11 @@ def _find_option(options: list[dict], value: str) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def create_standup_modal(existing_config: dict | None = None) -> dict:
+def create_standup_modal(existing_config: dict | None = None, bot_channels: list[dict] | None = None) -> dict:
     """
     Full 'Create a standup' modal matching Standup & Prosper UX.
     Pass existing_config to pre-fill fields when editing.
+    bot_channels: list of {"id": ..., "name": ...} dicts for channels the bot is in.
     """
     cfg = existing_config or {}
     is_edit = bool(cfg.get("standup_id"))
@@ -159,23 +160,30 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
     ]
     selected_group = _find_option(group_by_options, cfg.get("group_by", "member")) or group_by_options[0]
 
+    # Build channel options from bot-joined channels
+    channel_opts = [
+        {"text": {"type": "plain_text", "text": f"#{c['name']}"}, "value": c["id"]}
+        for c in sorted(bot_channels or [], key=lambda c: c["name"])
+    ]
+    channel_element: dict = {
+        "type": "static_select",
+        "action_id": "standup_channel",
+        "placeholder": {"type": "plain_text", "text": "Select a channel"},
+        "options": channel_opts
+        or [{"text": {"type": "plain_text", "text": "No channels — invite the bot first"}, "value": "_none"}],
+    }
+    if cfg.get("channel_id") and channel_opts:
+        initial = _find_option(channel_opts, cfg["channel_id"])
+        if initial:
+            channel_element["initial_option"] = initial
+
     blocks = [
         # Channel
         {
             "type": "input",
             "block_id": "standup_channel",
             "label": {"type": "plain_text", "text": "Standup channel"},
-            "element": {
-                "type": "conversations_select",
-                "action_id": "standup_channel",
-                "placeholder": {"type": "plain_text", "text": "Select a channel"},
-                "filter": {
-                    "include": ["public", "private"],
-                    "exclude_bot_users": True,
-                    "exclude_external_shared_channels": True,
-                },
-                **({"initial_conversation": cfg["channel_id"]} if cfg.get("channel_id") else {}),
-            },
+            "element": channel_element,
         },
         # Questions
         {
