@@ -587,10 +587,11 @@ def register_handlers(app: App) -> None:
             _complete_standup(user_id, session, client)
 
     @app.event("app_home_opened")
-    def handle_app_home(event, client):  # noqa: ANN001
+    def handle_app_home(event, client, body):  # noqa: ANN001
         """Render the App Home tab when a user opens it."""
         user_id = event["user"]
-        team_id = event.get("team", "")
+        team_id = event.get("view", {}).get("team_id") or body.get("team_id") or event.get("team") or ""
+        logger.info("app_home_opened: user=%s team=%s", user_id, team_id)
 
         import blocks as _blocks  # noqa: PLC0415
 
