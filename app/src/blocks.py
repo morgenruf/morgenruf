@@ -166,16 +166,10 @@ def create_standup_modal(existing_config: dict | None = None) -> dict:
             "block_id": "standup_channel",
             "label": {"type": "plain_text", "text": "Standup channel"},
             "element": {
-                "type": "conversations_select",
+                "type": "channels_select",
                 "action_id": "standup_channel",
                 "placeholder": {"type": "plain_text", "text": "Select a channel"},
-                "filter": {
-                    "include": ["public", "private"],
-                    "exclude_bot_users": True,
-                    "exclude_external_shared_channels": True,
-                },
-                **({"default_to_current_conversation": False} if not cfg.get("channel_id") else {}),
-                **({"initial_conversation": cfg["channel_id"]} if cfg.get("channel_id") else {}),
+                **({"initial_channel": cfg["channel_id"]} if cfg.get("channel_id") else {}),
             },
         },
         # Questions
