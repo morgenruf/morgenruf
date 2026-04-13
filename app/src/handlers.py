@@ -597,6 +597,7 @@ def register_handlers(app: App) -> None:
         workspace_name = ""
         on_vacation = False
         streak = 0
+        is_admin = False
         standups: list[dict] = []
 
         try:
@@ -604,6 +605,7 @@ def register_handlers(app: App) -> None:
 
             on_vacation = db.is_on_vacation(team_id, user_id)
             streak = db.get_standup_streak(team_id, user_id)
+            is_admin = db.get_member_role(team_id, user_id) == "admin"
 
             # Get today's submissions for this user
             today_standups = db.get_today_standups(team_id)
@@ -620,6 +622,9 @@ def register_handlers(app: App) -> None:
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
                 is_participant = not participants or user_id in participants
+                # Only show standups the user is part of (admins see all)
+                if not is_participant and not is_admin:
+                    continue
                 # Parse questions from DB (stored as JSON string or list)
                 raw_q = s.get("questions") or []
                 if isinstance(raw_q, str):
@@ -665,12 +670,12 @@ def register_handlers(app: App) -> None:
         except Exception:
             pass
 
-        # Check admin role for showing configure button
-        is_admin = False
-        try:
-            is_admin = db.get_member_role(team_id, user_id) == "admin"
-        except Exception:
-            pass
+        # is_admin already set above; fallback if db block failed
+        if not is_admin:
+            try:
+                is_admin = db.get_member_role(team_id, user_id) == "admin"
+            except Exception:
+                pass
 
         view = _blocks.app_home_view(
             standups=standups,
@@ -794,7 +799,6 @@ def register_handlers(app: App) -> None:
             pass
 
         bot_channels = _get_bot_channels(client)
-        logger.info("open_create_standup: bot_channels=%s", bot_channels)
         modal = _blocks.create_standup_modal(
             existing_config={"timezone": user_tz} if user_tz else None,
             bot_channels=bot_channels,
