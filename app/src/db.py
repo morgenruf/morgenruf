@@ -600,7 +600,7 @@ def get_member_email(team_id: str, user_id: str) -> str | None:
 
 
 def get_standup_schedules(team_id: str) -> list[dict]:
-    """Return all active standup schedules for a workspace."""
+    """Return all standup schedules for a workspace (includes paused)."""
     sql = "SELECT * FROM standup_schedules WHERE team_id = %s ORDER BY created_at"
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -695,8 +695,8 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
 
 
 def delete_standup_schedule(team_id: str, schedule_id: int) -> bool:
-    """Soft-delete by setting active=false (scoped to team_id)."""
-    sql = "UPDATE standup_schedules SET active = FALSE WHERE id = %s AND team_id = %s"
+    """Hard-delete a standup schedule (scoped to team_id)."""
+    sql = "DELETE FROM standup_schedules WHERE id = %s AND team_id = %s"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (schedule_id, team_id))
