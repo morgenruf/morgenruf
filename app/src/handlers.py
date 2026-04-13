@@ -63,7 +63,12 @@ def _send_mood_block(client, user_id: str) -> None:
 
 
 def _get_bot_channels(client) -> list[dict]:
-    """Return channels where the bot is a member: [{"id": ..., "name": ...}]."""
+    """Return channels where the bot is a member: [{"id": ..., "name": ...}].
+
+    Uses ``users_conversations`` which reliably returns only channels the
+    calling bot user has joined — unlike ``conversations_list`` + ``is_member``
+    which can be unreliable with refreshable (xoxe) tokens.
+    """
     channels = []
     cursor = None
     try:
@@ -71,10 +76,9 @@ def _get_bot_channels(client) -> list[dict]:
             kwargs = {"types": "public_channel,private_channel", "exclude_archived": True, "limit": 200}
             if cursor:
                 kwargs["cursor"] = cursor
-            result = client.conversations_list(**kwargs)
+            result = client.users_conversations(**kwargs)
             for c in result.get("channels", []):
-                if c.get("is_member"):
-                    channels.append({"id": c["id"], "name": c["name"]})
+                channels.append({"id": c["id"], "name": c["name"]})
             cursor = result.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
