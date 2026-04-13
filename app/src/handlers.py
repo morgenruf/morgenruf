@@ -587,10 +587,12 @@ def register_handlers(app: App) -> None:
             _complete_standup(user_id, session, client)
 
     @app.event("app_home_opened")
-    def handle_app_home(event, client, body):  # noqa: ANN001
+    def handle_app_home(event, client, body=None):  # noqa: ANN001
         """Render the App Home tab when a user opens it."""
         user_id = event["user"]
-        team_id = event.get("view", {}).get("team_id") or body.get("team_id") or event.get("team") or ""
+        team_id = (
+            event.get("view", {}).get("team_id") or (body.get("team_id") if body else None) or event.get("team") or ""
+        )
         logger.info("app_home_opened: user=%s team=%s", user_id, team_id)
 
         import blocks as _blocks  # noqa: PLC0415
@@ -599,6 +601,7 @@ def register_handlers(app: App) -> None:
         on_vacation = False
         streak = 0
         is_admin = False
+        all_other_standups: list[dict] = []
         standups: list[dict] = []
 
         try:
@@ -615,6 +618,7 @@ def register_handlers(app: App) -> None:
             user_last_response = user_today[-1] if user_today else None
 
             # Load standup schedules for this workspace
+            all_other_standups: list[dict] = []
             schedules = db.get_standup_schedules(team_id)
             for s in schedules:
                 # Parse schedule_days into a list
@@ -623,9 +627,6 @@ def register_handlers(app: App) -> None:
                     days = [d.strip() for d in days.split(",") if d.strip()]
                 participants = s.get("participants") or []
                 is_participant = not participants or user_id in participants
-                # Only show standups the user is part of
-                if not is_participant:
-                    continue
                 # Parse questions from DB (stored as JSON string or list)
                 raw_q = s.get("questions") or []
                 if isinstance(raw_q, str):
@@ -634,26 +635,28 @@ def register_handlers(app: App) -> None:
                     except Exception:
                         raw_q = []
 
-                standups.append(
-                    {
-                        "standup_id": str(s["id"]),
-                        "standup_name": s.get("name", "Team Standup"),
-                        "channel_id": s.get("channel_id", ""),
-                        "report_time": s.get("schedule_time", "09:00"),
-                        "timezone": s.get("schedule_tz", "UTC"),
-                        "days": days,
-                        "members": participants,
-                        "active": s.get("active", True),
-                        "questions": raw_q,
-                        "is_participant": is_participant,
-                        "user_responded_today": user_responded_today if is_participant else False,
-                        "user_last_response_time": (
-                            user_last_response["submitted_at"].strftime("%-I:%M %p")
-                            if user_last_response and user_last_response.get("submitted_at")
-                            else None
-                        ),
-                    }
-                )
+                entry = {
+                    "standup_id": str(s["id"]),
+                    "standup_name": s.get("name", "Team Standup"),
+                    "channel_id": s.get("channel_id", ""),
+                    "report_time": s.get("schedule_time", "09:00"),
+                    "timezone": s.get("schedule_tz", "UTC"),
+                    "days": days,
+                    "members": participants,
+                    "active": s.get("active", True),
+                    "questions": raw_q,
+                    "is_participant": is_participant,
+                    "user_responded_today": user_responded_today if is_participant else False,
+                    "user_last_response_time": (
+                        user_last_response["submitted_at"].strftime("%-I:%M %p")
+                        if user_last_response and user_last_response.get("submitted_at")
+                        else None
+                    ),
+                }
+                if is_participant:
+                    standups.append(entry)
+                elif is_admin:
+                    all_other_standups.append(entry)
 
             try:
                 info = client.team_info()
@@ -686,6 +689,7 @@ def register_handlers(app: App) -> None:
             workspace_name=workspace_name,
             user_tz=user_tz,
             is_admin=is_admin,
+            other_standups=all_other_standups if is_admin else [],
         )
 
         try:
@@ -704,7 +708,7 @@ def register_handlers(app: App) -> None:
             db.set_vacation(team_id, user_id, False)
         except Exception as e:
             logger.warning("Unexpected error in handle_vacation_return clearing vacation: %s", e)
-        handle_app_home({"user": user_id, "team": team_id}, client)
+        handle_app_home({"user": user_id, "team": team_id}, client, body={"team_id": team_id})
 
     @app.action("im_away")
     def handle_im_away(ack, body, client):  # noqa: ANN001
@@ -726,7 +730,7 @@ def register_handlers(app: App) -> None:
             text="🏖️ Got it! You're marked as away. I won't send you standups until you're back.\nMessage me *I'm back* or click the button in App Home when you return.",
         )
         # Refresh App Home to show "I'm back" state
-        handle_app_home({"user": user_id, "team": team_id}, client)
+        handle_app_home({"user": user_id, "team": team_id}, client, body={"team_id": team_id})
 
     @app.action("skip_standup")
     def handle_skip_standup_button(ack, body, client):  # noqa: ANN001
@@ -832,7 +836,7 @@ def register_handlers(app: App) -> None:
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
         _configure_mode_users.discard(f"{team_id}:{user_id}")
-        handle_app_home({"user": user_id, "team": team_id}, client)
+        handle_app_home({"user": user_id, "team": team_id}, client, body={"team_id": team_id})
 
     @app.action("app_home_help")
     def handle_app_home_help(ack, body, client):  # noqa: ANN001
@@ -847,7 +851,7 @@ def register_handlers(app: App) -> None:
         if f"{team_id}:{user_id}" in _configure_mode_users:
             _publish_configure_view(team_id, user_id, client)
         else:
-            handle_app_home({"user": user_id, "team": team_id}, client)
+            handle_app_home({"user": user_id, "team": team_id}, client, body={"team_id": team_id})
 
     def _publish_configure_view(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Render and publish the configure mode App Home."""

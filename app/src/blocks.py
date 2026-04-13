@@ -653,6 +653,7 @@ def app_home_view(
     workspace_name: str = "",
     user_tz: str = "",
     is_admin: bool = False,
+    other_standups: list[dict] | None = None,
 ) -> dict:
     """App Home tab — rich standup cards matching Standup & Prosper quality."""
     from datetime import datetime
@@ -911,6 +912,37 @@ def app_home_view(
             if actions:
                 blocks.append({"type": "actions", "elements": actions})
             blocks.append({"type": "divider"})
+
+    # Admin: other standups section
+    if is_admin and other_standups:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*🔧 Other standups (admin):*"},
+            }
+        )
+        for standup in other_standups:
+            standup_id = standup.get("standup_id") or standup.get("id", "")
+            name = standup.get("standup_name") or standup.get("name") or "Team Standup"
+            channel = standup.get("channel_id", "")
+            active = standup.get("active", True)
+            members = standup.get("members") or []
+            member_count = len(members) if isinstance(members, list) else 0
+
+            status_icon = "⏸️" if not active else "▫️"
+            line = f"{status_icon} <#{channel}> | {name} · {member_count} participant{'s' if member_count != 1 else ''}"
+            admin_actions = [
+                {
+                    "type": "button",
+                    "action_id": "edit_standup",
+                    "text": {"type": "plain_text", "text": "Configure"},
+                    "value": str(standup_id),
+                },
+            ]
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
+            blocks.append({"type": "actions", "elements": admin_actions})
+
+        blocks.append({"type": "divider"})
 
     # Footer
     blocks.append(
