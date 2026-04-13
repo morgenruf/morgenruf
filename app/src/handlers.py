@@ -609,7 +609,6 @@ def register_handlers(app: App) -> None:
 
             on_vacation = db.is_on_vacation(team_id, user_id)
             streak = db.get_standup_streak(team_id, user_id)
-            is_admin = db.get_member_role(team_id, user_id) == "admin"
 
             # Get today's submissions for this user
             today_standups = db.get_today_standups(team_id)
@@ -666,20 +665,15 @@ def register_handlers(app: App) -> None:
         except Exception as e:
             logger.warning("handle_app_home error loading data: %s", e)
 
-        # Fetch user timezone from Slack profile
+        # Fetch user timezone and Slack admin status from profile
         user_tz = ""
         try:
             user_info = client.users_info(user=user_id)
-            user_tz = user_info.get("user", {}).get("tz", "")
+            user_data = user_info.get("user", {})
+            user_tz = user_data.get("tz", "")
+            is_admin = user_data.get("is_admin", False) or user_data.get("is_owner", False)
         except Exception:
             pass
-
-        # is_admin already set above; fallback if db block failed
-        if not is_admin:
-            try:
-                is_admin = db.get_member_role(team_id, user_id) == "admin"
-            except Exception:
-                pass
 
         view = _blocks.app_home_view(
             standups=standups,
