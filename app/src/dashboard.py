@@ -391,9 +391,7 @@ def api_members():
             channel_member_ids = set()
             cursor = None
             while True:
-                resp = client.conversations_members(
-                    channel=channel_id, limit=500, cursor=cursor or ""
-                )
+                resp = client.conversations_members(channel=channel_id, limit=500, cursor=cursor or "")
                 channel_member_ids.update(resp.get("members", []))
                 cursor = resp.get("response_metadata", {}).get("next_cursor")
                 if not cursor:
