@@ -795,6 +795,7 @@ def register_handlers(app: App) -> None:
             pass
 
         bot_channels = _get_bot_channels(client)
+        logger.info("open_create_standup: bot_channels=%s", bot_channels)
         modal = _blocks.create_standup_modal(
             existing_config={"timezone": user_tz} if user_tz else None,
             bot_channels=bot_channels,
