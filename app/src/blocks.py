@@ -162,7 +162,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
 
     # Build channel options from bot-joined channels
     channel_opts = [
-        {"text": {"type": "plain_text", "text": f"#{c['name']}"}, "value": c["id"]}
+        {"text": {"type": "plain_text", "text": c["name"]}, "value": c["id"]}
         for c in sorted(bot_channels or [], key=lambda c: c["name"])
     ]
     channel_element: dict = {
