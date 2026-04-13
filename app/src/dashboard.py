@@ -378,17 +378,45 @@ def api_members():
     except Exception as e:
         logger.warning("Unexpected error in api_members loading role map: %s", e)
 
+    channel_id = request.args.get("channel_id")
+
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
 
         client = WebClient(token=token)
-        result = client.users_list(limit=200)
+
+        # If channel_id provided, fetch only that channel's members
+        channel_member_ids = None
+        if channel_id:
+            channel_member_ids = set()
+            cursor = None
+            while True:
+                resp = client.conversations_members(
+                    channel=channel_id, limit=500, cursor=cursor or ""
+                )
+                channel_member_ids.update(resp.get("members", []))
+                cursor = resp.get("response_metadata", {}).get("next_cursor")
+                if not cursor:
+                    break
+
+        # Paginate through all workspace users
+        all_users = []
+        cursor = None
+        while True:
+            result = client.users_list(limit=200, cursor=cursor or "")
+            all_users.extend(result.get("members", []))
+            cursor = result.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
         members = []
-        for u in result.get("members", []):
+        for u in all_users:
             if u.get("deleted") or u.get("is_bot") or u.get("id") == "USLACKBOT":
                 continue
-            profile = u.get("profile", {})
             uid = u["id"]
+            if channel_member_ids is not None and uid not in channel_member_ids:
+                continue
+            profile = u.get("profile", {})
             members.append(
                 {
                     "id": uid,
@@ -483,7 +511,8 @@ def api_channels():
                 kwargs["cursor"] = cursor
             result = client.conversations_list(**kwargs)
             for c in result.get("channels", []):
-                channels.append({"id": c["id"], "name": c["name"]})
+                if c.get("is_member"):
+                    channels.append({"id": c["id"], "name": c["name"]})
             cursor = result.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break

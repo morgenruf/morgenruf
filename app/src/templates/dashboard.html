@@ -359,11 +359,25 @@
       border: 1px solid var(--border2);
       border-radius: 9px;
       z-index: 100;
-      max-height: 200px;
+      max-height: 260px;
       overflow-y: auto;
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       display: none;
     }
+    .multi-dropdown .participant-search {
+      position: sticky; top: 0; z-index: 1;
+      background: var(--surface);
+      padding: 8px;
+      border-bottom: 1px solid var(--border2);
+    }
+    .multi-dropdown .participant-search input {
+      width: 100%; box-sizing: border-box;
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 5px; padding: 6px 10px;
+      color: var(--text); font-size: 13px; outline: none;
+    }
+    .multi-dropdown .participant-search input:focus { border-color: var(--accent); }
+    .multi-dropdown .no-results { padding: 12px 14px; color: var(--text-dim); font-size: 13px; }
     .multi-dropdown.open { display: block; }
     .multi-opt {
       padding: 8px 14px;
@@ -1346,10 +1360,11 @@
   }
 
   // ── Members ──
-  async function loadMembers() {
+  async function loadMembers(channelId) {
     document.getElementById('members-grid').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     try {
-      state.members = await api('GET', '/members');
+      const url = channelId ? '/members?channel_id=' + encodeURIComponent(channelId) : '/members';
+      state.members = await api('GET', url);
       renderMembers();
       populateParticipantsDropdown();
     } catch (e) {
@@ -1739,7 +1754,7 @@
 
   // ── Modal ──
   async function openCreateModal() {
-    if (!state.members.length) await loadMembers();
+    await loadMembers();
     document.getElementById('modal-title').textContent = 'New Standup';
     document.getElementById('modal-standup-id').value = '';
     document.getElementById('f-name').value = 'Morning Standup';
@@ -1771,7 +1786,8 @@
   async function openEditModal(id) {
     const s = state.standups.find(x => x.id === id);
     if (!s) return;
-    if (!state.members.length) await loadMembers();
+    if (s.channel_id) await loadChannelMembers(s.channel_id);
+    else await loadMembers();
     document.getElementById('modal-title').textContent = 'Edit Standup';
     document.getElementById('modal-standup-id').value = id;
     document.getElementById('f-name').value = s.name || '';
@@ -1952,12 +1968,34 @@
   // ── Participants multi-select ──
   function populateParticipantsDropdown() {
     const dd = document.getElementById('participants-dropdown');
-    dd.innerHTML = state.members.map(m =>
-      '<div class="multi-opt" data-id="' + esc(m.id) + '" onclick="toggleParticipant(&quot;' + esc(m.id) + '&quot;, &quot;' + esc(m.name || m.display_name || m.id) + '&quot;)">' +
-      '<div class="chk">&#10003;</div>' +
-      '<span>' + esc(m.name || m.display_name || m.id) + '</span></div>'
-    ).join('');
+    dd.innerHTML =
+      '<div class="participant-search"><input type="text" placeholder="Search members..." oninput="filterParticipants(this.value)" onclick="event.stopPropagation()"></div>' +
+      '<div class="participant-list">' +
+      state.members.map(m =>
+        '<div class="multi-opt" data-id="' + esc(m.id) + '" data-name="' + esc((m.name || '') + ' ' + (m.display_name || '')).toLowerCase() + '" onclick="toggleParticipant(&quot;' + esc(m.id) + '&quot;, &quot;' + esc(m.name || m.display_name || m.id) + '&quot;)">' +
+        '<div class="chk">&#10003;</div>' +
+        '<span>' + esc(m.name || m.display_name || m.id) + '</span></div>'
+      ).join('') +
+      '</div>';
     refreshParticipantDisplay();
+  }
+
+  function filterParticipants(query) {
+    const q = query.toLowerCase().trim();
+    const dd = document.getElementById('participants-dropdown');
+    const opts = dd.querySelectorAll('.multi-opt');
+    let visible = 0;
+    opts.forEach(opt => {
+      const match = !q || opt.dataset.name.includes(q);
+      opt.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    let noRes = dd.querySelector('.no-results');
+    if (!visible && q) {
+      if (!noRes) { noRes = document.createElement('div'); noRes.className = 'no-results'; dd.querySelector('.participant-list').appendChild(noRes); }
+      noRes.textContent = 'No members found';
+      noRes.style.display = '';
+    } else if (noRes) { noRes.style.display = 'none'; }
   }
 
   function toggleParticipant(id, name) {
@@ -1970,6 +2008,9 @@
   function refreshParticipantDisplay() {
     const disp = document.getElementById('participants-display');
     const dd = document.getElementById('participants-dropdown');
+    // clear search on refresh
+    const searchInput = dd.querySelector('.participant-search input');
+    if (searchInput && searchInput.value) { searchInput.value = ''; filterParticipants(''); }
     // update check marks
     dd.querySelectorAll('.multi-opt').forEach(opt => {
       const sel = state.participants.includes(opt.dataset.id);
@@ -1990,6 +2031,25 @@
     document.getElementById('participants-dropdown').classList.toggle('open');
     document.getElementById('participants-display').classList.toggle('open');
   });
+
+  // Reload participants when channel changes
+  document.getElementById('f-channel').addEventListener('change', async function() {
+    const channelId = this.value;
+    if (channelId) {
+      await loadChannelMembers(channelId);
+    } else {
+      await loadMembers();
+    }
+  });
+
+  async function loadChannelMembers(channelId) {
+    try {
+      state.members = await api('GET', '/members?channel_id=' + encodeURIComponent(channelId));
+      populateParticipantsDropdown();
+    } catch (e) {
+      console.error('Failed to load channel members:', e);
+    }
+  }
 
   document.addEventListener('click', e => {
     const wrap = document.getElementById('participants-wrap');
