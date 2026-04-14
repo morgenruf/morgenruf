@@ -1764,7 +1764,7 @@
     document.getElementById('f-name').value = 'Morning Standup';
     document.getElementById('f-channel').value = '';
     document.getElementById('f-time').value = '09:00';
-    document.getElementById('f-tz').value = 'UTC';
+    selectTz('UTC');
     document.getElementById('f-report-channel').value = '';
     document.getElementById('f-report-time').value = '';
     document.getElementById('f-group-by').value = 'member';
@@ -1797,7 +1797,7 @@
     document.getElementById('f-name').value = s.name || '';
     document.getElementById('f-channel').value = s.channel_id || '';
     document.getElementById('f-time').value = s.schedule_time || '09:00';
-    document.getElementById('f-tz').value = s.schedule_tz || 'UTC';
+    selectTz(s.schedule_tz || 'UTC');
     document.getElementById('f-report-channel').value = s.report_channel || '';
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
@@ -1846,7 +1846,7 @@
       name: document.getElementById('f-name').value.trim() || 'Morning Standup',
       channel_id: document.getElementById('f-channel').value,
       schedule_time: document.getElementById('f-time').value,
-      schedule_tz: document.getElementById('f-tz').value,
+      schedule_tz: getTzValue(),
       schedule_days: days,
       questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
       participants: state.participants,
@@ -2077,7 +2077,71 @@
   }
 
   // ── Timezone search ──
-  const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone');
+  const ALL_TIMEZONES = [
+    {value: 'UTC', label: 'UTC'},
+    {value: 'America/New_York', label: 'America/New_York (ET)'},
+    {value: 'America/Chicago', label: 'America/Chicago (CT)'},
+    {value: 'America/Denver', label: 'America/Denver (MT)'},
+    {value: 'America/Los_Angeles', label: 'America/Los_Angeles (PT)'},
+    {value: 'America/Toronto', label: 'America/Toronto (ET)'},
+    {value: 'America/Vancouver', label: 'America/Vancouver (PT)'},
+    {value: 'America/Phoenix', label: 'America/Phoenix (AZ)'},
+    {value: 'America/Anchorage', label: 'America/Anchorage (AKT)'},
+    {value: 'Pacific/Honolulu', label: 'Pacific/Honolulu (HST)'},
+    {value: 'America/Sao_Paulo', label: 'America/Sao_Paulo (BRT)'},
+    {value: 'America/Argentina/Buenos_Aires', label: 'America/Argentina/Buenos_Aires (ART)'},
+    {value: 'America/Bogota', label: 'America/Bogota (COT)'},
+    {value: 'America/Lima', label: 'America/Lima (PET)'},
+    {value: 'America/Mexico_City', label: 'America/Mexico_City (CST)'},
+    {value: 'Europe/London', label: 'Europe/London (GMT/BST)'},
+    {value: 'Europe/Dublin', label: 'Europe/Dublin (IST)'},
+    {value: 'Europe/Paris', label: 'Europe/Paris (CET)'},
+    {value: 'Europe/Berlin', label: 'Europe/Berlin (CET)'},
+    {value: 'Europe/Amsterdam', label: 'Europe/Amsterdam (CET)'},
+    {value: 'Europe/Madrid', label: 'Europe/Madrid (CET)'},
+    {value: 'Europe/Rome', label: 'Europe/Rome (CET)'},
+    {value: 'Europe/Warsaw', label: 'Europe/Warsaw (CET)'},
+    {value: 'Europe/Stockholm', label: 'Europe/Stockholm (CET)'},
+    {value: 'Europe/Zurich', label: 'Europe/Zurich (CET)'},
+    {value: 'Europe/Oslo', label: 'Europe/Oslo (CET)'},
+    {value: 'Europe/Helsinki', label: 'Europe/Helsinki (EET)'},
+    {value: 'Europe/Athens', label: 'Europe/Athens (EET)'},
+    {value: 'Europe/Bucharest', label: 'Europe/Bucharest (EET)'},
+    {value: 'Europe/Istanbul', label: 'Europe/Istanbul (TRT)'},
+    {value: 'Europe/Moscow', label: 'Europe/Moscow (MSK)'},
+    {value: 'Africa/Cairo', label: 'Africa/Cairo (EET)'},
+    {value: 'Africa/Johannesburg', label: 'Africa/Johannesburg (SAST)'},
+    {value: 'Africa/Lagos', label: 'Africa/Lagos (WAT)'},
+    {value: 'Africa/Nairobi', label: 'Africa/Nairobi (EAT)'},
+    {value: 'Asia/Dubai', label: 'Asia/Dubai (GST)'},
+    {value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)'},
+    {value: 'Asia/Colombo', label: 'Asia/Colombo (SLST)'},
+    {value: 'Asia/Dhaka', label: 'Asia/Dhaka (BST)'},
+    {value: 'Asia/Kathmandu', label: 'Asia/Kathmandu (NPT)'},
+    {value: 'Asia/Karachi', label: 'Asia/Karachi (PKT)'},
+    {value: 'Asia/Tashkent', label: 'Asia/Tashkent (UZT)'},
+    {value: 'Asia/Almaty', label: 'Asia/Almaty (ALMT)'},
+    {value: 'Asia/Bangkok', label: 'Asia/Bangkok (ICT)'},
+    {value: 'Asia/Jakarta', label: 'Asia/Jakarta (WIB)'},
+    {value: 'Asia/Singapore', label: 'Asia/Singapore (SGT)'},
+    {value: 'Asia/Kuala_Lumpur', label: 'Asia/Kuala_Lumpur (MYT)'},
+    {value: 'Asia/Shanghai', label: 'Asia/Shanghai (CST)'},
+    {value: 'Asia/Hong_Kong', label: 'Asia/Hong_Kong (HKT)'},
+    {value: 'Asia/Taipei', label: 'Asia/Taipei (CST)'},
+    {value: 'Asia/Seoul', label: 'Asia/Seoul (KST)'},
+    {value: 'Asia/Tokyo', label: 'Asia/Tokyo (JST)'},
+    {value: 'Asia/Yakutsk', label: 'Asia/Yakutsk (YAKT)'},
+    {value: 'Asia/Vladivostok', label: 'Asia/Vladivostok (VLAT)'},
+    {value: 'Australia/Perth', label: 'Australia/Perth (AWST)'},
+    {value: 'Australia/Darwin', label: 'Australia/Darwin (ACST)'},
+    {value: 'Australia/Adelaide', label: 'Australia/Adelaide (ACST/ACDT)'},
+    {value: 'Australia/Brisbane', label: 'Australia/Brisbane (AEST)'},
+    {value: 'Australia/Sydney', label: 'Australia/Sydney (AEST/AEDT)'},
+    {value: 'Australia/Melbourne', label: 'Australia/Melbourne (AEST/AEDT)'},
+    {value: 'Pacific/Auckland', label: 'Pacific/Auckland (NZST/NZDT)'},
+    {value: 'Pacific/Fiji', label: 'Pacific/Fiji (FJT)'},
+    {value: 'Pacific/Guam', label: 'Pacific/Guam (ChST)'},
+  ];
   // Common timezone aliases (old name → current IANA name)
   const TZ_ALIASES = {
     'calcutta': 'Asia/Kolkata', 'kolkata': 'Asia/Kolkata',
@@ -2103,14 +2167,20 @@
     if (!q) {
       matches = ALL_TIMEZONES;
     } else {
-      // Check aliases first, then filter normally
+      // Check aliases first
       const aliasMatch = TZ_ALIASES[q];
-      matches = ALL_TIMEZONES.filter(tz => tz.toLowerCase().includes(q));
-      if (aliasMatch && !matches.includes(aliasMatch)) matches.unshift(aliasMatch);
-      // Also match alias keys that start with q
+      matches = ALL_TIMEZONES.filter(tz => tz.label.toLowerCase().includes(q) || tz.value.toLowerCase().includes(q));
+      if (aliasMatch) {
+        const already = matches.some(tz => tz.value === aliasMatch);
+        if (!already) {
+          const found = ALL_TIMEZONES.find(tz => tz.value === aliasMatch);
+          if (found) matches.unshift(found);
+        }
+      }
+      // Also match partial alias keys
       if (!matches.length) {
-        const partialAlias = Object.entries(TZ_ALIASES).filter(([k]) => k.includes(q)).map(([,v]) => v);
-        matches = [...new Set(partialAlias)].filter(tz => ALL_TIMEZONES.includes(tz));
+        const partialAliasValues = [...new Set(Object.entries(TZ_ALIASES).filter(([k]) => k.includes(q)).map(([,v]) => v))];
+        matches = ALL_TIMEZONES.filter(tz => partialAliasValues.includes(tz.value));
       }
     }
     tzHighlightIdx = -1;
@@ -2118,20 +2188,30 @@
       tzDropdown.innerHTML = '<div class="tz-option" style="color:var(--text-dim)">No match</div>';
     } else {
       tzDropdown.innerHTML = matches.slice(0, 50).map((tz, i) =>
-        '<div class="tz-option" data-tz="' + esc(tz) + '" onmousedown="selectTz(\'' + esc(tz) + '\')">' + esc(tz) + '</div>'
+        '<div class="tz-option" data-tz="' + esc(tz.value) + '" onmousedown="selectTz(\'' + esc(tz.value) + '\')">' + esc(tz.label) + '</div>'
       ).join('');
     }
     tzDropdown.classList.add('open');
   }
 
+  function tzLabel(value) {
+    const found = ALL_TIMEZONES.find(tz => tz.value === value);
+    return found ? found.label : value;
+  }
+
   function selectTz(tz) {
-    tzInput.value = tz;
+    tzInput.dataset.tzValue = tz;
+    tzInput.value = tzLabel(tz);
     tzDropdown.classList.remove('open');
   }
 
-  tzInput.addEventListener('focus', () => renderTzOptions(tzInput.value));
-  tzInput.addEventListener('input', () => renderTzOptions(tzInput.value));
-  tzInput.addEventListener('blur', () => setTimeout(() => tzDropdown.classList.remove('open'), 150));
+  function getTzValue() {
+    return tzInput.dataset.tzValue || tzInput.value;
+  }
+
+  tzInput.addEventListener('focus', () => { tzInput.value = ''; renderTzOptions(''); });
+  tzInput.addEventListener('input', () => { tzInput.dataset.tzValue = ''; renderTzOptions(tzInput.value); });
+  tzInput.addEventListener('blur', () => setTimeout(() => { tzDropdown.classList.remove('open'); if (tzInput.dataset.tzValue) tzInput.value = tzLabel(tzInput.dataset.tzValue); }, 150));
   tzInput.addEventListener('keydown', (e) => {
     const opts = tzDropdown.querySelectorAll('.tz-option[data-tz]');
     if (e.key === 'ArrowDown') { e.preventDefault(); tzHighlightIdx = Math.min(tzHighlightIdx + 1, opts.length - 1); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
@@ -2271,7 +2351,7 @@
     document.getElementById('f-name').value = 'Daily Standup';
     document.getElementById('f-channel').value = '';
     document.getElementById('f-time').value = '09:00';
-    document.getElementById('f-tz').value = 'UTC';
+    selectTz('UTC');
     document.getElementById('f-report-channel').value = '';
     document.getElementById('f-report-time').value = '';
     document.getElementById('f-group-by').value = 'member';
@@ -2304,7 +2384,7 @@
     document.getElementById('f-name').value = s.name || '';
     document.getElementById('f-channel').value = s.channel_id || '';
     document.getElementById('f-time').value = s.schedule_time || '09:00';
-    document.getElementById('f-tz').value = s.schedule_tz || 'UTC';
+    selectTz(s.schedule_tz || 'UTC');
     document.getElementById('f-report-channel').value = '';
     document.getElementById('f-report-time').value = '';
     document.getElementById('f-group-by').value = 'member';
@@ -2397,7 +2477,7 @@
       name: document.getElementById('f-name').value.trim() || 'Daily Standup',
       channel_id: document.getElementById('f-channel').value,
       schedule_time: document.getElementById('f-time').value,
-      schedule_tz: document.getElementById('f-tz').value,
+      schedule_tz: getTzValue(),
       schedule_days: days,
       questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
       participants: state.participants,
