@@ -447,6 +447,15 @@ def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
 def register_handlers(app: App) -> None:
     """Register all Slack event handlers."""
 
+    # ----- External select: timezone search -----
+    @app.options("timezone")
+    def handle_timezone_options(ack, payload):  # noqa: ANN001
+        """Server-side search for timezone external_select."""
+        import blocks as _blocks  # noqa: PLC0415
+
+        query = payload.get("value", "")
+        ack(options=_blocks.timezone_search(query))
+
     @app.event("tokens_revoked")
     def handle_tokens_revoked(event, logger) -> None:  # noqa: ANN001
         """Handle token revocation — remove workspace installation and all data."""
@@ -1342,11 +1351,16 @@ def register_handlers(app: App) -> None:
             )
             return
 
-        # Collect answers from all question fields
+        # Collect answers from all question fields (rich_text_input)
+        import blocks as _blocks  # noqa: PLC0415
+
         for i in range(len(session.questions)):
             block_id = f"question_{i}"
             action_id = f"answer_{i}"
-            answer = values.get(block_id, {}).get(action_id, {}).get("value", "")
+            field = values.get(block_id, {}).get(action_id, {})
+            # rich_text_input → rich_text_value; fallback to plain value
+            rt = field.get("rich_text_value")
+            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else field.get("value", "")
             session = state_store.record_answer(cache_key, answer)
 
         # Ask mood after form submission
