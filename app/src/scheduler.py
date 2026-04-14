@@ -22,8 +22,22 @@ def get_scheduler() -> Optional[BackgroundScheduler]:
     return _scheduler
 
 
+def _fresh_bot_token(team_id: str, fallback_token: str) -> str:
+    """Return the latest bot_token from the DB, falling back to the passed-in token."""
+    try:
+        import db  # noqa: PLC0415
+
+        inst = db.get_installation(team_id)
+        if inst and inst.get("bot_token"):
+            return inst["bot_token"]
+    except Exception:
+        pass
+    return fallback_token
+
+
 def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
     """DM participants of a standup schedule (or all active members if no schedule)."""
+    bot_token = _fresh_bot_token(team_id, bot_token)
     try:
         import db  # noqa: PLC0415
 
@@ -151,6 +165,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
 
 def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: int) -> None:
     """DM active members a heads-up before standup time."""
+    bot_token = _fresh_bot_token(team_id, bot_token)
     try:
         import db  # noqa: PLC0415
 
@@ -241,6 +256,7 @@ def _send_manager_digest(team_id: str) -> None:
 
 def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
     """Post the standup report at the scheduled report_time, regardless of completion."""
+    bot_token = _fresh_bot_token(team_id, bot_token)
     try:
         import json as _json
 
