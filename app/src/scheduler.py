@@ -126,8 +126,14 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
         try:
             schedule = db.get_standup_schedule(team_id, schedule_id)
             if schedule and schedule.get("sync_with_channel"):
-                resp = client.conversations_members(channel=channel_id, limit=500)
-                channel_members = set(resp.get("members", []))
+                channel_members = set()
+                cursor = None
+                while True:
+                    resp = client.conversations_members(channel=channel_id, limit=500, cursor=cursor or "")
+                    channel_members.update(resp.get("members", []))
+                    cursor = resp.get("response_metadata", {}).get("next_cursor")
+                    if not cursor:
+                        break
                 # Filter out bots by checking each user (cached per team)
                 for uid in channel_members:
                     try:
@@ -181,15 +187,19 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                 )
 
             dm_count += 1
-            session = state_store.start(
-                cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name
-            )
 
-            # Send rich Block Kit DM with Fill-in-form / Skip / I'm away buttons
+            # Send DM first — only start session if delivery succeeds
             from blocks import standup_dm_message  # noqa: PLC0415
 
-            dm_msg = standup_dm_message(session.questions, standup_name)
+            default_questions = questions or [
+                "What did you complete yesterday?",
+                "What are you working on today?",
+                "Any blockers?",
+            ]
+            dm_msg = standup_dm_message(default_questions, standup_name)
             _slack_dm_with_retry(client, user_id, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg)
+
+            state_store.start(cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name)
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
         except Exception as exc:
             failed_count += 1
@@ -199,13 +209,24 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
         _notify_delivery_failure(client, channel_id, failed_count, dm_count)
 
 
-def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: int) -> None:
+def _send_reminder_to_workspace(
+    team_id: str, bot_token: str, reminder_minutes: int, schedule_id: int | None = None
+) -> None:
     """DM active members a heads-up before standup time."""
     bot_token = _fresh_bot_token(team_id, bot_token)
     try:
         import db  # noqa: PLC0415
 
         members = db.get_active_members(team_id)
+
+        # Filter to schedule participants if this is a schedule-specific reminder
+        if schedule_id is not None:
+            sched = db.get_standup_schedule(team_id, schedule_id)
+            if sched:
+                participants = sched.get("participants") or []
+                if participants:
+                    participant_set = set(participants)
+                    members = [m for m in members if m["user_id"] in participant_set]
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
         return
@@ -598,7 +619,7 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
             trigger=CronTrigger(
                 hour=reminder_dt.hour, minute=reminder_dt.minute, day_of_week=reminder_days, timezone=tz
             ),
-            args=[team_id, bot_token, reminder_minutes],
+            args=[team_id, bot_token, reminder_minutes, schedule_id],
             id=f"reminder_schedule_{team_id}_{schedule_id}",
             replace_existing=True,
         )
