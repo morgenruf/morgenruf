@@ -19,73 +19,187 @@ def _time_options() -> list[dict]:
     return options
 
 
+_TIMEZONE_ZONES = [
+    ("UTC", "UTC"),
+    ("America/New_York", "America/New_York (ET)"),
+    ("America/Chicago", "America/Chicago (CT)"),
+    ("America/Denver", "America/Denver (MT)"),
+    ("America/Los_Angeles", "America/Los_Angeles (PT)"),
+    ("America/Toronto", "America/Toronto (ET)"),
+    ("America/Vancouver", "America/Vancouver (PT)"),
+    ("America/Phoenix", "America/Phoenix (AZ)"),
+    ("America/Anchorage", "America/Anchorage (AKT)"),
+    ("Pacific/Honolulu", "Pacific/Honolulu (HST)"),
+    ("America/Sao_Paulo", "America/Sao_Paulo (BRT)"),
+    ("America/Argentina/Buenos_Aires", "America/Argentina/Buenos_Aires (ART)"),
+    ("America/Bogota", "America/Bogota (COT)"),
+    ("America/Lima", "America/Lima (PET)"),
+    ("America/Mexico_City", "America/Mexico_City (CST)"),
+    ("Europe/London", "Europe/London (GMT/BST)"),
+    ("Europe/Dublin", "Europe/Dublin (IST)"),
+    ("Europe/Paris", "Europe/Paris (CET)"),
+    ("Europe/Berlin", "Europe/Berlin (CET)"),
+    ("Europe/Amsterdam", "Europe/Amsterdam (CET)"),
+    ("Europe/Madrid", "Europe/Madrid (CET)"),
+    ("Europe/Rome", "Europe/Rome (CET)"),
+    ("Europe/Warsaw", "Europe/Warsaw (CET)"),
+    ("Europe/Stockholm", "Europe/Stockholm (CET)"),
+    ("Europe/Zurich", "Europe/Zurich (CET)"),
+    ("Europe/Oslo", "Europe/Oslo (CET)"),
+    ("Europe/Helsinki", "Europe/Helsinki (EET)"),
+    ("Europe/Athens", "Europe/Athens (EET)"),
+    ("Europe/Bucharest", "Europe/Bucharest (EET)"),
+    ("Europe/Istanbul", "Europe/Istanbul (TRT)"),
+    ("Europe/Moscow", "Europe/Moscow (MSK)"),
+    ("Africa/Cairo", "Africa/Cairo (EET)"),
+    ("Africa/Johannesburg", "Africa/Johannesburg (SAST)"),
+    ("Africa/Lagos", "Africa/Lagos (WAT)"),
+    ("Africa/Nairobi", "Africa/Nairobi (EAT)"),
+    ("Asia/Dubai", "Asia/Dubai (GST)"),
+    ("Asia/Kolkata", "Asia/Kolkata (IST)"),
+    ("Asia/Colombo", "Asia/Colombo (SLST)"),
+    ("Asia/Dhaka", "Asia/Dhaka (BST)"),
+    ("Asia/Kathmandu", "Asia/Kathmandu (NPT)"),
+    ("Asia/Karachi", "Asia/Karachi (PKT)"),
+    ("Asia/Tashkent", "Asia/Tashkent (UZT)"),
+    ("Asia/Almaty", "Asia/Almaty (ALMT)"),
+    ("Asia/Bangkok", "Asia/Bangkok (ICT)"),
+    ("Asia/Jakarta", "Asia/Jakarta (WIB)"),
+    ("Asia/Singapore", "Asia/Singapore (SGT)"),
+    ("Asia/Kuala_Lumpur", "Asia/Kuala_Lumpur (MYT)"),
+    ("Asia/Shanghai", "Asia/Shanghai (CST)"),
+    ("Asia/Hong_Kong", "Asia/Hong_Kong (HKT)"),
+    ("Asia/Taipei", "Asia/Taipei (CST)"),
+    ("Asia/Seoul", "Asia/Seoul (KST)"),
+    ("Asia/Tokyo", "Asia/Tokyo (JST)"),
+    ("Asia/Yakutsk", "Asia/Yakutsk (YAKT)"),
+    ("Asia/Vladivostok", "Asia/Vladivostok (VLAT)"),
+    ("Australia/Perth", "Australia/Perth (AWST)"),
+    ("Australia/Darwin", "Australia/Darwin (ACST)"),
+    ("Australia/Adelaide", "Australia/Adelaide (ACST/ACDT)"),
+    ("Australia/Brisbane", "Australia/Brisbane (AEST)"),
+    ("Australia/Sydney", "Australia/Sydney (AEST/AEDT)"),
+    ("Australia/Melbourne", "Australia/Melbourne (AEST/AEDT)"),
+    ("Pacific/Auckland", "Pacific/Auckland (NZST/NZDT)"),
+    ("Pacific/Fiji", "Pacific/Fiji (FJT)"),
+    ("Pacific/Guam", "Pacific/Guam (ChST)"),
+]
+
+_TZ_ALIASES: dict[str, str] = {
+    "calcutta": "Asia/Kolkata", "kolkata": "Asia/Kolkata",
+    "bombay": "Asia/Kolkata", "mumbai": "Asia/Kolkata",
+    "madras": "Asia/Chennai", "chennai": "Asia/Chennai",
+    "ist": "Asia/Kolkata", "pst": "America/Los_Angeles",
+    "est": "America/New_York", "cst": "America/Chicago",
+    "mst": "America/Denver", "gmt": "Europe/London",
+    "bst": "Europe/London", "cet": "Europe/Paris",
+    "jst": "Asia/Tokyo", "kst": "Asia/Seoul",
+    "aest": "Australia/Sydney", "nzst": "Pacific/Auckland",
+    "india": "Asia/Kolkata", "japan": "Asia/Tokyo",
+    "china": "Asia/Shanghai", "korea": "Asia/Seoul",
+}
+
+
 def _timezone_options() -> list[dict]:
-    zones = [
-        ("UTC", "UTC"),
-        ("America/New_York", "America/New_York (ET)"),
-        ("America/Chicago", "America/Chicago (CT)"),
-        ("America/Denver", "America/Denver (MT)"),
-        ("America/Los_Angeles", "America/Los_Angeles (PT)"),
-        ("America/Toronto", "America/Toronto (ET)"),
-        ("America/Vancouver", "America/Vancouver (PT)"),
-        ("America/Phoenix", "America/Phoenix (AZ)"),
-        ("America/Anchorage", "America/Anchorage (AKT)"),
-        ("Pacific/Honolulu", "Pacific/Honolulu (HST)"),
-        ("America/Sao_Paulo", "America/Sao_Paulo (BRT)"),
-        ("America/Argentina/Buenos_Aires", "America/Argentina/Buenos_Aires (ART)"),
-        ("America/Bogota", "America/Bogota (COT)"),
-        ("America/Lima", "America/Lima (PET)"),
-        ("America/Mexico_City", "America/Mexico_City (CST)"),
-        ("Europe/London", "Europe/London (GMT/BST)"),
-        ("Europe/Dublin", "Europe/Dublin (IST)"),
-        ("Europe/Paris", "Europe/Paris (CET)"),
-        ("Europe/Berlin", "Europe/Berlin (CET)"),
-        ("Europe/Amsterdam", "Europe/Amsterdam (CET)"),
-        ("Europe/Madrid", "Europe/Madrid (CET)"),
-        ("Europe/Rome", "Europe/Rome (CET)"),
-        ("Europe/Warsaw", "Europe/Warsaw (CET)"),
-        ("Europe/Stockholm", "Europe/Stockholm (CET)"),
-        ("Europe/Zurich", "Europe/Zurich (CET)"),
-        ("Europe/Oslo", "Europe/Oslo (CET)"),
-        ("Europe/Helsinki", "Europe/Helsinki (EET)"),
-        ("Europe/Athens", "Europe/Athens (EET)"),
-        ("Europe/Bucharest", "Europe/Bucharest (EET)"),
-        ("Europe/Istanbul", "Europe/Istanbul (TRT)"),
-        ("Europe/Moscow", "Europe/Moscow (MSK)"),
-        ("Africa/Cairo", "Africa/Cairo (EET)"),
-        ("Africa/Johannesburg", "Africa/Johannesburg (SAST)"),
-        ("Africa/Lagos", "Africa/Lagos (WAT)"),
-        ("Africa/Nairobi", "Africa/Nairobi (EAT)"),
-        ("Asia/Dubai", "Asia/Dubai (GST)"),
-        ("Asia/Kolkata", "Asia/Kolkata (IST)"),
-        ("Asia/Colombo", "Asia/Colombo (SLST)"),
-        ("Asia/Dhaka", "Asia/Dhaka (BST)"),
-        ("Asia/Kathmandu", "Asia/Kathmandu (NPT)"),
-        ("Asia/Karachi", "Asia/Karachi (PKT)"),
-        ("Asia/Tashkent", "Asia/Tashkent (UZT)"),
-        ("Asia/Almaty", "Asia/Almaty (ALMT)"),
-        ("Asia/Bangkok", "Asia/Bangkok (ICT)"),
-        ("Asia/Jakarta", "Asia/Jakarta (WIB)"),
-        ("Asia/Singapore", "Asia/Singapore (SGT)"),
-        ("Asia/Kuala_Lumpur", "Asia/Kuala_Lumpur (MYT)"),
-        ("Asia/Shanghai", "Asia/Shanghai (CST)"),
-        ("Asia/Hong_Kong", "Asia/Hong_Kong (HKT)"),
-        ("Asia/Taipei", "Asia/Taipei (CST)"),
-        ("Asia/Seoul", "Asia/Seoul (KST)"),
-        ("Asia/Tokyo", "Asia/Tokyo (JST)"),
-        ("Asia/Yakutsk", "Asia/Yakutsk (YAKT)"),
-        ("Asia/Vladivostok", "Asia/Vladivostok (VLAT)"),
-        ("Australia/Perth", "Australia/Perth (AWST)"),
-        ("Australia/Darwin", "Australia/Darwin (ACST)"),
-        ("Australia/Adelaide", "Australia/Adelaide (ACST/ACDT)"),
-        ("Australia/Brisbane", "Australia/Brisbane (AEST)"),
-        ("Australia/Sydney", "Australia/Sydney (AEST/AEDT)"),
-        ("Australia/Melbourne", "Australia/Melbourne (AEST/AEDT)"),
-        ("Pacific/Auckland", "Pacific/Auckland (NZST/NZDT)"),
-        ("Pacific/Fiji", "Pacific/Fiji (FJT)"),
-        ("Pacific/Guam", "Pacific/Guam (ChST)"),
-    ]
-    return [{"text": {"type": "plain_text", "text": label}, "value": value} for value, label in zones]
+    return [{"text": {"type": "plain_text", "text": label}, "value": value} for value, label in _TIMEZONE_ZONES]
+
+
+def timezone_search(query: str) -> list[dict]:
+    """Search timezones by substring and alias. Returns Slack option dicts."""
+    all_opts = _timezone_options()
+    q = (query or "").lower().strip()
+    if not q:
+        return all_opts
+
+    # Substring match on label (case-insensitive)
+    matches = [opt for opt in all_opts if q in opt["text"]["text"].lower()]
+
+    # Alias match — add to top if not already present
+    matched_values = {opt["value"] for opt in matches}
+    alias_hit = _TZ_ALIASES.get(q)
+    if not alias_hit:
+        # Partial alias match
+        for alias_key, tz_value in _TZ_ALIASES.items():
+            if q in alias_key:
+                alias_hit = tz_value
+                break
+    if alias_hit and alias_hit not in matched_values:
+        alias_opt = _find_option(all_opts, alias_hit)
+        if alias_opt:
+            matches.insert(0, alias_opt)
+
+    return matches[:100]
+
+
+# ---------------------------------------------------------------------------
+# Rich-text ↔ mrkdwn conversion
+# ---------------------------------------------------------------------------
+
+
+def _rt_elements_to_mrkdwn(elements: list[dict]) -> str:
+    """Convert rich_text element list (text, link, user, etc.) to mrkdwn."""
+    parts: list[str] = []
+    for el in elements:
+        el_type = el.get("type", "")
+        if el_type == "text":
+            text = el.get("text", "")
+            style = el.get("style", {})
+            if style.get("code"):
+                text = f"`{text}`"
+            if style.get("bold"):
+                text = f"*{text}*"
+            if style.get("italic"):
+                text = f"_{text}_"
+            if style.get("strike"):
+                text = f"~{text}~"
+            parts.append(text)
+        elif el_type == "link":
+            url = el.get("url", "")
+            text = el.get("text", url)
+            parts.append(f"<{url}|{text}>" if text != url else url)
+        elif el_type == "user":
+            parts.append(f"<@{el.get('user_id', '')}>")
+        elif el_type == "channel":
+            parts.append(f"<#{el.get('channel_id', '')}>")
+        elif el_type == "emoji":
+            parts.append(f":{el.get('name', '')}:")
+    return "".join(parts)
+
+
+def rich_text_to_mrkdwn(rich_text: dict) -> str:
+    """Convert a Slack rich_text block value to a mrkdwn string."""
+    if not rich_text or not isinstance(rich_text, dict):
+        return ""
+    parts: list[str] = []
+    for block in rich_text.get("elements", []):
+        btype = block.get("type", "")
+        if btype == "rich_text_section":
+            parts.append(_rt_elements_to_mrkdwn(block.get("elements", [])))
+        elif btype == "rich_text_list":
+            style = block.get("style", "bullet")
+            indent = block.get("indent", 0)
+            prefix_pad = "    " * indent
+            items: list[str] = []
+            for idx, item in enumerate(block.get("elements", [])):
+                prefix = f"{prefix_pad}• " if style == "bullet" else f"{prefix_pad}{idx + 1}. "
+                items.append(prefix + _rt_elements_to_mrkdwn(item.get("elements", [])))
+            parts.append("\n".join(items))
+        elif btype == "rich_text_preformatted":
+            parts.append("```\n" + _rt_elements_to_mrkdwn(block.get("elements", [])) + "\n```")
+        elif btype == "rich_text_quote":
+            lines = _rt_elements_to_mrkdwn(block.get("elements", [])).split("\n")
+            parts.append("\n".join("> " + line for line in lines))
+    return "\n".join(parts)
+
+
+def mrkdwn_to_rich_text(text: str) -> dict:
+    """Wrap a plain/mrkdwn string as a rich_text block for initial_value."""
+    return {
+        "type": "rich_text",
+        "elements": [
+            {"type": "rich_text_section", "elements": [{"type": "text", "text": text}]}
+        ],
+    }
 
 
 def _reminder_options() -> list[dict]:
@@ -140,7 +254,8 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
     day_options = _day_options()
 
     selected_time = _find_option(time_options, cfg.get("report_time", "09:00")) or time_options[36]
-    selected_tz = _find_option(tz_options, cfg.get("timezone", "UTC")) or tz_options[0]
+    tz_value = cfg.get("timezone", "UTC")
+    selected_tz = _find_option(tz_options, tz_value) or tz_options[0]
     selected_reminder = _find_option(reminder_options, str(cfg.get("reminder_minutes", 60))) or reminder_options[3]
 
     active_days = cfg.get("days", ["mon", "tue", "wed", "thu", "fri"])
@@ -220,10 +335,11 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
             "block_id": "timezone",
             "label": {"type": "plain_text", "text": "Timezone"},
             "element": {
-                "type": "static_select",
+                "type": "external_select",
                 "action_id": "timezone",
-                "options": tz_options,
-                "initial_option": selected_tz,
+                "min_query_length": 0,
+                "placeholder": {"type": "plain_text", "text": "Search timezone..."},
+                **({"initial_option": selected_tz} if selected_tz else {}),
             },
         },
         # Reminder
@@ -518,13 +634,11 @@ def standup_form_modal(questions: list[str], standup_name: str, previous_answers
     for i, question in enumerate(questions):
         prev = previous_answers[i] if i < len(previous_answers) else ""
         element: dict = {
-            "type": "plain_text_input",
+            "type": "rich_text_input",
             "action_id": f"answer_{i}",
-            "multiline": True,
-            "placeholder": {"type": "plain_text", "text": "Type your answer… (*bold*, _italic_, • bullets)"},
         }
         if prev:
-            element["initial_value"] = prev
+            element["initial_value"] = mrkdwn_to_rich_text(prev)
         blocks.append(
             {
                 "type": "input",
