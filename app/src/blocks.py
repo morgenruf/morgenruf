@@ -86,17 +86,28 @@ _TIMEZONE_ZONES = [
 ]
 
 _TZ_ALIASES: dict[str, str] = {
-    "calcutta": "Asia/Kolkata", "kolkata": "Asia/Kolkata",
-    "bombay": "Asia/Kolkata", "mumbai": "Asia/Kolkata",
-    "madras": "Asia/Chennai", "chennai": "Asia/Chennai",
-    "ist": "Asia/Kolkata", "pst": "America/Los_Angeles",
-    "est": "America/New_York", "cst": "America/Chicago",
-    "mst": "America/Denver", "gmt": "Europe/London",
-    "bst": "Europe/London", "cet": "Europe/Paris",
-    "jst": "Asia/Tokyo", "kst": "Asia/Seoul",
-    "aest": "Australia/Sydney", "nzst": "Pacific/Auckland",
-    "india": "Asia/Kolkata", "japan": "Asia/Tokyo",
-    "china": "Asia/Shanghai", "korea": "Asia/Seoul",
+    "calcutta": "Asia/Kolkata",
+    "kolkata": "Asia/Kolkata",
+    "bombay": "Asia/Kolkata",
+    "mumbai": "Asia/Kolkata",
+    "madras": "Asia/Chennai",
+    "chennai": "Asia/Chennai",
+    "ist": "Asia/Kolkata",
+    "pst": "America/Los_Angeles",
+    "est": "America/New_York",
+    "cst": "America/Chicago",
+    "mst": "America/Denver",
+    "gmt": "Europe/London",
+    "bst": "Europe/London",
+    "cet": "Europe/Paris",
+    "jst": "Asia/Tokyo",
+    "kst": "Asia/Seoul",
+    "aest": "Australia/Sydney",
+    "nzst": "Pacific/Auckland",
+    "india": "Asia/Kolkata",
+    "japan": "Asia/Tokyo",
+    "china": "Asia/Shanghai",
+    "korea": "Asia/Seoul",
 }
 
 
@@ -196,9 +207,7 @@ def mrkdwn_to_rich_text(text: str) -> dict:
     """Wrap a plain/mrkdwn string as a rich_text block for initial_value."""
     return {
         "type": "rich_text",
-        "elements": [
-            {"type": "rich_text_section", "elements": [{"type": "text", "text": text}]}
-        ],
+        "elements": [{"type": "rich_text_section", "elements": [{"type": "text", "text": text}]}],
     }
 
 
