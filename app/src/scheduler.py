@@ -506,6 +506,54 @@ def register_workspace_job(
     logger.info("Registered report job for %s at %s %s", team_id, report_time, schedule_tz)
 
 
+def register_workspace_digests_only(
+    scheduler: BackgroundScheduler,
+    team_id: str,
+    bot_token: str,
+    config: dict,
+) -> None:
+    """Register only digest jobs for a workspace that has schedule-level standups.
+
+    Skips standup DMs, reminders, and reports — those are handled per-schedule.
+    """
+    schedule_time: str = config.get("schedule_time", "09:00")
+    schedule_tz: str = config.get("schedule_tz", "UTC")
+    schedule_days: str = config.get("schedule_days", "mon,tue,wed,thu,fri")
+    try:
+        hour, minute = schedule_time.split(":")
+        tz = pytz.timezone(schedule_tz)
+    except Exception as exc:
+        logger.error("Invalid schedule config for %s: %s", team_id, exc)
+        return
+
+    # Weekly digest
+    scheduler.add_job(
+        _send_weekly_digest,
+        trigger=CronTrigger(day_of_week="sun", hour=18, minute=0, timezone=tz),
+        args=[team_id, bot_token],
+        id=f"digest_{team_id}",
+        name=f"Weekly Digest — {team_id}",
+        replace_existing=True,
+    )
+
+    # Manager digest
+    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)
+    scheduler.add_job(
+        _send_manager_digest,
+        trigger=CronTrigger(
+            hour=standup_plus_30.hour,
+            minute=standup_plus_30.minute,
+            day_of_week=schedule_days,
+            timezone=tz,
+        ),
+        args=[team_id],
+        id=f"manager_digest_{team_id}",
+        name=f"Manager Digest — {team_id}",
+        replace_existing=True,
+    )
+    logger.info("Registered digest-only jobs for %s (schedule-level standups active)", team_id)
+
+
 def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> None:
     """Register a cron job for a standup_schedules row."""
     team_id = schedule["team_id"]
@@ -596,18 +644,25 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
     global _scheduler
     scheduler = BackgroundScheduler()
 
-    for team_id, bot_token, config in installations:
-        register_workspace_job(scheduler, team_id, bot_token, config)
-
-    # Register standup_schedules jobs
+    # Collect teams that have schedule-level standups so we skip
+    # duplicate workspace-level standup/report jobs for them.
+    teams_with_schedules: set[str] = set()
     try:
         import db  # noqa: PLC0415
 
         all_schedules = db.get_all_active_schedules()
         for sched in all_schedules:
+            teams_with_schedules.add(sched["team_id"])
             register_schedule_job(scheduler, sched)
     except Exception as exc:
         logger.warning("Could not load standup_schedules: %s", exc)
+
+    for team_id, bot_token, config in installations:
+        if team_id in teams_with_schedules:
+            # Only register digest/manager jobs — standup + report handled by schedules
+            register_workspace_digests_only(scheduler, team_id, bot_token, config)
+        else:
+            register_workspace_job(scheduler, team_id, bot_token, config)
 
     _scheduler = scheduler
     return scheduler
