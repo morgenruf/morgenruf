@@ -1366,21 +1366,6 @@ def register_handlers(app: App) -> None:
         # Ask mood after form submission
         _send_mood_block(client, user_id)
 
-    @app.view("edit_standup_modal")
-    def handle_edit_modal_submit(ack, body, client):  # noqa: ANN001
-        """Handle modal submission for standup editing."""
-        ack()
-        user_id: str = body["user"]["id"]
-        team_id: str = body["team"]["id"]
-        values = body["view"]["state"]["values"]
-        yesterday = values["q1"]["answer"]["value"] or ""
-        today = values["q2"]["answer"]["value"] or ""
-        blockers = values["q3"]["answer"]["value"] or ""
-        import db  # noqa: PLC0415
-
-        db.update_standup(user_id, team_id, yesterday=yesterday, today=today, blockers=blockers)
-        client.chat_postMessage(channel=user_id, text="✅ Standup updated!")
-
     @app.action("standup_edit")
     def handle_standup_edit(ack, body, say, client):  # noqa: ANN001
         """Handle 'Edit my standup' button — re-open DM session for edits."""
