@@ -149,13 +149,8 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
                 "type": "input",
                 "block_id": f"answer_{step}",
                 "element": {
-                    "type": "plain_text_input",
+                    "type": "rich_text_input",
                     "action_id": f"standup_answer_{step}",
-                    "placeholder": {
-                        "type": "plain_text",
-                        "text": "Type your answer... (*bold*, _italic_, ~strike~, • bullets)",
-                    },
-                    "multiline": True,
                 },
                 "label": {"type": "plain_text", "text": "Your answer"},
             },
@@ -1081,9 +1076,11 @@ def register_handlers(app: App) -> None:
         input_action_id = f"standup_answer_{step}"
         answer = ""
         try:
-            answer = (
-                body.get("state", {}).get("values", {}).get(block_id, {}).get(input_action_id, {}).get("value") or ""
-            )
+            import blocks as _blocks  # noqa: PLC0415
+
+            field = body.get("state", {}).get("values", {}).get(block_id, {}).get(input_action_id, {})
+            rt = field.get("rich_text_value")
+            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else (field.get("value") or "")
         except Exception as e:
             logger.warning("submit_answer: could not read input value: %s", e)
 
