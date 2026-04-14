@@ -318,16 +318,37 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             except Exception:
                 pass
 
+        # Filter standups to only include this schedule's participants
+        participants = sched_cfg.get("participants") or []
+        if participants:
+            participant_set = set(participants)
+            today_standups = [s for s in today_standups if s.get("user_id") in participant_set]
+            if not today_standups:
+                logger.info(
+                    "No submissions from schedule participants for %s/%s — skipping report", team_id, schedule_id
+                )
+                return
+
         group_by = sched_cfg.get("group_by", "member")
-        config = db.get_workspace_config(team_id) or {}
-        questions = config.get("questions") or []
+        # Use schedule-specific questions, falling back to workspace config
+        questions = sched_cfg.get("questions") or []
         if isinstance(questions, str):
             try:
                 questions = _json.loads(questions)
             except Exception:
                 questions = []
+        if not questions:
+            config = db.get_workspace_config(team_id) or {}
+            questions = config.get("questions") or []
+            if isinstance(questions, str):
+                try:
+                    questions = _json.loads(questions)
+                except Exception:
+                    questions = []
 
-        active_members = db.get_active_members(team_id)
+        # Only fetch profiles for relevant members
+        relevant_user_ids = {s.get("user_id") for s in today_standups}
+        active_members = [m for m in db.get_active_members(team_id) if m["user_id"] in relevant_user_ids]
         user_profiles = {}
         for m in active_members:
             try:
@@ -356,7 +377,8 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         try:
             from ai_summary import generate_summary  # noqa: PLC0415
 
-            if config.get("ai_summary_enabled"):
+            ws_config = db.get_workspace_config(team_id) or {}
+            if ws_config.get("ai_summary_enabled"):
                 inst = db.get_installation(team_id)
                 team_name = (inst or {}).get("team_name", "")
                 summary_text = generate_summary(today_standups, team_name)
