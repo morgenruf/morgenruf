@@ -19,6 +19,15 @@ logger = logging.getLogger(__name__)
 # Cache daily thread parent message ts per channel: "team:channel:YYYY-MM-DD" -> ts
 _daily_thread_cache: dict[str, str] = {}
 
+
+def _clean_thread_cache() -> None:
+    """Remove stale entries from the thread cache (keep only today)."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    stale = [k for k in _daily_thread_cache if not k.endswith(today)]
+    for k in stale:
+        del _daily_thread_cache[k]
+
+
 # Track which users are in configure mode: "team_id:user_id"
 _configure_mode_users: set[str] = set()
 
@@ -87,38 +96,40 @@ def _get_bot_channels(client) -> list[dict]:
     return channels
 
 
-def _format_standup(user_id: str, answers: list[str], mood: str | None = None) -> str:
+_DEFAULT_LABELS = ["✅ Yesterday", "🎯 Today", "🚧 Blockers"]
+
+
+def _format_standup(
+    user_id: str, answers: list[str], mood: str | None = None, questions: list[str] | None = None
+) -> str:
     """Format collected answers into a structured standup post."""
     import blocks as _blocks  # noqa: PLC0415
 
-    date_str = datetime.utcnow().strftime("%B %d, %Y")
-    yesterday = _blocks.linkify_issues(answers[0]) if len(answers) > 0 else "—"
-    today = _blocks.linkify_issues(answers[1]) if len(answers) > 1 else "—"
-    raw_blockers = answers[2] if len(answers) > 2 else "—"
+    date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
-    blocker_text = (
-        "_None_ ✅"
-        if raw_blockers.strip().lower() in ("none", "no", "nope", "-", "n/a", "")
-        else _blocks.linkify_issues(raw_blockers)
-    )
+    labels = questions or _DEFAULT_LABELS
+    parts = [f"📋 *Standup from <@{user_id}>* — {date_str}\n"]
+    for i, label in enumerate(labels):
+        raw = answers[i] if i < len(answers) else "—"
+        # Detect "no blockers" only for the last default question
+        if not questions and i == 2 and raw.strip().lower() in ("none", "no", "nope", "-", "n/a", ""):
+            formatted_answer = "_None_ ✅"
+        else:
+            formatted_answer = _blocks.linkify_issues(raw) if raw != "—" else raw
+        parts.append(f"*{label}:*\n{formatted_answer}")
 
-    text = (
-        f"📋 *Standup from <@{user_id}>* — {date_str}\n\n"
-        f"*✅ Yesterday:*\n{yesterday}\n\n"
-        f"*🎯 Today:*\n{today}\n\n"
-        f"*🚧 Blockers:*\n{blocker_text}"
-    )
+    text = "\n\n".join(parts)
     if mood:
         text += f"\n\n*🎭 Mood:* {mood}"
     return text
 
 
-def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str | None = None) -> None:
-    """Best-effort persist to DB; log and continue on failure."""
+def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str | None = None) -> int | None:
+    """Best-effort persist to DB; log and continue on failure. Returns standup ID."""
     try:
         import db  # noqa: PLC0415
 
-        db.save_standup(
+        return db.save_standup(
             team_id=team_id,
             user_id=user_id,
             yesterday=answers[0] if len(answers) > 0 else "",
@@ -128,6 +139,7 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
         )
     except Exception as exc:
         logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
+        return None
 
 
 def _send_question_block(client, user_id: str, question: str, step: int) -> None:
@@ -207,9 +219,13 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
 
 def _complete_standup(user_id: str, session, client) -> None:
     """Finalize a completed standup: send Block Kit confirmation, post to channel, persist, fire events."""
+    _clean_thread_cache()
     n_questions = len(session.questions)
     question_answers = session.answers[:n_questions]
     mood = session.answers[n_questions] if len(session.answers) > n_questions else None
+
+    # Persist first so we have the standup ID for the edit button
+    standup_id = _persist_standup(session.team_id, user_id, question_answers, mood=mood)
 
     # Block Kit confirmation with edit button
     client.chat_postMessage(
@@ -230,6 +246,7 @@ def _complete_standup(user_id: str, session, client) -> None:
                         "type": "button",
                         "text": {"type": "plain_text", "text": "✏️ Edit responses"},
                         "action_id": "standup_edit",
+                        "value": str(standup_id) if standup_id else "0",
                         "style": "primary",
                     }
                 ],
@@ -237,7 +254,7 @@ def _complete_standup(user_id: str, session, client) -> None:
         ],
     )
 
-    formatted = _format_standup(user_id, question_answers, mood=mood)
+    formatted = _format_standup(user_id, question_answers, mood=mood, questions=session.questions)
     channel = session.channel
     if channel:
         try:
@@ -301,8 +318,6 @@ def _complete_standup(user_id: str, session, client) -> None:
                 text=f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}",
             )
 
-    _persist_standup(session.team_id, user_id, question_answers, mood=mood)
-
     # Ensure member exists in DB for reports/participation
     try:
         import db  # noqa: PLC0415
@@ -321,19 +336,27 @@ def _complete_standup(user_id: str, session, client) -> None:
 
     state_store.clear(f"{session.team_id}:{user_id}")
 
+    # Build answers dict keyed by question text
+    answers_dict = {}
+    for i, q in enumerate(session.questions):
+        answers_dict[q] = question_answers[i] if i < len(question_answers) else ""
+    # Also include legacy keys for backwards compatibility
+    if len(question_answers) > 0:
+        answers_dict["yesterday"] = question_answers[0]
+    if len(question_answers) > 1:
+        answers_dict["today"] = question_answers[1]
+    if len(question_answers) > 2:
+        answers_dict["blockers"] = question_answers[2]
+
     fire_webhooks(
         session.team_id,
         "standup.completed",
         {
             "team_id": session.team_id,
             "user_id": user_id,
-            "answers": {
-                "yesterday": question_answers[0] if len(question_answers) > 0 else "",
-                "today": question_answers[1] if len(question_answers) > 1 else "",
-                "blockers": question_answers[2] if len(question_answers) > 2 else "",
-            },
+            "answers": answers_dict,
             "mood": mood,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
 
@@ -343,8 +366,15 @@ def _complete_standup(user_id: str, session, client) -> None:
     try:
         from workflow import evaluate_rules  # noqa: PLC0415
 
-        blocker_text = question_answers[2] if len(question_answers) > 2 else ""
-        has_blockers = bool(blocker_text.strip())
+        # Check last answer for blockers (convention: last question is usually blockers)
+        blocker_text = question_answers[-1] if question_answers else ""
+        has_blockers = bool(blocker_text.strip()) and blocker_text.strip().lower() not in (
+            "none",
+            "no",
+            "nope",
+            "-",
+            "n/a",
+        )
         evaluate_rules(
             session.team_id,
             "blocker_detected",
@@ -529,6 +559,16 @@ def register_handlers(app: App) -> None:
         all_other_standups: list[dict] = []
         standups: list[dict] = []
 
+        # Fetch user timezone and Slack admin status FIRST so is_admin is available below
+        user_tz = ""
+        try:
+            user_info = client.users_info(user=user_id)
+            user_data = user_info.get("user", {})
+            user_tz = user_data.get("tz", "")
+            is_admin = user_data.get("is_admin", False) or user_data.get("is_owner", False)
+        except Exception:
+            pass
+
         try:
             import db  # noqa: PLC0415
 
@@ -589,16 +629,6 @@ def register_handlers(app: App) -> None:
                 pass
         except Exception as e:
             logger.warning("handle_app_home error loading data: %s", e)
-
-        # Fetch user timezone and Slack admin status from profile
-        user_tz = ""
-        try:
-            user_info = client.users_info(user=user_id)
-            user_data = user_info.get("user", {})
-            user_tz = user_data.get("tz", "")
-            is_admin = user_data.get("is_admin", False) or user_data.get("is_owner", False)
-        except Exception:
-            pass
 
         view = _blocks.app_home_view(
             standups=standups,

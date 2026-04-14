@@ -308,17 +308,21 @@ def save_standup(
     today: str,
     blockers: str,
     mood: str | None = None,
-) -> None:
-    """Persist a completed standup."""
+) -> int | None:
+    """Persist a completed standup. Returns the new standup ID."""
     has_blockers = blockers.strip().lower() not in ("none", "no", "nope", "-", "n/a", "")
     sql = """
         INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers, mood)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers, mood))
-    logger.info("Saved standup for %s / %s", team_id, user_id)
+            row = cur.fetchone()
+    standup_id = row[0] if row else None
+    logger.info("Saved standup %s for %s / %s", standup_id, team_id, user_id)
+    return standup_id
 
 
 def get_today_standups(team_id: str) -> list[dict]:

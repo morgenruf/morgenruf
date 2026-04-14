@@ -1869,7 +1869,7 @@
     };
     try {
       let updated;
-      const idx = state.standups.findIndex(s => s.id === id);
+      const idx = state.standups.findIndex(s => String(s.id) === String(id));
       if (id) {
         updated = await api('PUT', `/standups/${id}`, body);
         if (idx >= 0) state.standups[idx] = updated;
@@ -2146,7 +2146,7 @@
   const TZ_ALIASES = {
     'calcutta': 'Asia/Kolkata', 'kolkata': 'Asia/Kolkata',
     'bombay': 'Asia/Kolkata', 'mumbai': 'Asia/Kolkata',
-    'madras': 'Asia/Chennai', 'chennai': 'Asia/Chennai',
+    'madras': 'Asia/Kolkata', 'chennai': 'Asia/Kolkata',
     'saigon': 'Asia/Ho_Chi_Minh', 'rangoon': 'Asia/Yangon',
     'ist': 'Asia/Kolkata', 'pst': 'America/Los_Angeles',
     'est': 'America/New_York', 'cst': 'America/Chicago',
@@ -2298,7 +2298,7 @@
     }
     el.innerHTML = state.schedules.map(s => {
       const chName = channelName(s.channel_id);
-      const days = (s.schedule_days || '').split(',').join(', ');
+      const days = Array.isArray(s.schedule_days) ? s.schedule_days.join(', ') : (s.schedule_days || '').split(',').join(', ');
       const participants = (s.participants || []).length;
       const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
       return '<div class="standup-card" id="sched-' + s.id + '">' +
@@ -2343,8 +2343,8 @@
     } catch (e) { toast(e.message, 'error'); }
   }
 
-  function openCreateScheduleModal() {
-    if (!state.members.length) loadMembers();
+  async function openCreateScheduleModal() {
+    if (!state.members.length) await loadMembers();
     document.getElementById('modal-title').textContent = 'New Schedule';
     document.getElementById('modal-standup-id').value = '';
     document.getElementById('modal-standup-id').dataset.mode = 'schedule';
@@ -2374,10 +2374,10 @@
     document.getElementById('standup-modal').classList.add('open');
   }
 
-  function openEditScheduleModal(id) {
+  async function openEditScheduleModal(id) {
     const s = (state.schedules || []).find(x => x.id === id);
     if (!s) return;
-    if (!state.members.length) loadMembers();
+    if (!state.members.length) await loadMembers();
     document.getElementById('modal-title').textContent = 'Edit Schedule';
     document.getElementById('modal-standup-id').value = id;
     document.getElementById('modal-standup-id').dataset.mode = 'schedule';
@@ -2385,23 +2385,25 @@
     document.getElementById('f-channel').value = s.channel_id || '';
     document.getElementById('f-time').value = s.schedule_time || '09:00';
     selectTz(s.schedule_tz || 'UTC');
-    document.getElementById('f-report-channel').value = '';
-    document.getElementById('f-report-time').value = '';
-    document.getElementById('f-group-by').value = 'member';
-    document.getElementById('f-post-as').value = 'combined';
-    document.getElementById('f-sort-order').value = 'chronological';
-    document.getElementById('f-edit-window').value = 'report';
-    document.getElementById('f-jira').value = '';
-    document.getElementById('f-zendesk').value = '';
-    document.getElementById('f-github-repo').value = '';
-    document.getElementById('f-linear-team').value = '';
-    document.getElementById('f-avatar-toggle').classList.add('on');
+    document.getElementById('f-report-channel').value = s.report_channel || '';
+    document.getElementById('f-report-time').value = s.report_time || '';
+    document.getElementById('f-group-by').value = s.group_by || 'member';
+    document.getElementById('f-post-as').value = s.post_as || 'combined';
+    document.getElementById('f-sort-order').value = s.sort_order || 'chronological';
+    document.getElementById('f-edit-window').value = s.edit_window || 'report';
+    document.getElementById('f-jira').value = s.jira_base_url || '';
+    document.getElementById('f-zendesk').value = s.zendesk_base_url || '';
+    document.getElementById('f-github-repo').value = s.github_repo || '';
+    document.getElementById('f-linear-team').value = s.linear_team || '';
+    const avatarToggleS = document.getElementById('f-avatar-toggle');
+    if (s.display_avatar !== false) avatarToggleS.classList.add('on'); else avatarToggleS.classList.remove('on');
     document.getElementById('f-reminder').value = String(s.reminder_minutes || 0);
     document.getElementById(s.post_to_thread ? 'f-post-thread' : 'f-post-channel').checked = true;
     const notifyToggleS = document.getElementById('f-notify-toggle');
     if (s.notify_on_report !== false) notifyToggleS.classList.add('on'); else notifyToggleS.classList.remove('on');
-    document.getElementById('f-ai-summary-toggle').classList.remove('on');
-    document.getElementById('f-ai-provider').value = 'openai';
+    const aiToggleS = document.getElementById('f-ai-summary-toggle');
+    if (s.ai_summary_enabled) aiToggleS.classList.add('on'); else aiToggleS.classList.remove('on');
+    document.getElementById('f-ai-provider').value = s.ai_provider || 'openai';
     selectDays((s.schedule_days || 'mon,tue,wed,thu,fri').split(','));
     const qs = Array.isArray(s.questions) ? s.questions : [];
     setQuestions(qs.length ? qs : ['What did you complete yesterday?','What are you working on today?','Any blockers?']);
