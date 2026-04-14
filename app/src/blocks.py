@@ -575,8 +575,21 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
             },
             {
                 "type": "section",
+                "block_id": "intro",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "You can answer each question one by one by *responding in this DM*. "
+                        "Reply with `pass` or `NA` to skip a question and move on. "
+                        "Or click *Fill in form* to answer all questions at once."
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
                 "block_id": "first_question",
-                "text": {"type": "mrkdwn", "text": f"*{first_question}*"},
+                "text": {"type": "mrkdwn", "text": f"• *{first_question}*"},
             },
             {
                 "type": "actions",
