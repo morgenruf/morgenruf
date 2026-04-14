@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -33,6 +34,37 @@ def _fresh_bot_token(team_id: str, fallback_token: str) -> str:
     except Exception:
         pass
     return fallback_token
+
+
+def _slack_dm_with_retry(client: WebClient, user_id: str, max_retries: int = 2, **msg_kwargs) -> bool:
+    """Open a DM and send a message, retrying on transient failures. Returns True on success."""
+    for attempt in range(max_retries + 1):
+        try:
+            dm = client.conversations_open(users=user_id)
+            dm_channel = dm["channel"]["id"]
+            client.chat_postMessage(channel=dm_channel, **msg_kwargs)
+            return True
+        except Exception:
+            if attempt == max_retries:
+                raise
+            time.sleep(1.5**attempt)  # 1s, 1.5s
+    return False
+
+
+def _notify_delivery_failure(client: WebClient, channel_id: str, failed_count: int, total_count: int) -> None:
+    """Post a warning to the standup channel when DM delivery fails."""
+    if not channel_id or failed_count == 0:
+        return
+    try:
+        client.chat_postMessage(
+            channel=channel_id,
+            text=(
+                f"⚠️ *Standup delivery issue:* Failed to send standup DMs to {failed_count}/{total_count} members. "
+                "This is usually a temporary Slack API issue — standups will retry on the next scheduled run."
+            ),
+        )
+    except Exception as exc:
+        logger.warning("Could not post delivery failure notice to %s: %s", channel_id, exc)
 
 
 def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
@@ -115,6 +147,8 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
         except Exception as exc:
             logger.warning("Channel member sync failed for %s/%s: %s", team_id, schedule_id, exc)
 
+    failed_count = 0
+    dm_count = 0
     for member in members:
         user_id = member["user_id"]
         cache_key = f"{team_id}:{user_id}"
@@ -146,21 +180,23 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     "Unexpected error in _send_standup_to_workspace checking vacation for %s: %s", user_id, e
                 )
 
+            dm_count += 1
             session = state_store.start(
                 cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name
             )
-
-            dm = client.conversations_open(users=user_id)
-            dm_channel = dm["channel"]["id"]
 
             # Send rich Block Kit DM with Fill-in-form / Skip / I'm away buttons
             from blocks import standup_dm_message  # noqa: PLC0415
 
             dm_msg = standup_dm_message(session.questions, standup_name)
-            client.chat_postMessage(channel=dm_channel, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg)
+            _slack_dm_with_retry(client, user_id, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg)
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
         except Exception as exc:
+            failed_count += 1
             logger.error("Failed to DM %s / %s: %s", team_id, user_id, exc)
+
+    if failed_count > 0:
+        _notify_delivery_failure(client, channel_id, failed_count, dm_count)
 
 
 def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: int) -> None:
@@ -181,10 +217,9 @@ def _send_reminder_to_workspace(team_id: str, bot_token: str, reminder_minutes: 
 
             if db.is_skipped_today(team_id, user_id):
                 continue
-            dm = client.conversations_open(users=user_id)
-            dm_channel = dm["channel"]["id"]
-            client.chat_postMessage(
-                channel=dm_channel,
+            _slack_dm_with_retry(
+                client,
+                user_id,
                 text=f"⏰ Your standup starts in *{reminder_minutes} minutes*. Get ready! 🚀",
             )
         except Exception as exc:
