@@ -218,11 +218,13 @@ def _send_reminder_to_workspace(
         import db  # noqa: PLC0415
 
         members = db.get_active_members(team_id)
+        standup_name: str | None = None
 
         # Filter to schedule participants if this is a schedule-specific reminder
         if schedule_id is not None:
             sched = db.get_standup_schedule(team_id, schedule_id)
             if sched:
+                standup_name = sched.get("name")
                 participants = sched.get("participants") or []
                 if participants:
                     participant_set = set(participants)
@@ -238,10 +240,11 @@ def _send_reminder_to_workspace(
 
             if db.is_skipped_today(team_id, user_id):
                 continue
+            label = f" for *{standup_name}*" if standup_name else ""
             _slack_dm_with_retry(
                 client,
                 user_id,
-                text=f"⏰ Your standup starts in *{reminder_minutes} minutes*. Get ready! 🚀",
+                text=f"⏰ Standup{label} starts in *{reminder_minutes} minutes*. Get ready! 🚀",
             )
         except Exception as exc:
             logger.warning("Failed reminder DM to %s / %s: %s", team_id, user_id, exc)
