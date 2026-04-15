@@ -653,6 +653,31 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
+def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
+    """Return the first active schedule where the user is a participant.
+
+    Used when a standup is started outside the scheduled DM (e.g. user typed
+    "standup" in DM, or clicked the edit button) so the session posts to the
+    correct channel instead of falling back to the workspace-level channel.
+    """
+    sql = """
+        SELECT * FROM standup_schedules
+        WHERE team_id = %s
+          AND active = TRUE
+          AND %s = ANY(participants)
+        ORDER BY created_at
+        LIMIT 1
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            try:
+                cur.execute(sql, (team_id, user_id))
+            except Exception:
+                return None
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def get_standup_schedule_for_channel(team_id: str, channel_id: str) -> dict | None:
     """Return the first active standup schedule for a given channel (scoped to team_id)."""
     sql = "SELECT * FROM standup_schedules WHERE team_id = %s AND channel_id = %s AND active = TRUE LIMIT 1"
