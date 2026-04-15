@@ -205,6 +205,7 @@ def _schedule_to_standup(row: dict) -> dict:
         "manager_digest_enabled": bool(row.get("manager_digest_enabled", False)),
         "post_to_thread": bool(row.get("post_to_thread", False)),
         "notify_on_report": bool(row.get("notify_on_report", True)),
+        "post_summary": bool(row.get("post_summary", True)),
     }
 
 
@@ -244,6 +245,7 @@ def api_create_standup():
             reminder_minutes=int(data.get("reminder_minutes") or 0),
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
+            post_summary=bool(data.get("post_summary", True)),
         )
         return jsonify(_schedule_to_standup(row)), 201
     except Exception as exc:
@@ -297,6 +299,8 @@ def api_update_standup(standup_id: str):
             kwargs["post_to_thread"] = bool(data["post_to_thread"])
         if "notify_on_report" in data:
             kwargs["notify_on_report"] = bool(data["notify_on_report"])
+        if "post_summary" in data:
+            kwargs["post_summary"] = bool(data["post_summary"])
         row = db.update_standup_schedule(team_id, int(standup_id), **kwargs)
         return jsonify(_schedule_to_standup(row))
     except Exception as exc:
@@ -806,6 +810,7 @@ def api_create_schedule():
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
             weekend_reminder=bool(data.get("weekend_reminder", False)),
+            post_summary=bool(data.get("post_summary", True)),
         )
         try:
             from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
@@ -853,6 +858,8 @@ def api_update_schedule(schedule_id: int):
             kwargs["notify_on_report"] = bool(data["notify_on_report"])
         if "weekend_reminder" in data:
             kwargs["weekend_reminder"] = bool(data["weekend_reminder"])
+        if "post_summary" in data:
+            kwargs["post_summary"] = bool(data["post_summary"])
         if "sync_with_channel" in data:
             kwargs["sync_with_channel"] = bool(data["sync_with_channel"])
         if "group_by" in data:
