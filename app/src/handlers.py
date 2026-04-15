@@ -194,12 +194,24 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
 
     channel = ""
     questions = None
+    standup_name = "Team Standup"
     try:
         import db  # noqa: PLC0415
 
-        config = db.get_workspace_config(team_id) or {}
-        channel = config.get("channel_id", "")
-        qs = config.get("questions") or []
+        # Prefer the user's schedule (correct channel + questions) before
+        # falling back to the workspace-level config. Without this, users who
+        # belong to a channel-specific schedule would post to the workspace
+        # default channel or fail silently.
+        sched = db.get_schedule_for_user(team_id, user_id)
+        if sched:
+            channel = sched.get("channel_id", "") or ""
+            qs = sched.get("questions") or []
+            standup_name = sched.get("name") or standup_name
+        else:
+            config = db.get_workspace_config(team_id) or {}
+            channel = config.get("channel_id", "")
+            qs = config.get("questions") or []
+
         if isinstance(qs, str):
             import json as _json  # noqa: PLC0415
 
@@ -212,7 +224,9 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
     except Exception as e:
         logger.warning("Unexpected error in _start_standup_session loading config: %s", e)
 
-    session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
+    session = state_store.start(
+        cache_key, channel, team_id=team_id, questions=questions, standup_name=standup_name
+    )
     client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
     _send_question_block(client, user_id, session.questions[0], 0)
 
@@ -1417,9 +1431,17 @@ def register_handlers(app: App) -> None:
         try:
             import db  # noqa: PLC0415
 
-            config = db.get_workspace_config(team_id) or {}
-            channel = config.get("channel_id", "")
-            qs = config.get("questions") or []
+            # Resolve the user's schedule first so edits post to the same
+            # channel as the original standup (see _start_standup_session).
+            sched = db.get_schedule_for_user(team_id, user_id)
+            if sched:
+                channel = sched.get("channel_id", "") or ""
+                qs = sched.get("questions") or []
+            else:
+                config = db.get_workspace_config(team_id) or {}
+                channel = config.get("channel_id", "")
+                qs = config.get("questions") or []
+
             if isinstance(qs, str):
                 import json as _json
 
