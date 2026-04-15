@@ -353,6 +353,11 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
                 )
                 return
 
+        # Honor per-schedule opt-out for the end-of-day summary.
+        if sched_cfg.get("post_summary") is False:
+            logger.info("Summary disabled for %s/%s — skipping report", team_id, schedule_id)
+            return
+
         group_by = sched_cfg.get("group_by", "member")
         # Use schedule-specific questions, falling back to workspace config
         questions = sched_cfg.get("questions") or []
@@ -392,7 +397,21 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         else:
             summary_blocks = _blocks.build_summary_by_member(today_standups, questions, user_profiles=user_profiles)
 
-        client.chat_postMessage(channel=channel_id, text="📋 Daily Standup Summary", blocks=summary_blocks)
+        # Thread the summary under today's daily thread parent to reduce channel clutter.
+        thread_ts = None
+        try:
+            from handlers import _daily_thread_cache  # noqa: PLC0415
+
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}")
+        except Exception:
+            thread_ts = None
+
+        post_kwargs = {"channel": channel_id, "text": "📋 Daily Standup Summary", "blocks": summary_blocks}
+        if thread_ts:
+            post_kwargs["thread_ts"] = thread_ts
+        summary_resp = client.chat_postMessage(**post_kwargs)
+        summary_thread_ts = thread_ts or summary_resp.get("ts")
         logger.info(
             "Posted scheduled report for team %s to %s (%d submissions)", team_id, channel_id, len(today_standups)
         )
@@ -407,7 +426,10 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
                 team_name = (inst or {}).get("team_name", "")
                 summary_text = generate_summary(today_standups, team_name)
                 if summary_text:
-                    client.chat_postMessage(channel=channel_id, text=f"✨ *AI Summary*\n\n{summary_text}")
+                    ai_kwargs = {"channel": channel_id, "text": f"✨ *AI Summary*\n\n{summary_text}"}
+                    if summary_thread_ts:
+                        ai_kwargs["thread_ts"] = summary_thread_ts
+                    client.chat_postMessage(**ai_kwargs)
         except Exception as exc:
             logger.warning("AI summary in scheduled report failed: %s", exc)
 
