@@ -224,9 +224,7 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
     except Exception as e:
         logger.warning("Unexpected error in _start_standup_session loading config: %s", e)
 
-    session = state_store.start(
-        cache_key, channel, team_id=team_id, questions=questions, standup_name=standup_name
-    )
+    session = state_store.start(cache_key, channel, team_id=team_id, questions=questions, standup_name=standup_name)
     client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
     _send_question_block(client, user_id, session.questions[0], 0)
 
