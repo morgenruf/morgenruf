@@ -218,13 +218,28 @@ def _send_reminder_to_workspace(
         import db  # noqa: PLC0415
 
         members = db.get_active_members(team_id)
-        standup_name: str | None = None
+        standup_label: str | None = None
 
         # Filter to schedule participants if this is a schedule-specific reminder
         if schedule_id is not None:
             sched = db.get_standup_schedule(team_id, schedule_id)
             if sched:
-                standup_name = sched.get("name")
+                # Prefer the schedule's display name; fall back to channel + time
+                # so the reminder is always identifiable when a user belongs to
+                # multiple schedules.
+                name = (sched.get("name") or "").strip()
+                if name:
+                    standup_label = name
+                else:
+                    chan = sched.get("channel_id") or ""
+                    when = sched.get("schedule_time") or ""
+                    parts = []
+                    if chan:
+                        parts.append(f"<#{chan}>")
+                    if when:
+                        parts.append(f"at {when}")
+                    if parts:
+                        standup_label = " ".join(parts)
                 participants = sched.get("participants") or []
                 if participants:
                     participant_set = set(participants)
@@ -240,7 +255,7 @@ def _send_reminder_to_workspace(
 
             if db.is_skipped_today(team_id, user_id):
                 continue
-            label = f" for *{standup_name}*" if standup_name else ""
+            label = f" for *{standup_label}*" if standup_label else ""
             _slack_dm_with_retry(
                 client,
                 user_id,
