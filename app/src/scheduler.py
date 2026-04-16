@@ -412,15 +412,22 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         else:
             summary_blocks = _blocks.build_summary_by_member(today_standups, questions, user_profiles=user_profiles)
 
-        # Thread the summary under today's daily thread parent to reduce channel clutter.
+        # Thread the summary under today's daily thread parent to reduce
+        # channel clutter. Prefer the DB-backed lookup (survives pod restarts)
+        # and fall back to the in-memory cache used by the Bolt handler.
         thread_ts = None
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         try:
-            from handlers import _daily_thread_cache  # noqa: PLC0415
-
-            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}")
+            thread_ts = db.get_daily_thread_ts(team_id, channel_id, today_str)
         except Exception:
             thread_ts = None
+        if not thread_ts:
+            try:
+                from handlers import _daily_thread_cache  # noqa: PLC0415
+
+                thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}")
+            except Exception:
+                thread_ts = None
 
         post_kwargs = {"channel": channel_id, "text": "📋 Daily Standup Summary", "blocks": summary_blocks}
         if thread_ts:

@@ -205,7 +205,7 @@ def _schedule_to_standup(row: dict) -> dict:
         "manager_digest_enabled": bool(row.get("manager_digest_enabled", False)),
         "post_to_thread": bool(row.get("post_to_thread", False)),
         "notify_on_report": bool(row.get("notify_on_report", True)),
-        "post_summary": bool(row.get("post_summary", True)),
+        "post_summary": bool(row.get("post_summary", False)),
     }
 
 
@@ -245,7 +245,7 @@ def api_create_standup():
             reminder_minutes=int(data.get("reminder_minutes") or 0),
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
-            post_summary=bool(data.get("post_summary", True)),
+            post_summary=bool(data.get("post_summary", False)),
         )
         return jsonify(_schedule_to_standup(row)), 201
     except Exception as exc:
@@ -810,7 +810,7 @@ def api_create_schedule():
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
             weekend_reminder=bool(data.get("weekend_reminder", False)),
-            post_summary=bool(data.get("post_summary", True)),
+            post_summary=bool(data.get("post_summary", False)),
         )
         try:
             from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415

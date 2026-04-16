@@ -653,6 +653,42 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
+def upsert_daily_thread(team_id: str, channel_id: str, thread_date: str, parent_ts: str) -> None:
+    """Persist the parent message ts for today's standup thread.
+
+    Used by the end-of-day summary job to thread its post under the same
+    parent that individual standup submissions are threaded under, surviving
+    pod restarts between the first submission and the scheduled summary.
+    """
+    sql = """
+        INSERT INTO daily_standup_threads (team_id, channel_id, thread_date, parent_ts)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (team_id, channel_id, thread_date) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(sql, (team_id, channel_id, thread_date, parent_ts))
+            except Exception:
+                pass
+
+
+def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str) -> str | None:
+    """Look up the parent ts for today's standup thread, if one was created."""
+    sql = """
+        SELECT parent_ts FROM daily_standup_threads
+        WHERE team_id = %s AND channel_id = %s AND thread_date = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute(sql, (team_id, channel_id, thread_date))
+            except Exception:
+                return None
+            row = cur.fetchone()
+    return row[0] if row else None
+
+
 def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
     """Return the first active schedule where the user is a participant.
 

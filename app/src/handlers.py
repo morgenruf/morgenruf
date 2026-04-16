@@ -306,6 +306,13 @@ def _complete_standup(user_id: str, session, client) -> None:
             parent_ts = _daily_thread_cache.get(thread_key)
 
             if not parent_ts:
+                # Check DB first — the in-memory cache is lost on pod restart.
+                try:
+                    parent_ts = _db.get_daily_thread_ts(session.team_id, channel, today_str)
+                except Exception:
+                    parent_ts = None
+
+            if not parent_ts:
                 # Create parent message for today's thread — polished like competitors
                 standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
                 display_date = now_utc.strftime("%a, %b %d.")
@@ -314,7 +321,12 @@ def _complete_standup(user_id: str, session, client) -> None:
                     text=f"✨ {standup_name} Completed - {display_date} ✨",
                 )
                 parent_ts = parent["ts"]
-                _daily_thread_cache[thread_key] = parent_ts
+                try:
+                    _db.upsert_daily_thread(session.team_id, channel, today_str, parent_ts)
+                except Exception as e:
+                    logger.warning("Could not persist daily thread ts: %s", e)
+
+            _daily_thread_cache[thread_key] = parent_ts
 
             client.chat_postMessage(
                 channel=channel,
