@@ -153,20 +153,38 @@ class TestSendQuestionBlock:
 
 
 class TestStartStandupSession:
-    def test_already_active_sends_message_and_returns(self):
-        """If a session is already active, sends a warning and does not start a new one."""
-        _ss_mock.has_session.return_value = True
+    def test_already_active_clears_and_starts_fresh(self):
+        """If a session is already active, clear it and start a fresh one.
+
+        Previously the handler printed 'You already have an active standup
+        session' and bailed — leaving users stuck when a scheduled session
+        was never completed or when they belong to multiple schedules.
+        """
         client = MagicMock()
         db_mock = MagicMock()
+        db_mock.get_schedule_for_user.return_value = None
+        db_mock.get_workspace_config.return_value = {"channel_id": "C1", "questions": ["Q1", "Q2", "Q3"]}
+
+        fake_session = state.UserSession(
+            cache_key="T1:U1",
+            team_id="T1",
+            channel="C1",
+            questions=["Q1", "Q2", "Q3"],
+        )
 
         with patch.dict(sys.modules, {"db": db_mock}):
-            from handlers import _start_standup_session
+            with patch.object(state.state_store, "is_active", return_value=True):
+                with patch.object(state.state_store, "clear") as mock_clear:
+                    with patch.object(state.state_store, "start", return_value=fake_session):
+                        from handlers import _start_standup_session
 
-            _start_standup_session("U1", "T1", client)
+                        _start_standup_session("U1", "T1", client)
 
-        client.chat_postMessage.assert_called_once()
-        assert "already" in client.chat_postMessage.call_args.kwargs.get("text", "").lower()
-        _ss_mock.has_session.return_value = False  # reset
+                    mock_clear.assert_called_once_with("T1:U1")
+
+        texts = [c.kwargs.get("text", "") for c in client.chat_postMessage.call_args_list]
+        assert not any("already" in t.lower() for t in texts)
+        assert any("starting your standup" in t.lower() for t in texts)
 
     def test_new_session_sends_starting_message(self):
         _ss_mock.has_session.return_value = False
