@@ -185,12 +185,12 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
 def _start_standup_session(user_id: str, team_id: str, client) -> None:
     """Look up workspace config, create a session, and send the first question block."""
     cache_key = f"{team_id}:{user_id}"
+    # An explicit "standup"/"start" from the user means they want to begin
+    # (or restart) now. Silently clear any prior session — the old behavior
+    # of blocking left users stuck when a scheduled session was never
+    # completed or when they belong to multiple schedules.
     if state_store.is_active(cache_key):
-        client.chat_postMessage(
-            channel=user_id,
-            text="You already have an active standup session. Answer the current question or wait for it to reset.",
-        )
-        return
+        state_store.clear(cache_key)
 
     channel = ""
     questions = None
