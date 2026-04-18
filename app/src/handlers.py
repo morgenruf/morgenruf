@@ -160,9 +160,12 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
             {
                 "type": "input",
                 "block_id": f"answer_{step}",
+                "dispatch_action": True,
                 "element": {
-                    "type": "rich_text_input",
+                    "type": "plain_text_input",
                     "action_id": f"standup_answer_{step}",
+                    "multiline": True,
+                    "placeholder": {"type": "plain_text", "text": "Type your answer (use bullet points with •)"},
                 },
                 "label": {"type": "plain_text", "text": "Your answer"},
             },
