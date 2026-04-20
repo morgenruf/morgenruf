@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -12,6 +13,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from slack_sdk import WebClient
 from state import state_store
+
+# Refresh bot tokens this many seconds before their stated expiry.
+_TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +27,82 @@ def get_scheduler() -> Optional[BackgroundScheduler]:
     return _scheduler
 
 
+def _refresh_bot_token_if_needed(team_id: str, inst: dict) -> str | None:
+    """Proactively refresh an expiring/expired bot token via oauth.v2.access.
+
+    Returns the new bot_token on success, None if refresh wasn't possible/needed.
+    """
+    refresh_token = inst.get("bot_refresh_token")
+    expires_at = inst.get("bot_token_expires_at")
+    if not refresh_token or not expires_at:
+        return None
+    try:
+        if isinstance(expires_at, datetime):
+            expiry_epoch = expires_at.timestamp()
+        else:
+            expiry_epoch = float(expires_at)
+    except Exception:
+        return None
+    if expiry_epoch - time.time() > _TOKEN_REFRESH_LEEWAY_SECS:
+        return None
+
+    client_id = os.environ.get("SLACK_CLIENT_ID", "")
+    client_secret = os.environ.get("SLACK_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        logger.warning("Cannot refresh bot token for %s: SLACK_CLIENT_ID/SECRET missing", team_id)
+        return None
+
+    try:
+        resp = WebClient().oauth_v2_access(
+            client_id=client_id,
+            client_secret=client_secret,
+            grant_type="refresh_token",
+            refresh_token=refresh_token,
+        )
+    except Exception as exc:
+        logger.warning("Token refresh failed for team %s: %s", team_id, exc)
+        return None
+
+    new_token = resp.get("access_token")
+    new_refresh = resp.get("refresh_token") or refresh_token
+    expires_in = int(resp.get("expires_in") or 0)
+    if not new_token:
+        return None
+
+    new_expires_at = (
+        datetime.fromtimestamp(time.time() + expires_in, tz=timezone.utc).isoformat() if expires_in > 0 else None
+    )
+    try:
+        import db  # noqa: PLC0415
+
+        db.save_installation(
+            team_id=team_id,
+            team_name=inst.get("team_name") or "",
+            bot_token=new_token,
+            bot_user_id=inst.get("bot_user_id") or "",
+            app_id=inst.get("app_id") or "",
+            installed_by_user_id=inst.get("installed_by_user_id"),
+            bot_refresh_token=new_refresh,
+            bot_token_expires_at=new_expires_at,
+        )
+        logger.info("Refreshed bot token for team %s (expires in %ss)", team_id, expires_in)
+    except Exception as exc:
+        logger.warning("Refreshed bot token but failed to persist for %s: %s", team_id, exc)
+    return new_token
+
+
 def _fresh_bot_token(team_id: str, fallback_token: str) -> str:
-    """Return the latest bot_token from the DB, falling back to the passed-in token."""
+    """Return the latest bot_token from the DB, refreshing via OAuth if near/past expiry."""
     try:
         import db  # noqa: PLC0415
 
         inst = db.get_installation(team_id)
-        if inst and inst.get("bot_token"):
-            return inst["bot_token"]
+        if inst:
+            refreshed = _refresh_bot_token_if_needed(team_id, inst)
+            if refreshed:
+                return refreshed
+            if inst.get("bot_token"):
+                return inst["bot_token"]
     except Exception:
         pass
     return fallback_token
