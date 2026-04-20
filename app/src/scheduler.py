@@ -11,11 +11,16 @@ from typing import Optional
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
 from state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
+
+# Error substrings Slack returns when a bot token is no longer usable.
+_AUTH_ERROR_MARKERS = ("token_expired", "invalid_auth", "token_revoked", "not_authed")
 
 logger = logging.getLogger(__name__)
 
@@ -108,15 +113,155 @@ def _fresh_bot_token(team_id: str, fallback_token: str) -> str:
     return fallback_token
 
 
-def _slack_dm_with_retry(client: WebClient, user_id: str, max_retries: int = 2, **msg_kwargs) -> bool:
-    """Open a DM and send a message, retrying on transient failures. Returns True on success."""
+def _is_auth_error(exc: Exception) -> bool:
+    """True if a Slack API exception looks like an auth/token failure."""
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _AUTH_ERROR_MARKERS)
+
+
+def _force_refresh_bot_token(team_id: str) -> str | None:
+    """Force a refresh regardless of stored expiry. Returns new bot_token or None."""
+    try:
+        import db  # noqa: PLC0415
+
+        inst = db.get_installation(team_id)
+        if not inst:
+            return None
+        inst = dict(inst)
+        # Lie about the expiry so _refresh_bot_token_if_needed always fires.
+        inst["bot_token_expires_at"] = datetime.now(tz=timezone.utc)
+        return _refresh_bot_token_if_needed(team_id, inst)
+    except Exception as exc:
+        logger.warning("Force refresh failed for %s: %s", team_id, exc)
+        return None
+
+
+def _alert_token_refresh_failure(team_id: str, reason: str) -> None:
+    """Loud alert when a refresh attempt fails — workspace likely needs to reinstall."""
+    logger.error(
+        "TOKEN_REFRESH_FAILURE team=%s reason=%s — workspace may need to reinstall Morgenruf",
+        team_id,
+        reason,
+    )
+    ops_email = os.environ.get("MORGENRUF_OPS_EMAIL", "").strip()
+    if not ops_email:
+        return
+    try:
+        import resend  # type: ignore[import]  # noqa: PLC0415
+    except ImportError:
+        return
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        return
+    try:
+        resend.api_key = api_key
+        resend.Emails.send(
+            {
+                "from": "alerts@morgenruf.dev",
+                "to": ops_email,
+                "subject": f"[Morgenruf] Token refresh failed for team {team_id}",
+                "html": (
+                    f"<p>Bot-token refresh failed for team <code>{team_id}</code>.</p>"
+                    f"<p><b>Reason:</b> {reason}</p>"
+                    "<p>Scheduled standups for this workspace will fail until the workspace reinstalls Morgenruf.</p>"
+                ),
+            }
+        )
+    except Exception as exc:
+        logger.warning("Failed to send ops alert email for %s: %s", team_id, exc)
+
+
+def _call_with_auth_retry(team_id: str, client: WebClient, func):
+    """Invoke func(client); on auth error, refresh the token and retry once with the same client.
+
+    The retry mutates `client.token` in place so follow-on calls from the caller also benefit.
+    """
+    try:
+        return func(client)
+    except Exception as exc:
+        if not _is_auth_error(exc):
+            raise
+        new_token = _force_refresh_bot_token(team_id)
+        if not new_token:
+            _alert_token_refresh_failure(team_id, str(exc))
+            raise
+        client.token = new_token
+        return func(client)
+
+
+def _schedule_standup_retry(
+    team_id: str, bot_token: str, channel_id: str, schedule_id: int | None, delay_seconds: int = 60
+) -> None:
+    """Enqueue a one-shot retry of a failed standup run after the token has been refreshed."""
+    if _scheduler is None:
+        return
+    retry_id = f"standup_retry_{team_id}_{schedule_id or 'workspace'}_{int(time.time())}"
+    try:
+        _scheduler.add_job(
+            _send_standup_to_workspace,
+            trigger=DateTrigger(run_date=datetime.now(tz=timezone.utc) + timedelta(seconds=delay_seconds)),
+            args=[team_id, bot_token, channel_id, schedule_id],
+            id=retry_id,
+            name=f"Retry standup — {team_id}/{schedule_id or 'workspace'}",
+            replace_existing=False,
+        )
+        logger.info("Queued retry for standup %s/%s in %ss", team_id, schedule_id, delay_seconds)
+    except Exception as exc:
+        logger.warning("Could not queue standup retry for %s/%s: %s", team_id, schedule_id, exc)
+
+
+def _refresh_all_tokens_job() -> None:
+    """Background job: refresh any bot tokens nearing expiry across all installations."""
+    try:
+        import db  # noqa: PLC0415
+
+        installations = db.get_all_installations()
+    except Exception as exc:
+        logger.warning("Background token refresh: could not load installations: %s", exc)
+        return
+    refreshed = 0
+    for inst in installations:
+        team_id = inst.get("team_id")
+        if not team_id:
+            continue
+        try:
+            if _refresh_bot_token_if_needed(team_id, inst):
+                refreshed += 1
+        except Exception as exc:
+            logger.warning("Background token refresh for %s failed: %s", team_id, exc)
+    if refreshed:
+        logger.info("Background token refresh: refreshed %d token(s)", refreshed)
+
+
+def _slack_dm_with_retry(
+    client: WebClient,
+    user_id: str,
+    max_retries: int = 2,
+    team_id: str | None = None,
+    **msg_kwargs,
+) -> bool:
+    """Open a DM and send a message, retrying on transient failures. Returns True on success.
+
+    If `team_id` is provided, a Slack auth error (expired/invalid token) triggers a single
+    force-refresh of the bot token and an immediate retry with the new token.
+    """
+    auth_refresh_tried = False
     for attempt in range(max_retries + 1):
         try:
             dm = client.conversations_open(users=user_id)
             dm_channel = dm["channel"]["id"]
             client.chat_postMessage(channel=dm_channel, **msg_kwargs)
             return True
-        except Exception:
+        except Exception as exc:
+            # Reactive token refresh on auth error — try once, then retry the same attempt.
+            if team_id and not auth_refresh_tried and _is_auth_error(exc):
+                auth_refresh_tried = True
+                new_token = _force_refresh_bot_token(team_id)
+                if new_token:
+                    client.token = new_token
+                    continue  # retry without burning an attempt
+                _alert_token_refresh_failure(team_id, str(exc))
+                raise
             if attempt == max_retries:
                 raise
             time.sleep(1.5**attempt)  # 1s, 1.5s
@@ -185,13 +330,16 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
 
     logger.info("Triggering standup for team %s (%d members)", team_id, len(members))
 
-    # Verify bot token is still valid before DMing members
+    # Verify bot token is still valid before DMing members. If the token is stale,
+    # force-refresh once and retry with the new token before giving up.
     client = WebClient(token=bot_token)
     try:
-        client.auth_test()
+        _call_with_auth_retry(team_id, client, lambda c: c.auth_test())
     except Exception as exc:
         logger.error("Bot token invalid for team %s — skipping standup: %s", team_id, exc)
+        _schedule_standup_retry(team_id, bot_token, channel_id, schedule_id)
         return
+    bot_token = client.token  # pick up any refreshed token
 
     # Channel member sync: auto-add/remove participants based on Slack channel membership
     if schedule_id and channel_id:
@@ -269,7 +417,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                 "Any blockers?",
             ]
             dm_msg = standup_dm_message(default_questions, standup_name)
-            _slack_dm_with_retry(client, user_id, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg)
+            _slack_dm_with_retry(
+                client, user_id, team_id=team_id, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg
+            )
 
             state_store.start(cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name)
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
@@ -331,6 +481,7 @@ def _send_reminder_to_workspace(
             _slack_dm_with_retry(
                 client,
                 user_id,
+                team_id=team_id,
                 text=f"⏰ Standup{label} starts in *{reminder_minutes} minutes*. Get ready! 🚀",
             )
         except Exception as exc:
@@ -415,10 +566,11 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
 
         client = WebClient(token=bot_token)
         try:
-            client.auth_test()
+            _call_with_auth_retry(team_id, client, lambda c: c.auth_test())
         except Exception as exc:
             logger.error("Bot token invalid for report %s: %s", team_id, exc)
             return
+        bot_token = client.token
 
         sched_cfg = {}
         if schedule_id:
@@ -803,6 +955,17 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
             register_workspace_digests_only(scheduler, team_id, bot_token, config)
         else:
             register_workspace_job(scheduler, team_id, bot_token, config)
+
+    # Background bot-token maintenance: refresh any token nearing expiry every 30 minutes.
+    # Runs once shortly after startup so freshly-booted pods don't wait half an hour.
+    scheduler.add_job(
+        _refresh_all_tokens_job,
+        trigger=IntervalTrigger(minutes=30),
+        id="token_maintenance",
+        name="Background bot-token refresh",
+        replace_existing=True,
+        next_run_time=datetime.now(tz=timezone.utc) + timedelta(minutes=1),
+    )
 
     _scheduler = scheduler
     return scheduler
