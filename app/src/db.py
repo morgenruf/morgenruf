@@ -690,11 +690,17 @@ def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str) -> str 
 
 
 def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
-    """Return the first active schedule where the user is a participant.
+    """Return the active schedule the user is most likely currently doing.
+
+    When a user is in one schedule this is unambiguous. When they are in several
+    (e.g. morning + evening standups, or multiple teams), pick the schedule whose
+    `schedule_time` most recently passed in its own timezone — that is almost
+    always the standup the user is filling out right now. Falls back to the
+    oldest schedule if none has a time within the past 2 hours.
 
     Used when a standup is started outside the scheduled DM (e.g. user typed
-    "standup" in DM, or clicked the edit button) so the session posts to the
-    correct channel instead of falling back to the workspace-level channel.
+    "standup" in DM, clicked App Home's Start button, or ran /standup) so the
+    session posts to the correct channel instead of some other schedule's channel.
     """
     sql = """
         SELECT * FROM standup_schedules
@@ -702,7 +708,6 @@ def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
           AND active = TRUE
           AND %s = ANY(participants)
         ORDER BY created_at
-        LIMIT 1
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -710,8 +715,37 @@ def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
                 cur.execute(sql, (team_id, user_id))
             except Exception:
                 return None
-            row = cur.fetchone()
-    return dict(row) if row else None
+            rows = cur.fetchall() or []
+    if not rows:
+        return None
+    schedules = [dict(r) for r in rows]
+    if len(schedules) == 1:
+        return schedules[0]
+
+    # Multiple schedules — prefer the one whose scheduled time has most recently
+    # passed within the last 2 hours in the schedule's own timezone.
+    from datetime import datetime  # noqa: PLC0415
+
+    import pytz  # noqa: PLC0415
+
+    best = None
+    best_age_min: float | None = None
+    for sched in schedules:
+        tz_name = sched.get("schedule_tz") or "UTC"
+        time_str = sched.get("schedule_time") or ""
+        try:
+            tz = pytz.timezone(tz_name)
+            now_local = datetime.now(tz)
+            hh, mm = time_str.split(":")
+            sched_today = now_local.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+        except Exception:
+            continue
+        age_min = (now_local - sched_today).total_seconds() / 60.0
+        # Prefer schedules whose time has passed within the last 2 hours.
+        if 0 <= age_min <= 120 and (best_age_min is None or age_min < best_age_min):
+            best = sched
+            best_age_min = age_min
+    return best or schedules[0]
 
 
 def get_standup_schedule_for_channel(team_id: str, channel_id: str) -> dict | None:
