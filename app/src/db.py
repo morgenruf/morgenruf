@@ -749,13 +749,48 @@ def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
 
 
 def get_standup_schedule_for_channel(team_id: str, channel_id: str) -> dict | None:
-    """Return the first active standup schedule for a given channel (scoped to team_id)."""
-    sql = "SELECT * FROM standup_schedules WHERE team_id = %s AND channel_id = %s AND active = TRUE LIMIT 1"
+    """Return the active standup schedule for a given channel (scoped to team_id).
+
+    When a channel has multiple active schedules (e.g. morning + evening standups),
+    prefer the one whose `schedule_time` most recently passed within the last 2 hours
+    in its own timezone. Falls back to the oldest schedule otherwise.
+    """
+    sql = """
+        SELECT * FROM standup_schedules
+        WHERE team_id = %s AND channel_id = %s AND active = TRUE
+        ORDER BY created_at
+    """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (team_id, channel_id))
-            row = cur.fetchone()
-    return dict(row) if row else None
+            rows = cur.fetchall() or []
+    if not rows:
+        return None
+    schedules = [dict(r) for r in rows]
+    if len(schedules) == 1:
+        return schedules[0]
+
+    from datetime import datetime  # noqa: PLC0415
+
+    import pytz  # noqa: PLC0415
+
+    best = None
+    best_age_min: float | None = None
+    for sched in schedules:
+        tz_name = sched.get("schedule_tz") or "UTC"
+        time_str = sched.get("schedule_time") or ""
+        try:
+            tz = pytz.timezone(tz_name)
+            now_local = datetime.now(tz)
+            hh, mm = time_str.split(":")
+            sched_today = now_local.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
+        except Exception:
+            continue
+        age_min = (now_local - sched_today).total_seconds() / 60.0
+        if 0 <= age_min <= 120 and (best_age_min is None or age_min < best_age_min):
+            best = sched
+            best_age_min = age_min
+    return best or schedules[0]
 
 
 def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | None:

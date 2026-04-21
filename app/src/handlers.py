@@ -198,6 +198,7 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
     channel = ""
     questions = None
     standup_name = "Team Standup"
+    schedule_id: int | None = None
     try:
         import db  # noqa: PLC0415
 
@@ -210,6 +211,7 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
             channel = sched.get("channel_id", "") or ""
             qs = sched.get("questions") or []
             standup_name = sched.get("name") or standup_name
+            schedule_id = sched.get("id")
         else:
             config = db.get_workspace_config(team_id) or {}
             channel = config.get("channel_id", "")
@@ -227,7 +229,14 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
     except Exception as e:
         logger.warning("Unexpected error in _start_standup_session loading config: %s", e)
 
-    session = state_store.start(cache_key, channel, team_id=team_id, questions=questions, standup_name=standup_name)
+    session = state_store.start(
+        cache_key,
+        channel,
+        team_id=team_id,
+        questions=questions,
+        standup_name=standup_name,
+        schedule_id=schedule_id,
+    )
     client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
     _send_question_block(client, user_id, session.questions[0], 0)
 
@@ -277,7 +286,13 @@ def _complete_standup(user_id: str, session, client) -> None:
 
             sched_config = {}
             try:
-                sched_config = _db.get_standup_schedule_for_channel(session.team_id, channel) or {}
+                # Prefer an exact schedule_id lookup so workspaces with multiple
+                # schedules sharing one channel (e.g. morning + evening standups)
+                # don't get the wrong schedule's name / notify_on_report / flags.
+                if getattr(session, "schedule_id", None):
+                    sched_config = _db.get_standup_schedule(session.team_id, session.schedule_id) or {}
+                if not sched_config:
+                    sched_config = _db.get_standup_schedule_for_channel(session.team_id, channel) or {}
             except Exception as e:
                 logger.warning("Unexpected error in _complete_standup fetching schedule config: %s", e)
 
