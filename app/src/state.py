@@ -32,6 +32,7 @@ class UserSession:
     started_at: datetime = field(default_factory=datetime.utcnow)
     questions: list[str] = field(default_factory=lambda: list(QUESTIONS))
     standup_name: str = "Team Standup"
+    schedule_id: Optional[int] = None  # source schedule — avoids channel-based lookup ambiguity
 
     @property
     def user_id(self) -> str:
@@ -47,6 +48,7 @@ def _serialize(session: "UserSession") -> dict:
         "answers": session.answers,
         "questions": session.questions,
         "standup_name": session.standup_name,
+        "schedule_id": session.schedule_id,
     }
 
 
@@ -59,6 +61,7 @@ def _deserialize(data: dict) -> "UserSession":
         answers=data.get("answers", []),
         questions=data.get("questions", list(QUESTIONS)),
         standup_name=data.get("standup_name", "Team Standup"),
+        schedule_id=data.get("schedule_id"),
     )
 
 
@@ -76,6 +79,7 @@ class StateStore:
         team_id: str = "",
         questions: list[str] | None = None,
         standup_name: str = "Team Standup",
+        schedule_id: Optional[int] = None,
     ) -> UserSession:
         """Begin a new standup session. cache_key should be 'team_id:user_id'."""
         if not team_id:
@@ -88,6 +92,7 @@ class StateStore:
                 channel=channel,
                 questions=list(questions) if questions is not None else list(QUESTIONS),
                 standup_name=standup_name,
+                schedule_id=schedule_id,
             )
             session_store.set_session(cache_key, _serialize(session))
             return session

@@ -421,7 +421,14 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                 client, user_id, team_id=team_id, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg
             )
 
-            state_store.start(cache_key, channel_id, team_id=team_id, questions=questions, standup_name=standup_name)
+            state_store.start(
+                cache_key,
+                channel_id,
+                team_id=team_id,
+                questions=questions,
+                standup_name=standup_name,
+                schedule_id=schedule_id,
+            )
             logger.info("Sent standup DM to %s / %s", team_id, user_id)
         except Exception as exc:
             failed_count += 1
