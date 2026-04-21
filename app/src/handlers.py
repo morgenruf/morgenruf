@@ -142,13 +142,23 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
         return None
 
 
-def _send_question_block(client, user_id: str, question: str, step: int) -> None:
+def _send_question_block(client, user_id: str, question: str, step: int, initial_value: str | None = None) -> None:
     """Send a standup question as a Block Kit input block plus a Submit button.
 
     Multiline plain_text_input does NOT dispatch on Enter (Enter inserts a
     newline), so we render an explicit Submit button. The handler reads the
-    answer out of state.values rather than action.value.
+    answer out of state.values rather than action.value. When `initial_value`
+    is provided (edit flow) the previous answer is pre-filled so the user can
+    tweak it instead of retyping everything.
     """
+    element: dict = {
+        "type": "plain_text_input",
+        "action_id": f"standup_answer_{step}",
+        "multiline": True,
+        "placeholder": {"type": "plain_text", "text": "Type your answer (use bullet points with •)"},
+    }
+    if initial_value:
+        element["initial_value"] = initial_value
     client.chat_postMessage(
         channel=user_id,
         text=question,  # fallback for notifications
@@ -161,12 +171,7 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
                 "type": "input",
                 "block_id": f"answer_{step}",
                 "dispatch_action": True,
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": f"standup_answer_{step}",
-                    "multiline": True,
-                    "placeholder": {"type": "plain_text", "text": "Type your answer (use bullet points with •)"},
-                },
+                "element": element,
                 "label": {"type": "plain_text", "text": "Your answer"},
             },
             {
@@ -183,6 +188,16 @@ def _send_question_block(client, user_id: str, question: str, step: int) -> None
             },
         ],
     )
+
+
+def _initial_answer_for(session, step: int) -> str | None:
+    """Return the previous answer for `step` when the session is an edit of an existing standup."""
+    if not getattr(session, "editing_standup_id", None):
+        return None
+    answers = getattr(session, "edit_initial_answers", None) or []
+    if 0 <= step < len(answers):
+        return answers[step] or None
+    return None
 
 
 def _start_standup_session(user_id: str, team_id: str, client) -> None:
@@ -238,7 +253,7 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
         schedule_id=schedule_id,
     )
     client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
-    _send_question_block(client, user_id, session.questions[0], 0)
+    _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
 
 
 def _complete_standup(user_id: str, session, client) -> None:
@@ -248,19 +263,44 @@ def _complete_standup(user_id: str, session, client) -> None:
     question_answers = session.answers[:n_questions]
     mood = session.answers[n_questions] if len(session.answers) > n_questions else None
 
-    # Persist first so we have the standup ID for the edit button
-    standup_id = _persist_standup(session.team_id, user_id, question_answers, mood=mood)
+    # If this is an edit of a prior submission, update the existing row in place
+    # instead of creating a duplicate standup record.
+    is_edit = bool(getattr(session, "editing_standup_id", None))
+    standup_id: int | None = None
+    if is_edit:
+        try:
+            import db  # noqa: PLC0415
 
+            update_fields: dict = {
+                "yesterday": question_answers[0] if len(question_answers) > 0 else "",
+                "today": question_answers[1] if len(question_answers) > 1 else "",
+                "blockers": question_answers[2] if len(question_answers) > 2 else "",
+            }
+            if mood is not None:
+                update_fields["mood"] = mood
+            db.update_standup(user_id=user_id, team_id=session.team_id, **update_fields)
+            standup_id = session.editing_standup_id
+        except Exception as exc:
+            logger.warning("Could not update standup %s for %s: %s", session.editing_standup_id, user_id, exc)
+    else:
+        # Persist first so we have the standup ID for the edit button
+        standup_id = _persist_standup(session.team_id, user_id, question_answers, mood=mood)
+
+    confirmation_text = (
+        "✏️ *Standup updated!* Your edits have been saved."
+        if is_edit
+        else "✅ *Standup submitted!* You can edit your responses within 30 minutes."
+    )
     # Block Kit confirmation with edit button
     client.chat_postMessage(
         channel=user_id,
-        text="✅ Standup submitted!",
+        text="✏️ Standup updated!" if is_edit else "✅ Standup submitted!",
         blocks=[
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "✅ *Standup submitted!* You can edit your responses within 30 minutes.",
+                    "text": confirmation_text,
                 },
             },
             {
@@ -346,13 +386,22 @@ def _complete_standup(user_id: str, session, client) -> None:
 
             _daily_thread_cache[thread_key] = parent_ts
 
+            # Mark edits so teammates can tell which message is the latest version;
+            # we don't have the original reply's ts to update in place, so post
+            # the updated version as a new thread reply with a clear indicator.
+            channel_text = f"✏️ *Updated standup*\n{formatted}" if is_edit else formatted
             client.chat_postMessage(
                 channel=channel,
-                text=formatted,
+                text=channel_text,
                 thread_ts=parent_ts,
                 unfurl_links=False,
             )
-            logger.info("Posted standup for %s to %s (thread)", user_id, channel)
+            logger.info(
+                "Posted %s for %s to %s (thread)",
+                "standup update" if is_edit else "standup",
+                user_id,
+                channel,
+            )
         except Exception as exc:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
             client.chat_postMessage(
@@ -575,7 +624,13 @@ def register_handlers(app: App) -> None:
 
         if session.step < n_questions:
             # Still collecting question answers — send next question as Block Kit
-            _send_question_block(client, user_id, session.questions[session.step], session.step)
+            _send_question_block(
+                client,
+                user_id,
+                session.questions[session.step],
+                session.step,
+                _initial_answer_for(session, session.step),
+            )
         elif session.step == n_questions:
             # All questions answered — ask mood
             _send_mood_block(client, user_id)
@@ -1169,7 +1224,13 @@ def register_handlers(app: App) -> None:
         n_questions = len(session.questions)
 
         if session.step < n_questions:
-            _send_question_block(client, user_id, session.questions[session.step], session.step)
+            _send_question_block(
+                client,
+                user_id,
+                session.questions[session.step],
+                session.step,
+                _initial_answer_for(session, session.step),
+            )
         elif session.step == n_questions:
             # All main questions answered — ask mood
             _send_mood_block(client, user_id)
@@ -1456,6 +1517,8 @@ def register_handlers(app: App) -> None:
         cache_key = f"{team_id}:{user_id}"
         channel = ""
         questions = None
+        schedule_id: int | None = None
+        standup_name = "Team Standup"
         try:
             import db  # noqa: PLC0415
 
@@ -1465,6 +1528,8 @@ def register_handlers(app: App) -> None:
             if sched:
                 channel = sched.get("channel_id", "") or ""
                 qs = sched.get("questions") or []
+                schedule_id = sched.get("id")
+                standup_name = sched.get("name") or standup_name
             else:
                 config = db.get_workspace_config(team_id) or {}
                 channel = config.get("channel_id", "")
@@ -1482,8 +1547,38 @@ def register_handlers(app: App) -> None:
         except Exception as e:
             logger.warning("Unexpected error in handle_edit_standup loading config: %s", e)
 
-        session = state_store.start(cache_key, channel, team_id=team_id, questions=questions)
-        say(f"✏️ Let's update your standup!\n\n{session.questions[0]}")
+        # Load the user's previous answers so each question block pre-fills
+        # with what they submitted — requested by users who didn't want to
+        # retype everything just to correct a typo.
+        initial_answers: list[str] = []
+        try:
+            import db  # noqa: PLC0415
+
+            prev = db.get_standup_by_id(standup_id)
+            if prev:
+                initial_answers = [
+                    prev.get("yesterday") or "",
+                    prev.get("today") or "",
+                    prev.get("blockers") or "",
+                ]
+        except Exception as e:
+            logger.warning("Could not load previous standup %s for edit: %s", standup_id, e)
+
+        session = state_store.start(
+            cache_key,
+            channel,
+            team_id=team_id,
+            questions=questions,
+            standup_name=standup_name,
+            schedule_id=schedule_id,
+            editing_standup_id=standup_id,
+            edit_initial_answers=initial_answers,
+        )
+        client.chat_postMessage(
+            channel=user_id,
+            text="✏️ Let's update your standup — your previous answers are pre-filled, edit what you need.",
+        )
+        _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
 
     @app.message("skip")
     def handle_skip(message, say):  # noqa: ANN001
