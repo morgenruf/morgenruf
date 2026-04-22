@@ -200,8 +200,13 @@ def _initial_answer_for(session, step: int) -> str | None:
     return None
 
 
-def _start_standup_session(user_id: str, team_id: str, client) -> None:
-    """Look up workspace config, create a session, and send the first question block."""
+def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int | None = None) -> None:
+    """Look up workspace config, create a session, and send the first question block.
+
+    When `schedule_id` is provided (e.g. user clicked the per-schedule App Home
+    button) we use that exact schedule and skip the user-to-schedule guess so
+    members of multiple schedules land in the one they actually picked.
+    """
     cache_key = f"{team_id}:{user_id}"
     # An explicit "standup"/"start" from the user means they want to begin
     # (or restart) now. Silently clear any prior session — the old behavior
@@ -213,20 +218,23 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
     channel = ""
     questions = None
     standup_name = "Team Standup"
-    schedule_id: int | None = None
+    resolved_schedule_id: int | None = schedule_id
     try:
         import db  # noqa: PLC0415
 
-        # Prefer the user's schedule (correct channel + questions) before
-        # falling back to the workspace-level config. Without this, users who
-        # belong to a channel-specific schedule would post to the workspace
-        # default channel or fail silently.
-        sched = db.get_schedule_for_user(team_id, user_id)
+        sched = None
+        if schedule_id is not None:
+            # Explicit schedule from a per-schedule UI (App Home button etc.)
+            sched = db.get_standup_schedule(team_id, schedule_id)
+        if sched is None:
+            # Fall back to the user-to-schedule heuristic for paths that don't
+            # carry an explicit schedule (DM "standup", /standup command).
+            sched = db.get_schedule_for_user(team_id, user_id)
         if sched:
             channel = sched.get("channel_id", "") or ""
             qs = sched.get("questions") or []
             standup_name = sched.get("name") or standup_name
-            schedule_id = sched.get("id")
+            resolved_schedule_id = sched.get("id")
         else:
             config = db.get_workspace_config(team_id) or {}
             channel = config.get("channel_id", "")
@@ -250,7 +258,7 @@ def _start_standup_session(user_id: str, team_id: str, client) -> None:
         team_id=team_id,
         questions=questions,
         standup_name=standup_name,
-        schedule_id=schedule_id,
+        schedule_id=resolved_schedule_id,
     )
     client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
     _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
@@ -948,11 +956,23 @@ def register_handlers(app: App) -> None:
 
     @app.action("start_standup_now")
     def handle_start_standup_now(ack, body, client):  # noqa: ANN001
-        """Handle 'Start standup' button from App Home."""
+        """Handle 'Start standup' button from App Home.
+
+        The button is rendered per-schedule and carries the schedule id in
+        `value`. We pass it through so users belonging to multiple schedules
+        get the exact one they clicked instead of a heuristic guess.
+        """
         ack()
         user_id: str = body["user"]["id"]
         team_id: str = body["user"]["team_id"]
-        _start_standup_session(user_id, team_id, client)
+        schedule_id: int | None = None
+        try:
+            raw = body.get("actions", [{}])[0].get("value", "")
+            if raw:
+                schedule_id = int(raw)
+        except (ValueError, TypeError):
+            schedule_id = None
+        _start_standup_session(user_id, team_id, client, schedule_id=schedule_id)
 
     @app.action("view_previous_standups")
     def handle_view_previous_standups(ack, body, client):  # noqa: ANN001
