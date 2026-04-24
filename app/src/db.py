@@ -653,36 +653,37 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
-def upsert_daily_thread(team_id: str, channel_id: str, thread_date: str, parent_ts: str) -> None:
+def upsert_daily_thread(
+    team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0
+) -> None:
     """Persist the parent message ts for today's standup thread.
 
-    Used by the end-of-day summary job to thread its post under the same
-    parent that individual standup submissions are threaded under, surviving
-    pod restarts between the first submission and the scheduled summary.
+    Scoped by schedule_id so workspaces running multiple standups on the same
+    channel (morning + evening) get a distinct thread parent per schedule.
     """
     sql = """
-        INSERT INTO daily_standup_threads (team_id, channel_id, thread_date, parent_ts)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (team_id, channel_id, thread_date) DO NOTHING
+        INSERT INTO daily_standup_threads (team_id, channel_id, thread_date, schedule_id, parent_ts)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (team_id, channel_id, thread_date, schedule_id) DO NOTHING
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             try:
-                cur.execute(sql, (team_id, channel_id, thread_date, parent_ts))
+                cur.execute(sql, (team_id, channel_id, thread_date, int(schedule_id or 0), parent_ts))
             except Exception:
                 pass
 
 
-def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str) -> str | None:
+def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str, schedule_id: int = 0) -> str | None:
     """Look up the parent ts for today's standup thread, if one was created."""
     sql = """
         SELECT parent_ts FROM daily_standup_threads
-        WHERE team_id = %s AND channel_id = %s AND thread_date = %s
+        WHERE team_id = %s AND channel_id = %s AND thread_date = %s AND schedule_id = %s
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             try:
-                cur.execute(sql, (team_id, channel_id, thread_date))
+                cur.execute(sql, (team_id, channel_id, thread_date, int(schedule_id or 0)))
             except Exception:
                 return None
             row = cur.fetchone()
