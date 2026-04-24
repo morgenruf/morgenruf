@@ -145,20 +145,19 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
 def _send_question_block(client, user_id: str, question: str, step: int, initial_value: str | None = None) -> None:
     """Send a standup question as a Block Kit input block plus a Submit button.
 
-    Multiline plain_text_input does NOT dispatch on Enter (Enter inserts a
-    newline), so we render an explicit Submit button. The handler reads the
-    answer out of state.values rather than action.value. When `initial_value`
-    is provided (edit flow) the previous answer is pre-filled so the user can
-    tweak it instead of retyping everything.
+    Uses rich_text_input so users get the formatting toolbar (bold, italic,
+    bullets, etc.). The handler reads the answer out of state.values via
+    rich_text_value rather than action.value. When `initial_value` is provided
+    (edit flow) the previous answer is pre-filled so the user can tweak it.
     """
+    import blocks as _blocks  # noqa: PLC0415
+
     element: dict = {
-        "type": "plain_text_input",
+        "type": "rich_text_input",
         "action_id": f"standup_answer_{step}",
-        "multiline": True,
-        "placeholder": {"type": "plain_text", "text": "Type your answer (use bullet points with •)"},
     }
     if initial_value:
-        element["initial_value"] = initial_value
+        element["initial_value"] = _blocks.mrkdwn_to_rich_text(initial_value)
     client.chat_postMessage(
         channel=user_id,
         text=question,  # fallback for notifications
