@@ -648,15 +648,16 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         # and fall back to the in-memory cache used by the Bolt handler.
         thread_ts = None
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        sched_id_int = int(schedule_id or sched_cfg.get("id") or 0)
         try:
-            thread_ts = db.get_daily_thread_ts(team_id, channel_id, today_str)
+            thread_ts = db.get_daily_thread_ts(team_id, channel_id, today_str, sched_id_int)
         except Exception:
             thread_ts = None
         if not thread_ts:
             try:
                 from handlers import _daily_thread_cache  # noqa: PLC0415
 
-                thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}")
+                thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}:{sched_id_int}")
             except Exception:
                 thread_ts = None
 

@@ -365,16 +365,18 @@ def _complete_standup(user_id: str, session, client) -> None:
             except Exception as e:
                 logger.warning("Unexpected error in _complete_standup applying autolink: %s", e)
 
-            # Always post individual standups in a daily thread
+            # Always post individual standups in a daily thread, scoped by
+            # schedule so Morning and Evening standups don't share a thread.
             now_utc = datetime.now(timezone.utc)
             today_str = now_utc.strftime("%Y-%m-%d")
-            thread_key = f"{session.team_id}:{channel}:{today_str}"
+            schedule_id = int(getattr(session, "schedule_id", 0) or sched_config.get("id") or 0)
+            thread_key = f"{session.team_id}:{channel}:{today_str}:{schedule_id}"
             parent_ts = _daily_thread_cache.get(thread_key)
 
             if not parent_ts:
                 # Check DB first — the in-memory cache is lost on pod restart.
                 try:
-                    parent_ts = _db.get_daily_thread_ts(session.team_id, channel, today_str)
+                    parent_ts = _db.get_daily_thread_ts(session.team_id, channel, today_str, schedule_id)
                 except Exception:
                     parent_ts = None
 
@@ -388,7 +390,7 @@ def _complete_standup(user_id: str, session, client) -> None:
                 )
                 parent_ts = parent["ts"]
                 try:
-                    _db.upsert_daily_thread(session.team_id, channel, today_str, parent_ts)
+                    _db.upsert_daily_thread(session.team_id, channel, today_str, parent_ts, schedule_id)
                 except Exception as e:
                     logger.warning("Could not persist daily thread ts: %s", e)
 
