@@ -145,19 +145,19 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
 def _send_question_block(client, user_id: str, question: str, step: int, initial_value: str | None = None) -> None:
     """Send a standup question as a Block Kit input block plus a Submit button.
 
-    Uses rich_text_input so users get the formatting toolbar (bold, italic,
-    bullets, etc.). The handler reads the answer out of state.values via
-    rich_text_value rather than action.value. When `initial_value` is provided
-    (edit flow) the previous answer is pre-filled so the user can tweak it.
+    Uses plain_text_input — rich_text_input is only valid in modals/Home tabs,
+    not in chat.postMessage (Slack returns invalid_blocks). The toolbar is
+    available via the "Fill in form" modal flow. Multiline plain_text_input
+    does NOT dispatch on Enter, so we render an explicit Submit button.
     """
-    import blocks as _blocks  # noqa: PLC0415
-
     element: dict = {
-        "type": "rich_text_input",
+        "type": "plain_text_input",
         "action_id": f"standup_answer_{step}",
+        "multiline": True,
+        "placeholder": {"type": "plain_text", "text": "Type your answer (use bullet points with •)"},
     }
     if initial_value:
-        element["initial_value"] = _blocks.mrkdwn_to_rich_text(initial_value)
+        element["initial_value"] = initial_value
     client.chat_postMessage(
         channel=user_id,
         text=question,  # fallback for notifications
@@ -259,8 +259,14 @@ def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int 
         standup_name=standup_name,
         schedule_id=resolved_schedule_id,
     )
-    client.chat_postMessage(channel=user_id, text="📋 Starting your standup!")
-    _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
+    import blocks as _blocks  # noqa: PLC0415
+
+    dm = _blocks.standup_dm_message(session.questions, session.standup_name or "Standup")
+    client.chat_postMessage(
+        channel=user_id,
+        text=f"Time for your standup — {session.standup_name or 'Standup'}",
+        blocks=dm["blocks"],
+    )
 
 
 def _complete_standup(user_id: str, session, client) -> None:
