@@ -5,6 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- Helm chart optional Gateway API `HTTPRoute` support (`httpRoute.enabled`, chart v0.5.0)
+
 ## [1.0.0] — 2026-04-05 🎉 First stable release
 
 ### Added

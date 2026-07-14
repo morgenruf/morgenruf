@@ -11,6 +11,13 @@ service:
   type: ClusterIP
   port: 3000
 
+httpRoute:
+  enabled: false
+  hostName: "api.morgenruf.dev"
+  gateway:
+    name: morgenruf-gateway
+    namespace: morgenruf
+
 ingress:
   enabled: true
   className: "nginx"
