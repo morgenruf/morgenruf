@@ -313,6 +313,24 @@ If you use Cloudflare Tunnel instead of an ingress controller:
 # Service:  http://morgenruf.morgenruf.svc.cluster.local:3000
 ```
 
+### Gateway API (HTTPRoute)
+
+If your cluster uses [Gateway API](https://gateway-api.sigs.k8s.io/) instead of (or in addition to) Ingress, enable the chart's HTTPRoute and point it at your Gateway:
+
+```bash
+helm upgrade --install morgenruf morgenruf/morgenruf \
+  --namespace morgenruf \
+  --create-namespace \
+  --set ingress.enabled=false \
+  --set httpRoute.enabled=true \
+  --set httpRoute.hostName="api.your-domain.com" \
+  --set httpRoute.gateway.name="morgenruf-gateway" \
+  --set httpRoute.gateway.namespace="morgenruf" \
+  # ... plus required slack / database / app.url values
+```
+
+Requires Gateway API CRDs and an existing Gateway that matches `httpRoute.gateway`. Disable Ingress when HTTPRoute owns the hostname so you don't double-route the same host.
+
 ### values.yaml reference
 
 ```yaml
@@ -335,10 +353,17 @@ resend:
   apiKey: ""             # Resend API key for welcome emails (free tier ok)
 
 ingress:
-  enabled: true          # set false for Cloudflare Tunnel / custom routing
+  enabled: true          # set false for Cloudflare Tunnel / Gateway API / custom routing
   className: "nginx"
   hosts:
     - host: api.your-domain.com
+
+httpRoute:
+  enabled: false         # set true for Gateway API HTTPRoute
+  hostName: "api.your-domain.com"
+  gateway:
+    name: morgenruf-gateway
+    namespace: morgenruf
 ```
 
 > ⚠️ **Common mistake:** `slack.clientSecret` and `slack.signingSecret` are **different values**.  
@@ -358,6 +383,8 @@ app/helm/morgenruf/
     ├── deployment.yaml   ← init container runs migrations
     ├── service.yaml
     ├── ingress.yaml
+    ├── httproute.yaml    ← Gateway API HTTPRoute (optional)
+    ├── redis.yaml
     ├── configmap.yaml
     └── secret.yaml
 ```
