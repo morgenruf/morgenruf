@@ -653,9 +653,7 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
-def upsert_daily_thread(
-    team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0
-) -> None:
+def upsert_daily_thread(team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0) -> None:
     """Persist the parent message ts for today's standup thread.
 
     Scoped by schedule_id so workspaces running multiple standups on the same
