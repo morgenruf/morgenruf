@@ -127,8 +127,19 @@ def _format_standup(
     return text
 
 
-def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str | None = None) -> int | None:
-    """Best-effort persist to DB; log and continue on failure. Returns standup ID."""
+def _persist_standup(
+    team_id: str,
+    user_id: str,
+    answers: list[str],
+    mood: str | None = None,
+    questions: list[str] | None = None,
+) -> int | None:
+    """Best-effort persist to DB; log and continue on failure. Returns standup ID.
+
+    `questions` decides whether this standup reports a blocker at all. Without
+    it the third answer is assumed to be one, which is wrong for any schedule
+    that asks something else there.
+    """
     try:
         import db  # noqa: PLC0415
 
@@ -139,6 +150,7 @@ def _persist_standup(team_id: str, user_id: str, answers: list[str], mood: str |
             today=answers[1] if len(answers) > 1 else "",
             blockers=answers[2] if len(answers) > 2 else "",
             mood=mood,
+            questions=questions,
         )
     except Exception as exc:
         logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
@@ -300,7 +312,9 @@ def _complete_standup(user_id: str, session, client) -> None:
             logger.warning("Could not update standup %s for %s: %s", session.editing_standup_id, user_id, exc)
     else:
         # Persist first so we have the standup ID for the edit button
-        standup_id = _persist_standup(session.team_id, user_id, question_answers, mood=mood)
+        standup_id = _persist_standup(
+            session.team_id, user_id, question_answers, mood=mood, questions=session.questions
+        )
 
     confirmation_text = (
         "✏️ *Standup updated!* Your edits have been saved."
