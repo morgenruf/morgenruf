@@ -7,7 +7,9 @@ import logging
 import os
 import re
 from contextlib import contextmanager
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Generator
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -345,34 +347,29 @@ def get_today_standups(team_id: str) -> list[dict]:
 
 
 def get_dashboard_stats(team_id: str) -> dict:
-    """Return completion rate, active member count, and response counts."""
-    sql_responses = """
-        SELECT COUNT(*) AS total,
-               COUNT(DISTINCT user_id) AS active_members
-        FROM standups
-        WHERE team_id = %s
-          AND standup_date >= CURRENT_DATE - INTERVAL '7 days'
+    """Return this week's completion rate plus the counts the rate is built from.
+
+    The rate comes from `get_participation_overview`, so the denominator is the
+    set of (member, schedule, occurrence date) triples the workspace actually
+    asked for rather than a headcount times a hardcoded five day week. The
+    enrolment counts travel with it so the UI can say "of N enrolled members"
+    instead of showing a bare percentage.
     """
-    sql_total_members = "SELECT COUNT(*) AS cnt FROM members WHERE team_id = %s AND active = TRUE"
-    with db_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql_responses, (team_id,))
-            row = dict(cur.fetchone())
-            cur.execute(sql_total_members, (team_id,))
-            members_row = dict(cur.fetchone())
-    total_members = members_row.get("cnt", 0) or 0
-    responses_week = row.get("total", 0) or 0
-    active_members = row.get("active_members", 0) or 0
-    # Completion rate: responses this week / (members * working days this week)
-    completion_rate = 0
-    if total_members > 0 and responses_week > 0:
-        completion_rate = min(100, int(responses_week / max(total_members, 1) * 100 / 5))
+    overview = get_participation_overview(team_id, days=7)
     return {
-        "completion_rate": completion_rate,
-        "active_members": active_members,
-        "total_responses": responses_week,
-        "responses_this_week": responses_week,
-        "total_members": total_members,
+        "completion_rate": overview["completion_rate"],
+        "active_members": overview["responding_members"],
+        "total_responses": overview["responses"],
+        "responses_this_week": overview["responses"],
+        "total_members": overview["total_members"],
+        "enrolled_members": overview["enrolled_members"],
+        "unenrolled_members": overview["unenrolled_members"],
+        "on_vacation_members": overview["on_vacation_members"],
+        "expected_responses": overview["expected"],
+        "completed_responses": overview["completed"],
+        "missed_responses": overview["missed"],
+        "days": overview["days"],
+        "schedules": overview["schedules"],
     }
 
 
@@ -536,28 +533,364 @@ def get_user_last_standup_answers(team_id: str, user_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
-    """Return per-member participation stats for the last N days."""
-    sql = """
-        SELECT
-            m.user_id,
-            m.real_name,
-            COUNT(s.id) AS responses,
-            MAX(s.submitted_at) AS last_standup,
-            COUNT(CASE WHEN s.has_blockers THEN 1 END) AS days_with_blockers
-        FROM members m
-        LEFT JOIN standups s ON s.team_id = m.team_id
-            AND s.user_id = m.user_id
-            AND s.standup_date >= CURRENT_DATE - (%s - 1) * INTERVAL '1 day'
-        WHERE m.team_id = %s AND m.active = TRUE
-        GROUP BY m.user_id, m.real_name
-        ORDER BY responses DESC, m.real_name
+# Participation model (issue #74). See compute_participation for the model.
+
+DEFAULT_SCHEDULE_DAYS = "mon,tue,wed,thu,fri"
+
+_WEEKDAY_TOKENS = {
+    "mon": 0,
+    "monday": 0,
+    "tue": 1,
+    "tues": 1,
+    "tuesday": 1,
+    "wed": 2,
+    "weds": 2,
+    "wednesday": 2,
+    "thu": 3,
+    "thur": 3,
+    "thurs": 3,
+    "thursday": 3,
+    "fri": 4,
+    "friday": 4,
+    "sat": 5,
+    "saturday": 5,
+    "sun": 6,
+    "sunday": 6,
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+}
+
+_WORKING_WEEK = {0, 1, 2, 3, 4}
+
+
+def _utc_now() -> datetime:
+    """Current UTC time. A seam so the participation model can be tested at a fixed clock."""
+    return datetime.now(timezone.utc)
+
+
+def _resolve_zone(name: object):
+    """Return a tzinfo for an IANA timezone name, falling back to UTC."""
+    if isinstance(name, str) and name.strip():
+        try:
+            return ZoneInfo(name.strip())
+        except Exception:  # noqa: BLE001 - unknown name or missing tz database
+            logger.debug("Unknown schedule timezone %r, treating it as UTC", name)
+    return timezone.utc
+
+
+def parse_schedule_days(spec: object) -> set[int]:
+    """Return the weekday numbers a `schedule_days` value fires on (Monday is 0).
+
+    Accepts the shapes APScheduler's `day_of_week` accepts and this app writes:
+    "mon,wed,fri", "mon-fri", "fri-mon", "*" and bare numbers.
+    """
+    if not isinstance(spec, str) or not spec.strip():
+        spec = DEFAULT_SCHEDULE_DAYS
+    days: set[int] = set()
+    for token in spec.lower().replace(" ", "").split(","):
+        if not token:
+            continue
+        if token == "*":
+            return set(range(7))
+        if "-" in token[1:]:
+            start_txt, _, end_txt = token.partition("-")
+            start = _WEEKDAY_TOKENS.get(start_txt)
+            end = _WEEKDAY_TOKENS.get(end_txt)
+            if start is None or end is None:
+                continue
+            day = start
+            days.add(day)
+            while day != end:
+                day = (day + 1) % 7
+                days.add(day)
+            continue
+        day = _WEEKDAY_TOKENS.get(token)
+        if day is not None:
+            days.add(day)
+    return days or set(_WORKING_WEEK)
+
+
+def _schedule_minutes(schedule: dict) -> int:
+    """Return a schedule's fire time as minutes past local midnight, for ordering."""
+    match = re.match(r"^\s*(\d{1,2}):(\d{2})", str(schedule.get("schedule_time") or "09:00"))
+    if not match:
+        return 0
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
+def _as_date(value: object) -> date | None:
+    """Coerce a psycopg2 date, a datetime or an ISO string to a date."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def _percentage(part: int, whole: int) -> int:
+    """Return part of whole as a whole percentage, rounded half up, 0 when nothing was expected."""
+    if whole <= 0:
+        return 0
+    return int(part * 100 / whole + 0.5)
+
+
+def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
+    """Return the dates a schedule fired on in the last N days, in its own timezone."""
+    local_today = now.astimezone(_resolve_zone(schedule.get("schedule_tz"))).date()
+    weekdays = parse_schedule_days(schedule.get("schedule_days"))
+    window = [local_today - timedelta(days=offset) for offset in range(days)]
+    return sorted(day for day in window if day.weekday() in weekdays)
+
+
+def compute_participation(
+    schedules: list[dict] | None,
+    members: list[dict] | None,
+    submissions: list[dict] | None,
+    days: int = 7,
+    now: datetime | None = None,
+) -> dict:
+    """Compute workspace, per-schedule and per-member participation from raw rows.
+
+    The unit of "expected" is a (member, schedule, occurrence date) triple, not
+    a member. Counting members was wrong in three independent ways on a
+    workspace that runs several schedules:
+
+      * people who are in no schedule can never respond, yet sat in the
+        denominator;
+      * someone in a morning and an evening standup adds one to a headcount but
+        several submissions to the numerator;
+      * a hardcoded five day week caps a three-day-a-week standup at 60 percent.
+
+    Expanding each schedule's own `schedule_days` across the window in its own
+    `schedule_tz`, crossed with its own `participants`, fixes all three and
+    makes the per-schedule rates fall out of the same pass.
+
+    One limitation is worth naming: the `standups` table has no schedule id, so
+    a submission cannot be attributed to a schedule by identity. Submissions are
+    matched to occurrences per (member, day) by count, and where a member has
+    several occurrences on one day the matches are handed out in schedule_time
+    order. That keeps the per-schedule numbers summing exactly to the workspace
+    numerator, at the cost of guessing which of a member's two standups they
+    skipped when they filed only one.
+
+    Kept free of any database access so the arithmetic can be tested against
+    hand-computed numbers. `schedules` are `standup_schedules` rows, `members`
+    are `members` rows and `submissions` are `standups` rows covering at least
+    the window (a day of slack either side is fine, it is filtered here).
+    """
+    days = max(1, int(days or 1))
+    now = now or _utc_now()
+
+    known: dict[str, dict] = {}
+    for row in members or []:
+        user_id = row.get("user_id")
+        if not user_id:
+            continue
+        known[user_id] = {
+            "real_name": row.get("real_name") or user_id,
+            "active": bool(row.get("active", True)),
+            "on_vacation": bool(row.get("on_vacation") or False),
+        }
+
+    # Submissions are keyed by (member, day) because a standup row carries no
+    # schedule id. `responses` stays a raw count over the window so callers that
+    # already read it (the mailer, the MCP tools) keep their meaning.
+    per_day: dict[tuple[str, date], int] = {}
+    responses: dict[str, int] = {}
+    blockers: dict[str, int] = {}
+    last_standup: dict[str, Any] = {}
+    window_start = now.astimezone(timezone.utc).date() - timedelta(days=days - 1)
+    for row in submissions or []:
+        user_id = row.get("user_id")
+        day = _as_date(row.get("standup_date"))
+        if not user_id or day is None:
+            continue
+        per_day[(user_id, day)] = per_day.get((user_id, day), 0) + 1
+        if day >= window_start:
+            responses[user_id] = responses.get(user_id, 0) + 1
+            if row.get("has_blockers"):
+                blockers[user_id] = blockers.get(user_id, 0) + 1
+        submitted_at = row.get("submitted_at")
+        if submitted_at is not None:
+            previous = last_standup.get(user_id)
+            try:
+                if previous is None or submitted_at > previous:
+                    last_standup[user_id] = submitted_at
+            except TypeError:
+                last_standup.setdefault(user_id, submitted_at)
+
+    active_schedules = sorted(
+        (s for s in (schedules or []) if s.get("active", True)),
+        key=lambda s: (_schedule_minutes(s), int(s.get("id") or 0)),
+    )
+
+    schedule_rows: dict[int, dict] = {}
+    enrolled: set[str] = set()
+    # (member, day) -> the schedule ids that asked them for a standup that day,
+    # in schedule_time order.
+    occurrences: dict[tuple[str, date], list[int]] = {}
+    for schedule in active_schedules:
+        schedule_id = int(schedule.get("id") or 0)
+        dates = _occurrence_dates(schedule, days, now)
+        counted: list[str] = []
+        seen: set[str] = set()
+        for user_id in schedule.get("participants") or []:
+            if not user_id or user_id in seen:
+                continue
+            seen.add(user_id)
+            enrolled.add(user_id)
+            member = known.get(user_id)
+            if member is None:
+                # In a schedule but missing from the members table: the bot
+                # still DMs them, so they belong in the denominator.
+                known[user_id] = {"real_name": user_id, "active": True, "on_vacation": False}
+            elif not member["active"] or member["on_vacation"]:
+                # Inactive, or on approved leave, so nobody asked them today.
+                continue
+            counted.append(user_id)
+        schedule_rows[schedule_id] = {
+            "schedule_id": schedule_id,
+            "name": schedule.get("name") or f"Schedule {schedule_id}",
+            "occurrence_days": len(dates),
+            "participants": len(counted),
+            "expected": len(dates) * len(counted),
+            "completed": 0,
+        }
+        for user_id in counted:
+            for day in dates:
+                occurrences.setdefault((user_id, day), []).append(schedule_id)
+
+    expected_total = 0
+    completed_total = 0
+    per_member: dict[str, dict] = {}
+    for (user_id, day), schedule_ids in occurrences.items():
+        expected_here = len(schedule_ids)
+        completed_here = min(per_day.get((user_id, day), 0), expected_here)
+        expected_total += expected_here
+        completed_total += completed_here
+        stats = per_member.setdefault(user_id, {"expected": 0, "completed": 0, "schedules": set()})
+        stats["expected"] += expected_here
+        stats["completed"] += completed_here
+        stats["schedules"].update(schedule_ids)
+        for schedule_id in schedule_ids[:completed_here]:
+            schedule_rows[schedule_id]["completed"] += 1
+
+    member_rows = []
+    for user_id, member in known.items():
+        if not member["active"]:
+            continue
+        stats = per_member.get(user_id) or {"expected": 0, "completed": 0, "schedules": set()}
+        member_rows.append(
+            {
+                "user_id": user_id,
+                "real_name": member["real_name"],
+                "enrolled": user_id in enrolled,
+                "on_vacation": member["on_vacation"],
+                "expected": stats["expected"],
+                "completed": stats["completed"],
+                "missed": stats["expected"] - stats["completed"],
+                "responses": responses.get(user_id, 0),
+                "completion_rate": _percentage(stats["completed"], stats["expected"]),
+                "last_standup": last_standup.get(user_id),
+                "days_with_blockers": blockers.get(user_id, 0),
+                "schedules": [schedule_rows[sid]["name"] for sid in sorted(stats["schedules"])],
+            }
+        )
+    member_rows.sort(
+        key=lambda r: (
+            not r["enrolled"],
+            -r["completion_rate"],
+            -r["responses"],
+            (r["real_name"] or "").lower(),
+        )
+    )
+
+    for row in schedule_rows.values():
+        row["missed"] = row["expected"] - row["completed"]
+        row["completion_rate"] = _percentage(row["completed"], row["expected"])
+
+    return {
+        "days": days,
+        "expected": expected_total,
+        "completed": completed_total,
+        "missed": expected_total - completed_total,
+        "completion_rate": _percentage(completed_total, expected_total),
+        "responses": sum(responses.values()),
+        "responding_members": len([user for user, count in responses.items() if count > 0]),
+        "total_members": len(member_rows),
+        "enrolled_members": len([row for row in member_rows if row["enrolled"]]),
+        "unenrolled_members": len([row for row in member_rows if not row["enrolled"]]),
+        "on_vacation_members": len([row for row in member_rows if row["on_vacation"]]),
+        "schedules": [schedule_rows[sid] for sid in sorted(schedule_rows)],
+        "members": member_rows,
+    }
+
+
+def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], list[dict], list[dict]]:
+    """Load everything the participation model needs, in three fixed queries.
+
+    Three round trips whatever the workspace looks like, rather than one query
+    per schedule per day per participant. The calendar expansion itself is done
+    in Python instead of with `generate_series`: the row counts involved are
+    small (tens of schedules, hundreds of members, a week of submissions), each
+    schedule expands in its own IANA timezone which the Postgres session does
+    not know about, and keeping the arithmetic out of SQL is what lets it be
+    tested against hand-computed numbers without a live database.
+    """
+    sql_schedules = """
+        SELECT id, name, schedule_time, schedule_tz, schedule_days, participants, active
+        FROM standup_schedules
+        WHERE team_id = %s AND active = TRUE
+        ORDER BY schedule_time, id
+    """
+    sql_members = """
+        SELECT user_id, real_name, active, COALESCE(on_vacation, FALSE) AS on_vacation
+        FROM members
+        WHERE team_id = %s AND active = TRUE
+    """
+    # One extra day back absorbs the offset between the server's CURRENT_DATE
+    # and a schedule whose local date is behind it.
+    sql_submissions = """
+        SELECT user_id, standup_date, has_blockers, submitted_at
+        FROM standups
+        WHERE team_id = %s AND standup_date >= CURRENT_DATE - %s * INTERVAL '1 day'
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (days, team_id))
-            rows = cur.fetchall()
-    return [dict(r) for r in rows]
+            cur.execute(sql_schedules, (team_id,))
+            schedules = [dict(r) for r in cur.fetchall()]
+            cur.execute(sql_members, (team_id,))
+            members = [dict(r) for r in cur.fetchall()]
+            cur.execute(sql_submissions, (team_id, int(days)))
+            submissions = [dict(r) for r in cur.fetchall()]
+    return schedules, members, submissions
+
+
+def get_participation_overview(team_id: str, days: int = 7) -> dict:
+    """Return workspace, per-schedule and per-member participation for the last N days."""
+    days = max(1, int(days or 1))
+    schedules, members, submissions = _fetch_participation_inputs(team_id, days)
+    return compute_participation(schedules, members, submissions, days=days)
+
+
+def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
+    """Return per-member participation stats for the last N days.
+
+    Members in no active schedule are returned with `enrolled` False and an
+    expected count of 0 rather than being dropped, so a caller can show them as
+    "not enrolled" instead of "0/7".
+    """
+    return get_participation_overview(team_id, days=days)["members"]
 
 
 # ---------------------------------------------------------------------------
