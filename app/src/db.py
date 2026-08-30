@@ -266,6 +266,31 @@ def get_standups(
 # ---------------------------------------------------------------------------
 
 
+def get_all_members(team_id: str) -> list[dict]:
+    """Every member row for a team, active or not."""
+    sql = "SELECT * FROM members WHERE team_id = %s ORDER BY real_name NULLS LAST, user_id"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_members_active(team_id: str, user_ids: list[str], active: bool) -> int:
+    """Flip the active flag for a set of members. Returns the number changed.
+
+    Rows are never deleted. A person who left keeps their standup history, and
+    reactivating them if they return is a single flag.
+    """
+    if not user_ids:
+        return 0
+    sql = "UPDATE members SET active = %s WHERE team_id = %s AND user_id = ANY(%s) AND active <> %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (active, team_id, list(user_ids), active))
+            return cur.rowcount or 0
+
+
 def get_active_members(team_id: str) -> list[dict]:
     """Return active members for a workspace."""
     sql = "SELECT * FROM members WHERE team_id = %s AND active = TRUE ORDER BY real_name"
