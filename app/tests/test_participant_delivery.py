@@ -260,3 +260,50 @@ class TestSlackErrorIsDiagnosable:
         with caplog.at_level(logging.WARNING):
             assert slack_users.fetch_workspace_humans(client) is None
         assert "ratelimited" in caplog.text
+
+
+class TestPruneIsNotDeltaBased:
+    """#90 pruned only the people deactivated in the same pass.
+
+    Anyone deactivated by an earlier run was no longer active, so they never
+    appeared in a later delta and nothing ever removed them from the schedules.
+    On production that stranded five participants, including the bot.
+    """
+
+    @staticmethod
+    def _run(db, client):
+        with patch.dict(sys.modules, {"db": db}), patch.object(sched_mod, "_rate_limited_client", return_value=client):
+            sched_mod.sync_members_from_slack()
+
+    def test_someone_deactivated_on_an_earlier_run_is_still_pruned(self):
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": "T1", "bot_token": "xoxb"}]
+        # Already inactive, so this pass produces no deactivation delta at all.
+        db.get_all_members.return_value = [
+            {"user_id": "U_left_last_week", "active": False, "real_name": "Gone"},
+            {"user_id": "U_here", "active": True, "real_name": "Here"},
+        ]
+        self._run(db, _client([_slack_user("U_here", "Here")]))
+        db.set_members_active.assert_any_call("T1", [], False)
+        db.remove_participants_everywhere.assert_called_once_with("T1", ["U_left_last_week"])
+
+    def test_a_member_we_have_never_seen_is_left_alone(self):
+        """resolve_participants registers unknown people on delivery; do not fight it."""
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": "T1", "bot_token": "xoxb"}]
+        db.get_all_members.return_value = [{"user_id": "U_here", "active": True, "real_name": "Here"}]
+        self._run(db, _client([_slack_user("U_here", "Here")]))
+        db.remove_participants_everywhere.assert_not_called()
+
+    def test_this_pass_and_earlier_passes_are_pruned_together(self):
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": "T1", "bot_token": "xoxb"}]
+        db.get_all_members.return_value = [
+            {"user_id": "U_old", "active": False, "real_name": "Old"},
+            {"user_id": "U_new", "active": True, "real_name": "New"},
+            {"user_id": "U_here", "active": True, "real_name": "Here"},
+        ]
+        # Slack no longer reports U_new, so it is deactivated in this pass.
+        self._run(db, _client([_slack_user("U_here", "Here")]))
+        called = db.remove_participants_everywhere.call_args.args[1]
+        assert "U_old" in called

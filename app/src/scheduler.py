@@ -1313,7 +1313,20 @@ def sync_members_from_slack() -> None:
             # participation model, which invents a row for them when they are
             # missing from the members table, so a leaver would keep inflating
             # the denominator and keep being listed on the standup.
-            pruned = db.remove_participants_everywhere(team_id, to_deactivate) if to_deactivate else 0
+            #
+            # This works from current state rather than from this pass's
+            # deltas. Pruning only `to_deactivate` stranded anyone who was
+            # deactivated by an earlier run: they were no longer active, so they
+            # never appeared in a later delta, and nothing ever removed them.
+            #
+            # Members we have never seen are deliberately left alone. They are
+            # registered on first delivery by resolve_participants, and pruning
+            # them here would fight that.
+            # `stored` is the snapshot from before this pass deactivated anyone,
+            # so it must be combined with this pass's deactivations. Using only
+            # one or the other misses half the cases.
+            stale = sorted({m["user_id"] for m in stored if not m.get("active")} | set(to_deactivate))
+            pruned = db.remove_participants_everywhere(team_id, stale) if stale else 0
 
             # Backfill anyone still missing a name, which is what left raw Slack
             # ids showing in the dashboard.
