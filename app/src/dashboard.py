@@ -540,6 +540,27 @@ def api_channels():
 # ---------------------------------------------------------------------------
 
 
+def _participation_summary(overview: dict) -> dict:
+    """Return the headline participation figures without the per-member rows.
+
+    The denominator travels with the percentage so the UI can say
+    "of N enrolled members" rather than showing a bare number.
+    """
+    return {
+        "days": int(overview.get("days") or 7),
+        "completion_rate": int(overview.get("completion_rate") or 0),
+        "expected": int(overview.get("expected") or 0),
+        "completed": int(overview.get("completed") or 0),
+        "missed": int(overview.get("missed") or 0),
+        "responses": int(overview.get("responses") or 0),
+        "total_members": int(overview.get("total_members") or 0),
+        "enrolled_members": int(overview.get("enrolled_members") or 0),
+        "unenrolled_members": int(overview.get("unenrolled_members") or 0),
+        "on_vacation_members": int(overview.get("on_vacation_members") or 0),
+        "responding_members": int(overview.get("responding_members") or 0),
+    }
+
+
 @dashboard_bp.route("/dashboard/api/stats", methods=["GET"])
 @_login_required
 def api_stats():
@@ -555,6 +576,15 @@ def api_stats():
                 "active_members": 0,
                 "total_responses": 0,
                 "responses_this_week": 0,
+                "total_members": 0,
+                "enrolled_members": 0,
+                "unenrolled_members": 0,
+                "on_vacation_members": 0,
+                "expected_responses": 0,
+                "completed_responses": 0,
+                "missed_responses": 0,
+                "days": 7,
+                "schedules": [],
             }
         )
 
@@ -586,20 +616,29 @@ def api_reports():
                 days = max(1, (_dt.utcnow() - d).days + 1)
             except Exception as e:
                 logger.warning("Unexpected error in api_reports parsing date_from: %s", e)
-        participation = db.get_participation_stats(team_id, days=days)
+        overview = db.get_participation_overview(team_id, days=days)
         total_days = days
 
         member_summary = []
-        for p in participation:
-            responses = int(p.get("responses") or 0)
-            rate = min(5, round((responses / max(1, total_days)) * 5))
+        for p in overview.get("members") or []:
+            expected = int(p.get("expected") or 0)
+            rate = int(p.get("completion_rate") or 0)
             member_summary.append(
                 {
                     "user_id": p.get("user_id", ""),
                     "name": p.get("real_name") or p.get("user_id", ""),
-                    "responses": responses,
-                    "total": total_days,
-                    "stars": rate,
+                    "responses": int(p.get("responses") or 0),
+                    "completed": int(p.get("completed") or 0),
+                    "expected": expected,
+                    # "total" used to be the length of the window, which asked
+                    # a three-day-a-week member for five standups. It is now
+                    # what that member was actually asked for.
+                    "total": expected,
+                    "enrolled": bool(p.get("enrolled")),
+                    "on_vacation": bool(p.get("on_vacation")),
+                    "schedules": p.get("schedules") or [],
+                    "completion_rate": rate,
+                    "stars": int(rate * 5 / 100 + 0.5) if expected else 0,
                 }
             )
 
@@ -608,16 +647,82 @@ def api_reports():
                 "standups": standups,
                 "participation": member_summary,
                 "total_days": total_days,
+                "summary": _participation_summary(overview),
+                "schedules": overview.get("schedules") or [],
             }
         )
     except Exception as exc:
         logger.error("api_reports error: %s", exc)
-        return jsonify({"standups": [], "participation": [], "total_days": 7})
+        return jsonify(
+            {
+                "standups": [],
+                "participation": [],
+                "total_days": 7,
+                "summary": _participation_summary({}),
+                "schedules": [],
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
 # Webhooks API
 # ---------------------------------------------------------------------------
+
+# Bytes of entropy in a signing secret. token_urlsafe(32) yields 43 characters.
+_WEBHOOK_SECRET_BYTES = 32
+
+
+def _new_webhook_secret() -> str:
+    """Generate a signing secret. The raw value is handed to the operator once."""
+    return secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)
+
+
+def _iso(value):
+    """Render a timestamp for JSON, passing through anything already a string."""
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+def _public_webhook(hook: dict) -> dict:
+    """Strip the signing secret out of a webhook row before it leaves the server.
+
+    The raw secret is returned exactly twice in its life, by the create and
+    rotate endpoints, and never again. Listings get ``has_secret`` plus a short
+    prefix, enough for the UI to tell two secrets apart and to warn about rows
+    that predate signing and are still delivering unsigned.
+    """
+    secret = hook.get("secret") or ""
+    return {
+        "id": hook.get("id"),
+        "url": hook.get("webhook_url"),
+        "webhook_url": hook.get("webhook_url"),
+        "events": list(hook.get("events") or []),
+        "has_secret": bool(secret),
+        "secret_prefix": secret[:6] if secret else None,
+        "signed": bool(secret),
+        "created_at": _iso(hook.get("created_at")),
+    }
+
+
+def _clean_events(raw) -> tuple[list[str] | None, str | None]:
+    """Validate an ``events`` field from a request body.
+
+    Returns ``(events, error)``. ``events`` is None when the caller did not
+    supply the field at all, which means "leave it alone".
+    """
+    if raw is None:
+        return None, None
+    if not isinstance(raw, list):
+        return None, "events must be a list"
+    if not raw:
+        return None, "events must not be empty"
+    cleaned: list[str] = []
+    for item in raw:
+        name = db.normalize_webhook_event(str(item))
+        if name not in db.WEBHOOK_EVENTS:
+            return None, f"Unknown event {item!r}. Valid events: {', '.join(db.WEBHOOK_EVENTS)}"
+        if name not in cleaned:
+            cleaned.append(name)
+    return cleaned, None
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["GET"])
@@ -626,10 +731,17 @@ def api_list_webhooks():
     team_id = session["team_id"]
     try:
         hooks = db.get_webhooks(team_id)
-        return jsonify(hooks)
+        return jsonify([_public_webhook(h) for h in hooks])
     except Exception as exc:
         logger.warning("api_list_webhooks error: %s", exc)
         return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/events", methods=["GET"])
+@_login_required
+def api_webhook_events():
+    """List the event names a webhook can subscribe to."""
+    return jsonify({"events": list(db.WEBHOOK_EVENTS), "default": list(db.DEFAULT_WEBHOOK_EVENTS)})
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["POST"])
@@ -642,12 +754,137 @@ def api_add_webhook():
         return jsonify({"error": "url is required"}), 400
     if not _is_safe_webhook_url(url_val):
         return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+    events, err = _clean_events(data.get("events"))
+    if err:
+        return jsonify({"error": err}), 400
     try:
-        hook = db.add_webhook(team_id, url_val)
-        return jsonify(hook), 201
+        secret = _new_webhook_secret()
+        hook = db.add_webhook(team_id, url_val, secret=secret, events=events)
+        body = _public_webhook(hook)
+        # The only time the raw secret is ever returned. Store it now or rotate.
+        body["secret"] = secret
+        body["secret_shown_once"] = True
+        return jsonify(body), 201
     except Exception as exc:
         logger.error("api_add_webhook error: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["PATCH"])
+@_login_required
+def api_update_webhook(hook_id: str):
+    """Update a webhook's URL and/or its event subscription."""
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+
+    url_val = data.get("url")
+    if url_val is not None:
+        url_val = str(url_val).strip()
+        if not url_val:
+            return jsonify({"error": "url must not be empty"}), 400
+        if not _is_safe_webhook_url(url_val):
+            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+
+    events, err = _clean_events(data.get("events"))
+    if err:
+        return jsonify({"error": err}), 400
+    if url_val is None and events is None:
+        return jsonify({"error": "Nothing to update"}), 400
+
+    try:
+        hook = db.update_webhook(team_id, int(hook_id), url=url_val, events=events)
+        if not hook:
+            return jsonify({"error": "Webhook not found"}), 404
+        return jsonify(_public_webhook(hook))
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    except Exception as exc:
+        logger.error("api_update_webhook error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/rotate", methods=["POST"])
+@_login_required
+def api_rotate_webhook_secret(hook_id: str):
+    """Issue a new signing secret and return it once.
+
+    Rotating is also how a pre-signing webhook adopts signing: those rows keep
+    a NULL secret and deliver unsigned until an operator rotates deliberately,
+    because turning on signatures behind the receiver's back would break a
+    strict verifier that has never been given a key.
+    """
+    team_id = session["team_id"]
+    try:
+        secret = _new_webhook_secret()
+        hook = db.rotate_webhook_secret(team_id, int(hook_id), secret)
+        if not hook:
+            return jsonify({"error": "Webhook not found"}), 404
+        body = _public_webhook(hook)
+        body["secret"] = secret
+        body["secret_shown_once"] = True
+        return jsonify(body)
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    except Exception as exc:
+        logger.error("api_rotate_webhook_secret error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/test", methods=["POST"])
+@_login_required
+def api_test_webhook(hook_id: str):
+    """Send a synthetic event through the real signing and logging path."""
+    team_id = session["team_id"]
+    try:
+        hook = db.get_webhook(team_id, int(hook_id))
+        if not hook:
+            return jsonify({"error": "Webhook not found"}), 404
+        if not _is_safe_webhook_url(hook.get("webhook_url") or ""):
+            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+
+        from datetime import datetime, timezone  # noqa: PLC0415
+
+        from handlers import deliver_webhook  # noqa: PLC0415
+
+        events = list(hook.get("events") or db.DEFAULT_WEBHOOK_EVENTS)
+        event_type = events[0] if events else "standup.completed"
+        payload = {
+            "team_id": team_id,
+            "test": True,
+            "message": "Test delivery from the Morgenruf dashboard.",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        result = deliver_webhook(hook, event_type, payload, team_id=team_id)
+        return jsonify(result)
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    except Exception as exc:
+        logger.error("api_test_webhook error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/deliveries", methods=["GET"])
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/deliveries", methods=["GET"])
+@_login_required
+def api_webhook_deliveries(hook_id: str | None = None):
+    """Recent delivery attempts, newest first, for the team or one webhook."""
+    team_id = session["team_id"]
+    try:
+        limit = int(request.args.get("limit", 20))
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        webhook_id = int(hook_id) if hook_id is not None else None
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    try:
+        rows = db.get_webhook_deliveries(team_id, webhook_id=webhook_id, limit=limit)
+        for row in rows:
+            row["created_at"] = _iso(row.get("created_at"))
+        return jsonify(rows)
+    except Exception as exc:
+        logger.warning("api_webhook_deliveries error: %s", exc)
+        return jsonify([])
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["DELETE"])
@@ -670,19 +907,52 @@ def api_delete_webhook(hook_id: str):
 @dashboard_bp.route("/dashboard/api/analytics", methods=["GET"])
 @_login_required
 def api_analytics():
+    """Per-member participation for the last N days.
+
+    Members in no active schedule stay in the list with `enrolled` false and an
+    expected count of 0, so the UI can render them as "not enrolled" instead of
+    a misleading "0 of 7".
+    """
     team_id = session["team_id"]
     days = int(request.args.get("days", 7))
     try:
         stats = db.get_participation_stats(team_id, days)
         for row in stats:
-            if row.get("last_standup"):
-                row["last_standup"] = row["last_standup"].isoformat()
+            last = row.get("last_standup")
+            if last is not None and hasattr(last, "isoformat"):
+                row["last_standup"] = last.isoformat()
             row["responses"] = int(row.get("responses") or 0)
             row["days_with_blockers"] = int(row.get("days_with_blockers") or 0)
+            row["expected"] = int(row.get("expected") or 0)
+            row["completed"] = int(row.get("completed") or 0)
+            row["missed"] = int(row.get("missed") or 0)
+            row["completion_rate"] = int(row.get("completion_rate") or 0)
+            row["enrolled"] = bool(row.get("enrolled"))
+            row["on_vacation"] = bool(row.get("on_vacation"))
+            row["schedules"] = row.get("schedules") or []
         return jsonify(stats)
     except Exception as exc:
         logger.error("api_analytics error: %s", exc)
         return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/analytics/schedules", methods=["GET"])
+@_login_required
+def api_analytics_schedules():
+    """Per-schedule completion rates for the last N days, plus the workspace headline."""
+    team_id = session["team_id"]
+    days = int(request.args.get("days", 7))
+    try:
+        overview = db.get_participation_overview(team_id, days=days)
+        return jsonify(
+            {
+                "summary": _participation_summary(overview),
+                "schedules": overview.get("schedules") or [],
+            }
+        )
+    except Exception as exc:
+        logger.error("api_analytics_schedules error: %s", exc)
+        return jsonify({"summary": _participation_summary({}), "schedules": []})
 
 
 # ---------------------------------------------------------------------------
