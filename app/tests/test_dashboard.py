@@ -399,27 +399,59 @@ class TestApiStats:
 class TestApiAnalytics:
     """/dashboard/api/analytics and its per-schedule companion."""
 
+    @staticmethod
+    def _unenrolled_row():
+        return {
+            "user_id": "U6",
+            "real_name": "Fin",
+            "enrolled": False,
+            "on_vacation": False,
+            "expected": 0,
+            "completed": 0,
+            "missed": 0,
+            "responses": 3,
+            "completion_rate": 0,
+            "last_standup": None,
+            "days_with_blockers": 0,
+            "schedules": [],
+        }
+
     def test_rows_keep_the_enrolment_flags(self, authed_client):
-        _db_mock.get_participation_stats.return_value = [
-            {
-                "user_id": "U6",
-                "real_name": "Fin",
-                "enrolled": False,
-                "on_vacation": False,
-                "expected": 0,
-                "completed": 0,
-                "missed": 0,
-                "responses": 3,
-                "completion_rate": 0,
-                "last_standup": None,
-                "days_with_blockers": 0,
-                "schedules": [],
-            }
-        ]
-        rows = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        _db_mock.get_participation_overview.return_value = _overview(members=[self._unenrolled_row()])
+        payload = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        rows = payload["members"]
         assert rows[0]["enrolled"] is False
         assert rows[0]["expected"] == 0
         assert rows[0]["responses"] == 3
+
+    def test_response_carries_the_workspace_totals(self, authed_client):
+        """#85: the page must not have to compute the headline itself.
+
+        It used to average the per-member ratios, which is a different statistic
+        from the server's completed over expected, so the Standups card and the
+        Analytics card disagreed about the same window.
+        """
+        _db_mock.get_participation_overview.return_value = _overview(
+            members=[self._unenrolled_row()],
+            expected=15,
+            completed=7,
+            completion_rate=47,
+            enrolled_members=6,
+            unenrolled_members=1,
+        )
+        payload = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        assert payload["completion_rate"] == 47
+        assert payload["expected"] == 15
+        assert payload["completed"] == 7
+        assert payload["enrolled_members"] == 6
+        assert payload["unenrolled_members"] == 1
+
+    def test_failure_returns_a_usable_shape(self, authed_client):
+        _db_mock.get_participation_overview.side_effect = Exception("db down")
+        payload = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        _db_mock.get_participation_overview.side_effect = None
+        assert payload["members"] == []
+        assert payload["schedules"] == []
 
     def test_schedule_breakdown_endpoint(self, authed_client):
         _db_mock.get_participation_overview.return_value = _overview(

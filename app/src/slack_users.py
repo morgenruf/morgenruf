@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 
 SLACKBOT_ID = "USLACKBOT"
 
+# Upper bound on users.list pagination. Slack ends a walk with an empty
+# cursor; this stops a malformed or mocked response from looping forever.
+MAX_USER_PAGES = 50
+
 
 def is_human(user: dict[str, Any] | None) -> bool:
     """Return True when a `users.info` / `users.list` object is a real, active person."""
@@ -50,18 +54,28 @@ def fetch_human_users(client: Any, user_ids: Iterable[str]) -> dict[str, dict[st
     classified: set[str] = set()
     try:
         cursor = None
-        while True:
+        for _page in range(MAX_USER_PAGES):
             result = client.users_list(limit=200, cursor=cursor or "")
-            for user in result.get("members", []):
+            members = result.get("members", [])
+            if not isinstance(members, list):
+                break
+            for user in members:
+                if not isinstance(user, dict):
+                    continue
                 uid = user.get("id")
                 if uid not in wanted:
                     continue
                 classified.add(uid)
                 if is_human(user):
                     humans[uid] = user
-            cursor = result.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
+            cursor = (result.get("response_metadata") or {}).get("next_cursor")
+            # Slack signals the end with an empty string. Anything that is not a
+            # non-empty string ends the walk too, so a malformed response cannot
+            # spin this loop forever.
+            if not isinstance(cursor, str) or not cursor:
                 break
+        else:
+            logger.warning("users.list did not finish within %d pages, using what was read", MAX_USER_PAGES)
     except Exception as exc:
         logger.warning("users.list failed while filtering bots, keeping all %d ids: %s", len(wanted), exc)
         return {uid: {} for uid in wanted}

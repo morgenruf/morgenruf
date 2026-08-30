@@ -2588,19 +2588,23 @@
         (unenrolled.length ? ', ' + unenrolled.length + ' in no standup' : '');
     }
 
-    // The headline is always read against its denominator.
-    const provided = (payload && !Array.isArray(payload)) ? payload.completion_rate : undefined;
+    // The headline is always read against its denominator, and it is always an
+    // aggregate: total completed over total expected. Averaging per-member
+    // ratios weights someone with one expected standup the same as someone with
+    // ten, which is why this card and the Standups card used to disagree about
+    // the same window (#85).
+    const wrapper = (payload && !Array.isArray(payload)) ? payload : null;
     let rate;
-    if (typeof provided === 'number' && !scheduleId) {
-      rate = Math.round(provided);
-    } else if (enrolled.length) {
-      const share = enrolled.reduce((sum, r) => {
-        const expected = rowExpected(r, days);
-        return sum + Math.min((Number(r.responses) || 0) / expected, 1);
-      }, 0);
-      rate = Math.round((share / enrolled.length) * 100);
+    if (!scheduleId && wrapper && typeof wrapper.completion_rate === 'number') {
+      // Server figure, computed over (member, schedule, occurrence date) triples.
+      rate = Math.round(wrapper.completion_rate);
+    } else if (scheduleId && wrapper && Array.isArray(wrapper.schedules)) {
+      // Filtered to one standup: use that schedule's own totals when the server
+      // sent them, so the filtered headline is aggregated the same way.
+      const s = wrapper.schedules.find(x => String(x.id) === String(scheduleId));
+      rate = s && typeof s.completion_rate === 'number' ? Math.round(s.completion_rate) : aggregateRate(enrolled, days);
     } else {
-      rate = 0;
+      rate = aggregateRate(enrolled, days);
     }
 
     const visible = analyticsState.includeUnenrolled ? enrolled.concat(unenrolled) : enrolled;
@@ -3182,9 +3186,31 @@
     return m.display_name || m.name || 'user';
   }
 
+  function aggregateRate(rows, days) {
+    // Fallback for an older payload shape that carries no workspace totals.
+    // Sums first, divides once, so it matches the server's arithmetic.
+    let expected = 0;
+    let completed = 0;
+    (rows || []).forEach(r => {
+      const exp = Number(r.expected);
+      const done = Number(r.completed);
+      expected += Number.isFinite(exp) && exp > 0 ? exp : rowExpected(r, days);
+      completed += Number.isFinite(done) ? done : Math.min(Number(r.responses) || 0, rowExpected(r, days));
+    });
+    return expected > 0 ? Math.round((completed / expected) * 100) : 0;
+  }
+
   function slackChannelName(channelId) {
+    // Slack usually writes the name into the mention itself as <#C123|name>,
+    // and slackEntityHtml prefers that. This is the bare <#C123> case.
+    //
+    // The channel list only holds channels the bot has joined, so a mention of
+    // any other channel will not resolve. Falling back to the word "channel"
+    // made every unresolved mention look identical (#86); the id at least tells
+    // the reader that two mentions point somewhere different.
     const c = (state.channels || []).find(x => x.id === channelId);
-    return c && c.name ? c.name : 'channel';
+    if (c && c.name) return c.name;
+    return channelId || 'channel';
   }
 
   function slackEntityHtml(inner) {
