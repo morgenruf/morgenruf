@@ -450,18 +450,42 @@
     .tz-option:hover, .tz-option.highlighted { background: var(--surface2); }
 
     /* Members */
-    .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    /* One toolbar above the grid: search, role filter, sort. */
+    .list-toolbar {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .list-toolbar input[type="search"], .list-toolbar input[type="text"] { flex: 1 1 220px; max-width: 320px; }
+    .list-toolbar select { width: auto; min-width: 150px; }
+    .list-toolbar .toolbar-count { font-size: 12px; color: var(--text-dim); margin-left: auto; white-space: nowrap; }
+    .list-caption { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+
+    .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    /* Every card is the same shape whether or not Slack gave us a photo. */
     .member-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 14px 16px;
-      display: flex; align-items: center; gap: 12px;
+      display: flex; align-items: flex-start; gap: 12px;
     }
+    .member-avatar {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--accent-dim);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .member-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .member-info { flex: 1; min-width: 0; }
-    .member-name { font-weight: 500; font-size: 14px; }
+    .member-name { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
+    .member-handle { font-size: 12px; color: var(--text-muted); margin-top: 1px; overflow-wrap: anywhere; }
     .member-tz { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-    .member-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .member-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
     .role-badge {
       display: inline-block;
       font-size: 10px; font-weight: 600; letter-spacing: .04em;
@@ -473,27 +497,16 @@
       background: rgba(156,163,175,0.15); color: var(--text-dim);
       border: 1px solid rgba(156,163,175,0.2);
     }
+    .count-chip {
+      display: inline-block;
+      font-size: 10px; font-weight: 600; letter-spacing: .04em;
+      padding: 2px 8px; border-radius: 20px;
+      background: var(--surface2); border: 1px solid var(--border2);
+      color: var(--text-muted);
+    }
+    .count-chip.none { color: var(--text-dim); }
     .btn-role { font-size: 11px; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text-muted); cursor: pointer; transition: background 0.12s; }
     .btn-role:hover { background: var(--border); color: var(--text); }
-      width: 36px; height: 36px;
-      border-radius: 8px;
-      background: var(--surface2);
-      flex-shrink: 0;
-      overflow: hidden;
-    }
-    .avatar img { width: 100%; height: 100%; object-fit: cover; }
-    .avatar-initials {
-      width: 36px; height: 36px;
-      border-radius: 8px;
-      background: var(--accent-dim);
-      color: var(--accent);
-      font-weight: 700;
-      font-size: 13px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .member-name { font-weight: 500; font-size: 14px; }
-    .member-tz { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
     /* Webhooks */
     .webhooks-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -505,6 +518,55 @@
     .webhook-url { font-family: monospace; font-size: 12px; color: var(--text-muted); word-break: break-all; }
     .add-webhook-row { display: flex; gap: 10px; margin-top: 14px; }
     .add-webhook-row input { flex: 1; }
+    .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+    /* A signing secret shown once, and the standing warning when there is none. */
+    .secret-panel {
+      background: rgba(245,158,11,0.06);
+      border: 1px solid rgba(245,158,11,0.35);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    .secret-panel .secret-title { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: var(--warning); }
+    .secret-panel p { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+    .secret-value {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .secret-value code {
+      flex: 1; min-width: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px; word-break: break-all; color: var(--text);
+    }
+    .warn-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500;
+      padding: 2px 9px; border-radius: 100px;
+      background: rgba(245,158,11,0.12); color: var(--warning);
+      border: 1px solid rgba(245,158,11,0.3);
+    }
+    .ok-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500;
+      padding: 2px 9px; border-radius: 100px;
+      background: rgba(34,197,94,0.1); color: var(--accent);
+      border: 1px solid rgba(34,197,94,0.2);
+    }
+    .test-result { font-size: 12px; margin-top: 6px; }
+    .test-result.ok { color: var(--accent); }
+    .test-result.bad { color: var(--danger); }
+    .deliveries-cell { background: var(--surface2); }
+    .deliveries-cell .data-table td, .deliveries-cell .data-table th { padding: 7px 12px; }
+    .status-code { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .status-code.ok { color: var(--accent); }
+    .status-code.bad { color: var(--danger); }
+
+    /* Analytics */
+    .headline-rate { font-size: 34px; font-weight: 700; line-height: 1; }
+    .headline-denom { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+    .row-unenrolled td { color: var(--text-dim); background: rgba(255,255,255,0.015); }
+    .unenrolled-note { font-style: italic; color: var(--text-dim); }
 
     /* Reports */
     .chart-placeholder {
@@ -613,6 +675,9 @@
       .topbar { padding: 16px 14px 16px 62px; flex-wrap: wrap; gap: 10px; }
       .members-grid { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: 1fr; }
+      .list-toolbar > * { flex: 1 1 100%; max-width: none; }
+      .list-toolbar select { width: 100%; }
+      .list-toolbar .toolbar-count { margin-left: 0; }
       .standup-card { flex-wrap: wrap; }
       .standup-actions { width: 100%; justify-content: flex-end; }
       .form-grid { grid-template-columns: 1fr; }
@@ -651,9 +716,6 @@
     <div class="nav-section">Workspace</div>
     <div class="nav-item active" data-section="standups">
       <span class="nav-icon">&#9201;</span> Standups
-    </div>
-    <div class="nav-item" data-section="schedules">
-      <span class="nav-icon">&#128197;</span> Schedules
     </div>
     <div class="nav-item" data-section="members">
       <span class="nav-icon">&#128101;</span> Members
@@ -703,19 +765,8 @@
         <button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button>
       </div>
       <div id="stats-grid" class="stats-grid"></div>
+      <div id="standups-caption" class="list-caption"></div>
       <div id="standups-list" class="standups-grid"></div>
-    </div>
-
-    <!-- Schedules -->
-    <div id="section-schedules" class="section">
-      <div class="topbar">
-        <div>
-          <div class="page-title">Schedules</div>
-          <div class="page-subtitle">Multiple named standup schedules per workspace</div>
-        </div>
-        <button class="btn btn-primary" onclick="openCreateScheduleModal()">&#43; New Schedule</button>
-      </div>
-      <div id="schedules-list" class="standups-grid"></div>
     </div>
 
     <!-- Members -->
@@ -729,6 +780,21 @@
           <button class="btn btn-secondary" onclick="openInviteModal()">+ Invite Admin</button>
           <button class="btn btn-secondary" onclick="loadMembers()">&#8635; Refresh</button>
         </div>
+      </div>
+      <div class="list-toolbar">
+        <input type="search" id="member-search" placeholder="Search name or handle..." autocomplete="off"
+               oninput="setMemberFilter('q', this.value)" aria-label="Search members"/>
+        <select id="member-role-filter" onchange="setMemberFilter('role', this.value)" aria-label="Filter by role">
+          <option value="all">All roles</option>
+          <option value="admin">Admins</option>
+          <option value="member">Members</option>
+        </select>
+        <select id="member-sort" onchange="setMemberFilter('sort', this.value)" aria-label="Sort members">
+          <option value="name">Sort by name</option>
+          <option value="role">Sort by role</option>
+          <option value="tz">Sort by timezone</option>
+        </select>
+        <span class="toolbar-count" id="members-count"></span>
       </div>
       <div id="members-grid" class="members-grid"></div>
     </div>
@@ -760,6 +826,17 @@
           <button class="btn btn-secondary btn-sm" onclick="loadAnalytics(7)" id="ana-btn-7" style="opacity:1">7 days</button>
           <button class="btn btn-ghost btn-sm" onclick="loadAnalytics(30)" id="ana-btn-30">30 days</button>
         </div>
+      </div>
+      <div class="list-toolbar">
+        <select id="ana-schedule-filter" onchange="setAnalyticsFilter('scheduleId', this.value)" aria-label="Filter by standup" style="display:none">
+          <option value="">All standups</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:8px;margin:0;font-size:13px;color:var(--text-muted);cursor:pointer">
+          <input type="checkbox" id="ana-include-unenrolled" style="width:16px;height:16px"
+                 onchange="setAnalyticsFilter('includeUnenrolled', this.checked)"/>
+          Include unenrolled
+        </label>
+        <span class="toolbar-count" id="ana-count"></span>
       </div>
       <div id="analytics-content"></div>
     </div>
@@ -1276,7 +1353,6 @@
   const state = {
     section: 'standups',
     standups: [],
-    schedules: [],
     members: [],
     channels: [],
     stats: {},
@@ -1304,10 +1380,23 @@
     });
   });
 
+  // Sections that were merged away still answer to their old name, so an old
+  // link or bookmark lands on the survivor instead of a blank page.
+  const SECTION_ALIASES = { schedules: 'standups' };
+
+  function resolveSection(sec) {
+    const name = SECTION_ALIASES[sec] || sec;
+    return document.getElementById('section-' + name) ? name : 'standups';
+  }
+
   function switchSection(sec) {
+    sec = resolveSection(sec);
     document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === sec));
     document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + sec));
     state.section = sec;
+    if (window.location.hash.replace(/^#/, '') !== sec) {
+      try { history.replaceState(null, '', '#' + sec); } catch (e) { /* older browsers keep the old hash */ }
+    }
     if (!state.loaded[sec]) {
       state.loaded[sec] = true;
       if (sec === 'standups') loadStandups();
@@ -1316,12 +1405,13 @@
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
       if (sec === 'analytics') loadAnalytics(7);
-      if (sec === 'schedules') loadSchedules();
       if (sec === 'kudos') loadKudos();
       if (sec === 'automation') loadRules();
       if (sec === 'mcp') loadMCPKeys();
     }
   }
+
+  window.addEventListener('hashchange', () => switchSection(window.location.hash.replace(/^#/, '')));
 
   // ── Workspace avatar letter ──
   const teamName = '{{ team_name }}';
@@ -1423,27 +1513,79 @@
     await Promise.all([loadStats(), loadChannels()]);
     try {
       state.standups = await api('GET', '/standups');
+      state.standupsFetched = true;
       renderStandups();
     } catch (e) {
       document.getElementById('standups-list').innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load standups.</p>';
     }
   }
 
+  // ── Enrolment, read from the standup list the page already has ──
+  // An empty participant list means the whole channel, which is how the
+  // scheduler reads it, so the dashboard never contradicts who gets DMed.
+  function participantCount(s) {
+    const ids = Array.isArray(s && s.participants) ? s.participants : [];
+    return ids.length ? ids.length : null;
+  }
+
+  function standupIncludes(s, userId) {
+    const ids = Array.isArray(s && s.participants) ? s.participants : [];
+    return ids.length ? ids.indexOf(userId) >= 0 : true;
+  }
+
+  function standupsForMember(userId) {
+    return (state.standups || []).filter(s => standupIncludes(s, userId));
+  }
+
+  // The standup list doubles as the enrolment source for Members and
+  // Analytics, so fetch it once whichever page opens first.
+  async function ensureStandups() {
+    if (state.standupsFetched) return state.standups;
+    state.standupsFetched = true;
+    try {
+      state.standups = await api('GET', '/standups');
+    } catch (e) {
+      state.standups = state.standups || [];
+    }
+    return state.standups;
+  }
+
+  // "09:05" sorts as 545 minutes. Anything unparseable goes last rather than
+  // to midnight, so a broken row cannot claim the top of the list.
+  function timeOfDayMinutes(value) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(value || '').trim());
+    if (!m) return 24 * 60 + 1;
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+
+  function standupsByTimeOfDay(list) {
+    return [...(list || [])].sort((a, b) => {
+      const diff = timeOfDayMinutes(a.schedule_time) - timeOfDayMinutes(b.schedule_time);
+      if (diff) return diff;
+      return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+    });
+  }
+
   function renderStandups() {
     const el = document.getElementById('standups-list');
+    const caption = document.getElementById('standups-caption');
     if (!state.standups.length) {
+      if (caption) caption.textContent = '';
       el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9201;</div><h3>No standups yet</h3><p>Create your first standup to get your team going.</p><button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button></div>';
       return;
     }
-    const sorted = [...state.standups].sort((a, b) => {
-      const nameA = (a.name || 'Morning Standup').toLowerCase();
-      const nameB = (b.name || 'Morning Standup').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
+    const sorted = standupsByTimeOfDay(state.standups);
+    if (caption) {
+      caption.textContent = sorted.length + (sorted.length === 1 ? ' standup' : ' standups') + ', earliest time of day first';
+    }
     el.innerHTML = sorted.map(s => {
       const chName = channelName(s.channel_id);
       const dayChips = (s.schedule_days || []).map(d => '<span class="day-chip">' + esc(d) + '</span>').join('');
       const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
+      const people = participantCount(s);
+      const peopleLabel = people === null
+        ? 'Everyone in the channel'
+        : people + (people === 1 ? ' participant' : ' participants');
       return '<div class="standup-card" id="sc-' + s.id + '">' +
         '<div class="standup-icon">&#9201;</div>' +
         '<div class="standup-info">' +
@@ -1451,6 +1593,7 @@
         '<div class="standup-meta">' +
         '<span>#' + esc(chName) + '</span>' +
         '<span>' + esc(s.schedule_time || '09:00') + ' ' + esc(s.schedule_tz || 'UTC') + '</span>' +
+        '<span>' + esc(peopleLabel) + '</span>' +
         dayChips +
         badge +
         '</div></div>' +
@@ -1510,6 +1653,8 @@
   // ── Members ──
   async function loadMembers(channelId) {
     document.getElementById('members-grid').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    // Needed for the "in N standups" chip when Members is the first page open.
+    await ensureStandups();
     try {
       const url = channelId ? '/members?channel_id=' + encodeURIComponent(channelId) : '/members';
       state.members = await api('GET', url);
@@ -1520,21 +1665,85 @@
     }
   }
 
+  // Search, role filter and sort for the members grid. The controls live in
+  // the page, not in the rendered grid, so typing never loses focus.
+  const memberFilters = { q: '', role: 'all', sort: 'name' };
+
+  function setMemberFilter(key, value) {
+    memberFilters[key] = value;
+    renderMembers();
+  }
+
+  function memberName(m) {
+    return m.name || m.display_name || m.id;
+  }
+
+  // Two people really can share a real name, so the Slack handle is what
+  // tells them apart.
+  function memberHandle(m) {
+    return m.display_name || m.name || m.id;
+  }
+
+  function memberInitials(m) {
+    const words = memberName(m).trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    return words.map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  }
+
+  function filteredMembers() {
+    const q = memberFilters.q.trim().toLowerCase();
+    let list = (state.members || []).filter(m => {
+      const role = m.role || 'member';
+      if (memberFilters.role !== 'all' && role !== memberFilters.role) return false;
+      if (!q) return true;
+      return memberName(m).toLowerCase().includes(q) || memberHandle(m).toLowerCase().includes(q);
+    });
+    const byName = (a, b) => memberName(a).toLowerCase().localeCompare(memberName(b).toLowerCase());
+    if (memberFilters.sort === 'role') {
+      list = list.sort((a, b) => {
+        const ra = (a.role || 'member') === 'admin' ? 0 : 1;
+        const rb = (b.role || 'member') === 'admin' ? 0 : 1;
+        return ra - rb || byName(a, b);
+      });
+    } else if (memberFilters.sort === 'tz') {
+      list = list.sort((a, b) => (a.tz || 'UTC').localeCompare(b.tz || 'UTC') || byName(a, b));
+    } else {
+      list = list.sort(byName);
+    }
+    return list;
+  }
+
   function renderMembers() {
     const el = document.getElementById('members-grid');
-    if (!state.members.length) {
+    const countEl = document.getElementById('members-count');
+    const total = (state.members || []).length;
+    if (!total) {
+      if (countEl) countEl.textContent = '';
       el.innerHTML = '<p style="color:var(--text-dim);padding:24px">No members found.</p>';
       return;
     }
-    el.innerHTML = state.members.map(m => {
-      const initials = (m.name || m.display_name || '?').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    const shown = filteredMembers();
+    if (countEl) {
+      countEl.textContent = shown.length === total
+        ? total + (total === 1 ? ' member' : ' members')
+        : shown.length + ' of ' + total + ' members';
+    }
+    if (!shown.length) {
+      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">No member matches these filters.</p>';
+      return;
+    }
+    el.innerHTML = shown.map(m => {
       const avatarHtml = m.avatar
-        ? '<div class="avatar"><img src="' + esc(m.avatar) + '" alt=""/></div>'
-        : '<div class="avatar-initials">' + esc(initials) + '</div>';
+        ? '<div class="member-avatar"><img src="' + esc(m.avatar) + '" alt=""/></div>'
+        : '<div class="member-avatar">' + esc(memberInitials(m)) + '</div>';
       const role = m.role || 'member';
       const badgeHtml = role === 'admin'
         ? '<span class="role-badge">Admin</span>'
         : '<span class="role-badge member">Member</span>';
+      const inCount = standupsForMember(m.id).length;
+      const chip = inCount
+        ? '<span class="count-chip" title="Standups this person is in">' + inCount + (inCount === 1 ? ' standup' : ' standups') + '</span>'
+        : '<span class="count-chip none" title="Not a participant in any standup">No standups</span>';
       let roleBtn = '';
       if (window._myRole === 'admin' && m.id !== window._myUserId) {
         roleBtn = role === 'admin'
@@ -1542,9 +1751,12 @@
           : '<button class="btn-role" onclick="setRole(\'' + esc(m.id) + '\',\'admin\')">Make Admin</button>';
       }
       return '<div class="member-card">' + avatarHtml +
-        '<div class="member-info"><div class="member-name">' + esc(m.name || m.display_name || m.id) + '</div>' +
+        '<div class="member-info">' +
+        '<div class="member-name">' + esc(memberName(m)) + '</div>' +
+        '<div class="member-handle">@' + esc(memberHandle(m)) + '</div>' +
         '<div class="member-tz">' + esc(m.tz || 'UTC') + '</div>' +
-        '<div class="member-meta">' + badgeHtml + roleBtn + '</div></div></div>';
+        '<div class="member-meta">' + badgeHtml + chip + roleBtn + '</div>' +
+        '</div></div>';
     }).join('');
   }
 
@@ -1863,9 +2075,37 @@
   }
 
   // ── Webhooks ──
+  // The signing, test and delivery endpoints for #73 ship separately. Every
+  // call below goes through apiSoft, which reports a missing endpoint instead
+  // of throwing, so this page still works against the older API.
+  async function apiSoft(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    let res;
+    try {
+      res = await fetch('/dashboard/api' + path, opts);
+    } catch (e) {
+      return { ok: false, status: 0, data: null, error: 'Network error' };
+    }
+    if (res.status === 401) {
+      window.location.href = '/dashboard/login';
+      return { ok: false, status: 401, data: null, error: 'Session expired' };
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    const error = (data && (data.error || data.message)) || (res.ok ? '' : res.statusText || ('HTTP ' + res.status));
+    return { ok: res.ok, status: res.status, data, error };
+  }
+
+  // A generated secret is shown exactly once, then dropped from memory.
+  let newWebhookSecret = null;
+  const webhookTests = {};
+  const webhookDeliveries = {};
+
   async function loadWebhooks() {
     const el = document.getElementById('webhooks-content');
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    newWebhookSecret = null;
     try {
       state.webhooks = await api('GET', '/webhooks');
       renderWebhooks();
@@ -1874,35 +2114,208 @@
     }
   }
 
+  // true, false, or null when this build of the API does not report it.
+  function webhookHasSecret(h) {
+    if (typeof h.has_secret === 'boolean') return h.has_secret;
+    if (typeof h.signing_secret_set === 'boolean') return h.signing_secret_set;
+    if (typeof h.secret_set === 'boolean') return h.secret_set;
+    const prefix = h.secret_prefix !== undefined ? h.secret_prefix : h.signing_secret_prefix;
+    if (prefix !== undefined && prefix !== null) return !!String(prefix).length;
+    return null;
+  }
+
+  function webhookSecretCell(h) {
+    const has = webhookHasSecret(h);
+    if (has === true) {
+      const prefix = h.secret_prefix || h.signing_secret_prefix || '';
+      return '<span class="ok-pill">Signed</span>' +
+        (prefix ? ' <code style="font-size:11px;color:var(--text-dim)">' + esc(prefix) + '&hellip;</code>' : '');
+    }
+    if (has === false) {
+      return '<span class="warn-pill" title="Deliveries carry no signature header, so the receiver cannot verify them">&#9888; Not signed</span>';
+    }
+    return '<span class="count-chip none" title="This version of the API does not report signing status">Unknown</span>';
+  }
+
+  function renderWebhookSecretPanel() {
+    if (!newWebhookSecret) return '';
+    return '<div class="secret-panel">' +
+      '<div class="secret-title">&#9888; Copy this signing secret now</div>' +
+      '<p>Morgenruf signs every delivery to <span class="webhook-url">' + esc(newWebhookSecret.url) + '</span> with it. ' +
+      'This is the only time it is shown. Close this panel and it is gone for good.</p>' +
+      '<div class="secret-value">' +
+        '<code id="new-webhook-secret">' + esc(newWebhookSecret.value) + '</code>' +
+        '<button class="btn btn-secondary btn-sm" onclick="copyToClipboard(\'new-webhook-secret\')">Copy</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="dismissWebhookSecret()">Done</button>' +
+      '</div></div>';
+  }
+
+  function dismissWebhookSecret() {
+    newWebhookSecret = null;
+    renderWebhooks();
+  }
+
+  function renderDeliveriesRow(h) {
+    const entry = webhookDeliveries[h.id];
+    if (!entry || !entry.open) return '';
+    let inner;
+    if (entry.loading) {
+      inner = '<div class="loading-center" style="padding:16px"><div class="spinner"></div></div>';
+    } else if (entry.unavailable) {
+      inner = '<p style="color:var(--text-dim);font-size:12px;padding:8px 0">Delivery history is not available for this workspace yet.</p>';
+    } else if (!entry.rows.length) {
+      inner = '<p style="color:var(--text-dim);font-size:12px;padding:8px 0">No deliveries recorded yet.</p>';
+    } else {
+      const rows = entry.rows.map(d => {
+        const code = d.status_code !== undefined && d.status_code !== null ? d.status_code : d.status;
+        const numeric = Number(code);
+        const good = (typeof d.ok === 'boolean') ? d.ok
+          : (typeof d.success === 'boolean') ? d.success
+          : (numeric >= 200 && numeric < 300);
+        const codeText = (code === undefined || code === null || code === '') ? EMPTY_CELL : String(code);
+        const when = d.created_at || d.attempted_at || d.delivered_at || d.timestamp;
+        const err = d.error || d.error_message || '';
+        return '<tr>' +
+          '<td class="status-code ' + (good ? 'ok' : 'bad') + '">' + esc(codeText) + '</td>' +
+          '<td class="col-date">' + relativeCell(when, EMPTY_CELL) + '</td>' +
+          '<td>' + (err ? esc(err) : EMPTY_CELL) + '</td>' +
+          '</tr>';
+      }).join('');
+      inner = '<div class="table-scroll"><table class="data-table" style="min-width:360px">' +
+        '<thead><tr><th>Status</th><th class="col-date">When</th><th>Error</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table></div>';
+    }
+    return '<tr><td class="deliveries-cell" colspan="4">' +
+      '<div class="stat-label" style="margin-bottom:6px">Recent deliveries</div>' + inner + '</td></tr>';
+  }
+
   function renderWebhooks() {
     const el = document.getElementById('webhooks-content');
-    const rows = state.webhooks.map(h =>
-      '<tr><td class="webhook-url">' + esc(h.url) + '</td>' +
-      '<td class="col-date" style="font-size:12px">' + esc(formatDate(h.created_at, EMPTY_CELL)) + '</td>' +
-      '<td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteWebhook(' + h.id + ')">Delete</button></td></tr>'
-    ).join('');
+    const draft = (document.getElementById('new-webhook-url') || {}).value || '';
+    const rows = state.webhooks.map(h => {
+      const test = webhookTests[h.id];
+      const testHtml = test
+        ? '<div class="test-result ' + (test.ok ? 'ok' : 'bad') + '">' + esc(test.text) + '</div>'
+        : '';
+      const open = webhookDeliveries[h.id] && webhookDeliveries[h.id].open;
+      return '<tr>' +
+        '<td class="webhook-url">' + esc(h.url) + testHtml + '</td>' +
+        '<td>' + webhookSecretCell(h) + '</td>' +
+        '<td class="col-date" style="font-size:12px">' + esc(formatDate(h.created_at, EMPTY_CELL)) + '</td>' +
+        '<td><div class="row-actions">' +
+        '<button class="btn btn-secondary btn-sm" onclick="testWebhook(' + h.id + ')">Send test event</button>' +
+        '<button class="btn btn-secondary btn-sm" onclick="toggleDeliveries(' + h.id + ')">' + (open ? 'Hide deliveries' : 'Deliveries') + '</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="rotateWebhookSecret(' + h.id + ')">Rotate secret</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteWebhook(' + h.id + ')">Delete</button>' +
+        '</div></td></tr>' +
+        renderDeliveriesRow(h);
+    }).join('');
 
     el.innerHTML =
+      renderWebhookSecretPanel() +
       '<div class="webhooks-table-wrap">' +
-      '<table class="webhooks-table"><thead><tr><th>URL</th><th>Added</th><th></th></tr></thead>' +
-      '<tbody>' + (rows || '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
+      '<table class="webhooks-table" style="min-width:720px"><thead><tr><th>URL</th><th>Signing</th><th>Added</th><th></th></tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
       '</table></div>' +
       '<div class="add-webhook-row">' +
-      '<input type="url" id="new-webhook-url" placeholder="https://example.com/webhook"/>' +
+      '<input type="url" id="new-webhook-url" placeholder="https://example.com/webhook" value="' + esc(draft) + '"/>' +
       '<button class="btn btn-primary" onclick="addWebhook()">&#43; Add Webhook</button>' +
       '</div>';
+  }
+
+  // A secret may arrive under any of these names, or not at all on the older API.
+  function readSecret(data) {
+    if (!data || typeof data !== 'object') return '';
+    return data.secret || data.signing_secret || data.webhook_secret || '';
   }
 
   async function addWebhook() {
     const urlEl = document.getElementById('new-webhook-url');
     const url = urlEl.value.trim();
     if (!url) { toast('Please enter a URL', 'error'); return; }
-    try {
-      const hook = await api('POST', '/webhooks', { url });
-      state.webhooks.push(hook);
+    const res = await apiSoft('POST', '/webhooks', { url });
+    if (!res.ok) { toast(res.error || 'Failed to add webhook', 'error'); return; }
+    const hook = res.data || { id: 0, url, created_at: '' };
+    state.webhooks.push(hook);
+    const secret = readSecret(hook);
+    newWebhookSecret = secret ? { url: hook.url || url, value: secret } : null;
+    urlEl.value = '';
+    renderWebhooks();
+    toast('Webhook added');
+  }
+
+  async function rotateWebhookSecret(id) {
+    const hook = state.webhooks.find(h => h.id === id);
+    if (!confirm('Rotate this signing secret? Deliveries signed with the old secret stop verifying immediately.')) return;
+    const res = await apiSoft('POST', '/webhooks/' + id + '/rotate');
+    if (res.status === 404 || res.status === 405) {
+      toast('This workspace does not support rotating secrets yet', 'error');
+      return;
+    }
+    if (!res.ok) { toast(res.error || 'Failed to rotate secret', 'error'); return; }
+    const secret = readSecret(res.data);
+    if (hook && res.data) {
+      if (res.data.secret_prefix) hook.secret_prefix = res.data.secret_prefix;
+      hook.has_secret = true;
+    }
+    newWebhookSecret = secret ? { url: (hook && hook.url) || '', value: secret } : null;
+    renderWebhooks();
+    toast(secret ? 'Secret rotated' : 'Secret rotated, but the API returned no value to show');
+  }
+
+  async function testWebhook(id) {
+    webhookTests[id] = { ok: true, text: 'Sending test event...' };
+    renderWebhooks();
+    const res = await apiSoft('POST', '/webhooks/' + id + '/test');
+    if (res.status === 404 || res.status === 405) {
+      webhookTests[id] = { ok: false, text: 'Test events are not available for this workspace yet.' };
       renderWebhooks();
-      toast('Webhook added');
-    } catch (e) { toast(e.message, 'error'); }
+      return;
+    }
+    const data = res.data || {};
+    const code = data.status_code !== undefined ? data.status_code : data.status;
+    const delivered = res.ok && (data.ok !== false) && (data.success !== false);
+    if (delivered) {
+      webhookTests[id] = { ok: true, text: 'Test event delivered' + (code ? ' (HTTP ' + code + ')' : '') };
+    } else {
+      const reason = data.error || data.message || res.error || 'no response';
+      webhookTests[id] = { ok: false, text: 'Test event failed' + (code ? ' (HTTP ' + code + ')' : '') + ': ' + reason };
+    }
+    renderWebhooks();
+    // Deliveries on screen now include this attempt.
+    if (webhookDeliveries[id] && webhookDeliveries[id].open) loadDeliveries(id);
+  }
+
+  async function toggleDeliveries(id) {
+    const entry = webhookDeliveries[id];
+    if (entry && entry.open) {
+      entry.open = false;
+      renderWebhooks();
+      return;
+    }
+    webhookDeliveries[id] = { open: true, loading: true, rows: [], unavailable: false };
+    renderWebhooks();
+    await loadDeliveries(id);
+  }
+
+  async function loadDeliveries(id) {
+    const res = await apiSoft('GET', '/webhooks/' + id + '/deliveries');
+    const entry = webhookDeliveries[id] || { open: true };
+    entry.loading = false;
+    if (res.status === 404 || res.status === 405 || res.status === 501) {
+      entry.unavailable = true;
+      entry.rows = [];
+    } else if (!res.ok) {
+      entry.unavailable = true;
+      entry.rows = [];
+    } else {
+      const data = res.data;
+      const list = Array.isArray(data) ? data : ((data && (data.deliveries || data.rows || data.attempts)) || []);
+      entry.unavailable = false;
+      entry.rows = Array.isArray(list) ? list : [];
+    }
+    webhookDeliveries[id] = entry;
+    renderWebhooks();
   }
 
   async function deleteWebhook(id) {
@@ -1910,6 +2323,8 @@
     try {
       await api('DELETE', '/webhooks/' + id);
       state.webhooks = state.webhooks.filter(h => h.id !== id);
+      delete webhookTests[id];
+      delete webhookDeliveries[id];
       renderWebhooks();
       toast('Webhook removed');
     } catch (e) { toast(e.message, 'error'); }
@@ -2046,44 +2461,189 @@
   }
 
   // ── Analytics ──
+  // The backend for #74 is landing separately and may add fields or wrap the
+  // rows in an object. Everything below reads the new shape when it is there
+  // and falls back to today's plain array when it is not.
+  const analyticsState = { days: 7, includeUnenrolled: false, scheduleId: '', payload: null };
+
+  function setAnalyticsFilter(key, value) {
+    analyticsState[key] = value;
+    if (analyticsState.payload !== null) renderAnalytics(analyticsState.payload, analyticsState.days);
+  }
+
+  function analyticsRows(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+    const lists = [payload.members, payload.rows, payload.analytics, payload.participation];
+    for (const list of lists) {
+      if (Array.isArray(list)) return list;
+    }
+    return [];
+  }
+
+  // true, false, or null when the response says nothing about enrolment.
+  function rowEnrolledFlag(r) {
+    if (typeof r.enrolled === 'boolean') return r.enrolled;
+    if (typeof r.is_enrolled === 'boolean') return r.is_enrolled;
+    if (typeof r.schedule_count === 'number') return r.schedule_count > 0;
+    if (typeof r.standup_count === 'number') return r.standup_count > 0;
+    if (Array.isArray(r.schedule_ids)) return r.schedule_ids.length > 0;
+    if (Array.isArray(r.schedules)) return r.schedules.length > 0;
+    return null;
+  }
+
+  function rowIsEnrolled(r) {
+    const flag = rowEnrolledFlag(r);
+    if (flag !== null) return flag;
+    // Nothing in the response, so read the standup list the page already has.
+    if ((state.standups || []).length) return standupsForMember(r.user_id).length > 0;
+    // No enrolment information at all: treat every row as enrolled, which is
+    // exactly what the dashboard did before.
+    return true;
+  }
+
+  function rowScheduleIds(r) {
+    if (Array.isArray(r.schedule_ids)) return r.schedule_ids.map(String);
+    if (Array.isArray(r.schedules)) return r.schedules.map(s => String(s && s.id !== undefined ? s.id : s));
+    return standupsForMember(r.user_id).map(s => String(s.id));
+  }
+
+  // How many standups this person could have answered in the window.
+  function rowExpected(r, days) {
+    const candidates = [r.expected, r.expected_days, r.eligible_days, r.total];
+    for (const c of candidates) {
+      if (typeof c === 'number' && c > 0) return c;
+    }
+    return days;
+  }
+
+  function populateAnalyticsScheduleFilter() {
+    const sel = document.getElementById('ana-schedule-filter');
+    if (!sel) return;
+    const list = standupsByTimeOfDay(state.standups);
+    // Only worth a control when there is more than one standup to pick from.
+    if (list.length < 2) {
+      sel.style.display = 'none';
+      analyticsState.scheduleId = '';
+      return;
+    }
+    sel.style.display = '';
+    sel.innerHTML = '<option value="">All standups</option>' + list.map(s =>
+      '<option value="' + esc(s.id) + '">' + esc(s.name || 'Morning Standup') + ' &middot; ' + esc(s.schedule_time || '09:00') + '</option>'
+    ).join('');
+    sel.value = analyticsState.scheduleId || '';
+  }
+
   async function loadAnalytics(days) {
     const el = document.getElementById('analytics-content');
     if (!el) return;
+    analyticsState.days = days;
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     // Update button styles
     document.getElementById('ana-btn-7').className = 'btn ' + (days === 7 ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
     document.getElementById('ana-btn-30').className = 'btn ' + (days === 30 ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
+    await ensureStandups();
+    populateAnalyticsScheduleFilter();
     try {
       const data = await fetch('/dashboard/api/analytics?days=' + days).then(checkAuth).then(r => r.json());
+      analyticsState.payload = data;
       renderAnalytics(data, days);
     } catch (e) {
+      analyticsState.payload = null;
       el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load analytics.</p>';
     }
   }
 
-  function renderAnalytics(rows, days) {
+  function renderAnalytics(payload, days) {
     const el = document.getElementById('analytics-content');
-    if (!rows.length) {
+    if (!el) return;
+    const countEl = document.getElementById('ana-count');
+    const all = analyticsRows(payload);
+    if (!all.length) {
+      if (countEl) countEl.textContent = '';
       el.innerHTML = '<p style="color:var(--text-dim);padding:24px">No data yet. Run some standups first!</p>';
       return;
     }
-    const tableRows = rows.map(r => {
-      const last = formatDate(r.last_standup, EMPTY_CELL);
-      const bar = '🟢'.repeat(Math.min(r.responses, 5)) + '⬜'.repeat(Math.max(0, 5 - Math.min(r.responses, 5)));
-      const blockers = r.days_with_blockers ? '🚧 ' + r.days_with_blockers : '—';
+
+    const scheduleId = analyticsState.scheduleId;
+    const inScope = scheduleId
+      ? all.filter(r => rowScheduleIds(r).indexOf(String(scheduleId)) >= 0)
+      : all;
+    const enrolled = inScope.filter(rowIsEnrolled);
+    const unenrolled = inScope.filter(r => !rowIsEnrolled(r));
+
+    if (countEl) {
+      countEl.textContent = enrolled.length + ' enrolled' +
+        (unenrolled.length ? ', ' + unenrolled.length + ' in no standup' : '');
+    }
+
+    // The headline is always read against its denominator.
+    const provided = (payload && !Array.isArray(payload)) ? payload.completion_rate : undefined;
+    let rate;
+    if (typeof provided === 'number' && !scheduleId) {
+      rate = Math.round(provided);
+    } else if (enrolled.length) {
+      const share = enrolled.reduce((sum, r) => {
+        const expected = rowExpected(r, days);
+        return sum + Math.min((Number(r.responses) || 0) / expected, 1);
+      }, 0);
+      rate = Math.round((share / enrolled.length) * 100);
+    } else {
+      rate = 0;
+    }
+
+    const visible = analyticsState.includeUnenrolled ? enrolled.concat(unenrolled) : enrolled;
+
+    const tableRows = visible.map(r => {
+      const name = esc(r.real_name || r.name || r.user_id);
+      if (!rowIsEnrolled(r)) {
+        return '<tr class="row-unenrolled">' +
+          '<td>' + name + '</td>' +
+          '<td class="unenrolled-note">Not in any standup</td>' +
+          '<td>' + EMPTY_CELL + '</td>' +
+          '<td class="col-date">' + EMPTY_CELL + '</td>' +
+          '</tr>';
+      }
+      const expected = rowExpected(r, days);
+      const responses = Number(r.responses) || 0;
+      const filled = Math.min(responses, 5);
+      const bar = '🟢'.repeat(filled) + '⬜'.repeat(Math.max(0, 5 - filled));
+      const blockers = r.days_with_blockers ? '🚧 ' + r.days_with_blockers : EMPTY_CELL;
       return '<tr>' +
-        '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + esc(r.real_name || r.user_id) + '</td>' +
-        '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + bar + ' ' + r.responses + '/' + days + '</td>' +
-        '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + blockers + '</td>' +
-        '<td class="col-date" style="padding:10px 14px;border-bottom:1px solid var(--border)">' + esc(last) + '</td>' +
+        '<td>' + name + '</td>' +
+        '<td>' + bar + ' ' + responses + '/' + expected + '</td>' +
+        '<td>' + blockers + '</td>' +
+        '<td class="col-date">' + relativeCell(r.last_standup, 'Never') + '</td>' +
         '</tr>';
     }).join('');
+
+    const hiddenNote = (!analyticsState.includeUnenrolled && unenrolled.length)
+      ? '<p style="color:var(--text-dim);font-size:12px;margin-top:12px">' +
+        unenrolled.length + (unenrolled.length === 1 ? ' member is' : ' members are') +
+        ' in no standup and hidden. Tick "Include unenrolled" to list them.</p>'
+      : '';
+
     el.innerHTML =
+      '<div class="stats-grid">' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">Completion Rate</div>' +
+          '<div class="headline-rate">' + rate + '%</div>' +
+          '<div class="headline-denom">of ' + enrolled.length +
+            (enrolled.length === 1 ? ' enrolled member' : ' enrolled members') +
+            ', last ' + days + ' days</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+          '<div class="stat-label">Not In Any Standup</div>' +
+          '<div class="stat-value">' + unenrolled.length + '</div>' +
+          '<div class="stat-sub">no schedule sends them a DM</div>' +
+        '</div>' +
+      '</div>' +
       '<div class="webhooks-table-wrap">' +
-      '<table class="webhooks-table">' +
+      '<div class="table-scroll"><table class="data-table" style="min-width:560px">' +
       '<thead><tr>' +
-      '<th>Member</th><th>Responses (' + days + 'd)</th><th>Blockers</th><th>Last Standup</th>' +
-      '</tr></thead><tbody>' + tableRows + '</tbody></table></div>';
+      '<th class="col-name">Member</th><th>Responses (' + days + 'd)</th><th>Blockers</th><th class="col-date">Last Standup</th>' +
+      '</tr></thead><tbody>' + tableRows + '</tbody></table></div></div>' +
+      hiddenNote;
   }
 
   function exportCSV() {
@@ -2750,142 +3310,6 @@
   // the same helper.
   function timeAgo(iso) { return formatRelative(iso, ''); }
 
-  // ── Schedules ──
-  async function loadSchedules() {
-    const el = document.getElementById('schedules-list');
-    if (!el) return;
-    el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
-    if (!state.channels.length) await loadChannels();
-    try {
-      state.schedules = await api('GET', '/schedules');
-      renderSchedules();
-    } catch (e) {
-      el.innerHTML = '<p style="color:var(--text-dim);padding:24px">Failed to load schedules.</p>';
-    }
-  }
-
-  function renderSchedules() {
-    const el = document.getElementById('schedules-list');
-    if (!el) return;
-    if (!state.schedules || !state.schedules.length) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128197;</div><h3>No schedules yet</h3><p>Create named schedules with custom questions and participant lists.</p><button class="btn btn-primary" onclick="openCreateScheduleModal()">&#43; New Schedule</button></div>';
-      return;
-    }
-    el.innerHTML = state.schedules.map(s => {
-      const chName = channelName(s.channel_id);
-      const days = Array.isArray(s.schedule_days) ? s.schedule_days.join(', ') : (s.schedule_days || '').split(',').join(', ');
-      const participants = (s.participants || []).length;
-      const badge = s.active ? '<span class="badge-active">Active</span>' : '<span class="badge-paused">Paused</span>';
-      return '<div class="standup-card" id="sched-' + s.id + '">' +
-        '<div class="standup-icon">&#128197;</div>' +
-        '<div class="standup-info">' +
-        '<div class="standup-name">' + esc(s.name || 'Daily Standup') + '</div>' +
-        '<div class="standup-meta">' +
-        (s.channel_id ? '<span>#' + esc(chName) + '</span>' : '') +
-        '<span>' + esc(s.schedule_time || '09:00') + ' ' + esc(s.schedule_tz || 'UTC') + '</span>' +
-        '<span>' + esc(days) + '</span>' +
-        '<span>' + participants + ' participant' + (participants === 1 ? '' : 's') + '</span>' +
-        badge +
-        '</div></div>' +
-        '<div class="standup-actions">' +
-        '<button class="toggle ' + (s.active ? 'on' : '') + '" onclick="toggleSchedule(' + s.id + ', this)" title="Toggle active"></button>' +
-        '<button class="btn btn-secondary btn-sm" onclick="openEditScheduleModal(' + s.id + ')">Edit</button>' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteSchedule(' + s.id + ')">Delete</button>' +
-        '</div></div>';
-    }).join('');
-  }
-
-  async function toggleSchedule(id, btn) {
-    const sched = (state.schedules || []).find(s => s.id === id);
-    if (!sched) return;
-    const newActive = !sched.active;
-    try {
-      await api('PUT', '/schedules/' + id, { active: newActive });
-      sched.active = newActive;
-      btn.classList.toggle('on', newActive);
-      renderSchedules();
-      toast(newActive ? 'Schedule activated' : 'Schedule paused');
-    } catch (e) { toast(e.message, 'error'); }
-  }
-
-  async function deleteSchedule(id) {
-    if (!confirm('Delete this schedule?')) return;
-    try {
-      await api('DELETE', '/schedules/' + id);
-      state.schedules = (state.schedules || []).filter(s => s.id !== id);
-      renderSchedules();
-      toast('Schedule deleted');
-    } catch (e) { toast(e.message, 'error'); }
-  }
-
-  async function openCreateScheduleModal() {
-    if (!state.members.length) await loadMembers();
-    document.getElementById('modal-title').textContent = 'New Schedule';
-    document.getElementById('modal-standup-id').value = '';
-    document.getElementById('modal-standup-id').dataset.mode = 'schedule';
-    document.getElementById('f-name').value = 'Daily Standup';
-    document.getElementById('f-channel').value = '';
-    document.getElementById('f-time').value = '09:00';
-    selectTz(workspaceTz());
-    document.getElementById('f-report-channel').value = '';
-    document.getElementById('f-report-time').value = '';
-    document.getElementById('f-group-by').value = 'member';
-    document.getElementById('f-post-as').value = 'combined';
-    document.getElementById('f-sort-order').value = 'chronological';
-    document.getElementById('f-edit-window').value = 'report';
-    document.getElementById('f-jira').value = '';
-    document.getElementById('f-zendesk').value = '';
-    document.getElementById('f-github-repo').value = '';
-    document.getElementById('f-linear-team').value = '';
-    document.getElementById('f-avatar-toggle').classList.add('on');
-    document.getElementById('f-reminder').value = '0';
-    document.getElementById('f-post-channel').checked = true;
-    document.getElementById('f-notify-toggle').classList.add('on');
-    document.getElementById('f-ai-summary-toggle').classList.remove('on');
-    document.getElementById('f-ai-provider').value = 'openai';
-    selectDays(['mon','tue','wed','thu','fri']);
-    setQuestions(['What did you complete yesterday?','What are you working on today?','Any blockers?']);
-    clearParticipants();
-    document.getElementById('standup-modal').classList.add('open');
-  }
-
-  async function openEditScheduleModal(id) {
-    const s = (state.schedules || []).find(x => x.id === id);
-    if (!s) return;
-    if (!state.members.length) await loadMembers();
-    document.getElementById('modal-title').textContent = 'Edit Schedule';
-    document.getElementById('modal-standup-id').value = id;
-    document.getElementById('modal-standup-id').dataset.mode = 'schedule';
-    document.getElementById('f-name').value = s.name || '';
-    document.getElementById('f-channel').value = s.channel_id || '';
-    document.getElementById('f-time').value = s.schedule_time || '09:00';
-    selectTz(s.schedule_tz || workspaceTz());
-    document.getElementById('f-report-channel').value = s.report_channel || '';
-    document.getElementById('f-report-time').value = s.report_time || '';
-    document.getElementById('f-group-by').value = s.group_by || 'member';
-    document.getElementById('f-post-as').value = s.post_as || 'combined';
-    document.getElementById('f-sort-order').value = s.sort_order || 'chronological';
-    document.getElementById('f-edit-window').value = s.edit_window || 'report';
-    document.getElementById('f-jira').value = s.jira_base_url || '';
-    document.getElementById('f-zendesk').value = s.zendesk_base_url || '';
-    document.getElementById('f-github-repo').value = s.github_repo || '';
-    document.getElementById('f-linear-team').value = s.linear_team || '';
-    const avatarToggleS = document.getElementById('f-avatar-toggle');
-    if (s.display_avatar !== false) avatarToggleS.classList.add('on'); else avatarToggleS.classList.remove('on');
-    document.getElementById('f-reminder').value = String(s.reminder_minutes || 0);
-    document.getElementById(s.post_to_thread ? 'f-post-thread' : 'f-post-channel').checked = true;
-    const notifyToggleS = document.getElementById('f-notify-toggle');
-    if (s.notify_on_report !== false) notifyToggleS.classList.add('on'); else notifyToggleS.classList.remove('on');
-    const aiToggleS = document.getElementById('f-ai-summary-toggle');
-    if (s.ai_summary_enabled) aiToggleS.classList.add('on'); else aiToggleS.classList.remove('on');
-    document.getElementById('f-ai-provider').value = s.ai_provider || 'openai';
-    selectDays((s.schedule_days || 'mon,tue,wed,thu,fri').split(','));
-    const qs = Array.isArray(s.questions) ? s.questions : [];
-    setQuestions(qs.length ? qs : ['What did you complete yesterday?','What are you working on today?','Any blockers?']);
-    setParticipants(s.participants || []);
-    document.getElementById('standup-modal').classList.add('open');
-  }
-
   // ── Templates ──
   async function fetchTemplates() {
     if (state.templates) return state.templates;
@@ -2933,53 +3357,6 @@
     }
     document.getElementById('template-gallery').style.display = 'none';
     toast('Template applied: ' + t.name);
-  }
-
-  // ── Save standup / schedule (mode-aware) ──
-  const _origSaveStandup = saveStandup;
-  saveStandup = async function() {
-    const modeEl = document.getElementById('modal-standup-id');
-    if (modeEl.dataset.mode === 'schedule') {
-      return saveSchedule();
-    }
-    modeEl.dataset.mode = '';
-    return _origSaveStandup();
-  };
-
-  async function saveSchedule() {
-    const id = document.getElementById('modal-standup-id').value;
-    const days = Array.from(document.querySelectorAll('.day-chip.selected')).map(d => d.dataset.day);
-    const questions = Array.from(document.querySelectorAll('.question-input')).map(i => i.value.trim()).filter(Boolean);
-    const body = {
-      name: document.getElementById('f-name').value.trim() || 'Daily Standup',
-      channel_id: document.getElementById('f-channel').value,
-      schedule_time: document.getElementById('f-time').value,
-      schedule_tz: getTzValue(),
-      schedule_days: days,
-      questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
-      participants: state.participants,
-      reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
-      post_to_thread: document.getElementById('f-post-thread').checked,
-      notify_on_report: document.getElementById('f-notify-toggle').classList.contains('on'),
-      weekend_reminder: parseInt(document.getElementById('f-reminder').value) === -1,
-    };
-    try {
-      let updated;
-      if (id) {
-        updated = await api('PUT', '/schedules/' + id, body);
-        const idx = (state.schedules || []).findIndex(s => s.id == id);
-        if (idx >= 0) state.schedules[idx] = updated;
-      } else {
-        updated = await api('POST', '/schedules', body);
-        if (!state.schedules) state.schedules = [];
-        state.schedules.push(updated);
-      }
-      renderSchedules();
-      closeModal();
-      document.getElementById('modal-standup-id').dataset.mode = '';
-      toast(id ? 'Schedule updated' : 'Schedule created');
-      loadStats().catch(() => {});
-    } catch (e) { toast(e.message, 'error'); }
   }
 
   // ── Automation / Rules ──
@@ -3211,7 +3588,8 @@
   }
 
   // ── Boot ──
-  loadStandups();
+  // Open whatever the URL asks for. An old #schedules link lands on Standups.
+  switchSection(window.location.hash.replace(/^#/, '') || 'standups');
   loadMCPSection();
   </script>
 </body>
