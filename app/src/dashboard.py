@@ -24,6 +24,7 @@ from flask import (
     url_for,
 )
 from oauth import verify_login_token
+from schedule_validation import schedule_config_error, schedule_payload_error
 from slack_users import is_human
 
 logger = logging.getLogger(__name__)
@@ -207,6 +208,10 @@ def _schedule_to_standup(row: dict) -> dict:
         "post_to_thread": bool(row.get("post_to_thread", False)),
         "notify_on_report": bool(row.get("notify_on_report", True)),
         "post_summary": bool(row.get("post_summary", False)),
+        # #67: an active schedule whose time or timezone the scheduler cannot
+        # parse is never registered, so it silently never fires. None when the
+        # schedule is fine (or inactive, where not firing is the point).
+        "registration_error": schedule_config_error(row) if row.get("active", True) else None,
     }
 
 
@@ -227,6 +232,9 @@ def api_list_standups():
 def api_create_standup():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
+    invalid = schedule_payload_error(data)
+    if invalid:
+        return jsonify({"error": invalid}), 400
     try:
         days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
         if isinstance(days, list):
@@ -259,6 +267,9 @@ def api_create_standup():
 def api_update_standup(standup_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
+    invalid = schedule_payload_error(data)
+    if invalid:
+        return jsonify({"error": invalid}), 400
     try:
         kwargs: dict = {}
         for field in (
@@ -780,6 +791,10 @@ def api_list_schedules():
     team_id = session["team_id"]
     try:
         schedules = db.get_standup_schedules(team_id)
+        for row in schedules:
+            # #67: flag rows the scheduler will refuse, so an Active schedule
+            # that can never fire does not look healthy.
+            row["registration_error"] = schedule_config_error(row) if row.get("active", True) else None
         return jsonify(schedules)
     except Exception as exc:
         logger.error("api_list_schedules: %s", exc)
@@ -791,6 +806,9 @@ def api_list_schedules():
 def api_create_schedule():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
+    invalid = schedule_payload_error(data)
+    if invalid:
+        return jsonify({"error": invalid}), 400
     try:
         days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
         if isinstance(days, list):
@@ -834,6 +852,9 @@ def api_create_schedule():
 def api_update_schedule(schedule_id: int):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
+    invalid = schedule_payload_error(data)
+    if invalid:
+        return jsonify({"error": invalid}), 400
     try:
         days = data.get("schedule_days")
         if isinstance(days, list):
