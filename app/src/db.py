@@ -359,9 +359,21 @@ def save_standup(
     today: str,
     blockers: str,
     mood: str | None = None,
+    questions: list[str] | None = None,
 ) -> int | None:
-    """Persist a completed standup. Returns the new standup ID."""
-    has_blockers = blockers.strip().lower() not in ("none", "no", "nope", "-", "n/a", "")
+    """Persist a completed standup. Returns the new standup ID.
+
+    Pass `questions` whenever the caller knows them. The three answer columns
+    are named after the default questions, but a schedule can ask anything, so
+    without the question list there is no way to tell whether the third answer
+    is a blocker or an availability figure. See blockers.py.
+    """
+    import blockers as _blockers  # noqa: PLC0415
+
+    if questions:
+        has_blockers = _blockers.has_blockers(questions, [yesterday, today, blockers])
+    else:
+        has_blockers = _blockers.reports_a_blocker(blockers)
     sql = """
         INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers, mood)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
