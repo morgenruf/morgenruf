@@ -16,12 +16,14 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
-# slack_bolt and apscheduler are real dependencies and main.py imports submodules
-# from both, so a MagicMock stub breaks the import. Drop any an earlier test
-# module left behind instead.
-for _n in ("slack_bolt", "apscheduler", "pytz", "slack_sdk"):
-    if isinstance(sys.modules.get(_n), MagicMock):
-        del sys.modules[_n]
+# slack_bolt, slack_sdk, apscheduler and pytz are real dependencies, and main.py
+# imports submodules from them. Earlier test modules stub some of these, and a
+# stub breaks the import here. Clearing only the top level package is not
+# enough: a stubbed "slack_sdk.oauth" survives and shadows the real submodule,
+# which is what broke this file inside the full suite while it passed alone.
+for _name in [n for n in list(sys.modules) if n.split(".")[0] in {"slack_bolt", "slack_sdk", "apscheduler", "pytz"}]:
+    if isinstance(sys.modules.get(_name), MagicMock):
+        del sys.modules[_name]
 
 import main  # noqa: E402
 

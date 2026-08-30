@@ -61,7 +61,6 @@ def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
         return []
 
 
-
 def _is_dev_mode() -> bool:
     return bool(os.environ.get("FLASK_DEBUG")) or os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
 
@@ -97,6 +96,7 @@ def _resolve_secret_key() -> bytes | str:
         "FLASK_SECRET_KEY is not set. It signs dashboard login tokens, so the app "
         "will not start without it. Generate one with: openssl rand -hex 32"
     )
+
 
 def create_app() -> tuple[App, Flask]:
     signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
