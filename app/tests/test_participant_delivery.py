@@ -201,3 +201,62 @@ class TestMemberSync:
         db = self._db([{"user_id": "U1", "active": True, "real_name": "Ada"}])
         self._run(db, _client([_slack_user("U1", "Ada")]))
         db.remove_participants_everywhere.assert_not_called()
+
+
+class TestMemberSyncPacing:
+    """The first production run rate limited every workspace it touched.
+
+    users.list is Tier 2. Walking every installation back to back tripped
+    Slack's limit, and each 429 surfaced as a generic SlackApiError, so a
+    healthy workspace was skipped and looked exactly like a revoked token.
+    """
+
+    def test_the_loop_pauses_between_workspaces(self):
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": f"T{i}", "bot_token": "xoxb"} for i in range(4)]
+        db.get_all_members.return_value = [{"user_id": "U1", "active": True, "real_name": "Ada"}]
+        client = _client([_slack_user("U1", "Ada")])
+        with (
+            patch.dict(sys.modules, {"db": db}),
+            patch.object(sched_mod, "_rate_limited_client", return_value=client),
+            patch.object(sched_mod.time, "sleep") as slept,
+        ):
+            sched_mod.sync_members_from_slack()
+        # Four workspaces means three gaps, not four: no pause before the first.
+        assert slept.call_count == 3
+        assert all(c.args[0] == sched_mod._MEMBER_SYNC_PAUSE_SECONDS for c in slept.call_args_list)
+
+    def test_a_single_workspace_does_not_pause(self):
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": "T1", "bot_token": "xoxb"}]
+        db.get_all_members.return_value = [{"user_id": "U1", "active": True, "real_name": "Ada"}]
+        with (
+            patch.dict(sys.modules, {"db": db}),
+            patch.object(sched_mod, "_rate_limited_client", return_value=_client([_slack_user("U1", "Ada")])),
+            patch.object(sched_mod.time, "sleep") as slept,
+        ):
+            sched_mod.sync_members_from_slack()
+        slept.assert_not_called()
+
+    def test_the_client_carries_a_rate_limit_retry_handler(self):
+        client = sched_mod._rate_limited_client("xoxb-test")
+        names = [type(h).__name__ for h in client.retry_handlers]
+        assert "RateLimitErrorRetryHandler" in names
+
+
+class TestSlackErrorIsDiagnosable:
+    def test_the_slack_error_code_is_logged_not_the_generic_message(self, caplog):
+        """ "The request to the Slack API failed" does not say ratelimited."""
+        import logging
+
+        class FakeResponse(dict):
+            pass
+
+        err = Exception("The request to the Slack API failed.")
+        err.response = FakeResponse({"error": "ratelimited"})
+        client = MagicMock()
+        client.users_list.side_effect = err
+
+        with caplog.at_level(logging.WARNING):
+            assert slack_users.fetch_workspace_humans(client) is None
+        assert "ratelimited" in caplog.text

@@ -1228,6 +1228,25 @@ def _sync_jobs_from_db() -> None:
 _MEMBER_SYNC_INTERVAL_HOURS = 6
 
 
+_MEMBER_SYNC_PAUSE_SECONDS = 4
+
+
+def _rate_limited_client(token: str) -> WebClient:
+    """A WebClient that waits and retries when Slack says it is being called too fast.
+
+    Without this a 429 surfaces as a generic SlackApiError, the workspace is
+    skipped, and the skip looks identical to a revoked token.
+    """
+    client = WebClient(token=token)
+    try:
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler  # noqa: PLC0415
+
+        client.retry_handlers.append(RateLimitErrorRetryHandler(max_retry_count=3))
+    except Exception as exc:  # pragma: no cover - depends on slack_sdk internals
+        logger.debug("Could not attach the rate limit retry handler: %s", exc)
+    return client
+
+
 def sync_members_from_slack() -> None:
     """Reconcile the members table with who is actually in each Slack workspace.
 
@@ -1254,13 +1273,20 @@ def sync_members_from_slack() -> None:
         logger.warning("Member sync: could not load installations: %s", exc)
         return
 
-    for inst in installations:
+    for index, inst in enumerate(installations):
         team_id = inst.get("team_id")
         token = inst.get("bot_token")
         if not team_id or not token:
             continue
+
+        # users.list is Tier 2, roughly 20 calls a minute, and this loop walks
+        # every installation. Firing them back to back rate limited every
+        # workspace including the ones that were perfectly healthy. This job
+        # runs every six hours, so it can afford to be slow.
+        if index:
+            time.sleep(_MEMBER_SYNC_PAUSE_SECONDS)
         try:
-            client = WebClient(token=token)
+            client = _rate_limited_client(token)
             live = fetch_workspace_humans(client)
             if live is None:
                 logger.warning("Member sync: skipping %s, could not read the user list", team_id)
