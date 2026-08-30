@@ -106,14 +106,14 @@ def evaluate_rules(team_id: str, trigger: str, context: dict, client) -> None:
         matching = [r for r in rules if r["trigger"] == trigger]
         for rule in matching:
             try:
-                _fire_rule(rule, trigger, context, client)
+                _fire_rule(team_id, rule, trigger, context, client)
             except Exception as exc:
                 logger.warning("Rule %s (%s) failed: %s", rule.get("id"), rule.get("name"), exc)
     except Exception as exc:
         logger.warning("evaluate_rules failed for %s/%s: %s", team_id, trigger, exc)
 
 
-def _fire_rule(rule: dict, trigger: str, context: dict, client) -> None:
+def _fire_rule(team_id: str, rule: dict, trigger: str, context: dict, client) -> None:
     """Evaluate condition and execute action for a single rule."""
     # Condition check
     if trigger == "blocker_detected":
@@ -134,10 +134,62 @@ def _fire_rule(rule: dict, trigger: str, context: dict, client) -> None:
         client.chat_postMessage(channel=target, text=msg)
         logger.info("Rule %s fired %s → %s", rule.get("id"), action, target)
     elif action == "fire_webhook":
-        if _requests is None:
-            logger.warning("requests library not available for webhook rule %s", rule.get("id"))
-            return
-        _requests.post(target, json=context, timeout=5)
-        logger.info("Rule %s fired webhook → %s", rule.get("id"), target)
+        _fire_rule_webhook(team_id, rule, trigger, context)
     else:
         logger.warning("Unknown action %r in rule %s", action, rule.get("id"))
+
+
+def _fire_rule_webhook(team_id: str, rule: dict, trigger: str, context: dict) -> None:
+    """POST a rule's payload, validated and signed like any other webhook.
+
+    Two things were wrong with the original one-liner (#81). It POSTed straight
+    to `action_target` with no `is_safe_webhook_url` check, so a rule could aim
+    the server at the cloud metadata endpoint or an internal port. And it sent
+    nothing a receiver could verify, while registered webhooks had been signed
+    since #73.
+
+    Both are fixed by reusing the registered-webhook delivery path. When the
+    target matches a webhook this workspace has registered, the delivery is
+    signed with that webhook's secret and recorded in the delivery log. When it
+    does not, it still goes out, but unsigned and flagged as such in the log, so
+    the gap is visible rather than silent.
+    """
+    from url_guard import is_safe_webhook_url  # noqa: PLC0415
+
+    target = (rule.get("action_target") or "").strip()
+    rule_id = rule.get("id")
+
+    if not is_safe_webhook_url(target):
+        logger.warning(
+            "Rule %s webhook refused: %r is not an allowed target",
+            rule_id,
+            target,
+        )
+        return
+
+    try:
+        from handlers import deliver_webhook  # noqa: PLC0415
+    except Exception as exc:
+        logger.warning("Cannot deliver webhook for rule %s: %s", rule_id, exc)
+        return
+
+    hook = {"id": None, "webhook_url": target, "secret": None}
+    try:
+        import db  # noqa: PLC0415
+
+        for registered in db.get_webhooks(team_id) or []:
+            if (registered.get("webhook_url") or "").strip() == target:
+                hook = registered
+                break
+    except Exception as exc:
+        # A lookup failure only costs the signature, so deliver anyway.
+        logger.warning("Could not match rule %s target to a registered webhook: %s", rule_id, exc)
+
+    result = deliver_webhook(hook, f"rule.{trigger}", context, team_id=team_id)
+    logger.info(
+        "Rule %s fired webhook to %s (signed=%s, status=%s)",
+        rule_id,
+        target,
+        result.get("signed"),
+        result.get("status_code"),
+    )

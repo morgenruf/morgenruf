@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import csv
 import io
-import ipaddress
 import json
 import logging
 import os
 import secrets
 from functools import wraps
-from urllib.parse import urlparse
 
 import db
 from flask import (
@@ -26,6 +24,7 @@ from flask import (
 from oauth import verify_login_token
 from schedule_validation import schedule_config_error, schedule_payload_error
 from slack_users import is_human
+from url_guard import is_safe_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -37,22 +36,11 @@ _SCOPES = "channels:read,commands,groups:read,chat:write,im:history,im:read,im:w
 
 
 def _is_safe_webhook_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return False
-        host = parsed.hostname or ""
-        if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
-            return False
-        try:
-            addr = ipaddress.ip_address(host)
-            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-                return False
-        except ValueError:
-            pass  # hostname, not IP — allow it (DNS resolution at request time)
-        return True
-    except Exception:
-        return False
+    """Kept as a thin alias so existing call sites and tests are unaffected.
+
+    The implementation moved to url_guard so workflow.py can share it (#81).
+    """
+    return is_safe_webhook_url(url)
 
 
 # ---------------------------------------------------------------------------

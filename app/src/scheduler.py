@@ -446,6 +446,24 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
         _notify_delivery_failure(client, channel_id, failed_count, dm_count)
 
 
+def participation_pct(stats: list[dict] | None) -> int:
+    """Percentage of enrolled members who responded, for the low_participation rule.
+
+    Only people who are actually in a standup can respond. Dividing by the whole
+    workspace meant a rule set to fire below 50 percent fired every day no matter
+    how the enrolled team was doing, which trains people to ignore it (#82).
+
+    Rows that predate the `enrolled` flag count as enrolled, so a stale cache or
+    an older code path never makes the number worse than it was before.
+    Returns 100 when nobody was asked, so an empty team never trips the rule.
+    """
+    enrolled = [s for s in (stats or []) if s.get("enrolled", True)]
+    if not enrolled:
+        return 100
+    responded = sum(1 for s in enrolled if (s.get("responses") or 0) > 0)
+    return int(responded / len(enrolled) * 100)
+
+
 def _send_reminder_to_workspace(
     team_id: str, bot_token: str, reminder_minutes: int, schedule_id: int | None = None
 ) -> None:
@@ -510,9 +528,7 @@ def _send_reminder_to_workspace(
         from workflow import evaluate_rules  # noqa: PLC0415
 
         stats = db.get_participation_stats(team_id, days=1)
-        total = len(stats)
-        responded = sum(1 for s in stats if (s.get("responses") or 0) > 0)
-        pct = int((responded / total * 100) if total else 100)
+        pct = participation_pct(stats)
         evaluate_rules(team_id, "low_participation", {"participation_pct": pct, "team": team_id}, client)
     except Exception as exc:
         logger.warning("Participation workflow rules failed for %s: %s", team_id, exc)
