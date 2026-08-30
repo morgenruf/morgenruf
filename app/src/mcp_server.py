@@ -19,7 +19,7 @@ Example claude_desktop_config.json:
           "args": ["/path/to/morgenruf/app/src/mcp_server.py"],
           "env": {
             "DATABASE_URL": "postgresql://morgenruf:pass@localhost:5432/morgenruf",
-            "MCP_TEAM_ID": "TEE0GF0QZ"
+            "MCP_TEAM_ID": "T01EXAMPLE"
           }
         }
       }
@@ -107,7 +107,7 @@ TOOLS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "team_id": {"type": "string", "description": "Slack team ID (e.g. TEE0GF0QZ)"},
+                "team_id": {"type": "string", "description": "Slack team ID (e.g. T01EXAMPLE)"},
                 "from_date": {"type": "string", "description": "Start date YYYY-MM-DD (default: 7 days ago)"},
                 "to_date": {"type": "string", "description": "End date YYYY-MM-DD (default: today)"},
                 "user_id": {"type": "string", "description": "Filter to a specific Slack user ID"},
