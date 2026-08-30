@@ -117,10 +117,34 @@
     .ws-logout a { color: var(--text-dim); }
     .ws-logout a:hover { color: var(--danger); }
 
+    /* ── Sidebar drawer (small viewports) ── */
+    #sidebar-toggle {
+      display: none;
+      position: fixed;
+      top: 14px; left: 12px;
+      z-index: 60;
+      width: 38px; height: 38px;
+      align-items: center; justify-content: center;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 9px;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1;
+    }
+    #sidebar-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 45;
+    }
+
     /* ── Main content ── */
     #main {
       margin-left: var(--sidebar-w);
       flex: 1;
+      min-width: 0;
+      max-width: 100%;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
@@ -366,11 +390,14 @@
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
       display: none;
     }
+    .multi-dropdown .multi-head {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border2);
+    }
     .multi-dropdown .participant-search {
-      position: sticky; top: 0; z-index: 1;
       background: var(--surface);
       padding: 8px;
-      border-bottom: 1px solid var(--border2);
     }
     .multi-dropdown .participant-search input {
       width: 100%; box-sizing: border-box;
@@ -389,9 +416,27 @@
     }
     .multi-opt:hover { background: var(--surface2); }
     .multi-opt.selected { color: var(--accent); }
-    .multi-opt .chk { width: 14px; height: 14px; border: 1px solid var(--border2); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+    /* The tick is only visible once the row is actually selected. */
+    .multi-opt .chk { width: 14px; height: 14px; border: 1px solid var(--border2); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: transparent; background: transparent; }
     .multi-opt.selected .chk { background: var(--accent); border-color: var(--accent); color: #000; }
     .placeholder-text { color: var(--text-dim); font-size: 13px; }
+    .multi-select-summary { font-size: 13px; color: var(--text); font-weight: 500; margin-right: 4px; }
+    .multi-more { font-size: 12px; color: var(--text-dim); align-self: center; }
+    .multi-toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px 0;
+    }
+    .multi-toolbar .count { flex: 1; font-size: 12px; color: var(--text-dim); }
+    .multi-toolbar button {
+      background: none; border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--text-muted); font-size: 11px; padding: 3px 9px;
+    }
+    .multi-toolbar button:hover { color: var(--accent); border-color: var(--accent); }
+    .participants-hint {
+      margin-top: 6px; font-size: 12px; color: var(--text-dim);
+      display: none; align-items: center; gap: 8px;
+    }
+    .participants-hint.show { display: flex; }
     .tz-search-wrap { position: relative; }
     .tz-search-input { width: 100%; box-sizing: border-box; }
     .tz-dropdown {
@@ -451,8 +496,8 @@
     .member-tz { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
     /* Webhooks */
-    .webhooks-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-    .webhooks-table { width: 100%; border-collapse: collapse; }
+    .webhooks-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .webhooks-table { width: 100%; border-collapse: collapse; min-width: 520px; }
     .webhooks-table th { padding: 12px 16px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); text-align: left; border-bottom: 1px solid var(--border); background: var(--surface2); }
     .webhooks-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); }
     .webhooks-table tr:last-child td { border-bottom: none; }
@@ -494,6 +539,95 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-center { display: flex; align-items: center; justify-content: center; padding: 60px; }
 
+    /* ── Shared table scroller: tables scroll inside their card, never the page ── */
+    .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+      color: var(--text-dim); white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .col-date { min-width: 120px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .col-key { min-width: 160px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .col-name { min-width: 140px; }
+    .col-actions { text-align: right; white-space: nowrap; }
+
+    /* ── Card titles: the icon is its own element so it never touches the words ── */
+    .ico { display: inline-block; flex-shrink: 0; line-height: 1; margin-right: 6px; }
+    .card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+    /* These already separate their children with a flex gap. */
+    .card-title .ico, .btn .ico { margin-right: 0; }
+
+    /* ── Settings and other config pages use the full width ── */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    .settings-grid > * { min-width: 0; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .wide-col { max-width: 1100px; }
+
+    /* ── Slack mrkdwn rendered into HTML ── */
+    .slack-text { white-space: normal; word-break: break-word; }
+    .slack-text a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    .slack-text .slack-mention {
+      background: var(--accent-dim); color: var(--accent);
+      border-radius: 4px; padding: 0 4px; font-weight: 500;
+    }
+    .slack-text .slack-code {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 4px; padding: 1px 5px; font-size: 0.9em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .slack-text .slack-pre {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 7px; padding: 10px 12px; margin: 6px 0;
+      overflow-x: auto; font-size: 0.9em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .slack-text ul { margin: 4px 0 4px 18px; }
+    .slack-text li { margin: 2px 0; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      #sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        box-shadow: 0 0 40px rgba(0,0,0,0.6);
+      }
+      #sidebar.open { transform: none; }
+      #sidebar-toggle { display: inline-flex; }
+      #sidebar-backdrop.open { display: block; }
+      #main { margin-left: 0; }
+      .topbar { padding-left: 62px; }
+      .settings-grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .section { padding: 16px 14px; }
+      .topbar { padding: 16px 14px 16px 62px; flex-wrap: wrap; gap: 10px; }
+      .members-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .standup-card { flex-wrap: wrap; }
+      .standup-actions { width: 100%; justify-content: flex-end; }
+      .form-grid { grid-template-columns: 1fr; }
+      .modal-overlay { padding: 0; align-items: stretch; }
+      .modal {
+        max-width: none; width: 100%;
+        min-height: 100vh;
+        border: none; border-radius: 0;
+        display: flex; flex-direction: column;
+      }
+      .modal-body { flex: 1; padding: 16px; }
+      .modal-header, .modal-footer { padding: 14px 16px; }
+      .modal-footer { position: sticky; bottom: 0; background: var(--surface); }
+    }
+
     /* Scrollbar */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -501,6 +635,10 @@
   </style>
 </head>
 <body>
+  <!-- ── Sidebar drawer trigger (visible below 900px) ── -->
+  <button id="sidebar-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar()">&#9776;</button>
+  <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
+
   <!-- ── Sidebar ── -->
   <nav id="sidebar">
     <div class="sidebar-logo">
@@ -634,7 +772,7 @@
           <div class="page-subtitle">Workspace-level configuration</div>
         </div>
       </div>
-      <div id="settings-content" style="max-width:520px"></div>
+      <div id="settings-content" class="settings-grid"></div>
     </div>
 
     <!-- Webhooks -->
@@ -656,14 +794,14 @@
           <div class="page-subtitle">Celebrate your teammates' great work</div>
         </div>
       </div>
-      <div style="max-width:760px">
+      <div class="wide-col">
         <div class="stat-card" style="margin-bottom:20px">
           <div class="stat-label" style="margin-bottom:12px">How to give kudos</div>
           <p style="font-size:0.92rem;color:var(--text-muted)">DM the bot: <code style="background:var(--surface2);padding:2px 7px;border-radius:5px;font-size:0.88rem">kudos @teammate Great work on the deploy! 🚀</code></p>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="two-col">
           <div class="stat-card">
-            <div class="stat-label" style="margin-bottom:12px">🥇 Leaderboard — last 30 days</div>
+            <div class="stat-label" style="margin-bottom:12px"><span class="ico">&#129351;</span>Leaderboard, last 30 days</div>
             <div id="kudos-board"><div class="loading-center"><div class="spinner"></div></div></div>
           </div>
           <div>
@@ -683,7 +821,7 @@
         </div>
         <button class="btn btn-primary" onclick="openAddRuleForm()">+ Add Rule</button>
       </div>
-      <div style="max-width:760px">
+      <div class="wide-col">
         <div id="rules-list"><div class="loading-center"><div class="spinner"></div></div></div>
 
         <!-- Add Rule form (hidden by default) -->
@@ -694,7 +832,7 @@
               <label style="font-size:0.85rem;color:var(--text-muted)">Rule Name</label>
               <input id="rule-name" class="input" placeholder="e.g. Alert on blockers" required style="width:100%;margin-top:4px">
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="two-col" style="gap:12px">
               <div>
                 <label style="font-size:0.85rem;color:var(--text-muted)">Trigger</label>
                 <select id="rule-trigger" class="input" onchange="toggleConditionValue()" style="width:100%;margin-top:4px">
@@ -708,7 +846,7 @@
                 <input id="rule-condition" class="input" type="number" min="0" max="100" placeholder="50" style="width:100%;margin-top:4px">
               </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="two-col" style="gap:12px">
               <div>
                 <label style="font-size:0.85rem;color:var(--text-muted)">Action</label>
                 <select id="rule-action" class="input" style="width:100%;margin-top:4px">
@@ -734,26 +872,48 @@
         </div>
       </div>
     </div>
-  </div>
-
-    <!-- MCP -->
+    <!-- MCP (single merged section: API keys, team id, client config, generator) -->
     <div id="section-mcp" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">🔌 MCP — Connect AI Assistants</div>
-          <div class="page-subtitle">Let Claude, Cursor, and GitHub Copilot query your standup data via <code>https://api.morgenruf.dev/mcp</code></div>
+          <div class="page-title"><span class="ico">&#128268;</span>MCP</div>
+          <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>https://api.morgenruf.dev/mcp</code></div>
         </div>
-        <button class="btn btn-primary" onclick="openCreateKeyModal()">+ Generate New Key</button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><span class="ico">&#128214;</span>Setup Guide</a>
+          <button class="btn btn-primary" onclick="openCreateKeyModal()">&#43; Generate New Key</button>
+        </div>
       </div>
-      <div style="max-width:800px">
+      <div class="wide-col" style="display:grid;gap:20px">
 
-        <!-- Keys table -->
-        <div class="stat-card" style="margin-bottom:20px">
+        <!-- API Keys -->
+        <div class="stat-card">
           <div class="stat-label" style="margin-bottom:12px">API Keys</div>
           <div id="mcp-keys-list"><div class="loading-center"><div class="spinner"></div></div></div>
         </div>
 
-        <!-- Config snippets -->
+        <div class="settings-grid">
+          <!-- Team ID -->
+          <div class="stat-card">
+            <div class="stat-label" style="margin-bottom:12px">Your Team ID</div>
+            <div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-family:monospace;font-size:14px">
+              <code id="mcp-team-id" style="flex:1;background:none;border:none;padding:0;color:var(--text);font-size:14px;word-break:break-all">{{ team_id }}</code>
+              <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('mcp-team-id')">Copy</button>
+            </div>
+            <p style="font-size:12px;color:var(--text-dim);margin-top:8px">Identifies this workspace in support requests and API calls. Your API key already scopes every MCP request to it.</p>
+          </div>
+
+          <!-- Docs -->
+          <div class="stat-card">
+            <div class="stat-label" style="margin-bottom:12px">Documentation</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary"><span class="ico">&#128214;</span>Full MCP Setup Guide</a>
+              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico">&#128736;</span>View All 8 Tools</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Client Configuration -->
         <div class="stat-card">
           <div class="stat-label" style="margin-bottom:14px">Client Configuration</div>
           <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
@@ -775,7 +935,7 @@
     }
   }
 }</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('claude')">📋 Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('claude')"><span class="ico">&#128203;</span>Copy</button>
           </div>
 
           <div id="mcp-tab-cursor" style="display:none">
@@ -790,7 +950,7 @@
     }
   }
 }</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('cursor')">📋 Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('cursor')"><span class="ico">&#128203;</span>Copy</button>
           </div>
 
           <div id="mcp-tab-vscode" style="display:none">
@@ -806,21 +966,43 @@
     }
   }
 }</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('vscode')">📋 Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('vscode')"><span class="ico">&#128203;</span>Copy</button>
           </div>
 
           <div id="mcp-tab-http" style="display:none">
-            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Raw HTTP — useful for testing or custom integrations</p>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Raw HTTP, useful for testing or custom integrations</p>
             <pre id="snippet-http" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">curl -X POST https://api.morgenruf.dev/mcp \
   -H "Authorization: Bearer mrn_YOUR_KEY_HERE" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('http')">📋 Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('http')"><span class="ico">&#128203;</span>Copy</button>
           </div>
         </div>
+
+        <!-- Config Generator -->
+        <div class="stat-card">
+          <div class="stat-label" style="margin-bottom:12px">Config Generator</div>
+          <div style="margin-bottom:12px">
+            <label style="font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:6px">AI Assistant</label>
+            <select id="mcp-assistant" onchange="renderMCPConfig()" style="width:240px;max-width:100%">
+              <option value="claude">Claude Desktop</option>
+              <option value="cursor">Cursor</option>
+              <option value="vscode">VS Code / GitHub Copilot</option>
+            </select>
+          </div>
+          <div style="position:relative">
+            <pre id="mcp-config-output" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;color:var(--text);white-space:pre;overflow-x:auto;margin:0;line-height:1.6"></pre>
+            <button onclick="copyMCPConfig()" style="position:absolute;top:10px;right:10px" class="btn btn-secondary btn-sm">Copy</button>
+          </div>
+          <div style="margin-top:10px">
+            <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Config file location:</label>
+            <code id="mcp-config-path" style="font-size:12px;color:var(--text-muted);word-break:break-all"></code>
+          </div>
+          <p style="font-size:12px;color:var(--text-dim);margin-top:10px">Swap <code style="font-size:11px">mrn_YOUR_KEY_HERE</code> for a key from the API Keys card above. Morgenruf never asks you to put a database connection string in an assistant config.</p>
+        </div>
+
       </div>
     </div>
-
   </div>
 
   <!-- Invite Admin Modal -->
@@ -913,11 +1095,12 @@
         <div class="form-group">
           <label>Participants</label>
           <div class="multi-select-wrap" id="participants-wrap">
-            <div class="multi-select-display" id="participants-display" tabindex="0">
-              <span class="placeholder-text">Select participants...</span>
+            <div class="multi-select-display" id="participants-display" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+              <span class="placeholder-text">No one selected</span>
             </div>
             <div class="multi-dropdown" id="participants-dropdown"></div>
           </div>
+          <div class="participants-hint" id="participants-hint"></div>
         </div>
 
         <div class="form-section-title">Schedule</div>
@@ -929,7 +1112,7 @@
           <div class="form-group">
             <label>Timezone</label>
             <div class="tz-search-wrap" id="tz-search-wrap">
-              <input type="text" id="f-tz" class="tz-search-input" placeholder="Search timezone..." autocomplete="off" value="UTC"/>
+              <input type="text" id="f-tz" class="tz-search-input" placeholder="Search timezone..." autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tz-dropdown"/>
               <div class="tz-dropdown" id="tz-dropdown"></div>
             </div>
           </div>
@@ -1088,57 +1271,6 @@
   <!-- ── Toast container ── -->
   <div id="toast-container"></div>
 
-  <!-- ── MCP Section ── -->
-  <div id="section-mcp" class="section">
-    <div class="topbar">
-      <div>
-        <div class="page-title">🔌 MCP Integration</div>
-        <div class="page-subtitle">Connect AI Assistants — Let Claude, Cursor, and GitHub Copilot query your standup data</div>
-      </div>
-      <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">📖 Full Setup Guide</a>
-    </div>
-    <div style="max-width:720px;display:grid;gap:20px;padding-top:4px">
-
-      <!-- Team ID box -->
-      <div class="stat-card">
-        <div class="stat-label" style="margin-bottom:12px">Your Team ID</div>
-        <div style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-family:monospace;font-size:14px">
-          <code id="mcp-team-id" style="flex:1;background:none;border:none;padding:0;color:var(--text);font-size:14px">Loading…</code>
-          <button class="btn btn-secondary btn-sm" onclick="copyToClipboard('mcp-team-id')">Copy</button>
-        </div>
-        <p style="font-size:12px;color:var(--text-dim);margin-top:8px">Use this as <code style="font-size:11px">MCP_TEAM_ID</code> in your AI assistant config</p>
-      </div>
-
-      <!-- Config generator -->
-      <div class="stat-card">
-        <div class="stat-label" style="margin-bottom:12px">Config Generator</div>
-        <div style="margin-bottom:12px">
-          <label style="font-size:12px;font-weight:500;color:var(--text-muted);display:block;margin-bottom:6px">AI Assistant</label>
-          <select id="mcp-assistant" onchange="renderMCPConfig()" style="width:240px">
-            <option value="claude">Claude Desktop</option>
-            <option value="cursor">Cursor</option>
-            <option value="copilot">GitHub Copilot</option>
-          </select>
-        </div>
-        <div style="position:relative">
-          <pre id="mcp-config-output" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;font-size:12px;font-family:monospace;color:var(--text);white-space:pre;overflow-x:auto;margin:0;line-height:1.6"></pre>
-          <button onclick="copyMCPConfig()" style="position:absolute;top:10px;right:10px" class="btn btn-secondary btn-sm">Copy</button>
-        </div>
-        <div style="margin-top:10px">
-          <label style="font-size:12px;color:var(--text-dim);margin-bottom:4px;display:block">Config file location:</label>
-          <code id="mcp-config-path" style="font-size:12px;color:var(--text-muted)"></code>
-        </div>
-      </div>
-
-      <!-- Links -->
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary">📖 Full MCP Setup Guide</a>
-        <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost">🛠 View All 8 Tools</a>
-      </div>
-
-    </div>
-  </div>
-
   <script>
   // ── State ──
   const state = {
@@ -1154,11 +1286,21 @@
     loaded: {}
   };
 
+  // ── Sidebar drawer (small viewports) ──
+  function setSidebar(open) {
+    document.getElementById('sidebar').classList.toggle('open', open);
+    document.getElementById('sidebar-backdrop').classList.toggle('open', open);
+    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function toggleSidebar() { setSidebar(!document.getElementById('sidebar').classList.contains('open')); }
+  function closeSidebar() { setSidebar(false); }
+
   // ── Navigation ──
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
       const sec = item.dataset.section;
       switchSection(sec);
+      closeSidebar();
     });
   });
 
@@ -1467,7 +1609,9 @@
   }
 
   async function loadReports(opts = {}) {
+    // Both lists are needed so <@Uxxx> and <#Cxxx> in the answers resolve to names.
     if (!state.members?.length) await loadMembers();
+    if (!state.channels?.length) await loadChannels();
     const el = document.getElementById('reports-content');
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
@@ -1517,15 +1661,21 @@
         byDate[d].push(s);
       }
 
-      const responseRows = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, entries]) => `
-        <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${date}</td></tr>
+      const dateSort = (a, b) => {
+        const da = toDate(a[0]);
+        const db = toDate(b[0]);
+        if (da && db) return db.getTime() - da.getTime();
+        return b[0].localeCompare(a[0]);
+      };
+      const responseRows = Object.entries(byDate).sort(dateSort).map(([date, entries]) => `
+        <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${esc(formatDate(date, date))}</td></tr>
         ${entries.map(s => `
           <tr>
             <td style="width:180px;vertical-align:top;padding:8px 12px;font-weight:500">${avatarHtml(s.user_id, 28)}${esc(resolveName(s.user_id, s.user_name))}</td>
             <td style="padding:8px 12px">
-              ${s.yesterday ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Yesterday:</span> ${esc(s.yesterday)}</div>` : ''}
-              ${s.today ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Today:</span> ${esc(s.today)}</div>` : ''}
-              ${s.blockers && s.blockers.toLowerCase() !== 'none' ? `<div style="color:var(--danger)"><span style="font-weight:600;font-size:12px">🚧 Blockers:</span> ${esc(s.blockers)}</div>` : ''}
+              ${s.yesterday ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Yesterday:</span> ${slackBlock(s.yesterday)}</div>` : ''}
+              ${s.today ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Today:</span> ${slackBlock(s.today)}</div>` : ''}
+              ${s.blockers && s.blockers.toLowerCase() !== 'none' ? `<div style="color:var(--danger)"><span style="font-weight:600;font-size:12px"><span class="ico">🚧</span>Blockers:</span> ${slackBlock(s.blockers)}</div>` : ''}
             </td>
           </tr>
         `).join('')}
@@ -1556,28 +1706,32 @@
         <!-- Participation summary -->
         ${participation.length ? `
         <div class="stat-card" style="margin-bottom:20px">
-          <div class="stat-label" style="margin-bottom:12px">Participation — last ${total_days} days</div>
-          <table style="width:100%;border-collapse:collapse">
-            <thead><tr>
-              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Name</th>
-              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Participation</th>
-              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Recently Completed</th>
-            </tr></thead>
-            <tbody>${participationRows}</tbody>
-          </table>
+          <div class="stat-label" style="margin-bottom:12px">Participation, last ${total_days} days</div>
+          <div class="table-scroll">
+            <table style="width:100%;border-collapse:collapse;min-width:420px">
+              <thead><tr>
+                <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Name</th>
+                <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Participation</th>
+                <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--text-muted);font-weight:500">Recently Completed</th>
+              </tr></thead>
+              <tbody>${participationRows}</tbody>
+            </table>
+          </div>
         </div>` : ''}
 
         <!-- Response history -->
         <div class="stat-card">
           <div class="stat-label" style="margin-bottom:12px">Standup Responses</div>
           ${standups.length ? `
-          <table style="width:100%;border-collapse:collapse">
-            <thead><tr>
-              <th style="text-align:left;padding:6px 12px;font-size:12px;color:var(--text-muted);font-weight:500;width:140px">Member</th>
-              <th style="text-align:left;padding:6px 12px;font-size:12px;color:var(--text-muted);font-weight:500">Response</th>
-            </tr></thead>
-            <tbody>${responseRows}</tbody>
-          </table>` : '<p style="color:var(--text-muted);padding:12px 0;font-size:13px">No responses found for the selected filters.</p>'}
+          <div class="table-scroll">
+            <table style="width:100%;border-collapse:collapse;min-width:420px">
+              <thead><tr>
+                <th style="text-align:left;padding:6px 12px;font-size:12px;color:var(--text-muted);font-weight:500;width:140px">Member</th>
+                <th style="text-align:left;padding:6px 12px;font-size:12px;color:var(--text-muted);font-weight:500">Response</th>
+              </tr></thead>
+              <tbody>${responseRows}</tbody>
+            </table>
+          </div>` : '<p style="color:var(--text-muted);padding:12px 0;font-size:13px">No responses found for the selected filters.</p>'}
         </div>
       `;
     } catch (e) {
@@ -1588,18 +1742,21 @@
   // ── Settings ──
   async function loadSettings() {
     const el = document.getElementById('settings-content');
+    // The grid is only right once there are cards to lay out.
+    el.className = '';
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     try {
       const standups = await api('GET', '/standups');
       if (standups.length) {
         const s = standups[0];
-        el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px">' +
-          '<div style="font-weight:600;font-size:15px">Primary Standup Config</div>' +
+        el.className = 'settings-grid';
+        el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px">' +
+          '<div class="card-title"><span class="ico">&#9881;</span>Primary Standup Config</div>' +
           '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
           '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit Configuration</button>' +
           '</div>' +
           '<div id="feed-section"></div>' +
-          '<div id="digest-section" style="margin-top:0"></div>';
+          '<div id="digest-section"></div>';
         loadFeedSettings(s);
         loadDigestSettings(s);
       } else {
@@ -1617,15 +1774,15 @@
     const feedEnabled = !!standup.feed_public;
     const feedUrl = standup.feed_token ? (window.location.origin + '/feed/' + standup.feed_token) : '';
     el.innerHTML =
-      '<div class="stat-card" style="margin-bottom:16px">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
-          '<div style="font-weight:600;font-size:14px">🔗 Public Standup Feed</div>' +
+      '<div class="stat-card">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">' +
+          '<div class="card-title"><span class="ico">&#128279;</span>Public Standup Feed</div>' +
           '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
             '<input type="checkbox" id="feed-toggle" onchange="toggleFeed(this.checked)" ' + (feedEnabled ? 'checked' : '') + ' style="width:16px;height:16px">' +
             'Enable public feed' +
           '</label>' +
         '</div>' +
-        '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Share a read-only URL showing today\'s standups — no login required.</p>' +
+        '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Share a read-only URL showing today\'s standups. No login required.</p>' +
         (feedEnabled && feedUrl
           ? '<div style="display:flex;gap:8px;align-items:center">' +
               '<input id="feed-url-display" class="input" style="flex:1;font-size:12px;background:var(--surface2);color:var(--text-muted)" readonly value="' + esc(feedUrl) + '">' +
@@ -1677,8 +1834,8 @@
     const digestEnabled = !!standup.manager_digest_enabled;
     const managerEmail = standup.manager_email || '';
     el.innerHTML =
-      '<div class="stat-card" style="margin-bottom:16px">' +
-        '<div style="font-weight:600;font-size:14px;margin-bottom:8px">📧 Manager Digest Email</div>' +
+      '<div class="stat-card">' +
+        '<div class="card-title" style="margin-bottom:8px"><span class="ico">&#128231;</span>Manager Digest Email</div>' +
         '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Send a daily HTML email with today\'s standup responses to a manager after the standup window.</p>' +
         '<div style="display:grid;gap:10px">' +
           '<div>' +
@@ -1721,7 +1878,7 @@
     const el = document.getElementById('webhooks-content');
     const rows = state.webhooks.map(h =>
       '<tr><td class="webhook-url">' + esc(h.url) + '</td>' +
-      '<td style="color:var(--text-dim);font-size:12px">' + (h.created_at ? new Date(h.created_at).toLocaleDateString() : '') + '</td>' +
+      '<td class="col-date" style="font-size:12px">' + esc(formatDate(h.created_at, EMPTY_CELL)) + '</td>' +
       '<td style="text-align:right"><button class="btn btn-danger btn-sm" onclick="deleteWebhook(' + h.id + ')">Delete</button></td></tr>'
     ).join('');
 
@@ -1766,7 +1923,7 @@
     document.getElementById('f-name').value = 'Morning Standup';
     document.getElementById('f-channel').value = '';
     document.getElementById('f-time').value = '09:00';
-    selectTz('UTC');
+    selectTz(workspaceTz());
     document.getElementById('f-report-channel').value = '';
     document.getElementById('f-report-time').value = '';
     document.getElementById('f-group-by').value = 'member';
@@ -1799,7 +1956,7 @@
     document.getElementById('f-name').value = s.name || '';
     document.getElementById('f-channel').value = s.channel_id || '';
     document.getElementById('f-time').value = s.schedule_time || '09:00';
-    selectTz(s.schedule_tz || 'UTC');
+    selectTz(s.schedule_tz || workspaceTz());
     document.getElementById('f-report-channel').value = s.report_channel || '';
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
@@ -1911,14 +2068,14 @@
       return;
     }
     const tableRows = rows.map(r => {
-      const last = r.last_standup ? r.last_standup.slice(0, 10) : '—';
+      const last = formatDate(r.last_standup, EMPTY_CELL);
       const bar = '🟢'.repeat(Math.min(r.responses, 5)) + '⬜'.repeat(Math.max(0, 5 - Math.min(r.responses, 5)));
       const blockers = r.days_with_blockers ? '🚧 ' + r.days_with_blockers : '—';
       return '<tr>' +
         '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + esc(r.real_name || r.user_id) + '</td>' +
         '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + bar + ' ' + r.responses + '/' + days + '</td>' +
         '<td style="padding:10px 14px;border-bottom:1px solid var(--border)">' + blockers + '</td>' +
-        '<td style="padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text-muted)">' + last + '</td>' +
+        '<td class="col-date" style="padding:10px 14px;border-bottom:1px solid var(--border)">' + esc(last) + '</td>' +
         '</tr>';
     }).join('');
     el.innerHTML =
@@ -1975,15 +2132,28 @@
   function toggleAvatar(btn) { btn.classList.toggle('on'); }
 
   // ── Participants multi-select ──
+  const MAX_PARTICIPANT_CHIPS = 6;
+
+  function memberLabel(m) {
+    return m.name || m.display_name || m.id;
+  }
+
   function populateParticipantsDropdown() {
     const dd = document.getElementById('participants-dropdown');
     dd.innerHTML =
-      '<div class="participant-search"><input type="text" placeholder="Search members..." oninput="filterParticipants(this.value)" onclick="event.stopPropagation()"></div>' +
+      '<div class="multi-head">' +
+        '<div class="multi-toolbar">' +
+          '<span class="count" id="participants-count"></span>' +
+          '<button type="button" onclick="event.stopPropagation();selectAllParticipants()">Select all</button>' +
+          '<button type="button" onclick="event.stopPropagation();clearParticipants()">Clear all</button>' +
+        '</div>' +
+        '<div class="participant-search"><input type="text" placeholder="Search members..." oninput="filterParticipants(this.value)" onclick="event.stopPropagation()"></div>' +
+      '</div>' +
       '<div class="participant-list">' +
       state.members.map(m =>
-        '<div class="multi-opt" data-id="' + esc(m.id) + '" data-name="' + esc((m.name || '') + ' ' + (m.display_name || '')).toLowerCase() + '" onclick="toggleParticipant(&quot;' + esc(m.id) + '&quot;, &quot;' + esc(m.name || m.display_name || m.id) + '&quot;)">' +
+        '<div class="multi-opt" data-id="' + esc(m.id) + '" data-name="' + esc((m.name || '') + ' ' + (m.display_name || '')).toLowerCase() + '" onclick="toggleParticipant(&quot;' + esc(m.id) + '&quot;)">' +
         '<div class="chk">&#10003;</div>' +
-        '<span>' + esc(m.name || m.display_name || m.id) + '</span></div>'
+        '<span>' + esc(memberLabel(m)) + '</span></div>'
       ).join('') +
       '</div>';
     refreshParticipantDisplay();
@@ -2007,10 +2177,15 @@
     } else if (noRes) { noRes.style.display = 'none'; }
   }
 
-  function toggleParticipant(id, name) {
+  function toggleParticipant(id) {
     const idx = state.participants.indexOf(id);
     if (idx >= 0) state.participants.splice(idx, 1);
     else state.participants.push(id);
+    refreshParticipantDisplay();
+  }
+
+  function selectAllParticipants() {
+    state.participants = state.members.map(m => m.id);
     refreshParticipantDisplay();
   }
 
@@ -2025,21 +2200,78 @@
       const sel = state.participants.includes(opt.dataset.id);
       opt.classList.toggle('selected', sel);
     });
-    if (!state.participants.length) {
-      disp.innerHTML = '<span class="placeholder-text">Select participants...</span>';
+    const counter = document.getElementById('participants-count');
+    if (counter) counter.textContent = state.participants.length + ' of ' + state.members.length + ' selected';
+
+    // The collapsed field always states the real selection, never a placeholder
+    // that contradicts it.
+    const n = state.participants.length;
+    if (!n) {
+      disp.innerHTML = '<span class="placeholder-text">No one selected</span>';
+      refreshParticipantsHint();
       return;
     }
-    disp.innerHTML = state.participants.map(id => {
+    const chips = state.participants.slice(0, MAX_PARTICIPANT_CHIPS).map(id => {
       const m = state.members.find(x => x.id === id);
-      const name = m ? (m.name || m.display_name || id) : id;
-      return '<span class="tag-pill">' + esc(name) + '<span class="del" onclick="event.stopPropagation();toggleParticipant(&quot;' + esc(id) + '&quot;,&quot;&quot;)">&times;</span></span>';
+      const name = m ? memberLabel(m) : id;
+      return '<span class="tag-pill">' + esc(name) + '<span class="del" title="Remove" onclick="event.stopPropagation();toggleParticipant(&quot;' + esc(id) + '&quot;)">&times;</span></span>';
     }).join('');
+    const rest = n - Math.min(n, MAX_PARTICIPANT_CHIPS);
+    disp.innerHTML =
+      '<span class="multi-select-summary">' + n + ' selected</span>' + chips +
+      (rest > 0 ? '<span class="multi-more">+' + rest + ' more</span>' : '');
+    refreshParticipantsHint();
+  }
+
+  // ── Participants dropdown open/close ──
+  function openParticipants() {
+    document.getElementById('participants-dropdown').classList.add('open');
+    const disp = document.getElementById('participants-display');
+    disp.classList.add('open');
+    disp.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeParticipants() {
+    document.getElementById('participants-dropdown').classList.remove('open');
+    const disp = document.getElementById('participants-display');
+    disp.classList.remove('open');
+    disp.setAttribute('aria-expanded', 'false');
+  }
+
+  function participantsOpen() {
+    return document.getElementById('participants-dropdown').classList.contains('open');
   }
 
   document.getElementById('participants-display').addEventListener('click', () => {
-    document.getElementById('participants-dropdown').classList.toggle('open');
-    document.getElementById('participants-display').classList.toggle('open');
+    if (participantsOpen()) closeParticipants(); else openParticipants();
   });
+
+  // Outside click. mousedown fires before focus moves, so the dropdown gets out
+  // of the way of whatever the user is actually reaching for.
+  document.addEventListener('mousedown', e => {
+    const wrap = document.getElementById('participants-wrap');
+    if (wrap && !wrap.contains(e.target) && participantsOpen()) closeParticipants();
+  });
+
+  // Escape closes the dropdown only. The modal stays open on the first press.
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (participantsOpen()) {
+      e.stopPropagation();
+      e.preventDefault();
+      closeParticipants();
+      document.getElementById('participants-display').focus();
+      return;
+    }
+    if (tzDropdown && tzDropdown.classList.contains('open')) {
+      e.stopPropagation();
+      e.preventDefault();
+      tzDropdown.classList.remove('open');
+      return;
+    }
+    const modal = document.getElementById('standup-modal');
+    if (modal.classList.contains('open')) closeModal();
+  }, true);
 
   // Reload participants when channel changes
   document.getElementById('f-channel').addEventListener('change', async function() {
@@ -2049,7 +2281,26 @@
     } else {
       await loadMembers();
     }
+    refreshParticipantsHint();
   });
+
+  // Offer the channel's own members as a one-click selection, but never apply
+  // it behind the user's back.
+  function refreshParticipantsHint() {
+    const hint = document.getElementById('participants-hint');
+    if (!hint) return;
+    const sel = document.getElementById('f-channel');
+    const channelId = sel ? sel.value : '';
+    const count = state.members.length;
+    if (!channelId || !count || state.participants.length) {
+      hint.className = 'participants-hint';
+      hint.innerHTML = '';
+      return;
+    }
+    hint.className = 'participants-hint show';
+    hint.innerHTML = '<span>#' + esc(channelName(channelId)) + ' has ' + count + ' member' + (count === 1 ? '' : 's') + '.</span>' +
+      '<button type="button" class="btn btn-ghost btn-sm" onclick="selectAllParticipants()">Select them all</button>';
+  }
 
   async function loadChannelMembers(channelId) {
     try {
@@ -2059,14 +2310,6 @@
       console.error('Failed to load channel members:', e);
     }
   }
-
-  document.addEventListener('click', e => {
-    const wrap = document.getElementById('participants-wrap');
-    if (!wrap.contains(e.target)) {
-      document.getElementById('participants-dropdown').classList.remove('open');
-      document.getElementById('participants-display').classList.remove('open');
-    }
-  });
 
   function clearParticipants() {
     state.participants = [];
@@ -2123,7 +2366,9 @@
     {value: 'Asia/Karachi', label: 'Asia/Karachi (PKT)'},
     {value: 'Asia/Tashkent', label: 'Asia/Tashkent (UZT)'},
     {value: 'Asia/Almaty', label: 'Asia/Almaty (ALMT)'},
+    {value: 'Asia/Yangon', label: 'Asia/Yangon (MMT)'},
     {value: 'Asia/Bangkok', label: 'Asia/Bangkok (ICT)'},
+    {value: 'Asia/Ho_Chi_Minh', label: 'Asia/Ho_Chi_Minh (ICT)'},
     {value: 'Asia/Jakarta', label: 'Asia/Jakarta (WIB)'},
     {value: 'Asia/Singapore', label: 'Asia/Singapore (SGT)'},
     {value: 'Asia/Kuala_Lumpur', label: 'Asia/Kuala_Lumpur (MYT)'},
@@ -2201,19 +2446,78 @@
     return found ? found.label : value;
   }
 
+  function isKnownTz(value) {
+    return !!value && ALL_TIMEZONES.some(tz => tz.value === value);
+  }
+
+  // The browser knows the full IANA database, so ask it rather than trusting
+  // the shortlist above. Intl throws a RangeError on an unknown zone.
+  function isValidIanaTz(value) {
+    if (!value || value.indexOf(' ') >= 0) return false;
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: value });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Keep a real zone the shortlist happens to omit, so editing an existing
+  // standup never silently rewrites its schedule.
+  function rememberTz(value) {
+    if (!isKnownTz(value) && isValidIanaTz(value)) ALL_TIMEZONES.push({ value: value, label: value });
+    return isKnownTz(value);
+  }
+
+  // The workspace timezone: whatever most members are actually in, then the
+  // browser's own zone, and only then UTC. UTC is the wrong default for a team
+  // that all sits in one place.
+  function workspaceTz() {
+    const tally = {};
+    (state.members || []).forEach(m => {
+      if (isKnownTz(m.tz)) tally[m.tz] = (tally[m.tz] || 0) + 1;
+    });
+    let best = '';
+    let bestCount = 0;
+    Object.keys(tally).forEach(tz => {
+      if (tally[tz] > bestCount) { best = tz; bestCount = tally[tz]; }
+    });
+    if (best) return best;
+    try {
+      const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (isKnownTz(local)) return local;
+    } catch (e) { /* fall through to UTC */ }
+    return 'UTC';
+  }
+
   function selectTz(tz) {
-    tzInput.dataset.tzValue = tz;
-    tzInput.value = tzLabel(tz);
+    const value = rememberTz(tz) ? tz : workspaceTz();
+    tzInput.dataset.tzValue = value;
+    tzInput.value = tzLabel(value);
     tzDropdown.classList.remove('open');
   }
 
+  // Only ever hand the API a name the picker knows about, so a half-typed
+  // entry can never be saved as a schedule the scheduler will silently reject.
   function getTzValue() {
-    return tzInput.dataset.tzValue || tzInput.value;
+    if (isKnownTz(tzInput.dataset.tzValue)) return tzInput.dataset.tzValue;
+    const typed = (tzInput.value || '').trim().toLowerCase();
+    const exact = ALL_TIMEZONES.find(tz => tz.value.toLowerCase() === typed || tz.label.toLowerCase() === typed);
+    if (exact) return exact.value;
+    if (TZ_ALIASES[typed]) return TZ_ALIASES[typed];
+    const raw = (tzInput.value || '').trim();
+    if (isValidIanaTz(raw)) return raw;
+    return workspaceTz();
   }
 
   tzInput.addEventListener('focus', () => { tzInput.value = ''; renderTzOptions(''); });
   tzInput.addEventListener('input', () => { tzInput.dataset.tzValue = ''; renderTzOptions(tzInput.value); });
-  tzInput.addEventListener('blur', () => setTimeout(() => { tzDropdown.classList.remove('open'); if (tzInput.dataset.tzValue) tzInput.value = tzLabel(tzInput.dataset.tzValue); }, 150));
+  // On blur the field snaps back to whatever will actually be saved, so what
+  // you see is what the scheduler gets.
+  tzInput.addEventListener('blur', () => setTimeout(() => {
+    tzDropdown.classList.remove('open');
+    selectTz(getTzValue());
+  }, 150));
   tzInput.addEventListener('keydown', (e) => {
     const opts = tzDropdown.querySelectorAll('.tz-option[data-tz]');
     if (e.key === 'ArrowDown') { e.preventDefault(); tzHighlightIdx = Math.min(tzHighlightIdx + 1, opts.length - 1); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
@@ -2229,6 +2533,181 @@
   // ── Utilities ──
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Dates: one helper, used everywhere ──
+  // Placeholder for a cell with no value.
+  const EMPTY_CELL = '-';
+  const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Parse anything the API hands us (ISO date, ISO datetime, RFC 1123) into a Date.
+  // Returns null when the value is missing or unparseable, so callers can pick a fallback.
+  function toDate(value) {
+    if (value === null || value === undefined || value === '') return null;
+    if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+    const s = String(value).trim();
+    if (!s) return null;
+    const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return null;
+    // A server value stamped at midnight UTC is a calendar date, not an instant.
+    // Rebuild it from the UTC parts so it cannot slip a day west of Greenwich.
+    if (/\b00:00:00\b/.test(s) && /(GMT|UTC|Z|\+0000)/i.test(s)) {
+      return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+    return d;
+  }
+
+  // House format for absolute dates: "27 Aug 2026".
+  function formatDate(value, fallback) {
+    const d = toDate(value);
+    if (!d) return fallback === undefined ? EMPTY_CELL : fallback;
+    return d.getDate() + ' ' + MONTH_ABBR[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
+  function formatDateTime(value, fallback) {
+    const d = toDate(value);
+    if (!d) return fallback === undefined ? EMPTY_CELL : fallback;
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return formatDate(d) + ', ' + hh + ':' + mm;
+  }
+
+  // Relative wording for places where recency is the point.
+  function formatRelative(value, fallback) {
+    const d = toDate(value);
+    if (!d) return fallback === undefined ? EMPTY_CELL : fallback;
+    const secs = Math.round((Date.now() - d.getTime()) / 1000);
+    if (secs < 0) return formatDate(d);
+    if (secs < 45) return 'just now';
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return mins + (mins === 1 ? ' minute ago' : ' minutes ago');
+    const hours = Math.round(mins / 60);
+    if (hours < 24) return hours + (hours === 1 ? ' hour ago' : ' hours ago');
+    const days = Math.round(hours / 24);
+    if (days < 30) return days + (days === 1 ? ' day ago' : ' days ago');
+    return formatDate(d);
+  }
+
+  // Relative wording with the absolute value in a tooltip.
+  function relativeCell(value, fallback) {
+    const d = toDate(value);
+    if (!d) return esc(fallback === undefined ? EMPTY_CELL : fallback);
+    return '<span title="' + esc(formatDateTime(d)) + '">' + esc(formatRelative(d)) + '</span>';
+  }
+
+  // ── Slack mrkdwn → safe HTML ──
+  // Order matters. The text arrives from Slack, so it is untrusted:
+  //   1. undo Slack's own escaping so entities can be recognised,
+  //   2. lift code spans and <...> entities out into placeholders, escaping
+  //      every component as it is built,
+  //   3. HTML-escape all remaining text before any markup tag is inserted,
+  //   4. only then turn *bold* / _italic_ / ~strike~ / bullets into tags.
+  // Nothing that came from Slack ever reaches the DOM unescaped.
+  function slackUserName(userId) {
+    const m = (state.members || []).find(x => x.id === userId);
+    if (!m) return 'user';
+    return m.display_name || m.name || 'user';
+  }
+
+  function slackChannelName(channelId) {
+    const c = (state.channels || []).find(x => x.id === channelId);
+    return c && c.name ? c.name : 'channel';
+  }
+
+  function slackEntityHtml(inner) {
+    const bar = inner.indexOf('|');
+    const target = bar >= 0 ? inner.slice(0, bar) : inner;
+    const label = bar >= 0 ? inner.slice(bar + 1) : '';
+    const lead = target.charAt(0);
+
+    if (lead === '@') {
+      const uid = target.slice(1).split('^').pop();
+      return '<span class="slack-mention">@' + esc(label || slackUserName(uid)) + '</span>';
+    }
+    if (lead === '#') {
+      const cid = target.slice(1);
+      return '<span class="slack-mention">#' + esc(label || slackChannelName(cid)) + '</span>';
+    }
+    if (lead === '!') {
+      const kw = target.slice(1);
+      if (kw.indexOf('subteam^') === 0) return '<span class="slack-mention">' + esc(label || '@team') + '</span>';
+      if (kw === 'here' || kw === 'channel' || kw === 'everyone') return '<span class="slack-mention">@' + esc(kw) + '</span>';
+      if (kw.indexOf('date^') === 0) return esc(label || kw);
+      return esc('<' + inner + '>');
+    }
+    // Only http(s) and mailto become links. Anything else stays inert text,
+    // which is what keeps javascript: and data: URLs out of the page.
+    if (/^https?:\/\//i.test(target)) {
+      return '<a href="' + esc(target) + '" target="_blank" rel="noopener noreferrer">' + esc(label || target) + '</a>';
+    }
+    if (/^mailto:/i.test(target)) {
+      return '<a href="' + esc(target) + '">' + esc(label || target.replace(/^mailto:/i, '')) + '</a>';
+    }
+    return esc('<' + inner + '>');
+  }
+
+  function slackToHtml(text) {
+    if (text === null || text === undefined) return '';
+    let plain = String(text);
+    if (!plain) return '';
+
+    // 1. Undo Slack's escaping. &amp; must come last or "&amp;lt;" would
+    //    wrongly become "<" instead of the literal "&lt;".
+    plain = plain.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    // Strip our placeholder sentinels so the input cannot forge one.
+    plain = plain.replace(/[\uE000\uE001]/g, '');
+
+    const parts = [];
+    const stash = (html) => '\uE000' + (parts.push(html) - 1) + '\uE001';
+
+    // 2a. Code spans first: nothing inside them is markup.
+    plain = plain.replace(/```\n?([\s\S]*?)```/g, (m, body) =>
+      stash('<pre class="slack-pre"><code>' + esc(body.replace(/\n+$/, '')) + '</code></pre>'));
+    plain = plain.replace(/`([^`\n]+)`/g, (m, body) =>
+      stash('<code class="slack-code">' + esc(body) + '</code>'));
+
+    // 2b. Slack <...> entities: mentions, channels, links.
+    plain = plain.replace(/<([^<>]+)>/g, (m, inner) => stash(slackEntityHtml(inner)));
+
+    // 3. Escape everything that is left. Placeholders survive untouched.
+    let out = esc(plain);
+
+    // 4. Simple inline mrkdwn, now safe to turn into tags.
+    out = out.replace(/(^|[^\w*])\*([^*\n]+?)\*(?![\w*])/g, '$1<strong>$2</strong>');
+    out = out.replace(/(^|[^\w_])_([^_\n]+?)_(?![\w_])/g, '$1<em>$2</em>');
+    out = out.replace(/(^|[^\w~])~([^~\n]+?)~(?![\w~])/g, '$1<del>$2</del>');
+
+    // 5. Bullets and line breaks.
+    const lines = out.split('\n');
+    let html = '';
+    let inList = false;
+    for (const line of lines) {
+      const bullet = line.match(/^\s*(?:•|[-*])\s+(.*)$/);
+      if (bullet) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += '<li>' + bullet[1] + '</li>';
+        continue;
+      }
+      if (inList) { html += '</ul>'; inList = false; }
+      if (!line.trim()) continue;
+      html += (html && !html.endsWith('</ul>') ? '<br>' : '') + line;
+    }
+    if (inList) html += '</ul>';
+
+    // 6. Put the stashed fragments back. A code span nested inside a link
+    //    label needs a second pass, so loop until nothing is left.
+    for (let pass = 0; pass < 3 && html.indexOf('\uE000') >= 0; pass++) {
+      html = html.replace(/\uE000(\d+)\uE001/g, (m, i) => parts[Number(i)] || '');
+    }
+    return html;
+  }
+
+  // Wrap rendered Slack text so the stylesheet can reach it.
+  function slackBlock(text) {
+    const html = slackToHtml(text);
+    return html ? '<span class="slack-text">' + html + '</span>' : '';
   }
 
   // ── Kudos ──
@@ -2260,22 +2739,16 @@
     if (!el) return;
     if (!kudos.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No kudos yet — give some! DM the bot: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">kudos @teammate Great job!</code></p>'; return; }
     el.innerHTML = kudos.map(k => {
-      const ago = timeAgo(k.created_at);
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;">' +
-        '<div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:6px;">🏆 <strong style="color:var(--text);">@' + esc(k.from_user) + '</strong> → <strong style="color:#818cf8;">@' + esc(k.to_user) + '</strong> · ' + ago + '</div>' +
-        '<div style="font-size:0.95rem;color:var(--text-muted);font-style:italic;">"' + esc(k.message) + '"</div>' +
+        '<div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:6px;"><span class="ico">🏆</span><strong style="color:var(--text);">@' + esc(k.from_user) + '</strong> → <strong style="color:#818cf8;">@' + esc(k.to_user) + '</strong> · ' + relativeCell(k.created_at, '') + '</div>' +
+        '<div style="font-size:0.95rem;color:var(--text-muted);font-style:italic;">"' + slackBlock(k.message) + '"</div>' +
         '</div>';
     }).join('');
   }
 
-  function timeAgo(iso) {
-    if (!iso) return '';
-    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-    return Math.floor(diff / 86400) + 'd ago';
-  }
+  // Kept as a thin alias so every relative time in the dashboard comes out of
+  // the same helper.
+  function timeAgo(iso) { return formatRelative(iso, ''); }
 
   // ── Schedules ──
   async function loadSchedules() {
@@ -2353,7 +2826,7 @@
     document.getElementById('f-name').value = 'Daily Standup';
     document.getElementById('f-channel').value = '';
     document.getElementById('f-time').value = '09:00';
-    selectTz('UTC');
+    selectTz(workspaceTz());
     document.getElementById('f-report-channel').value = '';
     document.getElementById('f-report-time').value = '';
     document.getElementById('f-group-by').value = 'member';
@@ -2386,7 +2859,7 @@
     document.getElementById('f-name').value = s.name || '';
     document.getElementById('f-channel').value = s.channel_id || '';
     document.getElementById('f-time').value = s.schedule_time || '09:00';
-    selectTz(s.schedule_tz || 'UTC');
+    selectTz(s.schedule_tz || workspaceTz());
     document.getElementById('f-report-channel').value = s.report_channel || '';
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
@@ -2593,63 +3066,38 @@
   }
 
   // ── MCP ──
-  let _mcpTeamId = '';
-
-  async function loadMCPSection() {
-    try {
-      const me = await api('GET', '/me');
-      _mcpTeamId = me.team_id || '';
-      const el = document.getElementById('mcp-team-id');
-      if (el) el.textContent = _mcpTeamId || 'Not available';
-      renderMCPConfig();
-    } catch(e) {
-      const el = document.getElementById('mcp-team-id');
-      if (el) el.textContent = 'Error loading';
-    }
+  // The team id is rendered server side, so this only has to fill in the
+  // generated config snippet.
+  function loadMCPSection() {
+    renderMCPConfig();
   }
+
+  // Every client gets the same remote HTTP endpoint plus a scoped bearer key.
+  // There is deliberately no local/stdio variant: it would need a database
+  // connection string, and an example credential is a credential.
+  const MCP_ENDPOINT = 'https://api.morgenruf.dev/mcp';
+  const MCP_KEY_PLACEHOLDER = 'mrn_YOUR_KEY_HERE';
 
   function renderMCPConfig() {
     const assistant = document.getElementById('mcp-assistant')?.value || 'claude';
-    const teamId = _mcpTeamId || 'T0123ABCDE';
-    const dbUrl = 'postgresql://morgenruf:password@localhost:5432/morgenruf';
+    const server = {
+      url: MCP_ENDPOINT,
+      headers: { Authorization: 'Bearer ' + MCP_KEY_PLACEHOLDER }
+    };
 
     let config, path;
     if (assistant === 'claude') {
       path = navigator.platform.includes('Win')
         ? '%APPDATA%\\Claude\\claude_desktop_config.json'
         : '~/Library/Application Support/Claude/claude_desktop_config.json';
-      config = JSON.stringify({
-        mcpServers: {
-          morgenruf: {
-            command: 'python',
-            args: ['app/src/mcp_server.py'],
-            env: { DATABASE_URL: dbUrl, MCP_TEAM_ID: teamId }
-          }
-        }
-      }, null, 2);
+      config = JSON.stringify({ mcpServers: { morgenruf: server } }, null, 2);
     } else if (assistant === 'cursor') {
       path = '~/.cursor/mcp.json';
-      config = JSON.stringify({
-        mcpServers: {
-          morgenruf: {
-            command: 'python',
-            args: ['/path/to/mcp_server.py'],
-            env: { DATABASE_URL: dbUrl, MCP_TEAM_ID: teamId }
-          }
-        }
-      }, null, 2);
+      config = JSON.stringify({ mcpServers: { morgenruf: server } }, null, 2);
     } else {
-      path = '.github/copilot-config.json (in your repository)';
+      path = '.vscode/mcp.json (workspace) or your user settings';
       config = JSON.stringify({
-        mcp: {
-          servers: {
-            morgenruf: {
-              command: 'python',
-              args: ['/path/to/mcp_server.py'],
-              env: { DATABASE_URL: dbUrl, MCP_TEAM_ID: teamId }
-            }
-          }
-        }
+        servers: { morgenruf: Object.assign({ type: 'http' }, server) }
       }, null, 2);
     }
 
@@ -2691,17 +3139,17 @@
     }
     const rows = keys.map(k => `
       <tr>
-        <td><code style="font-size:0.82rem">${k.key_prefix}...</code></td>
-        <td>${k.name || '—'}</td>
-        <td style="font-size:0.8rem;color:var(--text-muted)">${k.created_at ? new Date(k.created_at).toLocaleDateString() : '—'}</td>
-        <td style="font-size:0.8rem;color:var(--text-muted)">${k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}</td>
-        <td><button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#dc2626" onclick="revokeMCPKey(${k.id})">Revoke</button></td>
+        <td class="col-key"><code style="font-size:0.82rem">${esc(k.key_prefix || '')}...</code></td>
+        <td class="col-name">${esc(k.name || EMPTY_CELL)}</td>
+        <td class="col-date">${esc(formatDate(k.created_at, EMPTY_CELL))}</td>
+        <td class="col-date">${relativeCell(k.last_used_at, 'Never')}</td>
+        <td class="col-actions"><button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#dc2626" onclick="revokeMCPKey(${k.id})">Revoke</button></td>
       </tr>`).join('');
-    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.88rem">
-      <thead><tr style="text-align:left;color:var(--text-muted);font-size:0.78rem">
-        <th style="padding:6px 8px">Prefix</th><th style="padding:6px 8px">Name</th>
-        <th style="padding:6px 8px">Created</th><th style="padding:6px 8px">Last Used</th><th></th>
-      </tr></thead><tbody>${rows}</tbody></table>`;
+    el.innerHTML = `<div class="table-scroll"><table class="data-table" style="min-width:640px">
+      <thead><tr>
+        <th class="col-key">Prefix</th><th class="col-name">Name</th>
+        <th class="col-date">Created</th><th class="col-date">Last Used</th><th class="col-actions"></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   function openCreateKeyModal() {
