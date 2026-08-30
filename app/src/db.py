@@ -121,9 +121,53 @@ def get_installation(team_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_all_installations() -> list[dict]:
-    """Return all installation rows."""
+def deactivate_installation(team_id: str, reason: str) -> bool:
+    """Mark an installation as gone. Returns True if this changed anything.
+
+    Called when Slack tells us the app is no longer installed. The row stays so
+    standup history keeps its reference and a reinstall can revive it.
+    """
+    sql = """
+        UPDATE installations
+        SET active = FALSE, deactivated_at = NOW(), deactivated_reason = %s
+        WHERE team_id = %s AND active
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (reason[:200], team_id))
+            changed = (cur.rowcount or 0) > 0
+    if changed:
+        logger.info("Retired installation %s: %s", team_id, reason)
+    return changed
+
+
+def reactivate_installation(team_id: str) -> bool:
+    """Bring a retired installation back. Called when a workspace reinstalls."""
+    sql = """
+        UPDATE installations
+        SET active = TRUE, deactivated_at = NULL, deactivated_reason = NULL
+        WHERE team_id = %s AND NOT active
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            changed = (cur.rowcount or 0) > 0
+    if changed:
+        logger.info("Installation %s is back", team_id)
+    return changed
+
+
+def get_all_installations(include_inactive: bool = False) -> list[dict]:
+    """Return installation rows, live ones by default.
+
+    An installation whose Slack app has been uninstalled keeps answering
+    account_inactive forever. Excluding those by default stops the scheduler
+    registering jobs for workspaces that cannot receive them, and stops the
+    member sync burning API calls on tokens Slack has already invalidated.
+    """
     sql = "SELECT * FROM installations ORDER BY installed_at"
+    if not include_inactive:
+        sql = "SELECT * FROM installations WHERE active ORDER BY installed_at"
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)

@@ -15,7 +15,12 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from schedule_validation import schedule_config_error
 from slack_sdk import WebClient
-from slack_users import fetch_human_users, fetch_workspace_humans, member_profile
+from slack_users import (
+    fetch_human_users,
+    fetch_workspace_humans_with_error,
+    is_dead_install,
+    member_profile,
+)
 from state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
@@ -1287,9 +1292,17 @@ def sync_members_from_slack() -> None:
             time.sleep(_MEMBER_SYNC_PAUSE_SECONDS)
         try:
             client = _rate_limited_client(token)
-            live = fetch_workspace_humans(client)
+            live, error_code = fetch_workspace_humans_with_error(client)
             if live is None:
-                logger.warning("Member sync: skipping %s, could not read the user list", team_id)
+                if is_dead_install(error_code):
+                    # The app has been uninstalled. Stop polling it every six
+                    # hours; a reinstall revives the row.
+                    db.deactivate_installation(team_id, error_code or "unknown")
+                    logger.info("Member sync: retired %s, Slack says %s", team_id, error_code)
+                else:
+                    logger.warning(
+                        "Member sync: skipping %s, could not read the user list (%s)", team_id, error_code or "unknown"
+                    )
                 continue
 
             stored = db.get_all_members(team_id)
