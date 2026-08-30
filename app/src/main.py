@@ -61,6 +61,43 @@ def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
         return []
 
 
+def _is_dev_mode() -> bool:
+    return bool(os.environ.get("FLASK_DEBUG")) or os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
+
+
+def _resolve_secret_key() -> bytes | str:
+    """Return the signing key, or refuse to start.
+
+    FLASK_SECRET_KEY signs the Flask session, the Slack OAuth state parameter
+    and the dashboard login token. Running without it used to log a warning and
+    carry on with a random key, which is safe for the session but meant a
+    restart silently invalidated every in-flight login, and it let a deployment
+    reach production with nobody noticing the variable was never set.
+
+    app/.env.example ships the variable empty, so the path of least resistance
+    for a self-hoster was to leave it that way. Refusing to boot makes that
+    impossible to miss. Dev keeps the old behaviour so a local checkout still
+    runs with no setup.
+    """
+    key = os.environ.get("FLASK_SECRET_KEY", "").strip()
+    if key:
+        if len(key) < 32:
+            logger.warning(
+                "FLASK_SECRET_KEY is %d characters. Use at least 32: openssl rand -hex 32",
+                len(key),
+            )
+        return key
+
+    if _is_dev_mode():
+        logger.warning("FLASK_SECRET_KEY not set, using a random key for this process (development only)")
+        return os.urandom(32)
+
+    raise RuntimeError(
+        "FLASK_SECRET_KEY is not set. It signs dashboard login tokens, so the app "
+        "will not start without it. Generate one with: openssl rand -hex 32"
+    )
+
+
 def create_app() -> tuple[App, Flask]:
     signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
     client_id = os.environ.get("SLACK_CLIENT_ID", "")
@@ -91,11 +128,7 @@ def create_app() -> tuple[App, Flask]:
     flask_app = Flask(__name__)
     # Trust Cloudflare/reverse-proxy headers so Flask knows the request is HTTPS
     flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-    secret_key = os.environ.get("FLASK_SECRET_KEY")
-    if not secret_key:
-        logger.warning("FLASK_SECRET_KEY not set — using random key (sessions will not persist across restarts)")
-        secret_key = os.urandom(32)
-    flask_app.secret_key = secret_key
+    flask_app.secret_key = _resolve_secret_key()
     flask_app.config["SESSION_COOKIE_SECURE"] = True
     flask_app.config["SESSION_COOKIE_HTTPONLY"] = True
     flask_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
