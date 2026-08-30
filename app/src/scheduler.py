@@ -325,7 +325,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
 
         members = db.get_active_members(team_id)
         if participants_filter:
-            members = [m for m in members if m["user_id"] in participants_filter]
+            # Register anyone selected who has never interacted with the bot,
+            # rather than silently dropping them from the delivery.
+            members = resolve_participants(WebClient(token=bot_token), team_id, participants_filter, members)
     except Exception as exc:
         logger.error("Could not load data for standup %s/%s: %s", team_id, schedule_id, exc)
         return
@@ -464,6 +466,68 @@ def participation_pct(stats: list[dict] | None) -> int:
     return int(responded / len(enrolled) * 100)
 
 
+def resolve_participants(client, team_id: str, participants, members: list[dict]) -> list[dict]:
+    """Return the member rows for `participants`, registering anyone unknown.
+
+    Delivery used to start from `get_active_members` and intersect with the
+    schedule's participant list, so a person picked in the dashboard who had
+    never interacted with the bot was silently dropped: listed on the standup,
+    never DMed, and counted in the total. On the live workspace one schedule
+    listed 15 participants and could reach exactly 1 of them.
+
+    Anyone already known keeps their stored `active` flag, so an opt-out is
+    still honoured. Anyone unknown is looked up once, filtered for bots, stored,
+    and included. A Slack lookup failure leaves them out of this run rather than
+    guessing, and the next run retries.
+    """
+    import db  # noqa: PLC0415
+
+    wanted = [p for p in (participants or []) if p]
+    if not wanted:
+        return members
+
+    known = {m["user_id"]: m for m in members}
+    resolved = [known[uid] for uid in wanted if uid in known]
+
+    unknown = [uid for uid in wanted if uid not in known]
+    if not unknown:
+        return resolved
+
+    # Someone in the list who is stored but inactive opted out; do not re-add.
+    try:
+        opted_out = {m["user_id"] for m in db.get_all_members(team_id)} if hasattr(db, "get_all_members") else set()
+    except Exception:
+        opted_out = set()
+    unknown = [uid for uid in unknown if uid not in opted_out]
+    if not unknown:
+        return resolved
+
+    try:
+        found = fetch_human_users(client, unknown)
+    except Exception as exc:
+        logger.warning("Could not resolve %d unknown participants for %s: %s", len(unknown), team_id, exc)
+        return resolved
+
+    for uid, user in found.items():
+        profile = member_profile(user)
+        # fetch_human_users returns an empty object for someone it kept only
+        # because Slack could not be reached. Deliver to them anyway, but do not
+        # write a member row with no name; that is what left raw Slack ids in the
+        # dashboard (#68). The next run retries the lookup.
+        if user:
+            try:
+                db.upsert_member(team_id, uid, **profile)
+                logger.info("Registered participant %s for %s on first delivery", uid, team_id)
+            except Exception as exc:
+                logger.warning("Could not register participant %s for %s: %s", uid, team_id, exc)
+        resolved.append({"user_id": uid, "real_name": profile.get("real_name") or uid})
+
+    dropped = len(wanted) - len(resolved)
+    if dropped:
+        logger.warning("Standup for %s lists %d participants but can reach %d", team_id, len(wanted), len(resolved))
+    return resolved
+
+
 def _send_reminder_to_workspace(
     team_id: str, bot_token: str, reminder_minutes: int, schedule_id: int | None = None
 ) -> None:
@@ -499,8 +563,7 @@ def _send_reminder_to_workspace(
                     standup_label = " ".join(parts)
             participants = sched.get("participants") or []
             if participants:
-                participant_set = set(participants)
-                members = [m for m in members if m["user_id"] in participant_set]
+                members = resolve_participants(WebClient(token=bot_token), team_id, participants, members)
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
         return

@@ -904,7 +904,8 @@ def api_analytics():
     team_id = session["team_id"]
     days = int(request.args.get("days", 7))
     try:
-        stats = db.get_participation_stats(team_id, days)
+        overview = db.get_participation_overview(team_id, days)
+        stats = overview["members"]
         for row in stats:
             last = row.get("last_standup")
             if last is not None and hasattr(last, "isoformat"):
@@ -918,10 +919,28 @@ def api_analytics():
             row["enrolled"] = bool(row.get("enrolled"))
             row["on_vacation"] = bool(row.get("on_vacation"))
             row["schedules"] = row.get("schedules") or []
-        return jsonify(stats)
+        # Return the workspace totals alongside the rows so the page shows the
+        # same completion rate as the Standups card. The client used to average
+        # the per-member ratios, which weights a member with one expected
+        # standup the same as one with ten and produced a different headline for
+        # the same window (#85).
+        return jsonify(
+            {
+                "members": stats,
+                "days": overview["days"],
+                "expected": overview["expected"],
+                "completed": overview["completed"],
+                "missed": overview["missed"],
+                "completion_rate": overview["completion_rate"],
+                "enrolled_members": overview["enrolled_members"],
+                "unenrolled_members": overview["unenrolled_members"],
+                "on_vacation_members": overview["on_vacation_members"],
+                "schedules": overview["schedules"],
+            }
+        )
     except Exception as exc:
         logger.error("api_analytics error: %s", exc)
-        return jsonify([])
+        return jsonify({"members": [], "schedules": []})
 
 
 @dashboard_bp.route("/dashboard/api/analytics/schedules", methods=["GET"])
