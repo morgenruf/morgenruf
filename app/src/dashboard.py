@@ -919,6 +919,7 @@ def api_analytics():
             row["enrolled"] = bool(row.get("enrolled"))
             row["on_vacation"] = bool(row.get("on_vacation"))
             row["schedules"] = row.get("schedules") or []
+            row["schedule_ids"] = [int(s) for s in (row.get("schedule_ids") or [])]
         # Return the workspace totals alongside the rows so the page shows the
         # same completion rate as the Standups card. The client used to average
         # the per-member ratios, which weights a member with one expected
