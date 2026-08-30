@@ -766,6 +766,16 @@
       white-space: nowrap;
       border: 0;
     }
+
+    /* A channel the bot cannot see. The id is kept deliberately (#86) so two
+       different mentions stay distinguishable, but styling it like a resolved
+       channel made it read as a rendering bug. */
+    .slack-mention-unknown {
+      background: none;
+      color: var(--text-dim);
+      border-bottom: 1px dotted currentColor;
+      font-variant-numeric: tabular-nums;
+    }
   </style>
 </head>
 <body>
@@ -3442,7 +3452,19 @@
     // the reader that two mentions point somewhere different.
     const c = (state.channels || []).find(x => x.id === channelId);
     if (c && c.name) return c.name;
+    // Channels the bot has not joined, resolved server side for this report.
+    const resolved = state.channelNames && state.channelNames[channelId];
+    if (resolved) return resolved;
     return channelId || 'channel';
+  }
+
+  // True when the mention could not be turned into a name. Slack answers
+  // channel_not_found for private channels the bot is not in, so some of these
+  // can never resolve; they should not be styled like a working channel link.
+  function channelIsUnresolved(channelId) {
+    if (!channelId) return true;
+    if ((state.channels || []).some(x => x.id === channelId)) return false;
+    return !(state.channelNames && state.channelNames[channelId]);
   }
 
   function slackEntityHtml(inner) {
@@ -3457,7 +3479,11 @@
     }
     if (lead === '#') {
       const cid = target.slice(1);
-      return '<span class="slack-mention">#' + esc(label || slackChannelName(cid)) + '</span>';
+      // A label in the mention itself is Slack's own, so it is always a name.
+      const unresolved = !label && channelIsUnresolved(cid);
+      const cls = unresolved ? 'slack-mention slack-mention-unknown' : 'slack-mention';
+      const title = unresolved ? ' title="Morgenruf cannot see this channel, so only its id is available"' : '';
+      return '<span class="' + cls + '"' + title + '>#' + esc(label || slackChannelName(cid)) + '</span>';
     }
     if (lead === '!') {
       const kw = target.slice(1);
