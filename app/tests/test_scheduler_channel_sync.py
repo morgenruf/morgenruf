@@ -1,4 +1,4 @@
-"""Regression tests for #53: channel sync must not add bots as participants.
+"""Regression tests for channel sync: bot filtering (#53) and member profiles (#68).
 
 Kept in its own module (rather than test_scheduler.py) so it does not collide
 with the scheduler test file added by the #51 reconciliation work.
@@ -100,3 +100,57 @@ class TestChannelSyncFiltersBots:
         self._run()
         dm_targets = {kwargs["users"] for _, kwargs in self.client.conversations_open.call_args_list}
         assert dm_targets == {"U1"}
+
+
+class TestChannelSyncStoresProfiles:
+    """#68: a synced member must get a name, email and timezone, not a bare id."""
+
+    def setup_method(self):
+        self.db = MagicMock()
+        self.db.get_standup_schedule.return_value = _schedule()
+        self.db.get_active_members.return_value = [{"user_id": "U1", "real_name": "Reporter"}]
+        self.db.is_skipped_today.return_value = False
+        self.db.is_on_vacation.return_value = False
+
+        self.client = MagicMock()
+        self.client.conversations_members.return_value = {"members": ["U1"], "response_metadata": {}}
+        self.client.users_list.return_value = {
+            "members": [
+                _slack_user(
+                    "U1",
+                    tz="Asia/Kolkata",
+                    profile={"real_name": "Anmol Nagpal", "email": "anmol@example.com"},
+                )
+            ],
+            "response_metadata": {},
+        }
+        self.client.conversations_open.return_value = {"channel": {"id": "D1"}}
+
+    def _run(self):
+        with (
+            patch.dict(sys.modules, {"db": self.db}),
+            patch.object(sched_mod, "WebClient", return_value=self.client),
+            patch.object(sched_mod.state_store, "is_active", return_value=False),
+        ):
+            sched_mod._send_standup_to_workspace("T1", "xoxb-test", "C1", 1)
+
+    def test_profile_is_passed_to_upsert_member(self):
+        self._run()
+        self.db.upsert_member.assert_called_once()
+        args, kwargs = self.db.upsert_member.call_args
+        assert args == ("T1", "U1")
+        assert kwargs["real_name"] == "Anmol Nagpal"
+        assert kwargs["email"] == "anmol@example.com"
+        assert kwargs["tz"] == "Asia/Kolkata"
+
+    def test_no_extra_slack_calls_for_the_profile(self):
+        """users.list already held the profile, so nothing extra is fetched."""
+        self._run()
+        assert self.client.users_list.call_count == 1
+        self.client.users_info.assert_not_called()
+
+    def test_unknown_profile_fields_stay_none_rather_than_blanking_the_row(self):
+        self.client.users_list.return_value = {"members": [_slack_user("U1")], "response_metadata": {}}
+        self._run()
+        _, kwargs = self.db.upsert_member.call_args
+        assert kwargs == {"real_name": None, "email": None, "tz": None}

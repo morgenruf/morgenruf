@@ -13,8 +13,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from schedule_validation import schedule_config_error
 from slack_sdk import WebClient
-from slack_users import filter_human_ids
+from slack_users import fetch_human_users, member_profile
 from state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
@@ -357,10 +358,14 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                         break
                 # Drop bots, apps and deactivated accounts. DMing them always
                 # fails and shows up as a standup delivery error every run.
-                channel_members = filter_human_ids(client, channel_members)
-                for uid in channel_members:
+                # The same bulk users.list carries each person's profile, so a
+                # synced member gets a name, email and timezone at no extra
+                # API cost instead of showing up as a raw Slack id (#68).
+                human_users = fetch_human_users(client, channel_members)
+                channel_members = set(human_users)
+                for uid, user in human_users.items():
                     try:
-                        db.upsert_member(team_id, uid)
+                        db.upsert_member(team_id, uid, **member_profile(user))
                     except Exception:
                         pass
                 # Update participants list to match channel
@@ -864,18 +869,27 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     team_id = schedule["team_id"]
     bot_token = schedule["bot_token"]
     schedule_id = schedule["id"]
-    schedule_time = schedule.get("schedule_time", "09:00")
-    schedule_tz = schedule.get("schedule_tz", "UTC")
+    schedule_time = schedule.get("schedule_time") or "09:00"
+    schedule_tz = schedule.get("schedule_tz") or "UTC"
     schedule_days = schedule.get("schedule_days", "mon,tue,wed,thu,fri")
     channel_id = schedule.get("channel_id") or ""
     reminder_minutes = int(schedule.get("reminder_minutes") or 0)
 
-    try:
-        hour, minute = schedule_time.split(":")
-        tz = pytz.timezone(schedule_tz)
-    except Exception as exc:
-        logger.error("Invalid schedule config %s: %s", schedule_id, exc)
+    config_error = schedule_config_error(schedule)
+    if config_error:
+        # The row stays Active in the DB with no job behind it, so it would
+        # otherwise never fire and never say why (#67). get_unregistered_schedules
+        # reports the same problem to the dashboard API.
+        logger.error(
+            "Schedule %s (%s) is active but cannot be registered: %s",
+            schedule_id,
+            schedule.get("name"),
+            config_error,
+        )
         return
+
+    hour, minute = schedule_time.split(":")
+    tz = pytz.timezone(schedule_tz)
 
     trigger = CronTrigger(hour=int(hour), minute=int(minute), day_of_week=schedule_days, timezone=tz)
     job_id = f"schedule_{team_id}_{schedule_id}"
@@ -1015,6 +1029,56 @@ def _remove_jobs(scheduler: BackgroundScheduler, job_ids: tuple[str, ...]) -> No
             scheduler.remove_job(job_id)
         except Exception:  # noqa: S110 — job may simply not exist
             pass
+
+
+def get_unregistered_schedules(
+    scheduler: Optional[BackgroundScheduler] = None,
+    schedules: Optional[list[dict]] = None,
+) -> list[dict]:
+    """Report active schedules that have no standup job behind them (#67).
+
+    A schedule can be Active in the DB and still never fire in two ways: its
+    time or timezone is unusable, so register_schedule_job refuses it, or its
+    job is missing from the running scheduler. Both are invisible to the user
+    today, since the only trace is a log line.
+
+    Pass `schedules` to check rows the caller already has, otherwise the active
+    rows are read from the DB. Returns one dict per affected schedule with
+    `team_id`, `id`, `name` and a human readable `reason`.
+    """
+    if schedules is None:
+        try:
+            import db  # noqa: PLC0415
+
+            schedules = db.get_all_active_schedules()
+        except Exception as exc:
+            logger.warning("Could not load schedules to check job registration: %s", exc)
+            return []
+    if scheduler is None:
+        scheduler = _scheduler
+
+    problems: list[dict] = []
+    for sched in schedules:
+        if not sched.get("active", True):
+            continue
+        reason = schedule_config_error(sched)
+        if not reason and scheduler is not None:
+            job_id = f"schedule_{sched.get('team_id')}_{sched.get('id')}"
+            try:
+                if scheduler.get_job(job_id) is None:
+                    reason = "No standup job is registered for this schedule."
+            except Exception as exc:
+                logger.debug("Could not inspect job %s: %s", job_id, exc)
+        if reason:
+            problems.append(
+                {
+                    "team_id": sched.get("team_id"),
+                    "id": sched.get("id"),
+                    "name": sched.get("name"),
+                    "reason": reason,
+                }
+            )
+    return problems
 
 
 def _sync_jobs_from_db() -> None:
