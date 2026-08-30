@@ -404,6 +404,7 @@ def save_standup(
     blockers: str,
     mood: str | None = None,
     questions: list[str] | None = None,
+    schedule_id: int | None = None,
 ) -> int | None:
     """Persist a completed standup. Returns the new standup ID.
 
@@ -419,13 +420,13 @@ def save_standup(
     else:
         has_blockers = _blockers.reports_a_blocker(blockers)
     sql = """
-        INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers, mood)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers, mood, schedule_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers, mood))
+            cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers, mood, schedule_id))
             row = cur.fetchone()
     standup_id = row[0] if row else None
     logger.info("Saved standup %s for %s / %s", standup_id, team_id, user_id)
@@ -962,13 +963,12 @@ def compute_participation(
     `schedule_tz`, crossed with its own `participants`, fixes all three and
     makes the per-schedule rates fall out of the same pass.
 
-    One limitation is worth naming: the `standups` table has no schedule id, so
-    a submission cannot be attributed to a schedule by identity. Submissions are
-    matched to occurrences per (member, day) by count, and where a member has
-    several occurrences on one day the matches are handed out in schedule_time
-    order. That keeps the per-schedule numbers summing exactly to the workspace
-    numerator, at the cost of guessing which of a member's two standups they
-    skipped when they filed only one.
+    Submissions written since migration 026 name the schedule they belong to and
+    are credited to it exactly. Older rows have no schedule id, so for those the
+    per-schedule split still falls back to handing credit out in schedule_time
+    order. That keeps the per-schedule numbers summing to the workspace
+    numerator either way; only the split between a member's two standups on one
+    day is a guess, and only for rows written before 026.
 
     Kept free of any database access so the arithmetic can be tested against
     hand-computed numbers. `schedules` are `standup_schedules` rows, `members`
@@ -993,6 +993,9 @@ def compute_participation(
     # schedule id. `responses` stays a raw count over the window so callers that
     # already read it (the mailer, the MCP tools) keep their meaning.
     per_day: dict[tuple[str, date], int] = {}
+    # (member, day) -> the schedules the submissions actually name. Rows written
+    # before standups carried a schedule id have none, so both paths are needed.
+    attributed: dict[tuple[str, date], set[int]] = {}
     responses: dict[str, int] = {}
     blockers: dict[str, int] = {}
     last_standup: dict[str, Any] = {}
@@ -1003,6 +1006,9 @@ def compute_participation(
         if not user_id or day is None:
             continue
         per_day[(user_id, day)] = per_day.get((user_id, day), 0) + 1
+        named = row.get("schedule_id")
+        if named:
+            attributed.setdefault((user_id, day), set()).add(int(named))
         if day >= window_start:
             responses[user_id] = responses.get(user_id, 0) + 1
             if row.get("has_blockers"):
@@ -1069,8 +1075,17 @@ def compute_participation(
         stats["expected"] += expected_here
         stats["completed"] += completed_here
         stats["schedules"].update(schedule_ids)
-        for schedule_id in schedule_ids[:completed_here]:
+        # Credit the schedules the submissions name. Anything left over is a
+        # submission from before standups recorded one, so it falls back to
+        # handing out credit in schedule_time order, which is a guess but keeps
+        # the per-schedule figures summing to the workspace total.
+        named = attributed.get((user_id, day), set()) & set(schedule_ids)
+        for schedule_id in named:
             schedule_rows[schedule_id]["completed"] += 1
+        remaining = completed_here - len(named)
+        if remaining > 0:
+            for schedule_id in [s for s in schedule_ids if s not in named][:remaining]:
+                schedule_rows[schedule_id]["completed"] += 1
 
     member_rows = []
     for user_id, member in known.items():
@@ -1148,7 +1163,7 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
     # One extra day back absorbs the offset between the server's CURRENT_DATE
     # and a schedule whose local date is behind it.
     sql_submissions = """
-        SELECT user_id, standup_date, has_blockers, submitted_at
+        SELECT user_id, standup_date, has_blockers, submitted_at, schedule_id
         FROM standups
         WHERE team_id = %s AND standup_date >= CURRENT_DATE - %s * INTERVAL '1 day'
     """

@@ -133,6 +133,7 @@ def _persist_standup(
     answers: list[str],
     mood: str | None = None,
     questions: list[str] | None = None,
+    schedule_id: int | None = None,
 ) -> int | None:
     """Best-effort persist to DB; log and continue on failure. Returns standup ID.
 
@@ -151,6 +152,7 @@ def _persist_standup(
             blockers=answers[2] if len(answers) > 2 else "",
             mood=mood,
             questions=questions,
+            schedule_id=schedule_id,
         )
     except Exception as exc:
         logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
@@ -313,7 +315,12 @@ def _complete_standup(user_id: str, session, client) -> None:
     else:
         # Persist first so we have the standup ID for the edit button
         standup_id = _persist_standup(
-            session.team_id, user_id, question_answers, mood=mood, questions=session.questions
+            session.team_id,
+            user_id,
+            question_answers,
+            mood=mood,
+            questions=session.questions,
+            schedule_id=session.schedule_id,
         )
 
     confirmation_text = (
