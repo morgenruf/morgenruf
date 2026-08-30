@@ -380,6 +380,56 @@ def get_dashboard_stats(team_id: str) -> dict:
 # Webhooks
 # ---------------------------------------------------------------------------
 
+# Canonical outbound webhook event names.
+#
+# Naming convention: dotted "<noun>.<past tense verb>", the convention the
+# webhooks table has shipped with since migration 003. The workflow_rules
+# table uses underscore trigger names ("standup_complete") for a different
+# concept (automation rule triggers), so the two vocabularies are mapped
+# rather than merged. Underscore spellings are accepted on input and
+# normalised to the dotted form; migration 023 rewrites any rows that were
+# stored with the underscore spelling.
+WEBHOOK_EVENTS = (
+    "standup.completed",
+    "blocker.detected",
+    "participation.low",
+)
+
+DEFAULT_WEBHOOK_EVENTS = ["standup.completed"]
+
+# Legacy / workflow_rules spellings accepted on input.
+WEBHOOK_EVENT_ALIASES = {
+    "standup_complete": "standup.completed",
+    "standup_completed": "standup.completed",
+    "blocker_detected": "blocker.detected",
+    "low_participation": "participation.low",
+}
+
+# Keep the most recent N delivery log rows per webhook.
+WEBHOOK_DELIVERY_RETENTION = 50
+
+
+def normalize_webhook_event(event: str) -> str:
+    """Map a legacy or underscore event spelling onto its canonical name."""
+    name = (event or "").strip()
+    return WEBHOOK_EVENT_ALIASES.get(name, name)
+
+
+def normalize_webhook_events(events: list[str] | None) -> list[str]:
+    """Normalise and de-duplicate a list of event names, keeping order.
+
+    Unknown names are dropped. An empty or missing list falls back to the
+    default event set so a webhook is never registered with no events.
+    """
+    if not events:
+        return list(DEFAULT_WEBHOOK_EVENTS)
+    out: list[str] = []
+    for raw in events:
+        name = normalize_webhook_event(str(raw))
+        if name in WEBHOOK_EVENTS and name not in out:
+            out.append(name)
+    return out or list(DEFAULT_WEBHOOK_EVENTS)
+
 
 def get_webhooks(team_id: str) -> list[dict]:
     """Return all webhooks registered for a team."""
@@ -398,8 +448,7 @@ def add_webhook(
     events: list[str] | None = None,
 ) -> dict:
     """Insert a new webhook and return the created row."""
-    if events is None:
-        events = ["standup.completed"]
+    events = normalize_webhook_events(events)
     sql = """
         INSERT INTO webhooks (team_id, webhook_url, secret, events)
         VALUES (%s, %s, %s, %s)
@@ -413,6 +462,62 @@ def add_webhook(
     return dict(row)
 
 
+def get_webhook(team_id: str, webhook_id: int) -> dict | None:
+    """Return a single webhook row scoped to team_id, or None."""
+    sql = "SELECT * FROM webhooks WHERE id = %s AND team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (webhook_id, team_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def update_webhook(
+    team_id: str,
+    webhook_id: int,
+    url: str | None = None,
+    events: list[str] | None = None,
+) -> dict | None:
+    """Update a webhook's URL and/or event subscription. Returns the new row, or None.
+
+    The secret is never touched here. Use ``rotate_webhook_secret`` for that.
+    """
+    sets: list[str] = []
+    params: list[Any] = []
+    if url is not None:
+        sets.append("webhook_url = %s")
+        params.append(url)
+    if events is not None:
+        sets.append("events = %s")
+        params.append(normalize_webhook_events(events))
+    if not sets:
+        return get_webhook(team_id, webhook_id)
+
+    params.extend([webhook_id, team_id])
+    sql = f"UPDATE webhooks SET {', '.join(sets)} WHERE id = %s AND team_id = %s RETURNING *"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def rotate_webhook_secret(team_id: str, webhook_id: int, secret: str) -> dict | None:
+    """Store a new signing secret for a webhook. Returns the updated row, or None.
+
+    The caller generates the secret so it can hand it back to the operator
+    exactly once. The value is never logged here.
+    """
+    sql = "UPDATE webhooks SET secret = %s WHERE id = %s AND team_id = %s RETURNING *"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (secret, webhook_id, team_id))
+            row = cur.fetchone()
+    if row:
+        logger.info("Rotated signing secret for webhook %s (team %s)", webhook_id, team_id)
+    return dict(row) if row else None
+
+
 def delete_webhook(team_id: str, webhook_id: int) -> bool:
     """Delete a webhook by id (scoped to team_id for safety). Returns True if deleted."""
     sql = "DELETE FROM webhooks WHERE id = %s AND team_id = %s"
@@ -421,6 +526,83 @@ def delete_webhook(team_id: str, webhook_id: int) -> bool:
             cur.execute(sql, (webhook_id, team_id))
             deleted = cur.rowcount > 0
     return deleted
+
+
+def record_webhook_delivery(
+    team_id: str,
+    webhook_id: int,
+    event_type: str,
+    status_code: int | None = None,
+    ok: bool = False,
+    signed: bool = False,
+    error: str | None = None,
+    duration_ms: int | None = None,
+) -> None:
+    """Append one delivery attempt to the log and prune old rows for that webhook.
+
+    ``status_code`` is NULL when the request never produced a response (DNS
+    failure, connection refused, timeout); ``error`` then holds a short reason.
+    Only the most recent ``WEBHOOK_DELIVERY_RETENTION`` rows per webhook are
+    kept so the table cannot grow without bound.
+    """
+    insert_sql = """
+        INSERT INTO webhook_deliveries
+            (webhook_id, team_id, event_type, status_code, ok, signed, error, duration_ms)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    prune_sql = """
+        DELETE FROM webhook_deliveries
+        WHERE webhook_id = %s
+          AND id NOT IN (
+              SELECT id FROM webhook_deliveries
+              WHERE webhook_id = %s
+              ORDER BY id DESC
+              LIMIT %s
+          )
+    """
+    short_error = (error or "")[:500] or None
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                insert_sql,
+                (
+                    webhook_id,
+                    team_id,
+                    event_type,
+                    status_code,
+                    bool(ok),
+                    bool(signed),
+                    short_error,
+                    duration_ms,
+                ),
+            )
+            cur.execute(prune_sql, (webhook_id, webhook_id, WEBHOOK_DELIVERY_RETENTION))
+
+
+def get_webhook_deliveries(team_id: str, webhook_id: int | None = None, limit: int = 20) -> list[dict]:
+    """Return recent delivery attempts for a team, newest first.
+
+    Pass ``webhook_id`` to narrow the log to a single webhook.
+    """
+    limit = max(1, min(int(limit), 200))
+    params: list[Any] = [team_id]
+    where = "team_id = %s"
+    if webhook_id is not None:
+        where += " AND webhook_id = %s"
+        params.append(int(webhook_id))
+    params.append(limit)
+    sql = f"""
+        SELECT id, webhook_id, event_type, status_code, ok, signed, error, duration_ms, created_at
+        FROM webhook_deliveries
+        WHERE {where}
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------
