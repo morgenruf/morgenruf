@@ -432,6 +432,17 @@
       color: var(--text-muted); font-size: 11px; padding: 3px 9px;
     }
     .multi-toolbar button:hover { color: var(--accent); border-color: var(--accent); }
+    /* The member list inside the participants dropdown. Without a height cap
+       the dropdown grows with the workspace and runs over the Schedule fields
+       below it, which is half of what made it feel broken in #66. */
+    .participant-list { max-height: 260px; overflow-y: auto; }
+
+    /* Analytics rows for people who are in no standup. They are shown only when
+       "Include unenrolled" is ticked, and must read as context rather than as a
+       team member scoring zero (#74). */
+    .row-unenrolled { opacity: 0.55; }
+    .row-unenrolled td { font-style: italic; }
+
     .participants-hint {
       margin-top: 6px; font-size: 12px; color: var(--text-dim);
       display: none; align-items: center; gap: 8px;
@@ -1084,7 +1095,7 @@
 
   <!-- Invite Admin Modal -->
   <div id="invite-modal" class="modal-overlay" style="display:none">
-    <div class="modal-box" style="max-width:420px">
+    <div class="modal" style="max-width:420px">
       <div class="modal-header">
         <div class="modal-title">Invite Admin</div>
         <button class="modal-close" onclick="closeInviteModal()">&#10005;</button>
