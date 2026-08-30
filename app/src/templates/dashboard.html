@@ -858,6 +858,11 @@
           <option value="admin">Admins</option>
           <option value="member">Members</option>
         </select>
+        <select id="member-tracking-filter" onchange="setMemberFilter('tracking', this.value)" aria-label="Filter by whether Morgenruf tracks them">
+          <option value="all">Everyone in Slack</option>
+          <option value="tracked">In Morgenruf</option>
+          <option value="untracked">Not in Morgenruf</option>
+        </select>
         <select id="member-sort" onchange="setMemberFilter('sort', this.value)" aria-label="Sort members">
           <option value="name">Sort by name</option>
           <option value="role">Sort by role</option>
@@ -1714,9 +1719,14 @@
     });
   }
 
+  // Channels the bot has joined come from state.channels. Anything else was
+  // resolved server side for this report, otherwise a mention of a channel the
+  // bot is not in rendered as a raw id like "#C0B3JSAQWPL".
   function channelName(id) {
     const c = state.channels.find(c => c.id === id);
-    return c ? c.name : (id || 'unknown');
+    if (c) return c.name;
+    const resolved = state.channelNames && state.channelNames[id];
+    return resolved || (id || 'unknown');
   }
 
   // ── Members ──
@@ -1736,7 +1746,7 @@
 
   // Search, role filter and sort for the members grid. The controls live in
   // the page, not in the rendered grid, so typing never loses focus.
-  const memberFilters = { q: '', role: 'all', sort: 'name' };
+  const memberFilters = { q: '', role: 'all', sort: 'name', tracking: 'all' };
 
   function setMemberFilter(key, value) {
     memberFilters[key] = value;
@@ -1759,11 +1769,18 @@
     return words.map(w => w[0]).slice(0, 2).join('').toUpperCase();
   }
 
+  function memberMatchesTracking(m) {
+    if (memberFilters.tracking === 'tracked') return m.tracked !== false;
+    if (memberFilters.tracking === 'untracked') return m.tracked === false;
+    return true;
+  }
+
   function filteredMembers() {
     const q = memberFilters.q.trim().toLowerCase();
     let list = (state.members || []).filter(m => {
       const role = m.role || 'member';
       if (memberFilters.role !== 'all' && role !== memberFilters.role) return false;
+      if (!memberMatchesTracking(m)) return false;
       if (!q) return true;
       return memberName(m).toLowerCase().includes(q) || memberHandle(m).toLowerCase().includes(q);
     });
@@ -1792,10 +1809,21 @@
       return;
     }
     const shown = filteredMembers();
+    // The page lists everyone in the Slack workspace, but only the people the
+    // bot holds a row for appear in Analytics or in any participation figure.
+    // Saying "42 members" while Analytics said 26 was the whole confusion.
+    const untracked = (state.members || []).filter(m => m.tracked === false).length;
     if (countEl) {
-      countEl.textContent = shown.length === total
+      const base = shown.length === total
         ? total + (total === 1 ? ' member' : ' members')
         : shown.length + ' of ' + total + ' members';
+      countEl.textContent = untracked
+        ? base + ', ' + (total - untracked) + ' in Morgenruf'
+        : base;
+      countEl.title = untracked
+        ? untracked + ' of these are in your Slack workspace but not yet in any standup, ' +
+          'so they are not counted in Analytics.'
+        : '';
     }
     if (!shown.length) {
       el.innerHTML = '<p style="color:var(--text-dim);padding:24px">No member matches these filters.</p>';
@@ -1812,7 +1840,9 @@
       const inCount = standupsForMember(m.id).length;
       const chip = inCount
         ? '<span class="count-chip" title="Standups this person is in">' + inCount + (inCount === 1 ? ' standup' : ' standups') + '</span>'
-        : '<span class="count-chip none" title="Not a participant in any standup">No standups</span>';
+        : m.tracked === false
+          ? '<span class="count-chip none" title="In your Slack workspace, but not tracked by Morgenruf and not counted in Analytics">Not in Morgenruf</span>'
+          : '<span class="count-chip none" title="Tracked by Morgenruf, but not a participant in any standup">No standups</span>';
       let roleBtn = '';
       if (window._myRole === 'admin' && m.id !== window._myUserId) {
         roleBtn = role === 'admin'
@@ -1882,7 +1912,8 @@
   }
 
   // ── Reports ──
-  let reportState = { dateFrom: '', dateTo: '', userId: '', range: 7 };
+  const REPORT_DAYS_PER_PAGE = 7;
+  let reportState = { dateFrom: '', dateTo: '', userId: '', range: 7, dayLimit: REPORT_DAYS_PER_PAGE };
 
   // Both range buttons carried the same class, so neither ever looked
   // selected and there was no way to tell which window you were reading.
@@ -1906,7 +1937,25 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // Assign the fields rather than replacing the object: rebuilding it inline
+  // dropped dayLimit, and slice(0, undefined) renders nothing at all.
+  function resetReportFilters() {
+    reportState.dateFrom = '';
+    reportState.dateTo = '';
+    reportState.userId = '';
+    reportState.range = 0;
+    loadReports();
+  }
+
+  function showMoreReportDays() {
+    reportState.dayLimit += REPORT_DAYS_PER_PAGE;
+    loadReports({ keepWindow: true });
+  }
+
   async function loadReports(opts = {}) {
+    // Any change to the filters starts the window again, otherwise you would
+    // carry an expanded view from one filter into the next.
+    if (!opts.keepWindow) reportState.dayLimit = REPORT_DAYS_PER_PAGE;
     // Both lists are needed so <@Uxxx> and <#Cxxx> in the answers resolve to names.
     if (!state.members?.length) await loadMembers();
     if (!state.channels?.length) await loadChannels();
@@ -1924,7 +1973,8 @@
         headers: { 'X-Team-Id': state.teamId || '' }
       }).then(checkAuth).then(r => r.json());
 
-      const { standups = [], participation = [], total_days = 7 } = data;
+      const { standups = [], participation = [], total_days = 7, channel_names = {} } = data;
+      state.channelNames = Object.assign(state.channelNames || {}, channel_names);
 
       // Build member lookup map for resolving user IDs to names and avatars
       const memberLookup = {};
@@ -1980,14 +2030,20 @@
         if (da && db) return db.getTime() - da.getTime();
         return b[0].localeCompare(a[0]);
       };
-      const responseRows = Object.entries(byDate).sort(dateSort).map(([date, entries]) => `
+      // A month of history for a busy workspace rendered into 311KB of DOM in
+      // one go, which is slow to build and slower to scroll. Render a page of
+      // days at a time; the filters above still apply to the whole set.
+      const allDays = Object.entries(byDate).sort(dateSort);
+      const shownDays = allDays.slice(0, reportState.dayLimit || REPORT_DAYS_PER_PAGE);
+      const hiddenDays = allDays.length - shownDays.length;
+      const responseRows = shownDays.map(([date, entries]) => `
         <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${esc(formatDate(date, date))}</td></tr>
         ${entries.map(s => `
           <tr>
             <td style="width:180px;vertical-align:top;padding:8px 12px;font-weight:500">${avatarHtml(s.user_id, 28)}${esc(resolveName(s.user_id, s.user_name))}</td>
             <td style="padding:8px 12px">
-              ${s.yesterday ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Yesterday:</span> ${slackBlock(s.yesterday)}</div>` : ''}
-              ${s.today ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Today:</span> ${slackBlock(s.today)}</div>` : ''}
+              ${answerBlock(s, 0, s.yesterday)}
+              ${answerBlock(s, 1, s.today)}
               ${blockerBlock(s)}
             </td>
           </tr>
@@ -2013,7 +2069,7 @@
             ${memberOptions}
           </select>
           <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px"
-                  onclick="reportState={dateFrom:'',dateTo:'',userId:'',range:0};loadReports()">Reset</button>
+                  onclick="resetReportFilters()">Reset</button>
         </div>
 
         <!-- Participation summary -->
@@ -2044,7 +2100,13 @@
               </tr></thead>
               <tbody>${responseRows}</tbody>
             </table>
-          </div>` : '<p style="color:var(--text-muted);padding:12px 0;font-size:13px">No responses found for the selected filters.</p>'}
+          </div>
+          ${hiddenDays > 0 ? `<div style="padding:14px 0;text-align:center">
+            <button class="btn btn-secondary btn-sm" onclick="showMoreReportDays()">
+              Show ${Math.min(hiddenDays, REPORT_DAYS_PER_PAGE)} more ${hiddenDays === 1 ? 'day' : 'days'}</button>
+            <div style="color:var(--text-dim);font-size:12px;margin-top:6px">
+              Showing ${shownDays.length} of ${allDays.length} days</div>
+          </div>` : ''}` : '<p style="color:var(--text-muted);padding:12px 0;font-size:13px">No responses found for the selected filters.</p>'}
         </div>
       `;
     } catch (e) {
@@ -3320,10 +3382,40 @@
     return ['none', 'no', 'n', 'na', 'n/a', 'nil', 'nothing', 'nope', '0'].indexOf(text) < 0;
   }
 
+  // The label for one answer slot. "Yesterday" and "Today" are the default
+  // questions, not the only ones: a schedule asking "Previous day work" and
+  // "Availability in Hours" had its answers printed under the defaults. The
+  // server sends the questions it can attribute; where it cannot, the generic
+  // labels stay.
+  const DEFAULT_LABELS = ['Yesterday', 'Today', 'Blockers'];
+
+  function answerLabel(s, index) {
+    const questions = Array.isArray(s.questions) ? s.questions : null;
+    const asked = questions && questions[index];
+    return esc(String(asked || DEFAULT_LABELS[index] || '').replace(/[:?]\s*$/, ''));
+  }
+
+  function answerBlock(s, index, value) {
+    if (!value) return '';
+    return '<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">' +
+      answerLabel(s, index) + ':</span> ' + slackBlock(value) + '</div>';
+  }
+
+  // The third slot is only a blocker when the question asked about one.
+  // Otherwise it is just another answer, and printing it in red under
+  // "Blockers" is how "4:30 Hrs" ended up looking like an impediment.
+  function thirdQuestionIsAboutBlockers(s) {
+    const questions = Array.isArray(s.questions) ? s.questions : null;
+    if (!questions || !questions[2]) return true;  // unknown, keep old behaviour
+    return /block|impediment|stuck/i.test(String(questions[2]));
+  }
+
   function blockerBlock(s) {
-    if (!s.blockers || !reportsAsBlocked(s)) return '';
-    return '<div class="report-blockers"><span class="report-blockers-label">Blockers:</span> ' +
-      slackBlock(s.blockers) + '</div>';
+    if (!s.blockers) return '';
+    if (!thirdQuestionIsAboutBlockers(s)) return answerBlock(s, 2, s.blockers);
+    if (!reportsAsBlocked(s)) return '';
+    return '<div class="report-blockers"><span class="report-blockers-label">' +
+      answerLabel(s, 2) + ':</span> ' + slackBlock(s.blockers) + '</div>';
   }
 
   function aggregateRate(rows, days) {
