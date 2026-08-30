@@ -117,3 +117,34 @@ def member_profile(user: dict[str, Any] | None) -> dict[str, str | None]:
         "email": profile.get("email") or None,
         "tz": user.get("tz") or None,
     }
+
+
+def fetch_workspace_humans(client: Any) -> set[str] | None:
+    """Return the ids of every real, active person in the workspace.
+
+    Returns None when the walk could not be completed. That distinction matters
+    to the caller: an empty set means "this workspace genuinely has nobody",
+    while None means "we do not know", and deactivating members on a "do not
+    know" would empty every standup in the workspace.
+    """
+    humans: set[str] = set()
+    cursor = None
+    try:
+        for _page in range(MAX_USER_PAGES):
+            result = client.users_list(limit=200, cursor=cursor or "")
+            members = result.get("members", [])
+            if not isinstance(members, list):
+                return None
+            for user in members:
+                if isinstance(user, dict) and is_human(user):
+                    uid = user.get("id")
+                    if uid:
+                        humans.add(uid)
+            cursor = (result.get("response_metadata") or {}).get("next_cursor")
+            if not isinstance(cursor, str) or not cursor:
+                return humans
+        logger.warning("users.list did not finish within %d pages, not reconciling", MAX_USER_PAGES)
+        return None
+    except Exception as exc:
+        logger.warning("Could not list workspace users: %s", exc)
+        return None

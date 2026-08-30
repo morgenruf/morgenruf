@@ -121,3 +121,62 @@ class TestPaginationIsBounded:
         client.users_list.return_value = {"members": [_slack_user("U1")], "response_metadata": MagicMock()}
         slack_users.fetch_human_users(client, ["U1"])
         assert client.users_list.call_count == 1
+
+
+class TestMemberSync:
+    """People who left Slack must stop appearing (nothing ever deactivated them)."""
+
+    @staticmethod
+    def _run(db, client):
+        with patch.dict(sys.modules, {"db": db}), patch.object(sched_mod, "WebClient", return_value=client):
+            sched_mod.sync_members_from_slack()
+
+    def _db(self, stored):
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": "T1", "bot_token": "xoxb"}]
+        db.get_all_members.return_value = stored
+        db.set_members_active.return_value = 1
+        return db
+
+    def test_a_member_who_left_is_deactivated(self):
+        db = self._db(
+            [
+                {"user_id": "U_gone", "active": True, "real_name": "Left"},
+                {"user_id": "U_here", "active": True, "real_name": "Still here"},
+            ]
+        )
+        # Slack still reports a populated workspace, just without U_gone.
+        self._run(db, _client([_slack_user("U_here", "Still here")]))
+        db.set_members_active.assert_any_call("T1", ["U_gone"], False)
+
+    def test_a_member_who_returned_is_restored(self):
+        db = self._db([{"user_id": "U_back", "active": False, "real_name": "Back"}])
+        self._run(db, _client([_slack_user("U_back", "Back")]))
+        db.set_members_active.assert_any_call("T1", ["U_back"], True)
+
+    def test_the_bot_is_deactivated(self):
+        db = self._db([{"user_id": "BMORGENRUF", "active": True, "real_name": "Morgenruf"}])
+        self._run(db, _client([_slack_user("BMORGENRUF", "Morgenruf", is_bot=True), _slack_user("U1")]))
+        db.set_members_active.assert_any_call("T1", ["BMORGENRUF"], False)
+
+    def test_a_nameless_row_gets_backfilled(self):
+        db = self._db([{"user_id": "U9", "active": True, "real_name": ""}])
+        self._run(db, _client([_slack_user("U9", "Real Name")]))
+        db.upsert_member.assert_called_once()
+        assert db.upsert_member.call_args.kwargs["real_name"] == "Real Name"
+
+    def test_an_unreadable_workspace_is_skipped_entirely(self):
+        """A failed lookup must never be read as "nobody works here"."""
+        db = self._db([{"user_id": "U1", "active": True, "real_name": "Ada"}])
+        client = MagicMock()
+        client.users_list.side_effect = Exception("slack down")
+        self._run(db, client)
+        db.set_members_active.assert_not_called()
+
+    def test_an_empty_user_list_is_refused(self):
+        db = self._db([{"user_id": "U1", "active": True, "real_name": "Ada"}])
+        self._run(db, _client([]))
+        # Slack claims nobody exists while we hold members: far likelier a bad
+        # response than an empty workspace, so change nothing.
+        for call in db.set_members_active.call_args_list:
+            assert call.args[1] != ["U1"] or call.args[2] is not False
