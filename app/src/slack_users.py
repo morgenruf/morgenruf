@@ -26,22 +26,27 @@ def is_human(user: dict[str, Any] | None) -> bool:
     return not (user.get("deleted") or user.get("is_bot"))
 
 
-def filter_human_ids(client: Any, user_ids: Iterable[str]) -> set[str]:
-    """Return the subset of `user_ids` belonging to real, active people.
+def fetch_human_users(client: Any, user_ids: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """Return `{user_id: Slack user object}` for the real, active people in `user_ids`.
 
     Classifies in bulk via a paginated `users.list` so a large channel costs a
     handful of API calls rather than one `users.info` per member. Ids missing
     from `users.list` (Slack Connect guests, for example) fall back to an
     individual `users.info` lookup.
 
+    The fetched user objects are handed back rather than discarded, so a caller
+    that needs a profile (name, email, timezone) gets one without a second
+    round trip. Ids kept only because Slack could not be reached map to an
+    empty dict.
+
     On an unrecoverable API error the input is returned unchanged: dropping
     people from a standup is worse than the bot noise this filter removes.
     """
     wanted = {uid for uid in user_ids if uid}
     if not wanted:
-        return set()
+        return {}
 
-    humans: set[str] = set()
+    humans: dict[str, dict[str, Any]] = {}
     classified: set[str] = set()
     try:
         cursor = None
@@ -53,24 +58,48 @@ def filter_human_ids(client: Any, user_ids: Iterable[str]) -> set[str]:
                     continue
                 classified.add(uid)
                 if is_human(user):
-                    humans.add(uid)
+                    humans[uid] = user
             cursor = result.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
     except Exception as exc:
         logger.warning("users.list failed while filtering bots, keeping all %d ids: %s", len(wanted), exc)
-        return wanted
+        return {uid: {} for uid in wanted}
 
     for uid in wanted - classified:
         try:
-            if is_human(client.users_info(user=uid).get("user", {})):
-                humans.add(uid)
+            user = client.users_info(user=uid).get("user", {})
+            if is_human(user):
+                humans[uid] = user
         except Exception as exc:
             # Unknown rather than proven-bot, so keep them in the standup.
             logger.warning("users.info failed for %s, keeping as participant: %s", uid, exc)
-            humans.add(uid)
+            humans[uid] = {}
 
     dropped = len(wanted) - len(humans)
     if dropped:
         logger.info("Filtered %d bot/deactivated account(s) out of %d Slack members", dropped, len(wanted))
     return humans
+
+
+def filter_human_ids(client: Any, user_ids: Iterable[str]) -> set[str]:
+    """Return the subset of `user_ids` belonging to real, active people.
+
+    Thin wrapper over `fetch_human_users` for callers that only need the ids.
+    """
+    return set(fetch_human_users(client, user_ids))
+
+
+def member_profile(user: dict[str, Any] | None) -> dict[str, str | None]:
+    """Pull the fields `db.upsert_member` stores out of a Slack user object.
+
+    Anything the object does not carry comes back as None so an upsert leaves
+    the stored value alone instead of blanking it.
+    """
+    user = user or {}
+    profile = user.get("profile") or {}
+    return {
+        "real_name": profile.get("real_name") or profile.get("display_name") or user.get("real_name") or None,
+        "email": profile.get("email") or None,
+        "tz": user.get("tz") or None,
+    }

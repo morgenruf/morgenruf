@@ -10,6 +10,11 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
+# schedule_validation (imported by dashboard) needs the real pytz to tell a
+# valid timezone from a typo. Drop a MagicMock left behind by another module.
+if isinstance(sys.modules.get("pytz"), MagicMock):
+    del sys.modules["pytz"]
+
 # Stub heavy dependencies before importing dashboard
 sys.modules.setdefault("psycopg2", MagicMock())
 sys.modules.setdefault("psycopg2.extras", MagicMock())
@@ -321,3 +326,104 @@ class TestScheduleToStandup:
         row = {"id": 3, "schedule_days": "mon,wed,fri"}
         result = _schedule_to_standup(row)
         assert result["schedule_days"] == ["mon", "wed", "fri"]
+
+
+# Timezone and time validation on the schedule APIs (#67)
+
+
+def _schedule_row(**overrides):
+    row = {
+        "id": 1,
+        "name": "Morning",
+        "channel_id": "C1",
+        "schedule_time": "09:00",
+        "schedule_tz": "UTC",
+        "schedule_days": "mon,tue,wed,thu,fri",
+        "questions": [],
+        "active": True,
+        "participants": [],
+        "reminder_minutes": 0,
+    }
+    row.update(overrides)
+    return row
+
+
+class TestScheduleTimingValidation:
+    """A typo in the timezone used to save fine and then never fire."""
+
+    def test_create_standup_with_bad_timezone_returns_400(self, authed_client):
+        _db_mock.create_standup_schedule.reset_mock()
+        resp = authed_client.post(
+            "/dashboard/api/standups",
+            json={"name": "New", "channel_id": "C2", "schedule_tz": "Asia/Kolkatta"},
+        )
+        assert resp.status_code == 400
+        assert "Asia/Kolkatta" in resp.get_json()["error"]
+        _db_mock.create_standup_schedule.assert_not_called()
+
+    def test_create_standup_with_valid_timezone_still_works(self, authed_client):
+        _db_mock.create_standup_schedule.reset_mock()
+        _db_mock.create_standup_schedule.return_value = _schedule_row(id=2, schedule_tz="Asia/Kolkata")
+        resp = authed_client.post(
+            "/dashboard/api/standups",
+            json={"name": "New", "channel_id": "C2", "schedule_tz": "Asia/Kolkata"},
+        )
+        assert resp.status_code == 201
+
+    def test_update_standup_with_bad_timezone_returns_400(self, authed_client):
+        _db_mock.update_standup_schedule.reset_mock()
+        resp = authed_client.put("/dashboard/api/standups/1", json={"schedule_tz": "GMT+5:30"})
+        assert resp.status_code == 400
+        _db_mock.update_standup_schedule.assert_not_called()
+
+    def test_update_standup_with_bad_time_returns_400(self, authed_client):
+        _db_mock.update_standup_schedule.reset_mock()
+        resp = authed_client.put("/dashboard/api/standups/1", json={"schedule_time": "9am"})
+        assert resp.status_code == 400
+        assert "09:30" in resp.get_json()["error"]
+        _db_mock.update_standup_schedule.assert_not_called()
+
+    def test_update_standup_without_timing_fields_is_untouched(self, authed_client):
+        _db_mock.update_standup_schedule.reset_mock()
+        _db_mock.update_standup_schedule.return_value = _schedule_row()
+        resp = authed_client.put("/dashboard/api/standups/1", json={"name": "Renamed"})
+        assert resp.status_code == 200
+        _db_mock.update_standup_schedule.assert_called_once()
+
+    def test_create_schedule_with_bad_timezone_returns_400(self, authed_client):
+        _db_mock.create_standup_schedule.reset_mock()
+        resp = authed_client.post("/dashboard/api/schedules", json={"name": "Daily", "schedule_tz": "IST"})
+        assert resp.status_code == 400
+        _db_mock.create_standup_schedule.assert_not_called()
+
+    def test_update_schedule_with_bad_timezone_returns_400(self, authed_client):
+        _db_mock.update_standup_schedule.reset_mock()
+        resp = authed_client.put("/dashboard/api/schedules/1", json={"schedule_tz": "Mars/Olympus"})
+        assert resp.status_code == 400
+        _db_mock.update_standup_schedule.assert_not_called()
+
+
+class TestRegistrationErrorSurfacing:
+    """An Active schedule the scheduler refuses must not look healthy (#67)."""
+
+    def test_standup_list_flags_a_schedule_that_can_never_fire(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkatta")]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.status_code == 200
+        assert "Asia/Kolkatta" in resp.get_json()[0]["registration_error"]
+
+    def test_healthy_schedule_has_no_error(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkata")]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.get_json()[0]["registration_error"] is None
+
+    def test_inactive_schedule_is_not_flagged(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkatta", active=False)]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.get_json()[0]["registration_error"] is None
+
+    def test_schedules_list_flags_it_too(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_time="25:00")]
+        resp = authed_client.get("/dashboard/api/schedules")
+        assert resp.status_code == 200
+        assert resp.get_json()[0]["registration_error"] is not None
