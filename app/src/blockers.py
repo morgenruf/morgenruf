@@ -31,6 +31,14 @@ _NO_BLOCKER_PHRASES = frozenset(
         "",
         "n",
         "na",
+        # "n/a" has to be listed whole. The word split below breaks it on the
+        # slash into {"n", "a"}, and "a" is not a no-word, so without this the
+        # commonest short answer after "no" is read as a blocker. 122 of them
+        # on the production workspace.
+        "n/a",
+        "n.a",
+        "n\\a",
+        "nn",
         "no",
         "nope",
         "none",

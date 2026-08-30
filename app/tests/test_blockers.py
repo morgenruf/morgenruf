@@ -117,3 +117,35 @@ class TestEdges:
     def test_a_multi_word_answer_of_only_no_words(self):
         assert reports_a_blocker("no, none") is False
         assert reports_a_blocker("none / nil") is False
+
+
+class TestNotApplicable:
+    """ "N/A" is the commonest short answer after "no", and it was read as a blocker.
+
+    `normalise` leaves the slash alone, the phrase list did not carry the whole
+    string, and the word split at the end broke it into {"n", "a"}. "a" is not
+    a no-word, so the answer came back as a blocker. Production held 122 of
+    these across every casing and bullet form.
+    """
+
+    def test_every_casing_and_bullet_form_seen_in_production(self):
+        for value in ["N/A", "n/a", "N/a", "• N/A", "• n/a", "n/a.", "- N/A"]:
+            assert reports_a_blocker(value) is False, value
+
+    def test_the_other_separators_people_use(self):
+        for value in ["n.a", "n\\a", "N.A."]:
+            assert reports_a_blocker(value) is False, value
+
+    def test_the_doubled_letter_typo(self):
+        for value in ["nn", "Nn", "• nn"]:
+            assert reports_a_blocker(value) is False, value
+
+    def test_under_a_blocker_question(self):
+        assert has_blockers(DEFAULT_Q, ["x", "y", "N/A"]) is False
+
+    def test_a_slash_separated_pair_of_no_words_still_works(self):
+        assert reports_a_blocker("none / nil") is False
+
+    def test_a_real_blocker_containing_a_slash_is_untouched(self):
+        assert reports_a_blocker("blocked on the CI/CD pipeline") is True
+        assert reports_a_blocker("waiting on n/a approval from legal") is True
