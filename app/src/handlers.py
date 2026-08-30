@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import requests
 from slack_bolt import App
+from slack_users import filter_human_ids, is_human
 from state import state_store
 
 logger = logging.getLogger(__name__)
@@ -1166,6 +1167,11 @@ def register_handlers(app: App) -> None:
             import db  # noqa: PLC0415
 
             user_info = client.users_info(user=user_id).get("user", {})
+            if not is_human(user_info):
+                # Another bot joined the channel. It can't do a standup and
+                # DMing it would fail on every run.
+                logger.debug("Ignoring non-human join by %s in %s", user_id, team_id)
+                return
             profile = user_info.get("profile", {})
             db.upsert_member(
                 team_id=team_id,
@@ -1404,6 +1410,9 @@ def register_handlers(app: App) -> None:
         timezone = values.get("timezone", {}).get("timezone", {}).get("selected_option", {}).get("value", "UTC")
         reminder_val = values.get("reminder", {}).get("reminder", {}).get("selected_option", {}).get("value", "0")
         members = values.get("members", {}).get("members", {}).get("selected_users", [])
+        # The users picker lets you select apps; they can't answer a standup.
+        _human_members = filter_human_ids(client, members)
+        members = [uid for uid in members if uid in _human_members]
         days_opts = values.get("days", {}).get("days", {}).get("selected_options", [])
         days = [o["value"] for o in days_opts]
         report_dest = (

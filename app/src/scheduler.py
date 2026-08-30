@@ -14,6 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
+from slack_users import filter_human_ids
 from state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
@@ -354,7 +355,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     cursor = resp.get("response_metadata", {}).get("next_cursor")
                     if not cursor:
                         break
-                # Filter out bots by checking each user (cached per team)
+                # Drop bots, apps and deactivated accounts. DMing them always
+                # fails and shows up as a standup delivery error every run.
+                channel_members = filter_human_ids(client, channel_members)
                 for uid in channel_members:
                     try:
                         db.upsert_member(team_id, uid)
