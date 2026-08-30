@@ -770,10 +770,17 @@
     /* A channel the bot cannot see. The id is kept deliberately (#86) so two
        different mentions stay distinguishable, but styling it like a resolved
        channel made it read as a rendering bug. */
-    .slack-mention-unknown {
+    /* Both selectors, because `.slack-text .slack-mention` is two classes and
+       would otherwise win the background and colour on specificity, leaving
+       an unresolved id still painted like a real channel. */
+    .slack-mention-unknown,
+    .slack-text .slack-mention-unknown {
       background: none;
       color: var(--text-dim);
       border-bottom: 1px dotted currentColor;
+      border-radius: 0;
+      padding: 0;
+      font-weight: 400;
       font-variant-numeric: tabular-nums;
     }
   </style>
