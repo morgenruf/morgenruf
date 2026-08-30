@@ -17,6 +17,6 @@ maintainers:
     url: https://morgenruf.dev
 dependencies:
   - name: postgresql
-    version: 18.7.13
+    version: 18.8.13
     repository: "https://charts.bitnami.com/bitnami"
     condition: postgresql.enabled

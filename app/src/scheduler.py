@@ -14,6 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
+from slack_users import filter_human_ids
 from state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
@@ -354,7 +355,9 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                     cursor = resp.get("response_metadata", {}).get("next_cursor")
                     if not cursor:
                         break
-                # Filter out bots by checking each user (cached per team)
+                # Drop bots, apps and deactivated accounts. DMing them always
+                # fails and shows up as a standup delivery error every run.
+                channel_members = filter_human_ids(client, channel_members)
                 for uid in channel_members:
                     try:
                         db.upsert_member(team_id, uid)
@@ -452,27 +455,29 @@ def _send_reminder_to_workspace(
         # Filter to schedule participants if this is a schedule-specific reminder
         if schedule_id is not None:
             sched = db.get_standup_schedule(team_id, schedule_id)
-            if sched:
-                # Prefer the schedule's display name; fall back to channel + time
-                # so the reminder is always identifiable when a user belongs to
-                # multiple schedules.
-                name = (sched.get("name") or "").strip()
-                if name:
-                    standup_label = name
-                else:
-                    chan = sched.get("channel_id") or ""
-                    when = sched.get("schedule_time") or ""
-                    parts = []
-                    if chan:
-                        parts.append(f"<#{chan}>")
-                    if when:
-                        parts.append(f"at {when}")
-                    if parts:
-                        standup_label = " ".join(parts)
-                participants = sched.get("participants") or []
-                if participants:
-                    participant_set = set(participants)
-                    members = [m for m in members if m["user_id"] in participant_set]
+            if not sched or not sched.get("active"):
+                logger.info("Schedule %s inactive, skipping reminder", schedule_id)
+                return
+            # Prefer the schedule's display name; fall back to channel + time
+            # so the reminder is always identifiable when a user belongs to
+            # multiple schedules.
+            name = (sched.get("name") or "").strip()
+            if name:
+                standup_label = name
+            else:
+                chan = sched.get("channel_id") or ""
+                when = sched.get("schedule_time") or ""
+                parts = []
+                if chan:
+                    parts.append(f"<#{chan}>")
+                if when:
+                    parts.append(f"at {when}")
+                if parts:
+                    standup_label = " ".join(parts)
+            participants = sched.get("participants") or []
+            if participants:
+                participant_set = set(participants)
+                members = [m for m in members if m["user_id"] in participant_set]
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
         return
@@ -939,10 +944,150 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     logger.info("Registered report job for schedule %s at %s %s", schedule_id, report_time, schedule_tz)
 
 
+# ---------------------------------------------------------------------------
+# DB → scheduler reconciliation
+#
+# The dashboard and Slack HTTP endpoints are served by a forked gunicorn
+# worker, whose copy of this scheduler has no running timer thread — jobs
+# registered there never fire. The running scheduler lives in the parent
+# process and only reads the DB at startup, so schedules created or edited
+# at runtime would otherwise stay invisible until a restart. This periodic
+# reconcile job closes that gap.
+# ---------------------------------------------------------------------------
+
+_SYNC_INTERVAL_MINUTES = 2
+
+# Fields that feed the cron triggers / job args in register_schedule_job and
+# register_workspace_job. Questions and participants are re-read from the DB
+# at fire time, so they don't require a re-registration.
+_SCHEDULE_TRIGGER_FIELDS = (
+    "name",
+    "channel_id",
+    "schedule_time",
+    "schedule_tz",
+    "schedule_days",
+    "reminder_minutes",
+    "weekend_reminder",
+    "report_time",
+)
+_WORKSPACE_TRIGGER_FIELDS = (
+    "channel_id",
+    "schedule_time",
+    "schedule_tz",
+    "schedule_days",
+    "reminder_minutes",
+    "report_time",
+)
+
+# What the sync loop last registered, keyed by (team_id, schedule_id) and
+# team_id respectively. Values are trigger fingerprints.
+_synced_schedule_fps: dict[tuple[str, int], str] = {}
+_synced_workspace_fps: dict[str, str] = {}
+
+
+def _schedule_fingerprint(sched: dict) -> str:
+    return repr([sched.get(f) for f in _SCHEDULE_TRIGGER_FIELDS])
+
+
+def _workspace_fingerprint(config: dict, digests_only: bool) -> str:
+    return repr([digests_only] + [config.get(f) for f in _WORKSPACE_TRIGGER_FIELDS])
+
+
+def _schedule_job_ids(team_id: str, schedule_id: int) -> tuple[str, ...]:
+    return (
+        f"schedule_{team_id}_{schedule_id}",
+        f"reminder_schedule_{team_id}_{schedule_id}",
+        f"weekend_reminder_schedule_{team_id}_{schedule_id}",
+        f"report_schedule_{team_id}_{schedule_id}",
+    )
+
+
+def _workspace_job_ids(team_id: str, digests_too: bool = False) -> tuple[str, ...]:
+    ids = (f"standup_{team_id}", f"reminder_{team_id}", f"report_{team_id}")
+    if digests_too:
+        ids += (f"digest_{team_id}", f"manager_digest_{team_id}")
+    return ids
+
+
+def _remove_jobs(scheduler: BackgroundScheduler, job_ids: tuple[str, ...]) -> None:
+    for job_id in job_ids:
+        try:
+            scheduler.remove_job(job_id)
+        except Exception:  # noqa: S110 — job may simply not exist
+            pass
+
+
+def _sync_jobs_from_db() -> None:
+    """Reconcile the running scheduler's jobs with the DB.
+
+    Registers jobs for new/edited schedules and removes jobs for deleted or
+    deactivated ones, so dashboard changes take effect without a restart.
+    """
+    if _scheduler is None:
+        return
+    try:
+        import db  # noqa: PLC0415
+
+        schedules = db.get_all_active_schedules()
+        installations = db.get_all_installations()
+    except Exception as exc:
+        logger.warning("Schedule sync: could not load config from DB: %s", exc)
+        return
+
+    # Schedule-level jobs
+    desired: dict[tuple[str, int], str] = {}
+    for sched in schedules:
+        key = (sched["team_id"], sched["id"])
+        fp = _schedule_fingerprint(sched)
+        desired[key] = fp
+        if _synced_schedule_fps.get(key) != fp:
+            # Drop the whole job group first so sub-jobs that are no longer
+            # configured (e.g. a reminder switched off) don't linger.
+            _remove_jobs(_scheduler, _schedule_job_ids(*key))
+            register_schedule_job(_scheduler, sched)
+    for key in set(_synced_schedule_fps) - set(desired):
+        _remove_jobs(_scheduler, _schedule_job_ids(*key))
+        logger.info("Schedule sync: removed jobs for deleted/inactive schedule %s/%s", key[0], key[1])
+    _synced_schedule_fps.clear()
+    _synced_schedule_fps.update(desired)
+
+    # Workspace-level jobs
+    teams_with_schedules = {s["team_id"] for s in schedules}
+    desired_ws: dict[str, str] = {}
+    for inst in installations:
+        team_id = inst.get("team_id")
+        if not team_id:
+            continue
+        try:
+            config = db.get_workspace_config(team_id) or {}
+        except Exception as exc:
+            logger.warning("Schedule sync: could not load workspace config for %s: %s", team_id, exc)
+            continue
+        if not config.get("active", True):
+            continue
+        digests_only = team_id in teams_with_schedules
+        fp = _workspace_fingerprint(config, digests_only)
+        desired_ws[team_id] = fp
+        if _synced_workspace_fps.get(team_id) != fp:
+            bot_token = inst.get("bot_token") or ""
+            _remove_jobs(_scheduler, _workspace_job_ids(team_id))
+            if digests_only:
+                register_workspace_digests_only(_scheduler, team_id, bot_token, config)
+            else:
+                register_workspace_job(_scheduler, team_id, bot_token, config)
+    for team_id in set(_synced_workspace_fps) - set(desired_ws):
+        _remove_jobs(_scheduler, _workspace_job_ids(team_id, digests_too=True))
+        logger.info("Schedule sync: removed jobs for uninstalled/inactive workspace %s", team_id)
+    _synced_workspace_fps.clear()
+    _synced_workspace_fps.update(desired_ws)
+
+
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:
     """Build scheduler from a list of (team_id, bot_token, config) tuples."""
     global _scheduler
     scheduler = BackgroundScheduler()
+    _synced_schedule_fps.clear()
+    _synced_workspace_fps.clear()
 
     # Collect teams that have schedule-level standups so we skip
     # duplicate workspace-level standup/report jobs for them.
@@ -954,6 +1099,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         for sched in all_schedules:
             teams_with_schedules.add(sched["team_id"])
             register_schedule_job(scheduler, sched)
+            _synced_schedule_fps[(sched["team_id"], sched["id"])] = _schedule_fingerprint(sched)
     except Exception as exc:
         logger.warning("Could not load standup_schedules: %s", exc)
 
@@ -961,8 +1107,10 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         if team_id in teams_with_schedules:
             # Only register digest/manager jobs — standup + report handled by schedules
             register_workspace_digests_only(scheduler, team_id, bot_token, config)
+            _synced_workspace_fps[team_id] = _workspace_fingerprint(config, True)
         else:
             register_workspace_job(scheduler, team_id, bot_token, config)
+            _synced_workspace_fps[team_id] = _workspace_fingerprint(config, False)
 
     # Background bot-token maintenance: refresh any token nearing expiry every 30 minutes.
     # Runs once shortly after startup so freshly-booted pods don't wait half an hour.
@@ -973,6 +1121,16 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         name="Background bot-token refresh",
         replace_existing=True,
         next_run_time=datetime.now(tz=timezone.utc) + timedelta(minutes=1),
+    )
+
+    # Reconcile jobs with the DB so schedules created/edited via the dashboard
+    # (which runs in a forked worker process) take effect without a restart.
+    scheduler.add_job(
+        _sync_jobs_from_db,
+        trigger=IntervalTrigger(minutes=_SYNC_INTERVAL_MINUTES),
+        id="schedule_sync",
+        name="DB → scheduler schedule sync",
+        replace_existing=True,
     )
 
     _scheduler = scheduler
