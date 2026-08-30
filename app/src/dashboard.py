@@ -540,6 +540,27 @@ def api_channels():
 # ---------------------------------------------------------------------------
 
 
+def _participation_summary(overview: dict) -> dict:
+    """Return the headline participation figures without the per-member rows.
+
+    The denominator travels with the percentage so the UI can say
+    "of N enrolled members" rather than showing a bare number.
+    """
+    return {
+        "days": int(overview.get("days") or 7),
+        "completion_rate": int(overview.get("completion_rate") or 0),
+        "expected": int(overview.get("expected") or 0),
+        "completed": int(overview.get("completed") or 0),
+        "missed": int(overview.get("missed") or 0),
+        "responses": int(overview.get("responses") or 0),
+        "total_members": int(overview.get("total_members") or 0),
+        "enrolled_members": int(overview.get("enrolled_members") or 0),
+        "unenrolled_members": int(overview.get("unenrolled_members") or 0),
+        "on_vacation_members": int(overview.get("on_vacation_members") or 0),
+        "responding_members": int(overview.get("responding_members") or 0),
+    }
+
+
 @dashboard_bp.route("/dashboard/api/stats", methods=["GET"])
 @_login_required
 def api_stats():
@@ -555,6 +576,15 @@ def api_stats():
                 "active_members": 0,
                 "total_responses": 0,
                 "responses_this_week": 0,
+                "total_members": 0,
+                "enrolled_members": 0,
+                "unenrolled_members": 0,
+                "on_vacation_members": 0,
+                "expected_responses": 0,
+                "completed_responses": 0,
+                "missed_responses": 0,
+                "days": 7,
+                "schedules": [],
             }
         )
 
@@ -586,20 +616,29 @@ def api_reports():
                 days = max(1, (_dt.utcnow() - d).days + 1)
             except Exception as e:
                 logger.warning("Unexpected error in api_reports parsing date_from: %s", e)
-        participation = db.get_participation_stats(team_id, days=days)
+        overview = db.get_participation_overview(team_id, days=days)
         total_days = days
 
         member_summary = []
-        for p in participation:
-            responses = int(p.get("responses") or 0)
-            rate = min(5, round((responses / max(1, total_days)) * 5))
+        for p in overview.get("members") or []:
+            expected = int(p.get("expected") or 0)
+            rate = int(p.get("completion_rate") or 0)
             member_summary.append(
                 {
                     "user_id": p.get("user_id", ""),
                     "name": p.get("real_name") or p.get("user_id", ""),
-                    "responses": responses,
-                    "total": total_days,
-                    "stars": rate,
+                    "responses": int(p.get("responses") or 0),
+                    "completed": int(p.get("completed") or 0),
+                    "expected": expected,
+                    # "total" used to be the length of the window, which asked
+                    # a three-day-a-week member for five standups. It is now
+                    # what that member was actually asked for.
+                    "total": expected,
+                    "enrolled": bool(p.get("enrolled")),
+                    "on_vacation": bool(p.get("on_vacation")),
+                    "schedules": p.get("schedules") or [],
+                    "completion_rate": rate,
+                    "stars": int(rate * 5 / 100 + 0.5) if expected else 0,
                 }
             )
 
@@ -608,11 +647,21 @@ def api_reports():
                 "standups": standups,
                 "participation": member_summary,
                 "total_days": total_days,
+                "summary": _participation_summary(overview),
+                "schedules": overview.get("schedules") or [],
             }
         )
     except Exception as exc:
         logger.error("api_reports error: %s", exc)
-        return jsonify({"standups": [], "participation": [], "total_days": 7})
+        return jsonify(
+            {
+                "standups": [],
+                "participation": [],
+                "total_days": 7,
+                "summary": _participation_summary({}),
+                "schedules": [],
+            }
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -858,19 +907,52 @@ def api_delete_webhook(hook_id: str):
 @dashboard_bp.route("/dashboard/api/analytics", methods=["GET"])
 @_login_required
 def api_analytics():
+    """Per-member participation for the last N days.
+
+    Members in no active schedule stay in the list with `enrolled` false and an
+    expected count of 0, so the UI can render them as "not enrolled" instead of
+    a misleading "0 of 7".
+    """
     team_id = session["team_id"]
     days = int(request.args.get("days", 7))
     try:
         stats = db.get_participation_stats(team_id, days)
         for row in stats:
-            if row.get("last_standup"):
-                row["last_standup"] = row["last_standup"].isoformat()
+            last = row.get("last_standup")
+            if last is not None and hasattr(last, "isoformat"):
+                row["last_standup"] = last.isoformat()
             row["responses"] = int(row.get("responses") or 0)
             row["days_with_blockers"] = int(row.get("days_with_blockers") or 0)
+            row["expected"] = int(row.get("expected") or 0)
+            row["completed"] = int(row.get("completed") or 0)
+            row["missed"] = int(row.get("missed") or 0)
+            row["completion_rate"] = int(row.get("completion_rate") or 0)
+            row["enrolled"] = bool(row.get("enrolled"))
+            row["on_vacation"] = bool(row.get("on_vacation"))
+            row["schedules"] = row.get("schedules") or []
         return jsonify(stats)
     except Exception as exc:
         logger.error("api_analytics error: %s", exc)
         return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/analytics/schedules", methods=["GET"])
+@_login_required
+def api_analytics_schedules():
+    """Per-schedule completion rates for the last N days, plus the workspace headline."""
+    team_id = session["team_id"]
+    days = int(request.args.get("days", 7))
+    try:
+        overview = db.get_participation_overview(team_id, days=days)
+        return jsonify(
+            {
+                "summary": _participation_summary(overview),
+                "schedules": overview.get("schedules") or [],
+            }
+        )
+    except Exception as exc:
+        logger.error("api_analytics_schedules error: %s", exc)
+        return jsonify({"summary": _participation_summary({}), "schedules": []})
 
 
 # ---------------------------------------------------------------------------

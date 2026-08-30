@@ -160,26 +160,50 @@ class TestApiMembers:
 # ---------------------------------------------------------------------------
 
 
+def _overview(members=None, schedules=None, **totals):
+    """A get_participation_overview payload, shaped like db.compute_participation returns."""
+    base = {
+        "days": 7,
+        "expected": 0,
+        "completed": 0,
+        "missed": 0,
+        "completion_rate": 0,
+        "responses": 0,
+        "responding_members": 0,
+        "total_members": 0,
+        "enrolled_members": 0,
+        "unenrolled_members": 0,
+        "on_vacation_members": 0,
+        "schedules": schedules or [],
+        "members": members or [],
+    }
+    base.update(totals)
+    return base
+
+
 class TestApiReports:
     def test_returns_200_with_expected_keys(self, authed_client):
         _db_mock.get_standups.return_value = []
-        _db_mock.get_participation_stats.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
         resp = authed_client.get("/dashboard/api/reports")
         assert resp.status_code == 200
         data = resp.get_json()
         assert "standups" in data
         assert "participation" in data
         assert "total_days" in data
+        assert "summary" in data
+        assert "schedules" in data
 
     def test_filters_by_user_id(self, authed_client):
         _db_mock.get_standups.return_value = [
             {"user_id": "U1", "yesterday": "a", "today": "b"},
             {"user_id": "U2", "yesterday": "c", "today": "d"},
         ]
-        _db_mock.get_participation_stats.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
         resp = authed_client.get("/dashboard/api/reports?user_id=U1")
         assert resp.status_code == 200
         data = resp.get_json()
+        assert data["standups"]  # the real path ran, not the error fallback
         assert all(s["user_id"] == "U1" for s in data["standups"])
 
     def test_db_error_returns_empty_fallback(self, authed_client):
@@ -188,13 +212,97 @@ class TestApiReports:
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["standups"] == []
+        assert data["summary"]["expected"] == 0
         _db_mock.get_standups.side_effect = None  # reset
 
     def test_date_from_param_accepted(self, authed_client):
         _db_mock.get_standups.return_value = []
-        _db_mock.get_participation_stats.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
         resp = authed_client.get("/dashboard/api/reports?date_from=2024-01-01")
         assert resp.status_code == 200
+
+    def test_member_total_is_what_was_expected_not_the_window_length(self, authed_client):
+        """A mon/wed/fri member expected 3 standups reports 3, not the 7 day window."""
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview(
+            members=[
+                {
+                    "user_id": "U4",
+                    "real_name": "Dee",
+                    "enrolled": True,
+                    "on_vacation": False,
+                    "expected": 3,
+                    "completed": 2,
+                    "missed": 1,
+                    "responses": 2,
+                    "completion_rate": 67,
+                    "last_standup": None,
+                    "days_with_blockers": 0,
+                    "schedules": ["Tri"],
+                }
+            ],
+            expected=3,
+            completed=2,
+            missed=1,
+            completion_rate=67,
+            enrolled_members=1,
+            total_members=1,
+        )
+        resp = authed_client.get("/dashboard/api/reports")
+        row = resp.get_json()["participation"][0]
+        assert row["total"] == 3
+        assert row["expected"] == 3
+        assert row["completion_rate"] == 67
+        assert row["stars"] == 3  # 67 percent of 5 stars, rounded
+
+    def test_unenrolled_member_is_returned_flagged_with_zero_stars(self, authed_client):
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview(
+            members=[
+                {
+                    "user_id": "U6",
+                    "real_name": "Fin",
+                    "enrolled": False,
+                    "on_vacation": False,
+                    "expected": 0,
+                    "completed": 0,
+                    "missed": 0,
+                    "responses": 3,
+                    "completion_rate": 0,
+                    "last_standup": None,
+                    "days_with_blockers": 0,
+                    "schedules": [],
+                }
+            ],
+            total_members=1,
+            unenrolled_members=1,
+        )
+        resp = authed_client.get("/dashboard/api/reports")
+        data = resp.get_json()
+        row = data["participation"][0]
+        assert row["enrolled"] is False
+        assert row["expected"] == 0
+        assert row["responses"] == 3
+        assert row["stars"] == 0
+        assert data["summary"]["unenrolled_members"] == 1
+
+    def test_summary_carries_the_denominator(self, authed_client):
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview(
+            expected=180,
+            completed=156,
+            missed=24,
+            completion_rate=87,
+            total_members=42,
+            enrolled_members=24,
+            unenrolled_members=18,
+        )
+        summary = authed_client.get("/dashboard/api/reports").get_json()["summary"]
+        assert summary["completion_rate"] == 87
+        assert summary["expected"] == 180
+        assert summary["enrolled_members"] == 24
+        assert summary["total_members"] == 42
+        assert summary["unenrolled_members"] == 18
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +365,86 @@ class TestApiStats:
         }
         resp = authed_client.get("/dashboard/api/stats")
         assert resp.status_code == 200
+
+    def test_passes_through_the_enrolment_denominator(self, authed_client):
+        _db_mock.get_dashboard_stats.return_value = {
+            "completion_rate": 87,
+            "active_members": 24,
+            "total_responses": 156,
+            "responses_this_week": 156,
+            "total_members": 42,
+            "enrolled_members": 24,
+            "unenrolled_members": 18,
+            "expected_responses": 180,
+            "completed_responses": 156,
+            "schedules": [{"schedule_id": 1, "name": "Morning", "completion_rate": 100}],
+        }
+        data = authed_client.get("/dashboard/api/stats").get_json()
+        assert data["completion_rate"] == 87
+        assert data["enrolled_members"] == 24
+        assert data["total_members"] == 42
+        assert data["expected_responses"] == 180
+        assert data["schedules"][0]["name"] == "Morning"
+
+    def test_error_fallback_still_carries_the_new_keys(self, authed_client):
+        _db_mock.get_dashboard_stats.side_effect = Exception("DB error")
+        data = authed_client.get("/dashboard/api/stats").get_json()
+        _db_mock.get_dashboard_stats.side_effect = None
+        assert data["completion_rate"] == 0
+        assert data["enrolled_members"] == 0
+        assert data["expected_responses"] == 0
+        assert data["schedules"] == []
+
+
+class TestApiAnalytics:
+    """/dashboard/api/analytics and its per-schedule companion."""
+
+    def test_rows_keep_the_enrolment_flags(self, authed_client):
+        _db_mock.get_participation_stats.return_value = [
+            {
+                "user_id": "U6",
+                "real_name": "Fin",
+                "enrolled": False,
+                "on_vacation": False,
+                "expected": 0,
+                "completed": 0,
+                "missed": 0,
+                "responses": 3,
+                "completion_rate": 0,
+                "last_standup": None,
+                "days_with_blockers": 0,
+                "schedules": [],
+            }
+        ]
+        rows = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        assert rows[0]["enrolled"] is False
+        assert rows[0]["expected"] == 0
+        assert rows[0]["responses"] == 3
+
+    def test_schedule_breakdown_endpoint(self, authed_client):
+        _db_mock.get_participation_overview.return_value = _overview(
+            schedules=[
+                {
+                    "schedule_id": 1,
+                    "name": "Morning",
+                    "occurrence_days": 5,
+                    "participants": 3,
+                    "expected": 15,
+                    "completed": 9,
+                    "missed": 6,
+                    "completion_rate": 60,
+                }
+            ],
+            expected=15,
+            completed=9,
+            completion_rate=60,
+        )
+        data = authed_client.get("/dashboard/api/analytics/schedules?days=7").get_json()
+        assert data["schedules"][0]["completion_rate"] == 60
+        assert data["summary"]["expected"] == 15
+
+    def test_schedule_breakdown_requires_login(self, client):
+        assert client.get("/dashboard/api/analytics/schedules").status_code == 401
 
 
 # ---------------------------------------------------------------------------
