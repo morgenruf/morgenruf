@@ -119,13 +119,11 @@ def member_profile(user: dict[str, Any] | None) -> dict[str, str | None]:
     }
 
 
-def fetch_workspace_humans(client: Any) -> set[str] | None:
-    """Return the ids of every real, active person in the workspace.
+def fetch_workspace_humans_with_error(client: Any) -> tuple[set[str] | None, str | None]:
+    """`fetch_workspace_humans`, plus Slack's error code when it fails.
 
-    Returns None when the walk could not be completed. That distinction matters
-    to the caller: an empty set means "this workspace genuinely has nobody",
-    while None means "we do not know", and deactivating members on a "do not
-    know" would empty every standup in the workspace.
+    The caller needs the code to tell an uninstalled app from a rate limit.
+    One means retire the installation, the other means try again later.
     """
     humans: set[str] = set()
     cursor = None
@@ -134,7 +132,7 @@ def fetch_workspace_humans(client: Any) -> set[str] | None:
             result = client.users_list(limit=200, cursor=cursor or "")
             members = result.get("members", [])
             if not isinstance(members, list):
-                return None
+                return None, "malformed_response"
             for user in members:
                 if isinstance(user, dict) and is_human(user):
                     uid = user.get("id")
@@ -142,13 +140,47 @@ def fetch_workspace_humans(client: Any) -> set[str] | None:
                         humans.add(uid)
             cursor = (result.get("response_metadata") or {}).get("next_cursor")
             if not isinstance(cursor, str) or not cursor:
-                return humans
+                return humans, None
         logger.warning("users.list did not finish within %d pages, not reconciling", MAX_USER_PAGES)
-        return None
+        return None, "too_many_pages"
     except Exception as exc:
-        # slack_sdk's str() is just "The request to the Slack API failed", which
-        # is not diagnosable. The response carries the actual code: ratelimited,
-        # missing_scope, invalid_auth, account_inactive.
-        code = getattr(getattr(exc, "response", None), "get", lambda _k, _d=None: None)("error")
+        code = slack_error_code(exc)
         logger.warning("Could not list workspace users: %s", code or exc)
+        return None, code
+
+
+def fetch_workspace_humans(client: Any) -> set[str] | None:
+    """Return the ids of every real, active person in the workspace.
+
+    Returns None when the walk could not be completed. That distinction matters
+    to the caller: an empty set means "this workspace genuinely has nobody",
+    while None means "we do not know", and deactivating members on a "do not
+    know" would empty every standup in the workspace.
+    """
+    return fetch_workspace_humans_with_error(client)[0]
+
+
+# Codes Slack returns when the app is no longer installed, or the token can
+# never work again. Retrying these is pointless until someone reinstalls.
+DEAD_INSTALL_CODES = frozenset({"account_inactive", "invalid_auth", "token_revoked", "not_authed"})
+
+
+def slack_error_code(exc: Exception) -> str | None:
+    """Pull Slack's error code out of an exception.
+
+    slack_sdk's str() is only "The request to the Slack API failed", which does
+    not distinguish a rate limit from an uninstalled app. The code is on the
+    response.
+    """
+    response = getattr(exc, "response", None)
+    if response is None:
         return None
+    try:
+        return response.get("error")
+    except Exception:
+        return None
+
+
+def is_dead_install(code: str | None) -> bool:
+    """True when the code means the app is gone rather than temporarily unhappy."""
+    return bool(code) and code in DEAD_INSTALL_CODES

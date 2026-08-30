@@ -307,3 +307,70 @@ class TestPruneIsNotDeltaBased:
         self._run(db, _client([_slack_user("U_here", "Here")]))
         called = db.remove_participants_everywhere.call_args.args[1]
         assert "U_old" in called
+
+
+def _dead(code):
+    e = Exception("The request to the Slack API failed.")
+    e.response = {"error": code}
+    c = MagicMock()
+    c.users_list.side_effect = e
+    return c
+
+
+class TestRetireDeadInstallations:
+    """10 of 17 installations answered account_inactive and were polled forever.
+
+    Nothing recorded that an app had been uninstalled, so every scheduler pass
+    registered jobs for workspaces that could not receive them and the member
+    sync spent API calls on tokens Slack had already invalidated.
+    """
+
+    def _db(self):
+        db = MagicMock()
+        db.get_all_installations.return_value = [{"team_id": "T_dead", "bot_token": "xoxb"}]
+        db.get_all_members.return_value = [{"user_id": "U1", "active": True, "real_name": "Ada"}]
+        return db
+
+    def _run(self, db, client):
+        with patch.dict(sys.modules, {"db": db}), patch.object(sched_mod, "_rate_limited_client", return_value=client):
+            sched_mod.sync_members_from_slack()
+
+    def test_an_uninstalled_app_is_retired(self):
+        db = self._db()
+        self._run(db, _dead("account_inactive"))
+        db.deactivate_installation.assert_called_once_with("T_dead", "account_inactive")
+
+    def test_a_revoked_token_is_retired(self):
+        db = self._db()
+        self._run(db, _dead("token_revoked"))
+        db.deactivate_installation.assert_called_once()
+
+    def test_a_rate_limit_is_not_retired(self):
+        """Temporary trouble must never retire a live workspace."""
+        db = self._db()
+        self._run(db, _dead("ratelimited"))
+        db.deactivate_installation.assert_not_called()
+
+    def test_an_unknown_error_is_not_retired(self):
+        db = self._db()
+        self._run(db, _dead("internal_error"))
+        db.deactivate_installation.assert_not_called()
+
+    def test_a_healthy_workspace_is_not_retired(self):
+        db = self._db()
+        self._run(db, _client([_slack_user("U1", "Ada")]))
+        db.deactivate_installation.assert_not_called()
+
+
+class TestDeadInstallCodes:
+    def test_which_codes_mean_gone(self):
+        for code in ["account_inactive", "invalid_auth", "token_revoked", "not_authed"]:
+            assert slack_users.is_dead_install(code) is True, code
+        for code in ["ratelimited", "internal_error", "fatal_error", None, ""]:
+            assert slack_users.is_dead_install(code) is False, code
+
+    def test_the_code_is_read_off_the_response(self):
+        e = Exception("The request to the Slack API failed.")
+        e.response = {"error": "account_inactive"}
+        assert slack_users.slack_error_code(e) == "account_inactive"
+        assert slack_users.slack_error_code(Exception("plain")) is None

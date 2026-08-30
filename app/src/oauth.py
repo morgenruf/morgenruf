@@ -146,6 +146,7 @@ def oauth_callback():
     # Persist installation
     is_new_install = False
     try:
+        db.reactivate_installation(team_id)
         is_new_install = db.save_installation(
             team_id=team_id,
             team_name=team_name,
