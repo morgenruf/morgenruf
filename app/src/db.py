@@ -1032,6 +1032,12 @@ def compute_participation(
     # (member, day) -> the schedule ids that asked them for a standup that day,
     # in schedule_time order.
     occurrences: dict[tuple[str, date], list[int]] = {}
+    # Which schedules name each person, independent of whether any of those
+    # schedules actually fired inside the window. Occurrences cannot answer
+    # this: someone on leave, or on a weekly standup that did not come round
+    # this week, has no occurrences at all and would look like a member of no
+    # standup, which in turn hid them from the dashboard's per-standup filter.
+    membership: dict[str, set[int]] = {}
     for schedule in active_schedules:
         schedule_id = int(schedule.get("id") or 0)
         dates = _occurrence_dates(schedule, days, now)
@@ -1042,6 +1048,7 @@ def compute_participation(
                 continue
             seen.add(user_id)
             enrolled.add(user_id)
+            membership.setdefault(user_id, set()).add(schedule_id)
             member = known.get(user_id)
             if member is None:
                 # In a schedule but missing from the members table: the bot
@@ -1092,6 +1099,7 @@ def compute_participation(
         if not member["active"]:
             continue
         stats = per_member.get(user_id) or {"expected": 0, "completed": 0, "schedules": set()}
+        member_schedules = membership.get(user_id) or set()
         member_rows.append(
             {
                 "user_id": user_id,
@@ -1105,7 +1113,13 @@ def compute_participation(
                 "completion_rate": _percentage(stats["completed"], stats["expected"]),
                 "last_standup": last_standup.get(user_id),
                 "days_with_blockers": blockers.get(user_id, 0),
-                "schedules": [schedule_rows[sid]["name"] for sid in sorted(stats["schedules"])],
+                # Which standups this person is on. Names for display, ids so
+                # the dashboard's "filter by standup" control has something to
+                # compare against: it was matching a numeric id against this
+                # list of names, missing every time, and emptying the table for
+                # every standup you picked.
+                "schedules": [schedule_rows[sid]["name"] for sid in sorted(member_schedules) if sid in schedule_rows],
+                "schedule_ids": sorted(sid for sid in member_schedules if sid in schedule_rows),
             }
         )
     member_rows.sort(

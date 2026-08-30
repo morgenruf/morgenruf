@@ -708,6 +708,64 @@
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+
+    /* Participation meter. Replaces a fixed strip of five emoji that could not
+       represent a denominator: 4/10 and 4/5 drew the same picture. */
+    .meter {
+      display: inline-block;
+      width: 96px;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--surface2);
+      overflow: hidden;
+      vertical-align: middle;
+    }
+    .meter-fill { display: block; height: 100%; border-radius: 3px; }
+    .meter-good { background: #2ea043; }
+    .meter-warn { background: #d29922; }
+    .meter-poor { background: #6e7681; }
+    .col-meter { white-space: nowrap; }
+    .meter-value {
+      margin-left: 10px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* A count of days blocked, not a construction sign. The emoji rendered as
+       a tofu box in the dashboard's font stack. */
+    .blocker-count {
+      display: inline-block;
+      min-width: 20px;
+      padding: 1px 7px;
+      border-radius: 10px;
+      background: rgba(248, 81, 73, 0.15);
+      color: #f85149;
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+
+    .report-blockers {
+      color: var(--danger);
+      border-left: 2px solid var(--danger);
+      padding-left: 10px;
+      margin-top: 6px;
+    }
+    .report-blockers-label { font-weight: 600; font-size: 12px; }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
   </style>
 </head>
 <body>
@@ -815,11 +873,11 @@
       <div class="topbar">
         <div>
           <div class="page-title">Reports</div>
-          <div class="page-subtitle">Standup history — filter by date, member, or question</div>
+          <div class="page-subtitle">Standup history, filtered by date or member</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-secondary btn-sm" onclick="reportState.dateFrom=dateNDaysAgo(7);reportState.dateTo='';loadReports()">7d</button>
-          <button class="btn btn-secondary btn-sm" onclick="reportState.dateFrom=dateNDaysAgo(30);reportState.dateTo='';loadReports()">30d</button>
+          <button class="btn btn-secondary btn-sm" id="rep-btn-7" onclick="setReportRange(7)">7d</button>
+          <button class="btn btn-ghost btn-sm" id="rep-btn-30" onclick="setReportRange(30)">30d</button>
           <button class="btn btn-secondary" onclick="exportCSV()">&#8659; Export CSV</button>
         </div>
       </div>
@@ -1824,7 +1882,24 @@
   }
 
   // ── Reports ──
-  let reportState = { dateFrom: '', dateTo: '', userId: '' };
+  let reportState = { dateFrom: '', dateTo: '', userId: '', range: 7 };
+
+  // Both range buttons carried the same class, so neither ever looked
+  // selected and there was no way to tell which window you were reading.
+  function setReportRange(n) {
+    reportState.dateFrom = dateNDaysAgo(n);
+    reportState.dateTo = '';
+    reportState.range = n;
+    loadReports();
+  }
+
+  function paintReportRange() {
+    const active = reportState.range;
+    [7, 30].forEach(n => {
+      const b = document.getElementById('rep-btn-' + n);
+      if (b) b.className = 'btn ' + (active === n ? 'btn-secondary' : 'btn-ghost') + ' btn-sm';
+    });
+  }
 
   function dateNDaysAgo(n) {
     const d = new Date(); d.setDate(d.getDate() - n);
@@ -1836,6 +1911,7 @@
     if (!state.members?.length) await loadMembers();
     if (!state.channels?.length) await loadChannels();
     const el = document.getElementById('reports-content');
+    paintReportRange();
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
 
     const params = new URLSearchParams();
@@ -1864,14 +1940,28 @@
           : `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:var(--surface2);color:var(--text-muted);font-size:${Math.round(size*0.4)}px;font-weight:600;vertical-align:middle;margin-right:6px">${esc(initials)}</span>`;
       };
 
-      const starsHtml = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
-      const participationRows = participation.map(p => `
-        <tr>
-          <td style="padding:6px 8px">${avatarHtml(p.user_id, 24)}${esc(resolveName(p.user_id, p.name))}</td>
-          <td style="padding:6px 8px;color:var(--text-muted)">(${p.responses}/${p.total})</td>
-          <td style="padding:6px 8px;color:#f59e0b;letter-spacing:2px;font-size:16px">${starsHtml(p.stars)}</td>
-        </tr>
-      `).join('');
+      // Clamped. `stars` is derived from a percentage server side, so a rate
+      // above 100 would make the second repeat() negative and throw a
+      // RangeError, taking the whole report render down with it.
+      const starsHtml = (n) => {
+        const filled = Math.max(0, Math.min(Number(n) || 0, 5));
+        return '<span aria-hidden="true">' + '\u2605'.repeat(filled) + '\u2606'.repeat(5 - filled) +
+               '</span><span class="sr-only">' + filled + ' of 5</span>';
+      };
+      // Someone in no standup was asked for nothing, so "(0/0)" beside an
+      // empty row of stars read as a bad score rather than as not applicable.
+      // Analytics already says "Not in any standup"; say the same here.
+      const participationRows = participation.map(p => {
+        const name = `<td style="padding:6px 8px">${avatarHtml(p.user_id, 24)}${esc(resolveName(p.user_id, p.name))}</td>`;
+        if (!p.expected) {
+          return `<tr class="row-unenrolled">${name}` +
+            `<td colspan="2" style="padding:6px 8px;color:var(--text-dim)">` +
+            `${p.enrolled === false ? 'Not in any standup' : 'Nothing scheduled in this window'}</td></tr>`;
+        }
+        return `<tr>${name}` +
+          `<td style="padding:6px 8px;color:var(--text-muted);font-variant-numeric:tabular-nums">${p.responses}/${p.total}</td>` +
+          `<td style="padding:6px 8px;color:#f59e0b;letter-spacing:2px;font-size:16px">${starsHtml(p.stars)}</td></tr>`;
+      }).join('');
 
       const memberOptions = (state.members || []).map(m =>
         `<option value="${m.id}" ${reportState.userId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`
@@ -1898,7 +1988,7 @@
             <td style="padding:8px 12px">
               ${s.yesterday ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Yesterday:</span> ${slackBlock(s.yesterday)}</div>` : ''}
               ${s.today ? `<div style="margin-bottom:4px"><span style="font-weight:600;font-size:12px">Today:</span> ${slackBlock(s.today)}</div>` : ''}
-              ${s.blockers && s.blockers.toLowerCase() !== 'none' ? `<div style="color:var(--danger)"><span style="font-weight:600;font-size:12px"><span class="ico">🚧</span>Blockers:</span> ${slackBlock(s.blockers)}</div>` : ''}
+              ${blockerBlock(s)}
             </td>
           </tr>
         `).join('')}
@@ -1910,12 +2000,12 @@
           <div style="display:flex;gap:6px;align-items:center">
             <span style="font-size:12px;color:var(--text-muted)">From</span>
             <input type="date" class="form-input" style="width:150px;padding:6px 10px;font-size:13px"
-                   value="${reportState.dateFrom}" onchange="reportState.dateFrom=this.value;loadReports()"/>
+                   value="${reportState.dateFrom}" onchange="reportState.dateFrom=this.value;reportState.range=0;loadReports()"/>
           </div>
           <div style="display:flex;gap:6px;align-items:center">
             <span style="font-size:12px;color:var(--text-muted)">To</span>
             <input type="date" class="form-input" style="width:150px;padding:6px 10px;font-size:13px"
-                   value="${reportState.dateTo}" onchange="reportState.dateTo=this.value;loadReports()"/>
+                   value="${reportState.dateTo}" onchange="reportState.dateTo=this.value;reportState.range=0;loadReports()"/>
           </div>
           <select class="form-input" style="width:180px;padding:6px 10px;font-size:13px"
                   onchange="reportState.userId=this.value;loadReports()">
@@ -1923,7 +2013,7 @@
             ${memberOptions}
           </select>
           <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px"
-                  onclick="reportState={dateFrom:'',dateTo:'',userId:''};loadReports()">Reset</button>
+                  onclick="reportState={dateFrom:'',dateTo:'',userId:'',range:0};loadReports()">Reset</button>
         </div>
 
         <!-- Participation summary -->
@@ -2513,9 +2603,15 @@
     return true;
   }
 
+  // Ids only. `r.schedules` is a list of display names, so it must never be
+  // read as a fallback here: mapping it produced ["Morning Standup"] and the
+  // filter then looked for "3" in that, missed, and emptied the table for
+  // every standup you could pick.
   function rowScheduleIds(r) {
     if (Array.isArray(r.schedule_ids)) return r.schedule_ids.map(String);
-    if (Array.isArray(r.schedules)) return r.schedules.map(s => String(s && s.id !== undefined ? s.id : s));
+    if (Array.isArray(r.schedules) && r.schedules.every(s => s && typeof s === 'object' && s.id !== undefined)) {
+      return r.schedules.map(s => String(s.id));
+    }
     return standupsForMember(r.user_id).map(s => String(s.id));
   }
 
@@ -2621,12 +2717,17 @@
       }
       const expected = rowExpected(r, days);
       const responses = Number(r.responses) || 0;
-      const filled = Math.min(responses, 5);
-      const bar = '🟢'.repeat(filled) + '⬜'.repeat(Math.max(0, 5 - filled));
-      const blockers = r.days_with_blockers ? '🚧 ' + r.days_with_blockers : EMPTY_CELL;
+      // A proportional bar, not five emoji. The old strip was always five
+      // cells wide whatever the denominator, so 4/10 was drawn identically to
+      // 4/5, and anyone at 5 or more responses drew a full row of green: 8/10
+      // looked like a perfect score.
+      const bar = meterHtml(responses, expected);
+      const blockers = r.days_with_blockers
+        ? '<span class="blocker-count">' + r.days_with_blockers + '</span>'
+        : EMPTY_CELL;
       return '<tr>' +
         '<td>' + name + '</td>' +
-        '<td>' + bar + ' ' + responses + '/' + expected + '</td>' +
+        '<td class="col-meter">' + bar + '<span class="meter-value">' + responses + '/' + expected + '</span></td>' +
         '<td>' + blockers + '</td>' +
         '<td class="col-date">' + relativeCell(r.last_standup, 'Never') + '</td>' +
         '</tr>';
@@ -3184,6 +3285,45 @@
     const m = (state.members || []).find(x => x.id === userId);
     if (!m) return 'user';
     return m.display_name || m.name || 'user';
+  }
+
+  // A proportional completion meter. Percentage decides the fill, so rows with
+  // different denominators are comparable at a glance, and the number beside it
+  // keeps the raw counts readable. Screen readers get the figure, not the bar.
+  function meterHtml(done, total) {
+    const t = Number(total) > 0 ? Number(total) : 0;
+    const d = Math.max(0, Math.min(Number(done) || 0, t || Number(done) || 0));
+    const pct = t ? Math.round((d / t) * 100) : 0;
+    const tone = pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'poor';
+    return '<span class="meter" role="img" aria-label="' + d + ' of ' + t + ' completed">' +
+      '<span class="meter-fill meter-' + tone + '" style="width:' + pct + '%"></span></span>';
+  }
+
+  // Whether a standup's blocker answer is worth showing in red.
+  //
+  // Reports used to decide this itself, with `blockers.toLowerCase() !== 'none'`.
+  // That painted 1,558 of 1,676 entries red on the production workspace, for
+  // answers like "no", "Na", "." and "0". The server already stores the
+  // decision in `has_blockers`, computed from the question that was actually
+  // asked, so read that and stop guessing. The text check survives only for
+  // rows written before that column existed.
+  function reportsAsBlocked(s) {
+    if (typeof s.has_blockers === 'boolean') return s.has_blockers;
+    // Strip the list markers the bot asks people to use before comparing.
+    // "• None" is the case that made the server-side check wrong too.
+    const text = String(s.blockers || '')
+      .replace(/[\s\-*•·>.,:;!]+$/, '')
+      .replace(/^[\s\-*•·>.,:;!]+/, '')
+      .trim()
+      .toLowerCase();
+    if (!text) return false;
+    return ['none', 'no', 'n', 'na', 'n/a', 'nil', 'nothing', 'nope', '0'].indexOf(text) < 0;
+  }
+
+  function blockerBlock(s) {
+    if (!s.blockers || !reportsAsBlocked(s)) return '';
+    return '<div class="report-blockers"><span class="report-blockers-label">Blockers:</span> ' +
+      slackBlock(s.blockers) + '</div>';
   }
 
   function aggregateRate(rows, days) {

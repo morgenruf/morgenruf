@@ -573,3 +573,80 @@ class TestSubmissionsNameTheirSchedule:
         subs = [{"user_id": "U1", "standup_date": monday, "schedule_id": 999}]
         r = db.compute_participation(schedules, members, subs, days=1, now=now)
         assert sum(s["completed"] for s in r["schedules"]) == r["completed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# schedule ids on member rows
+# ---------------------------------------------------------------------------
+
+
+class TestScheduleIdsOnMemberRows:
+    """The dashboard's "filter by standup" control needs ids, not names.
+
+    It had only `schedules`, a list of display names, and compared a numeric
+    schedule id against it. The comparison never matched, so picking any
+    standup emptied the analytics table.
+    """
+
+    def test_rows_carry_the_ids_of_the_schedules_they_belong_to(self):
+        result = _result()
+        rows = _by_user(result)
+        assert rows["U1"]["schedule_ids"] == [1, 2]
+        assert rows["U4"]["schedule_ids"] == [3]
+
+    def test_ids_line_up_with_the_names_beside_them(self):
+        result = _result()
+        names = {s["schedule_id"]: s["name"] for s in result["schedules"]}
+        for row in result["members"]:
+            assert [names[i] for i in row["schedule_ids"]] == row["schedules"], row["user_id"]
+
+    def test_ids_are_integers_so_they_can_be_compared_after_stringifying(self):
+        for row in _result()["members"]:
+            assert all(isinstance(i, int) for i in row["schedule_ids"]), row["user_id"]
+
+    def test_a_member_in_no_schedule_has_an_empty_list(self):
+        rows = _by_user(_result())
+        assert rows["U6"]["schedule_ids"] == []
+        assert rows["U6"]["enrolled"] is False
+
+    def test_filtering_by_a_real_id_selects_the_right_people(self):
+        """What the dashboard actually does with the field."""
+        rows = _result()["members"]
+        picked = [r["user_id"] for r in rows if 2 in r["schedule_ids"]]
+        assert picked == ["U1"]
+        picked_one = sorted(r["user_id"] for r in rows if 1 in r["schedule_ids"])
+        assert picked_one == ["U1", "U2", "U3", "U5"]
+
+    def test_every_id_resolves_to_a_returned_schedule(self):
+        result = _result()
+        known = {s["schedule_id"] for s in result["schedules"]}
+        for row in result["members"]:
+            assert set(row["schedule_ids"]) <= known, row["user_id"]
+
+    def test_someone_on_leave_still_belongs_to_their_standup(self):
+        """Membership is the participant list, not "was asked this week".
+
+        Occurrences skip anyone on approved leave, so deriving membership from
+        them dropped those people out of the per-standup filter entirely.
+        """
+        rows = _by_user(_result())
+        assert rows["U5"]["on_vacation"] is True
+        assert rows["U5"]["expected"] == 0
+        assert rows["U5"]["schedule_ids"] == [1]
+
+    def test_a_schedule_that_did_not_come_round_this_week_still_counts(self):
+        """A weekly standup with no occurrence in the window keeps its roster."""
+        schedules, members, submissions = _workspace()
+        schedules.append(_schedule(9, "Weekly", ["U2"], days="sun", time_="08:00"))
+        result = db.compute_participation(schedules, members, submissions, days=3, now=NOW)
+        row = _by_user(result)["U2"]
+        assert 9 in row["schedule_ids"]
+        assert "Weekly" in row["schedules"]
+
+    def test_an_inactive_member_named_on_a_schedule_is_not_listed_at_all(self):
+        """Deactivated people are dropped from the rows, ids or not."""
+        schedules, members, submissions = _workspace()
+        members = [m for m in members if m["user_id"] != "U3"]
+        members.append(_member("U3", "Cy", active=False))
+        result = db.compute_participation(schedules, members, submissions, days=7, now=NOW)
+        assert "U3" not in _by_user(result)
