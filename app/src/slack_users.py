@@ -146,5 +146,9 @@ def fetch_workspace_humans(client: Any) -> set[str] | None:
         logger.warning("users.list did not finish within %d pages, not reconciling", MAX_USER_PAGES)
         return None
     except Exception as exc:
-        logger.warning("Could not list workspace users: %s", exc)
+        # slack_sdk's str() is just "The request to the Slack API failed", which
+        # is not diagnosable. The response carries the actual code: ratelimited,
+        # missing_scope, invalid_auth, account_inactive.
+        code = getattr(getattr(exc, "response", None), "get", lambda _k, _d=None: None)("error")
+        logger.warning("Could not list workspace users: %s", code or exc)
         return None
