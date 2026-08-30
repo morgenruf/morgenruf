@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytz
 import requests
+from schedule_validation import schedule_time_error, schedule_timezone_error
 from slack_bolt import App
 from slack_users import filter_human_ids, is_human
 from state import state_store
@@ -1438,6 +1439,14 @@ def register_handlers(app: App) -> None:
         active_val = (
             values.get("standup_active", {}).get("standup_active", {}).get("selected_option", {}).get("value", "true")
         )
+
+        # The timezone picker is an external_select over a curated list, but a
+        # value the scheduler cannot resolve would save a standup that never
+        # fires and never says why (#67), so check before writing the row.
+        invalid = schedule_timezone_error(timezone) or schedule_time_error(report_time)
+        if invalid:
+            client.chat_postMessage(channel=user_id, text=f"❌ Couldn't save *{standup_name}*: {invalid}")
+            return
 
         try:
             import db  # noqa: PLC0415

@@ -20,6 +20,9 @@ for _name in ("pytz", "slack_sdk"):
 _prior_session_store = sys.modules.get("session_store")
 _ss_mock = MagicMock()
 _ss_mock.get_session.return_value = None
+# Without this the bare MagicMock answers "yes" and every member looks like they
+# already have a session open, which only shows up when this module runs alone.
+_ss_mock.has_session.return_value = False
 sys.modules["session_store"] = _ss_mock
 
 _had_scheduler = "scheduler" in sys.modules
@@ -241,3 +244,54 @@ class TestReminderSkipsInactiveSchedule(_SyncTestBase):
     def test_inactive_schedule_sends_nothing(self):
         web_client = self._run_reminder(_schedule_row(active=False))
         web_client.return_value.conversations_open.assert_not_called()
+
+
+class TestInvalidScheduleIsReportable(_SyncTestBase):
+    """#67: an unusable timezone leaves an Active schedule with no job at all."""
+
+    def test_invalid_timezone_registers_no_job(self):
+        sched_mod.register_schedule_job(self.scheduler, _schedule_row(schedule_tz="Asia/Kolkatta"))
+        assert self.scheduler.get_job("schedule_T1_1") is None
+
+    def test_invalid_timezone_is_reported(self):
+        rows = [_schedule_row(schedule_tz="Asia/Kolkatta")]
+        problems = sched_mod.get_unregistered_schedules(self.scheduler, rows)
+        assert len(problems) == 1
+        assert problems[0]["id"] == 1
+        assert problems[0]["team_id"] == "T1"
+        assert "Asia/Kolkatta" in problems[0]["reason"]
+
+    def test_invalid_time_is_reported(self):
+        problems = sched_mod.get_unregistered_schedules(self.scheduler, [_schedule_row(schedule_time="9am")])
+        assert len(problems) == 1
+        assert "9am" in problems[0]["reason"]
+
+    def test_registered_schedule_is_not_reported(self):
+        rows = [_schedule_row()]
+        sched_mod.register_schedule_job(self.scheduler, rows[0])
+        assert sched_mod.get_unregistered_schedules(self.scheduler, rows) == []
+
+    def test_active_schedule_with_no_job_is_reported(self):
+        problems = sched_mod.get_unregistered_schedules(self.scheduler, [_schedule_row()])
+        assert len(problems) == 1
+        assert "No standup job" in problems[0]["reason"]
+
+    def test_inactive_schedule_is_ignored(self):
+        assert sched_mod.get_unregistered_schedules(self.scheduler, [_schedule_row(active=False)]) == []
+
+    def test_config_problems_are_reported_without_a_running_scheduler(self):
+        """The dashboard worker has no scheduler of its own, but can still tell."""
+        problems = sched_mod.get_unregistered_schedules(None, [_schedule_row(schedule_tz="IST")])
+        assert len(problems) == 1
+
+    def test_schedules_are_read_from_the_db_when_not_supplied(self):
+        db = _make_db(schedules=[_schedule_row(schedule_tz="Asia/Kolkatta")])
+        with patch.dict(sys.modules, {"db": db}):
+            problems = sched_mod.get_unregistered_schedules(self.scheduler)
+        assert len(problems) == 1
+
+    def test_db_error_reports_nothing(self):
+        db = MagicMock()
+        db.get_all_active_schedules.side_effect = RuntimeError("db down")
+        with patch.dict(sys.modules, {"db": db}):
+            assert sched_mod.get_unregistered_schedules(self.scheduler) == []
