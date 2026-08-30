@@ -17,7 +17,7 @@ from schedule_validation import schedule_config_error
 from slack_sdk import WebClient
 from slack_users import (
     fetch_human_users,
-    fetch_workspace_humans_with_error,
+    fetch_workspace_directory,
     is_dead_install,
     member_profile,
 )
@@ -1278,6 +1278,17 @@ def sync_members_from_slack() -> None:
         logger.warning("Member sync: could not load installations: %s", exc)
         return
 
+    # Who each workspace's schedules say should be taking part. Loaded once
+    # rather than per installation.
+    listed: dict[str, set[str]] = {}
+    try:
+        for sched in db.get_all_active_schedules():
+            team = sched.get("team_id")
+            if team:
+                listed.setdefault(team, set()).update(sched.get("participants") or [])
+    except Exception as exc:
+        logger.warning("Member sync: could not load schedules, not registering participants: %s", exc)
+
     for index, inst in enumerate(installations):
         team_id = inst.get("team_id")
         token = inst.get("bot_token")
@@ -1292,7 +1303,8 @@ def sync_members_from_slack() -> None:
             time.sleep(_MEMBER_SYNC_PAUSE_SECONDS)
         try:
             client = _rate_limited_client(token)
-            live, error_code = fetch_workspace_humans_with_error(client)
+            directory, error_code = fetch_workspace_directory(client)
+            live = set(directory) if directory is not None else None
             if live is None:
                 if is_dead_install(error_code):
                     # The app has been uninstalled. Stop polling it every six
@@ -1306,14 +1318,38 @@ def sync_members_from_slack() -> None:
                 continue
 
             stored = db.get_all_members(team_id)
-            if not stored:
-                continue
 
             # A workspace that reports zero people while we hold members is far
             # more likely to be a bad response than a genuinely empty Slack.
             if not live:
                 logger.warning("Member sync: %s reported no users but has %d members, skipping", team_id, len(stored))
                 continue
+
+            # No `if not stored: continue` here. A workspace we hold no members
+            # for is precisely the one that most needs its participants
+            # registered, and returning early would skip that.
+
+            # Register anyone a schedule lists who we have no row for. Until
+            # now this only happened at delivery time, inside
+            # resolve_participants, so a schedule could sit for days reaching a
+            # fraction of the people named on it and report nothing wrong. One
+            # workspace was delivering to 1 of 15 for exactly this reason.
+            #
+            # The directory above already cost a users.list call, so confirming
+            # these ids and reading their profiles is free.
+            known = {m["user_id"] for m in stored}
+            registered = 0
+            for uid in sorted(listed.get(team_id, set()) - known):
+                user = directory.get(uid)
+                if not user:
+                    # Listed on a schedule but not a real, active human. Leave
+                    # it: the participant prune is the right place for that.
+                    continue
+                try:
+                    db.upsert_member(team_id, uid, **member_profile(user))
+                    registered += 1
+                except Exception as exc:
+                    logger.warning("Member sync: could not register %s: %s", uid, exc)
 
             to_deactivate = [m["user_id"] for m in stored if m.get("active") and m["user_id"] not in live]
             to_restore = [m["user_id"] for m in stored if not m.get("active") and m["user_id"] in live]
@@ -1332,9 +1368,8 @@ def sync_members_from_slack() -> None:
             # deactivated by an earlier run: they were no longer active, so they
             # never appeared in a later delta, and nothing ever removed them.
             #
-            # Members we have never seen are deliberately left alone. They are
-            # registered on first delivery by resolve_participants, and pruning
-            # them here would fight that.
+            # Members we have never seen were registered just above, so they
+            # are in `known` and not at risk of being pruned here.
             # `stored` is the snapshot from before this pass deactivated anyone,
             # so it must be combined with this pass's deactivations. Using only
             # one or the other misses half the cases.
@@ -1354,10 +1389,12 @@ def sync_members_from_slack() -> None:
                     except Exception as exc:
                         logger.warning("Member sync: could not backfill %s: %s", uid, exc)
 
-            if gone or back or nameless or pruned:
+            if gone or back or nameless or pruned or registered:
                 logger.info(
-                    "Member sync %s: deactivated %d, restored %d, backfilled %d, pruned from %d schedules",
+                    "Member sync %s: registered %d, deactivated %d, restored %d, backfilled %d, "
+                    "pruned from %d schedules",
                     team_id,
+                    registered,
                     gone,
                     back,
                     len(nameless),

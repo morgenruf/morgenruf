@@ -119,13 +119,17 @@ def member_profile(user: dict[str, Any] | None) -> dict[str, str | None]:
     }
 
 
-def fetch_workspace_humans_with_error(client: Any) -> tuple[set[str] | None, str | None]:
-    """`fetch_workspace_humans`, plus Slack's error code when it fails.
+def fetch_workspace_directory(client: Any) -> tuple[dict[str, dict[str, Any]] | None, str | None]:
+    """Every real, active person in the workspace, as `{id: user object}`.
 
-    The caller needs the code to tell an uninstalled app from a rate limit.
-    One means retire the installation, the other means try again later.
+    Returns the objects rather than just ids so a caller can register a member
+    with their name and timezone without a second round trip. `users.list` is
+    Tier 2, so paying for it once and reusing the result matters.
+
+    The second element is Slack's error code on failure, which is what lets the
+    caller tell an uninstalled app from a rate limit.
     """
-    humans: set[str] = set()
+    humans: dict[str, dict[str, Any]] = {}
     cursor = None
     try:
         for _page in range(MAX_USER_PAGES):
@@ -137,7 +141,7 @@ def fetch_workspace_humans_with_error(client: Any) -> tuple[set[str] | None, str
                 if isinstance(user, dict) and is_human(user):
                     uid = user.get("id")
                     if uid:
-                        humans.add(uid)
+                        humans[uid] = user
             cursor = (result.get("response_metadata") or {}).get("next_cursor")
             if not isinstance(cursor, str) or not cursor:
                 return humans, None
@@ -147,6 +151,12 @@ def fetch_workspace_humans_with_error(client: Any) -> tuple[set[str] | None, str
         code = slack_error_code(exc)
         logger.warning("Could not list workspace users: %s", code or exc)
         return None, code
+
+
+def fetch_workspace_humans_with_error(client: Any) -> tuple[set[str] | None, str | None]:
+    """Ids only. Thin wrapper over `fetch_workspace_directory`."""
+    directory, code = fetch_workspace_directory(client)
+    return (set(directory) if directory is not None else None), code
 
 
 def fetch_workspace_humans(client: Any) -> set[str] | None:
