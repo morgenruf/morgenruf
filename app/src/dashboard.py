@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 from functools import wraps
 
@@ -373,12 +374,17 @@ def api_members():
     if not token:
         return jsonify([])
 
-    # Build role map from DB
+    # Roles, and who the bot actually holds a row for. This endpoint lists
+    # everyone in the Slack workspace, which is right for the participant
+    # pickers but meant the Members page said 42 while Analytics said 26 with
+    # nothing on either page explaining the difference. Marking each person
+    # tells the page which population it is looking at.
     role_map: dict[str, str] = {}
+    tracked: set[str] = set()
     try:
-        db_members = db.get_active_members(team_id)
-        for r in db_members:
+        for r in db.get_active_members(team_id):
             role_map[r["user_id"]] = r.get("role", "member")
+            tracked.add(r["user_id"])
     except Exception as e:
         logger.warning("Unexpected error in api_members loading role map: %s", e)
 
@@ -428,6 +434,9 @@ def api_members():
                     "email": profile.get("email", ""),
                     "tz": u.get("tz", "UTC"),
                     "role": role_map.get(uid, "member"),
+                    # False means: in Slack, but the bot holds no active row,
+                    # so they are in no standup and in no participation figure.
+                    "tracked": uid in tracked,
                 }
             )
         return jsonify(members)
@@ -444,6 +453,7 @@ def api_members():
                         "email": r.get("email", ""),
                         "tz": r.get("tz", "UTC"),
                         "role": r.get("role", "member"),
+                        "tracked": True,
                     }
                     for r in rows
                 ]
@@ -577,6 +587,102 @@ def api_stats():
         )
 
 
+# Channel names the bot is not a member of, resolved once per process.
+# users.conversations only lists channels the bot has joined, so a standup that
+# mentions any other channel rendered the raw id: "#C0B3JSAQWPL" instead of a
+# name.
+_CHANNEL_NAME_CACHE: dict[str, str] = {}
+_CHANNEL_MENTION = re.compile(r"<#(C[A-Z0-9]+)(?:\|[^>]*)?>")
+
+
+def _resolve_channel_names(token: str, standups: list[dict]) -> dict[str, str]:
+    """Look up the channels mentioned in these answers, by id."""
+    referenced: set[str] = set()
+    for row in standups:
+        for field in ("yesterday", "today", "blockers"):
+            value = row.get(field)
+            if value:
+                referenced.update(_CHANNEL_MENTION.findall(str(value)))
+    if not referenced:
+        return {}
+
+    found = {cid: _CHANNEL_NAME_CACHE[cid] for cid in referenced if cid in _CHANNEL_NAME_CACHE}
+    missing = referenced - set(found)
+    if not missing:
+        return found
+
+    try:
+        from slack_sdk import WebClient  # noqa: PLC0415
+
+        client = WebClient(token=token)
+    except Exception as exc:
+        logger.warning("Could not build a client to resolve channel names: %s", exc)
+        return found
+
+    # Bounded, so a standup full of mentions cannot turn one page load into
+    # dozens of Slack calls.
+    for cid in sorted(missing)[:25]:
+        try:
+            info = client.conversations_info(channel=cid)
+            name = (info.get("channel") or {}).get("name")
+            if name:
+                _CHANNEL_NAME_CACHE[cid] = name
+                found[cid] = name
+        except Exception as exc:
+            # Private, archived, or in another workspace. Nothing to show.
+            logger.debug("Could not resolve channel %s: %s", cid, exc)
+    return found
+
+
+def _attach_questions(team_id: str, standups: list[dict]) -> None:
+    """Label each standup with the questions it was actually asked.
+
+    The report hardcoded "Yesterday", "Today" and "Blockers", which are the
+    default questions and not necessarily the ones a schedule asks. A schedule
+    asking "Availability in Hours" third had "4:30 Hrs" printed under a red
+    Blockers heading. Same mistake as counting that answer as a blocker, which
+    `blockers.py` already fixed on the computing side.
+
+    `schedule_id` on the standup is the reliable answer, but it only exists on
+    rows written since it was added. For older rows, fall back to the
+    schedules the person belongs to, and only when they all ask the same
+    thing: someone in a morning and an evening standup with different
+    questions is genuinely ambiguous, so those keep the generic labels rather
+    than being given a guess.
+    """
+    if not standups:
+        return
+    try:
+        schedules = db.get_standup_schedules(team_id)
+    except Exception as exc:
+        logger.warning("Could not load schedules for report labels: %s", exc)
+        return
+
+    by_id: dict[int, list] = {}
+    per_user: dict[str, list[list]] = {}
+    for sched in schedules:
+        questions = sched.get("questions") or []
+        if not questions:
+            continue
+        by_id[int(sched.get("id") or 0)] = questions
+        if not sched.get("active"):
+            continue
+        for user_id in sched.get("participants") or []:
+            per_user.setdefault(user_id, []).append(questions)
+
+    def unanimous(user_id: str) -> list | None:
+        found = per_user.get(user_id) or []
+        if not found:
+            return None
+        first = found[0]
+        return first if all(q == first for q in found) else None
+
+    for row in standups:
+        schedule_id = row.get("schedule_id")
+        questions = by_id.get(int(schedule_id)) if schedule_id else None
+        row["questions"] = questions or unanimous(row.get("user_id", "")) or None
+
+
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
 @_login_required
 def api_reports():
@@ -594,6 +700,9 @@ def api_reports():
         )
         if user_id_filter:
             standups = [s for s in standups if s.get("user_id") == user_id_filter]
+
+        _attach_questions(team_id, standups)
+        channel_names = _resolve_channel_names(token, standups) if (token := _get_bot_token()) else {}
 
         days = 7
         if date_from:
@@ -633,6 +742,7 @@ def api_reports():
         return jsonify(
             {
                 "standups": standups,
+                "channel_names": channel_names,
                 "participation": member_summary,
                 "total_days": total_days,
                 "summary": _participation_summary(overview),
