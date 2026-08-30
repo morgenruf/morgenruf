@@ -15,7 +15,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from schedule_validation import schedule_config_error
 from slack_sdk import WebClient
-from slack_users import fetch_human_users, member_profile
+from slack_users import fetch_human_users, fetch_workspace_humans, member_profile
 from state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
@@ -495,7 +495,7 @@ def resolve_participants(client, team_id: str, participants, members: list[dict]
 
     # Someone in the list who is stored but inactive opted out; do not re-add.
     try:
-        opted_out = {m["user_id"] for m in db.get_all_members(team_id)} if hasattr(db, "get_all_members") else set()
+        opted_out = {m["user_id"] for m in db.get_all_members(team_id) if not m.get("active")}
     except Exception:
         opted_out = set()
     unknown = [uid for uid in unknown if uid not in opted_out]
@@ -1225,6 +1225,88 @@ def _sync_jobs_from_db() -> None:
     _synced_workspace_fps.update(desired_ws)
 
 
+_MEMBER_SYNC_INTERVAL_HOURS = 6
+
+
+def sync_members_from_slack() -> None:
+    """Reconcile the members table with who is actually in each Slack workspace.
+
+    Nothing ever deactivated a member who left. Rows were created on first
+    contact and stayed active forever, so the dashboard listed people who had
+    left the company, the bot itself, and rows with no name at all, and every
+    one of them sat in participation denominators.
+
+    Rules:
+      * anyone Slack no longer reports as a real, active person is deactivated
+      * anyone active in Slack whose row was deactivated is restored, so
+        rejoining is not a manual fix
+      * names and timezones are backfilled for rows that never got a profile
+      * rows are never deleted, so standup history survives
+
+    A workspace whose user list cannot be read is skipped entirely. Treating a
+    failed lookup as "nobody is here" would deactivate the whole workspace.
+    """
+    try:
+        import db  # noqa: PLC0415
+
+        installations = db.get_all_installations()
+    except Exception as exc:
+        logger.warning("Member sync: could not load installations: %s", exc)
+        return
+
+    for inst in installations:
+        team_id = inst.get("team_id")
+        token = inst.get("bot_token")
+        if not team_id or not token:
+            continue
+        try:
+            client = WebClient(token=token)
+            live = fetch_workspace_humans(client)
+            if live is None:
+                logger.warning("Member sync: skipping %s, could not read the user list", team_id)
+                continue
+
+            stored = db.get_all_members(team_id)
+            if not stored:
+                continue
+
+            # A workspace that reports zero people while we hold members is far
+            # more likely to be a bad response than a genuinely empty Slack.
+            if not live:
+                logger.warning("Member sync: %s reported no users but has %d members, skipping", team_id, len(stored))
+                continue
+
+            to_deactivate = [m["user_id"] for m in stored if m.get("active") and m["user_id"] not in live]
+            to_restore = [m["user_id"] for m in stored if not m.get("active") and m["user_id"] in live]
+
+            gone = db.set_members_active(team_id, to_deactivate, False)
+            back = db.set_members_active(team_id, to_restore, True)
+
+            # Backfill anyone still missing a name, which is what left raw Slack
+            # ids showing in the dashboard.
+            nameless = [m["user_id"] for m in stored if m["user_id"] in live and not (m.get("real_name") or "").strip()]
+            if nameless:
+                found = fetch_human_users(client, nameless)
+                for uid, user in found.items():
+                    if not user:
+                        continue
+                    try:
+                        db.upsert_member(team_id, uid, **member_profile(user))
+                    except Exception as exc:
+                        logger.warning("Member sync: could not backfill %s: %s", uid, exc)
+
+            if gone or back or nameless:
+                logger.info(
+                    "Member sync %s: deactivated %d, restored %d, backfilled %d",
+                    team_id,
+                    gone,
+                    back,
+                    len(nameless),
+                )
+        except Exception as exc:
+            logger.warning("Member sync failed for %s: %s", team_id, exc)
+
+
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:
     """Build scheduler from a list of (team_id, bot_token, config) tuples."""
     global _scheduler
@@ -1264,6 +1346,17 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         name="Background bot-token refresh",
         replace_existing=True,
         next_run_time=datetime.now(tz=timezone.utc) + timedelta(minutes=1),
+    )
+
+    # Keep the members table matching who is actually in each Slack workspace,
+    # so people who left stop appearing and stop skewing participation.
+    scheduler.add_job(
+        sync_members_from_slack,
+        trigger=IntervalTrigger(hours=_MEMBER_SYNC_INTERVAL_HOURS),
+        id="member_sync",
+        name="Slack member reconciliation",
+        replace_existing=True,
+        next_run_time=datetime.now(tz=timezone.utc) + timedelta(minutes=2),
     )
 
     # Reconcile jobs with the DB so schedules created/edited via the dashboard
