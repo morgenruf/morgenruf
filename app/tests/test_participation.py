@@ -489,3 +489,87 @@ class TestPublicHelpers:
         with patch.object(db, "_pool", pool):
             db.get_participation_overview("T1", days=7)
         assert cur.execute.call_count == 3
+
+
+class TestSubmissionsNameTheirSchedule:
+    """Before migration 026 a submission could not be attributed to a schedule.
+
+    A member in a morning and an evening standup who filed only one was
+    credited to whichever fired first, regardless of which they answered.
+    """
+
+    @staticmethod
+    def _two_standups():
+        people = ["U1"]
+        morning = {
+            "id": 1,
+            "team_id": "T",
+            "name": "Morning",
+            "schedule_days": "mon",
+            "schedule_tz": "UTC",
+            "schedule_time": "09:00",
+            "participants": people,
+            "active": True,
+        }
+        evening = {
+            "id": 2,
+            "team_id": "T",
+            "name": "Evening",
+            "schedule_days": "mon",
+            "schedule_tz": "UTC",
+            "schedule_time": "18:00",
+            "participants": people,
+            "active": True,
+        }
+        members = [{"user_id": "U1", "real_name": "Ada", "active": True, "on_vacation": False}]
+        monday = dt.date(2026, 3, 9)
+        now = dt.datetime(2026, 3, 9, 23, 0, tzinfo=dt.timezone.utc)
+        return [morning, evening], members, monday, now
+
+    def _rate_for(self, result, schedule_id):
+        return next(s for s in result["schedules"] if s["schedule_id"] == schedule_id)["completed"]
+
+    def test_the_evening_standup_gets_the_credit_when_named(self):
+        schedules, members, monday, now = self._two_standups()
+        subs = [{"user_id": "U1", "standup_date": monday, "schedule_id": 2}]
+        r = db.compute_participation(schedules, members, subs, days=1, now=now)
+        assert self._rate_for(r, 2) == 1
+        assert self._rate_for(r, 1) == 0
+
+    def test_the_morning_standup_gets_it_when_that_is_the_one_named(self):
+        schedules, members, monday, now = self._two_standups()
+        subs = [{"user_id": "U1", "standup_date": monday, "schedule_id": 1}]
+        r = db.compute_participation(schedules, members, subs, days=1, now=now)
+        assert self._rate_for(r, 1) == 1
+        assert self._rate_for(r, 2) == 0
+
+    def test_a_row_with_no_schedule_id_still_falls_back(self):
+        """Rows written before 026 keep the old time-order behaviour."""
+        schedules, members, monday, now = self._two_standups()
+        subs = [{"user_id": "U1", "standup_date": monday}]
+        r = db.compute_participation(schedules, members, subs, days=1, now=now)
+        assert self._rate_for(r, 1) == 1
+        assert self._rate_for(r, 2) == 0
+
+    def test_named_and_unnamed_rows_together(self):
+        schedules, members, monday, now = self._two_standups()
+        subs = [
+            {"user_id": "U1", "standup_date": monday, "schedule_id": 2},
+            {"user_id": "U1", "standup_date": monday},
+        ]
+        r = db.compute_participation(schedules, members, subs, days=1, now=now)
+        assert self._rate_for(r, 1) == 1
+        assert self._rate_for(r, 2) == 1
+
+    def test_per_schedule_still_sums_to_the_workspace_total(self):
+        schedules, members, monday, now = self._two_standups()
+        subs = [{"user_id": "U1", "standup_date": monday, "schedule_id": 2}]
+        r = db.compute_participation(schedules, members, subs, days=1, now=now)
+        assert sum(s["completed"] for s in r["schedules"]) == r["completed"]
+
+    def test_a_schedule_id_that_did_not_ask_them_is_ignored(self):
+        """A stale id must not credit a schedule the person is not in."""
+        schedules, members, monday, now = self._two_standups()
+        subs = [{"user_id": "U1", "standup_date": monday, "schedule_id": 999}]
+        r = db.compute_participation(schedules, members, subs, days=1, now=now)
+        assert sum(s["completed"] for s in r["schedules"]) == r["completed"] == 1
