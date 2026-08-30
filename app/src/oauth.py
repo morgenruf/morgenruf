@@ -44,8 +44,19 @@ _url_generator = AuthorizeUrlGenerator(
 )
 
 
+# Resolved once per process. When FLASK_SECRET_KEY is unset we fall back to a
+# random value rather than a constant: a predictable state secret would let an
+# attacker mint their own OAuth state and defeat the CSRF check on install.
+# A random key means state tokens do not survive a restart, which costs an
+# in-flight install its callback and is the safe direction to fail in.
+_FALLBACK_STATE_SECRET = os.urandom(32)
+
+
 def _state_secret() -> bytes:
-    key = os.environ.get("FLASK_SECRET_KEY", "fallback-insecure-key")
+    key = os.environ.get("FLASK_SECRET_KEY")
+    if not key:
+        logger.warning("FLASK_SECRET_KEY not set, signing OAuth state with a per-process random key")
+        return _FALLBACK_STATE_SECRET
     return key.encode() if isinstance(key, str) else key
 
 
