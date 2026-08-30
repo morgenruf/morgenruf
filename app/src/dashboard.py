@@ -24,6 +24,7 @@ from flask import (
     url_for,
 )
 from oauth import verify_login_token
+from slack_users import is_human
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +414,7 @@ def api_members():
 
         members = []
         for u in all_users:
-            if u.get("deleted") or u.get("is_bot") or u.get("id") == "USLACKBOT":
+            if not is_human(u):
                 continue
             uid = u["id"]
             if channel_member_ids is not None and uid not in channel_member_ids:
