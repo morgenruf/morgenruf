@@ -180,3 +180,24 @@ class TestMemberSync:
         # response than an empty workspace, so change nothing.
         for call in db.set_members_active.call_args_list:
             assert call.args[1] != ["U1"] or call.args[2] is not False
+
+    def test_a_leaver_is_also_pruned_from_schedules(self):
+        """Deactivating the row alone left them in the participation denominator.
+
+        compute_participation invents a member row for anyone named in a
+        schedule's participants but missing from the members table, so a leaver
+        kept being counted (and listed) until the schedule was edited by hand.
+        """
+        db = self._db(
+            [
+                {"user_id": "U_gone", "active": True, "real_name": "Left"},
+                {"user_id": "U_here", "active": True, "real_name": "Still here"},
+            ]
+        )
+        self._run(db, _client([_slack_user("U_here", "Still here")]))
+        db.remove_participants_everywhere.assert_called_once_with("T1", ["U_gone"])
+
+    def test_nobody_leaving_means_no_schedule_edits(self):
+        db = self._db([{"user_id": "U1", "active": True, "real_name": "Ada"}])
+        self._run(db, _client([_slack_user("U1", "Ada")]))
+        db.remove_participants_everywhere.assert_not_called()

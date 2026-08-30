@@ -291,6 +291,30 @@ def set_members_active(team_id: str, user_ids: list[str], active: bool) -> int:
             return cur.rowcount or 0
 
 
+def remove_participants_everywhere(team_id: str, user_ids: list[str]) -> int:
+    """Drop these users from every schedule's participant list.
+
+    Deactivating a member is not enough on its own. The participation model
+    treats anyone named in a schedule's `participants` as expected, inventing a
+    row for them when they are not in the members table, so a person who left
+    would keep inflating the denominator and keep being listed on the standup.
+
+    Returns the number of schedules changed.
+    """
+    if not user_ids:
+        return 0
+    sql = """
+        UPDATE standup_schedules
+        SET participants = ARRAY(SELECT unnest(participants) EXCEPT SELECT unnest(%s::text[]))
+        WHERE team_id = %s AND participants && %s::text[]
+    """
+    ids = list(user_ids)
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (ids, team_id, ids))
+            return cur.rowcount or 0
+
+
 def get_active_members(team_id: str) -> list[dict]:
     """Return active members for a workspace."""
     sql = "SELECT * FROM members WHERE team_id = %s AND active = TRUE ORDER BY real_name"
