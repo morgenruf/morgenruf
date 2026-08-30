@@ -619,6 +619,62 @@ def api_reports():
 # Webhooks API
 # ---------------------------------------------------------------------------
 
+# Bytes of entropy in a signing secret. token_urlsafe(32) yields 43 characters.
+_WEBHOOK_SECRET_BYTES = 32
+
+
+def _new_webhook_secret() -> str:
+    """Generate a signing secret. The raw value is handed to the operator once."""
+    return secrets.token_urlsafe(_WEBHOOK_SECRET_BYTES)
+
+
+def _iso(value):
+    """Render a timestamp for JSON, passing through anything already a string."""
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+def _public_webhook(hook: dict) -> dict:
+    """Strip the signing secret out of a webhook row before it leaves the server.
+
+    The raw secret is returned exactly twice in its life, by the create and
+    rotate endpoints, and never again. Listings get ``has_secret`` plus a short
+    prefix, enough for the UI to tell two secrets apart and to warn about rows
+    that predate signing and are still delivering unsigned.
+    """
+    secret = hook.get("secret") or ""
+    return {
+        "id": hook.get("id"),
+        "url": hook.get("webhook_url"),
+        "webhook_url": hook.get("webhook_url"),
+        "events": list(hook.get("events") or []),
+        "has_secret": bool(secret),
+        "secret_prefix": secret[:6] if secret else None,
+        "signed": bool(secret),
+        "created_at": _iso(hook.get("created_at")),
+    }
+
+
+def _clean_events(raw) -> tuple[list[str] | None, str | None]:
+    """Validate an ``events`` field from a request body.
+
+    Returns ``(events, error)``. ``events`` is None when the caller did not
+    supply the field at all, which means "leave it alone".
+    """
+    if raw is None:
+        return None, None
+    if not isinstance(raw, list):
+        return None, "events must be a list"
+    if not raw:
+        return None, "events must not be empty"
+    cleaned: list[str] = []
+    for item in raw:
+        name = db.normalize_webhook_event(str(item))
+        if name not in db.WEBHOOK_EVENTS:
+            return None, f"Unknown event {item!r}. Valid events: {', '.join(db.WEBHOOK_EVENTS)}"
+        if name not in cleaned:
+            cleaned.append(name)
+    return cleaned, None
+
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["GET"])
 @_login_required
@@ -626,10 +682,17 @@ def api_list_webhooks():
     team_id = session["team_id"]
     try:
         hooks = db.get_webhooks(team_id)
-        return jsonify(hooks)
+        return jsonify([_public_webhook(h) for h in hooks])
     except Exception as exc:
         logger.warning("api_list_webhooks error: %s", exc)
         return jsonify([])
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/events", methods=["GET"])
+@_login_required
+def api_webhook_events():
+    """List the event names a webhook can subscribe to."""
+    return jsonify({"events": list(db.WEBHOOK_EVENTS), "default": list(db.DEFAULT_WEBHOOK_EVENTS)})
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["POST"])
@@ -642,12 +705,137 @@ def api_add_webhook():
         return jsonify({"error": "url is required"}), 400
     if not _is_safe_webhook_url(url_val):
         return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+    events, err = _clean_events(data.get("events"))
+    if err:
+        return jsonify({"error": err}), 400
     try:
-        hook = db.add_webhook(team_id, url_val)
-        return jsonify(hook), 201
+        secret = _new_webhook_secret()
+        hook = db.add_webhook(team_id, url_val, secret=secret, events=events)
+        body = _public_webhook(hook)
+        # The only time the raw secret is ever returned. Store it now or rotate.
+        body["secret"] = secret
+        body["secret_shown_once"] = True
+        return jsonify(body), 201
     except Exception as exc:
         logger.error("api_add_webhook error: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["PATCH"])
+@_login_required
+def api_update_webhook(hook_id: str):
+    """Update a webhook's URL and/or its event subscription."""
+    team_id = session["team_id"]
+    data = request.get_json(force=True) or {}
+
+    url_val = data.get("url")
+    if url_val is not None:
+        url_val = str(url_val).strip()
+        if not url_val:
+            return jsonify({"error": "url must not be empty"}), 400
+        if not _is_safe_webhook_url(url_val):
+            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+
+    events, err = _clean_events(data.get("events"))
+    if err:
+        return jsonify({"error": err}), 400
+    if url_val is None and events is None:
+        return jsonify({"error": "Nothing to update"}), 400
+
+    try:
+        hook = db.update_webhook(team_id, int(hook_id), url=url_val, events=events)
+        if not hook:
+            return jsonify({"error": "Webhook not found"}), 404
+        return jsonify(_public_webhook(hook))
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    except Exception as exc:
+        logger.error("api_update_webhook error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/rotate", methods=["POST"])
+@_login_required
+def api_rotate_webhook_secret(hook_id: str):
+    """Issue a new signing secret and return it once.
+
+    Rotating is also how a pre-signing webhook adopts signing: those rows keep
+    a NULL secret and deliver unsigned until an operator rotates deliberately,
+    because turning on signatures behind the receiver's back would break a
+    strict verifier that has never been given a key.
+    """
+    team_id = session["team_id"]
+    try:
+        secret = _new_webhook_secret()
+        hook = db.rotate_webhook_secret(team_id, int(hook_id), secret)
+        if not hook:
+            return jsonify({"error": "Webhook not found"}), 404
+        body = _public_webhook(hook)
+        body["secret"] = secret
+        body["secret_shown_once"] = True
+        return jsonify(body)
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    except Exception as exc:
+        logger.error("api_rotate_webhook_secret error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/test", methods=["POST"])
+@_login_required
+def api_test_webhook(hook_id: str):
+    """Send a synthetic event through the real signing and logging path."""
+    team_id = session["team_id"]
+    try:
+        hook = db.get_webhook(team_id, int(hook_id))
+        if not hook:
+            return jsonify({"error": "Webhook not found"}), 404
+        if not _is_safe_webhook_url(hook.get("webhook_url") or ""):
+            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+
+        from datetime import datetime, timezone  # noqa: PLC0415
+
+        from handlers import deliver_webhook  # noqa: PLC0415
+
+        events = list(hook.get("events") or db.DEFAULT_WEBHOOK_EVENTS)
+        event_type = events[0] if events else "standup.completed"
+        payload = {
+            "team_id": team_id,
+            "test": True,
+            "message": "Test delivery from the Morgenruf dashboard.",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        result = deliver_webhook(hook, event_type, payload, team_id=team_id)
+        return jsonify(result)
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    except Exception as exc:
+        logger.error("api_test_webhook error: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/webhooks/deliveries", methods=["GET"])
+@dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/deliveries", methods=["GET"])
+@_login_required
+def api_webhook_deliveries(hook_id: str | None = None):
+    """Recent delivery attempts, newest first, for the team or one webhook."""
+    team_id = session["team_id"]
+    try:
+        limit = int(request.args.get("limit", 20))
+    except (TypeError, ValueError):
+        limit = 20
+    try:
+        webhook_id = int(hook_id) if hook_id is not None else None
+    except ValueError:
+        return jsonify({"error": "Invalid webhook id"}), 400
+    try:
+        rows = db.get_webhook_deliveries(team_id, webhook_id=webhook_id, limit=limit)
+        for row in rows:
+            row["created_at"] = _iso(row.get("created_at"))
+        return jsonify(rows)
+    except Exception as exc:
+        logger.warning("api_webhook_deliveries error: %s", exc)
+        return jsonify([])
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["DELETE"])

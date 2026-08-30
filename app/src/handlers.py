@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytz
@@ -494,12 +495,124 @@ def _complete_standup(user_id: str, session, client) -> None:
         logger.warning("Workflow rules evaluation failed: %s", exc)
 
 
-def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
-    """POST payload to every registered webhook for team_id.
+# Legacy / workflow_rules spellings accepted for webhook event names. Mirrors
+# db.WEBHOOK_EVENT_ALIASES; kept local so subscription matching never depends
+# on a live db import.
+_WEBHOOK_EVENT_ALIASES = {
+    "standup_complete": "standup.completed",
+    "standup_completed": "standup.completed",
+    "blocker_detected": "blocker.detected",
+    "low_participation": "participation.low",
+}
 
-    Adds ``X-Morgenruf-Event`` and (when a secret is configured)
-    ``X-Morgenruf-Signature`` headers to each request.
-    Failures are logged but never raised so they can't break the main flow.
+
+def _canonical_event(event: str) -> str:
+    """Map an underscore or legacy event spelling onto its canonical dotted name."""
+    name = (event or "").strip()
+    return _WEBHOOK_EVENT_ALIASES.get(name, name)
+
+
+def _record_delivery(hook: dict, event_type: str, team_id: str | None, result: dict) -> None:
+    """Append one delivery attempt to the log. Never raises."""
+    webhook_id = hook.get("id")
+    if not webhook_id:
+        return  # unsaved or synthetic hook, nothing to attach the log row to
+    try:
+        import db  # noqa: PLC0415
+
+        db.record_webhook_delivery(
+            team_id=team_id or hook.get("team_id") or "",
+            webhook_id=webhook_id,
+            event_type=event_type,
+            status_code=result.get("status_code"),
+            ok=result.get("ok", False),
+            signed=result.get("signed", False),
+            error=result.get("error"),
+            duration_ms=result.get("duration_ms"),
+        )
+    except Exception as exc:
+        logger.warning("Could not record delivery for webhook %s: %s", webhook_id, exc)
+
+
+def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | None = None) -> dict:
+    """Sign and POST one payload to one webhook, log the attempt, return the result.
+
+    The request carries ``X-Morgenruf-Event`` and, when the webhook has a
+    signing secret, ``X-Morgenruf-Signature: sha256=<hex>``. The HMAC is
+    computed over the exact bytes handed to ``requests`` (``data=body``), not
+    over a re-serialised copy, so the receiver can verify the body it read off
+    the wire byte for byte.
+
+    Receiver-side verification recipe (Flask shown, any framework works)::
+
+        import hashlib, hmac
+
+        body = request.get_data()  # RAW bytes, read before any JSON parsing
+        expected = "sha256=" + hmac.new(SECRET.encode(), body, hashlib.sha256).hexdigest()
+        sent = request.headers.get("X-Morgenruf-Signature", "")
+        if not hmac.compare_digest(expected, sent):
+            abort(401)
+
+    Two rules for receivers. Compare with ``hmac.compare_digest``, never with
+    ``==``: a plain string compare short circuits on the first differing byte
+    and leaks the correct signature one byte at a time to anyone who can time
+    the response. And hash the raw body, never ``json.dumps(request.json)``:
+    key order, spacing and unicode escaping all change the bytes and therefore
+    the digest.
+
+    Returns a dict with ``status_code`` (None when there was no HTTP
+    response), ``ok``, ``signed``, ``error``, ``duration_ms``. Never raises.
+    """
+    event_type = _canonical_event(event_type)
+    body = json.dumps(payload, default=str).encode()
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Morgenruf-Event": event_type,
+    }
+
+    secret: str | None = hook.get("secret")
+    signed = bool(secret)
+    if signed:
+        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        headers["X-Morgenruf-Signature"] = f"sha256={sig}"
+
+    url = hook.get("webhook_url") or ""
+    status_code: int | None = None
+    error: str | None = None
+    ok = False
+    started = time.monotonic()
+    try:
+        resp = requests.post(url, data=body, headers=headers, timeout=10)
+        status_code = getattr(resp, "status_code", None)
+        ok = isinstance(status_code, int) and 200 <= status_code < 300
+        if not ok:
+            error = f"HTTP {status_code}"
+        logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"[:500]
+        logger.warning("Webhook delivery failed for %s: %s", url, exc)
+    duration_ms = int((time.monotonic() - started) * 1000)
+
+    result = {
+        "webhook_id": hook.get("id"),
+        "event": event_type,
+        "signed": signed,
+        "status_code": status_code,
+        "ok": ok,
+        "error": error,
+        "duration_ms": duration_ms,
+    }
+    _record_delivery(hook, event_type, team_id, result)
+    return result
+
+
+def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
+    """POST payload to every registered webhook for team_id subscribed to the event.
+
+    Signing, the delivery log and error swallowing all live in
+    ``deliver_webhook``. Failures are logged but never raised so they can't
+    break the main flow.
     """
     try:
         import db  # noqa: PLC0415
@@ -512,33 +625,13 @@ def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
     if not webhooks:
         return
 
-    body = json.dumps(payload, default=str).encode()
+    wanted = _canonical_event(event_type)
 
     for hook in webhooks:
         events: list[str] = hook.get("events") or ["standup.completed"]
-        if event_type not in events:
+        if wanted not in {_canonical_event(e) for e in events}:
             continue
-
-        headers = {
-            "Content-Type": "application/json",
-            "X-Morgenruf-Event": event_type,
-        }
-
-        secret: str | None = hook.get("secret")
-        if secret:
-            sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-            headers["X-Morgenruf-Signature"] = f"sha256={sig}"
-
-        try:
-            resp = requests.post(hook["webhook_url"], data=body, headers=headers, timeout=10)
-            logger.info(
-                "Webhook %s fired for %s → HTTP %s",
-                hook["webhook_url"],
-                event_type,
-                resp.status_code,
-            )
-        except Exception as exc:
-            logger.warning("Webhook delivery failed for %s: %s", hook["webhook_url"], exc)
+        deliver_webhook(hook, wanted, payload, team_id=team_id)
 
 
 def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
