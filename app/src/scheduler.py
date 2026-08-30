@@ -1282,6 +1282,13 @@ def sync_members_from_slack() -> None:
             gone = db.set_members_active(team_id, to_deactivate, False)
             back = db.set_members_active(team_id, to_restore, True)
 
+            # Deactivating the member row is not enough. Anyone still named in a
+            # schedule's participants is treated as expected by the
+            # participation model, which invents a row for them when they are
+            # missing from the members table, so a leaver would keep inflating
+            # the denominator and keep being listed on the standup.
+            pruned = db.remove_participants_everywhere(team_id, to_deactivate) if to_deactivate else 0
+
             # Backfill anyone still missing a name, which is what left raw Slack
             # ids showing in the dashboard.
             nameless = [m["user_id"] for m in stored if m["user_id"] in live and not (m.get("real_name") or "").strip()]
@@ -1295,13 +1302,14 @@ def sync_members_from_slack() -> None:
                     except Exception as exc:
                         logger.warning("Member sync: could not backfill %s: %s", uid, exc)
 
-            if gone or back or nameless:
+            if gone or back or nameless or pruned:
                 logger.info(
-                    "Member sync %s: deactivated %d, restored %d, backfilled %d",
+                    "Member sync %s: deactivated %d, restored %d, backfilled %d, pruned from %d schedules",
                     team_id,
                     gone,
                     back,
                     len(nameless),
+                    pruned,
                 )
         except Exception as exc:
             logger.warning("Member sync failed for %s: %s", team_id, exc)
