@@ -1206,7 +1206,7 @@
         </div>
         <div class="two-col">
           <div class="stat-card">
-            <div class="stat-label" style="margin-bottom:12px"><span class="ico">&#129351;</span>Leaderboard, last 30 days</div>
+            <div class="stat-label" style="margin-bottom:12px">Leaderboard, last 30 days</div>
             <div id="kudos-board"><div class="loading-center"><div class="spinner"></div></div></div>
           </div>
           <div>
@@ -1281,11 +1281,11 @@
     <div id="section-mcp" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title"><span class="ico">&#128268;</span>MCP</div>
+          <div class="page-title">MCP</div>
           <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>https://api.morgenruf.dev/mcp</code></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><span class="ico">&#128214;</span>Setup Guide</a>
+          <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><span class="ico"></span>Setup Guide</a>
           <button class="btn btn-primary" onclick="openCreateKeyModal()">&#43; Generate New Key</button>
         </div>
       </div>
@@ -1312,8 +1312,8 @@
           <div class="stat-card">
             <div class="stat-label" style="margin-bottom:12px">Documentation</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary"><span class="ico">&#128214;</span>Full MCP Setup Guide</a>
-              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico">&#128736;</span>View All 8 Tools</a>
+              <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary"><span class="ico"></span>Full MCP Setup Guide</a>
+              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico"></span>View All 8 Tools</a>
             </div>
           </div>
         </div>
@@ -1340,7 +1340,7 @@
     }
   }
 }</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('claude')"><span class="ico">&#128203;</span>Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('claude')"><span class="ico"></span>Copy</button>
           </div>
 
           <div id="mcp-tab-cursor" style="display:none">
@@ -1355,7 +1355,7 @@
     }
   }
 }</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('cursor')"><span class="ico">&#128203;</span>Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('cursor')"><span class="ico"></span>Copy</button>
           </div>
 
           <div id="mcp-tab-vscode" style="display:none">
@@ -1371,7 +1371,7 @@
     }
   }
 }</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('vscode')"><span class="ico">&#128203;</span>Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('vscode')"><span class="ico"></span>Copy</button>
           </div>
 
           <div id="mcp-tab-http" style="display:none">
@@ -1380,7 +1380,7 @@
   -H "Authorization: Bearer mrn_YOUR_KEY_HERE" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'</pre>
-            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('http')"><span class="ico">&#128203;</span>Copy</button>
+            <button class="btn btn-secondary" style="margin-top:8px;font-size:0.8rem" onclick="copyConfig('http')"><span class="ico"></span>Copy</button>
           </div>
         </div>
 
@@ -2380,7 +2380,7 @@
         const s = standups[0];
         el.className = 'settings-grid';
         el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px">' +
-          '<div class="card-title"><span class="ico">&#9881;</span>Primary Standup Config</div>' +
+          '<div class="card-title">Primary Standup Config</div>' +
           '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
           '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit Configuration</button>' +
           '</div>' +
@@ -2389,7 +2389,7 @@
         loadFeedSettings(s);
         loadDigestSettings(s);
       } else {
-        el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9881;</div><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
+        el.innerHTML = '<div class="empty-state"><svg class="empty-icon-svg"><use href="#i-settings"/></svg><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
       }
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-dim)">Failed to load settings.</p>';
@@ -2405,7 +2405,7 @@
     el.innerHTML =
       '<div class="stat-card">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">' +
-          '<div class="card-title"><span class="ico">&#128279;</span>Public Standup Feed</div>' +
+          '<div class="card-title">Public Standup Feed</div>' +
           '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">' +
             '<input type="checkbox" id="feed-toggle" onchange="toggleFeed(this.checked)" ' + (feedEnabled ? 'checked' : '') + ' style="width:16px;height:16px">' +
             'Enable public feed' +
@@ -2464,7 +2464,7 @@
     const managerEmail = standup.manager_email || '';
     el.innerHTML =
       '<div class="stat-card">' +
-        '<div class="card-title" style="margin-bottom:8px"><span class="ico">&#128231;</span>Manager Digest Email</div>' +
+        '<div class="card-title" style="margin-bottom:8px">Manager Digest Email</div>' +
         '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Send a daily HTML email with today\'s standup responses to a manager after the standup window.</p>' +
         '<div style="display:grid;gap:10px">' +
           '<div>' +
