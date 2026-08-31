@@ -132,3 +132,99 @@ class TestClassesAreStyled:
     def test_a_rule_in_a_selector_list_counts(self):
         fake = '<style>.a, .b { color: red; }</style><div class="b"></div>'
         assert defined_classes(fake) >= {"a", "b"}
+
+
+# ---------------------------------------------------------------------------
+# Visual rules that are easy to regress and hard to notice in review
+# ---------------------------------------------------------------------------
+
+EMOJI = re.compile("[\U0001f000-\U0001faff]")
+
+
+def palette(markup: str) -> dict[str, str]:
+    root = re.search(r":root \{(.*?)\n    \}", markup, re.S).group(1)
+    return dict(re.findall(r"--([\w-]+):\s*(#[0-9a-fA-F]{6})", root))
+
+
+def luminance(value: str) -> float:
+    channels = [int(value[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    channels = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast(foreground: str, background: str) -> float:
+    high, low = sorted((luminance(foreground), luminance(background)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+class TestNoEmojiAsIcons:
+    """Emoji render differently on every platform, cannot take the colour of the
+    control they sit in, and read as a placeholder. The dashboard used them for
+    the whole sidebar, several page titles and the kudos leaderboard.
+    """
+
+    def test_the_template_carries_no_emoji(self):
+        found = sorted(set(EMOJI.findall(read_template())))
+        assert not found, f"emoji in the template: {found}"
+
+    def test_the_sidebar_uses_the_icon_set(self):
+        markup = read_template()
+        assert markup.count('use href="#i-') >= 9
+        assert '<span class="nav-icon">' not in markup
+
+    def test_every_icon_referenced_is_defined(self):
+        markup = read_template()
+        defined = set(re.findall(r'<symbol id="(i-[\w-]+)"', markup))
+        used = set(re.findall(r'use href="#(i-[\w-]+)"', markup))
+        assert used <= defined, f"referenced but not defined: {sorted(used - defined)}"
+
+    def test_no_symbol_is_defined_and_never_used(self):
+        markup = read_template()
+        defined = set(re.findall(r'<symbol id="(i-[\w-]+)"', markup))
+        used = set(re.findall(r'use href="#(i-[\w-]+)"', markup))
+        assert defined <= used, f"defined but unused: {sorted(defined - used)}"
+
+
+class TestContrast:
+    """WCAG AA. Checked here because a palette change is exactly the kind of edit
+    that looks fine to whoever made it and fails for everyone else.
+    """
+
+    PAIRS = [
+        ("text", "bg", 4.5),
+        ("text", "surface", 4.5),
+        ("text", "surface2", 4.5),
+        ("text-muted", "bg", 4.5),
+        ("text-muted", "surface", 4.5),
+        ("text-dim", "surface", 3.0),
+        ("panel-text", "panel", 4.5),
+        ("panel-weak", "panel", 3.0),
+        ("accent", "surface", 3.0),
+        ("danger", "surface", 3.0),
+        ("warning", "surface", 3.0),
+        ("sev-good", "panel", 3.0),
+        ("sev-warn", "panel", 3.0),
+        ("sev-mid", "panel", 3.0),
+        ("sev-bad", "panel", 3.0),
+        ("sev-info", "panel", 3.0),
+    ]
+
+    def test_every_text_and_surface_pair_meets_aa(self):
+        tokens = palette(read_template())
+        failures = []
+        for foreground, background, required in self.PAIRS:
+            assert foreground in tokens, f"--{foreground} is not defined"
+            assert background in tokens, f"--{background} is not defined"
+            actual = contrast(tokens[foreground], tokens[background])
+            if actual < required:
+                failures.append(f"--{foreground} on --{background}: {actual:.2f}:1 < {required}")
+        assert not failures, "; ".join(failures)
+
+    def test_the_palette_is_actually_being_read(self):
+        """A guard on the parsing, so an empty token map cannot pass the checks."""
+        assert len(palette(read_template())) > 15
+
+    def test_green_and_red_differ_by_more_than_hue(self):
+        """A share of readers cannot separate those two by colour alone."""
+        tokens = palette(read_template())
+        assert abs(luminance(tokens["sev-good"]) - luminance(tokens["sev-bad"])) > 0.05
