@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="/static/icon-512.png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -26,11 +26,25 @@
       --danger: #ef4444;
       --warning: #f59e0b;
       --sidebar-w: 220px;
+
+      /* Ops console. An operator scans this for gaps, so the useful unit is
+         how many members fit on one screen, not how comfortable one row is. */
+      --pad: 12px;
+      --gap: 8px;
+      --row-h: 28px;
+      --fs-sm: 12px;
+      --fs-xs: 11px;
+      --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      /* One scale for the grid, so a half-answered day is not guesswork. */
+      --cell-on: #22c55e;
+      --cell-block: #f59e0b;
+      --cell-off: #262b31;
     }
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: var(--sans);
       font-size: 14px;
       -webkit-font-smoothing: antialiased;
       min-height: 100vh;
@@ -782,6 +796,176 @@
       padding: 0;
       font-weight: 400;
       font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Ops console ───────────────────────────────────────────────────────
+       Density is the point. The research style for a data-dense dashboard
+       specifies 12px padding, ~36px rows and 12-14px type; the previous
+       layout was roughly double that, which is why a workspace of 26 people
+       needed three screens to read. */
+
+    .ops-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      margin-bottom: var(--gap);
+      overflow: hidden;
+    }
+    .ops-stat {
+      flex: 1 1 140px;
+      padding: 10px var(--pad);
+      border-right: 1px solid var(--border);
+      min-width: 0;
+    }
+    .ops-stat:last-child { border-right: 0; }
+    .ops-stat-label {
+      font-size: var(--fs-xs);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .ops-stat-value {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+    }
+    .ops-stat-note { font-size: var(--fs-xs); color: var(--text-dim); }
+    .ops-stat-warn .ops-stat-value { color: var(--warning); }
+
+    .ops-panel {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      margin-bottom: var(--gap);
+    }
+    .ops-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--gap);
+      padding: 8px var(--pad);
+      border-bottom: 1px solid var(--border);
+      font-size: var(--fs-xs);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .ops-scroll { overflow-x: auto; }
+
+    /* The member-by-day grid. */
+    .grid-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-sm);
+    }
+    .grid-table th {
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      font-weight: 500;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 4px 0;
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+    }
+    .grid-table th.grid-name-head { text-align: left; padding-left: var(--pad); }
+    .grid-table td { padding: 0; height: var(--row-h); }
+    .grid-table tbody tr:hover { background: var(--surface2); }
+    .grid-name {
+      padding-left: var(--pad);
+      padding-right: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 190px;
+    }
+    .grid-cellwrap { width: 22px; text-align: center; }
+    .grid-total {
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      color: var(--text-muted);
+      text-align: right;
+      padding-right: var(--pad);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* A cell carries its state in fill AND shape, never colour alone: solid
+       for answered, hatched for missed, a ring for a day carrying a blocker,
+       and nothing at all for a day the person was not asked about. */
+    .cell {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      vertical-align: middle;
+      background: var(--cell-off);
+    }
+    .cell-none { background: transparent; box-shadow: inset 0 0 0 1px var(--border2); }
+    .cell-miss {
+      background: repeating-linear-gradient(
+        45deg, var(--cell-off), var(--cell-off) 2px, transparent 2px, transparent 4px);
+      box-shadow: inset 0 0 0 1px var(--border2);
+    }
+    .cell-part { background: linear-gradient(to top, var(--cell-on) 50%, var(--cell-off) 50%); }
+    .cell-done { background: var(--cell-on); }
+    .cell-block { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--cell-block); }
+
+    .grid-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: var(--fs-xs);
+      color: var(--text-dim);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .grid-legend span { display: inline-flex; align-items: center; gap: 5px; }
+
+    /* Per-standup table with a trend line. */
+    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .ops-table th {
+      text-align: left;
+      font-size: var(--fs-xs);
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 6px var(--pad);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .ops-table td {
+      padding: 0 var(--pad);
+      height: var(--row-h);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .ops-table tbody tr:last-child td { border-bottom: 0; }
+    .ops-table tbody tr:hover { background: var(--surface2); }
+    .ops-num {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .spark { display: block; }
+    .ops-empty { padding: var(--pad); color: var(--text-dim); font-size: var(--fs-sm); }
+
+    @media (max-width: 720px) {
+      .grid-name { max-width: 120px; }
+      .ops-stat { flex-basis: 50%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .grid-table tbody tr, .ops-table tbody tr { transition: none; }
     }
   </style>
 </head>
@@ -2784,33 +2968,6 @@
 
     const visible = analyticsState.includeUnenrolled ? enrolled.concat(unenrolled) : enrolled;
 
-    const tableRows = visible.map(r => {
-      const name = esc(r.real_name || r.name || r.user_id);
-      if (!rowIsEnrolled(r)) {
-        return '<tr class="row-unenrolled">' +
-          '<td>' + name + '</td>' +
-          '<td class="unenrolled-note">Not in any standup</td>' +
-          '<td>' + EMPTY_CELL + '</td>' +
-          '<td class="col-date">' + EMPTY_CELL + '</td>' +
-          '</tr>';
-      }
-      const expected = rowExpected(r, days);
-      const responses = Number(r.responses) || 0;
-      // A proportional bar, not five emoji. The old strip was always five
-      // cells wide whatever the denominator, so 4/10 was drawn identically to
-      // 4/5, and anyone at 5 or more responses drew a full row of green: 8/10
-      // looked like a perfect score.
-      const bar = meterHtml(responses, expected);
-      const blockers = r.days_with_blockers
-        ? '<span class="blocker-count">' + r.days_with_blockers + '</span>'
-        : EMPTY_CELL;
-      return '<tr>' +
-        '<td>' + name + '</td>' +
-        '<td class="col-meter">' + bar + '<span class="meter-value">' + responses + '/' + expected + '</span></td>' +
-        '<td>' + blockers + '</td>' +
-        '<td class="col-date">' + relativeCell(r.last_standup, 'Never') + '</td>' +
-        '</tr>';
-    }).join('');
 
     const hiddenNote = (!analyticsState.includeUnenrolled && unenrolled.length)
       ? '<p style="color:var(--text-dim);font-size:12px;margin-top:12px">' +
@@ -2818,27 +2975,143 @@
         ' in no standup and hidden. Tick "Include unenrolled" to list them.</p>'
       : '';
 
+    const windowDays = (wrapper && Array.isArray(wrapper.window_days)) ? wrapper.window_days : [];
+    const scheduleRows = (wrapper && Array.isArray(wrapper.schedules)) ? wrapper.schedules : [];
+    const responding = visible.filter(r => (Number(r.responses) || 0) > 0).length;
+    const blockedNow = visible.reduce((n, r) => n + (Number(r.days_with_blockers) || 0), 0);
+
     el.innerHTML =
-      '<div class="stats-grid">' +
-        '<div class="stat-card">' +
-          '<div class="stat-label">Completion Rate</div>' +
-          '<div class="headline-rate">' + rate + '%</div>' +
-          '<div class="headline-denom">of ' + enrolled.length +
-            (enrolled.length === 1 ? ' enrolled member' : ' enrolled members') +
-            ', last ' + days + ' days</div>' +
-        '</div>' +
-        '<div class="stat-card">' +
-          '<div class="stat-label">Not In Any Standup</div>' +
-          '<div class="stat-value">' + unenrolled.length + '</div>' +
-          '<div class="stat-sub">no schedule sends them a DM</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="webhooks-table-wrap">' +
-      '<div class="table-scroll"><table class="data-table" style="min-width:560px">' +
-      '<thead><tr>' +
-      '<th class="col-name">Member</th><th>Responses (' + days + 'd)</th><th>Blockers</th><th class="col-date">Last Standup</th>' +
-      '</tr></thead><tbody>' + tableRows + '</tbody></table></div></div>' +
+      opsStrip(rate, responding, enrolled.length, blockedNow, unenrolled.length, days) +
+      participationGrid(visible, windowDays) +
+      standupBreakdown(scheduleRows, windowDays) +
       hiddenNote;
+  }
+
+  // ── Ops console pieces ──
+
+  function opsStat(label, value, note, warn) {
+    return '<div class="ops-stat' + (warn ? ' ops-stat-warn' : '') + '">' +
+      '<div class="ops-stat-label">' + esc(label) + '</div>' +
+      '<div class="ops-stat-value">' + esc(value) + '</div>' +
+      '<div class="ops-stat-note">' + esc(note) + '</div></div>';
+  }
+
+  function opsStrip(rate, responding, enrolledCount, blocked, unenrolled, days) {
+    return '<div class="ops-strip">' +
+      opsStat('Completion', rate + '%', 'last ' + days + ' days') +
+      opsStat('Responding', responding + '/' + enrolledCount, 'answered at least once') +
+      opsStat('Blocked', String(blocked), blocked === 1 ? 'reported blocker' : 'reported blockers', blocked > 0) +
+      opsStat('Unenrolled', String(unenrolled), 'no standup reaches them', unenrolled > 0) +
+      '</div>';
+  }
+
+  // A day column header: the weekday letter, with the date available on hover.
+  const WEEKDAY_INITIAL = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  function dayHeader(iso) {
+    const d = toDate(iso);
+    const letter = d ? WEEKDAY_INITIAL[d.getDay()] : '';
+    return '<th class="grid-cellwrap" title="' + esc(formatDate(iso, iso)) + '">' + esc(letter) + '</th>';
+  }
+
+  // One cell. State is carried by fill and shape as well as colour, because a
+  // grid that means anything only in green is unreadable to a good fraction of
+  // people and prints as a blank square.
+  function gridCell(day, name) {
+    const expected = Number(day && day.expected) || 0;
+    const completed = Number(day && day.completed) || 0;
+    const when = formatDate(day && day.date, '');
+    let cls = 'cell cell-none';
+    let what = 'not scheduled';
+    if (expected > 0) {
+      if (completed >= expected) { cls = 'cell cell-done'; what = 'answered'; }
+      else if (completed > 0) { cls = 'cell cell-part'; what = completed + ' of ' + expected + ' answered'; }
+      else { cls = 'cell cell-miss'; what = 'missed'; }
+    }
+    if (day && day.blocked) { cls += ' cell-block'; what += ', reported a blocker'; }
+    const label = name + ', ' + when + ': ' + what;
+    return '<td class="grid-cellwrap"><span class="' + cls + '" title="' + esc(label) + '"></span></td>';
+  }
+
+  function participationGrid(rows, windowDays) {
+    if (!rows.length || !windowDays.length) {
+      return '<div class="ops-panel"><div class="ops-panel-head">Participation</div>' +
+        '<div class="ops-empty">Nothing to show for these filters.</div></div>';
+    }
+    const legend = '<div class="grid-legend">' +
+      '<span><i class="cell cell-done"></i>answered</span>' +
+      '<span><i class="cell cell-part"></i>partly</span>' +
+      '<span><i class="cell cell-miss"></i>missed</span>' +
+      '<span><i class="cell cell-block cell-done"></i>blocker</span>' +
+      '<span><i class="cell cell-none"></i>not scheduled</span></div>';
+
+    const head = '<tr><th class="grid-name-head">Member</th>' +
+      windowDays.map(dayHeader).join('') +
+      '<th style="text-align:right;padding-right:var(--pad)">Rate</th></tr>';
+
+    const byDate = {};
+    const body = rows.map(r => {
+      const name = r.real_name || r.name || r.user_id || '';
+      const days = Array.isArray(r.days) ? r.days : [];
+      days.forEach(d => { byDate[d.date] = d; });
+      const lookup = {};
+      days.forEach(d => { lookup[d.date] = d; });
+      const cells = windowDays.map(iso => gridCell(lookup[iso], name)).join('');
+      const expected = Number(r.expected) || 0;
+      const completed = Number(r.completed) || 0;
+      const pct = expected ? Math.round((completed / expected) * 100) + '%' : EMPTY_CELL;
+      return '<tr><td class="grid-name" title="' + esc(name) + '">' + esc(name) + '</td>' +
+        cells + '<td class="grid-total">' + esc(pct) + '</td></tr>';
+    }).join('');
+
+    return '<div class="ops-panel">' +
+      '<div class="ops-panel-head"><span>Participation</span>' + legend + '</div>' +
+      '<div class="ops-scroll"><table class="grid-table"><thead>' + head +
+      '</thead><tbody>' + body + '</tbody></table></div></div>';
+  }
+
+  // A trend line for one standup. Days the schedule did not run are null and
+  // are skipped rather than drawn as zero, so a weekly standup does not appear
+  // to fail four days out of five.
+  function sparkline(series) {
+    const points = [];
+    const width = 76;
+    const height = 18;
+    const step = series.length > 1 ? width / (series.length - 1) : width;
+    series.forEach((value, index) => {
+      if (value === null || value === undefined) return;
+      const x = index * step;
+      const y = height - 1 - (Math.max(0, Math.min(100, Number(value))) / 100) * (height - 2);
+      points.push(x.toFixed(1) + ',' + y.toFixed(1));
+    });
+    if (points.length < 2) {
+      return '<svg class="spark" width="' + width + '" height="' + height + '" aria-hidden="true">' +
+        (points.length ? '<circle cx="' + points[0].split(',')[0] + '" cy="' + points[0].split(',')[1] +
+          '" r="1.8" fill="var(--text-dim)"/>' : '') + '</svg>';
+    }
+    return '<svg class="spark" width="' + width + '" height="' + height + '" aria-hidden="true">' +
+      '<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" ' +
+      'stroke-linecap="round" points="' + points.join(' ') + '"/></svg>';
+  }
+
+  function standupBreakdown(schedules, windowDays) {
+    if (!schedules.length) return '';
+    const rows = schedules.map(s => {
+      const series = Array.isArray(s.series) ? s.series : [];
+      const rate = typeof s.completion_rate === 'number' ? Math.round(s.completion_rate) + '%' : EMPTY_CELL;
+      const ran = series.filter(v => v !== null && v !== undefined).length;
+      return '<tr>' +
+        '<td>' + esc(s.name || 'Standup') + '</td>' +
+        '<td class="ops-num">' + (Number(s.participants) || 0) + '</td>' +
+        '<td class="ops-num">' + esc(rate) + '</td>' +
+        '<td title="' + esc(ran + (ran === 1 ? ' day' : ' days') + ' in this window') + '">' +
+          sparkline(series) + '</td></tr>';
+    }).join('');
+    return '<div class="ops-panel">' +
+      '<div class="ops-panel-head"><span>By standup</span></div>' +
+      '<div class="ops-scroll"><table class="ops-table"><thead><tr>' +
+      '<th>Standup</th><th class="ops-num">People</th><th class="ops-num">Rate</th><th>Trend</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   function exportCSV() {
