@@ -848,7 +848,7 @@
     .panel-flush { padding: 0; }
 
     /* Stat panel: a big value coloured by threshold over its own sparkline. */
-    .stat-panel { position: relative; padding: 14px var(--pad) 0; min-height: 96px; }
+    .stat-panel { padding: 16px var(--pad); }
     .stat-panel-label {
       font-size: var(--fs-xs);
       text-transform: uppercase;
@@ -864,7 +864,6 @@
       margin-top: 6px;
     }
     .stat-panel-note { font-size: var(--fs-xs); color: var(--panel-weak); margin-top: 2px; }
-    .stat-panel-spark { display: block; width: 100%; height: 30px; margin-top: 6px; }
 
     .sev-good { color: var(--sev-good); }
     .sev-warn { color: var(--sev-warn); }
@@ -2976,7 +2975,7 @@
     const series = workspaceSeries(visible, windowDays);
 
     el.innerHTML =
-      statRow(rate, responding, enrolled.length, blockedNow, unenrolled.length, days, series) +
+      statRow(rate, responding, enrolled.length, blockedNow, unenrolled.length, days) +
       timeSeriesPanel(series, windowDays, days) +
       memberPanel(visible, days) +
       standupBreakdown(scheduleRows, windowDays) +
@@ -3048,34 +3047,22 @@
     return { line: line, area: area, points: points };
   }
 
-  function statPanel(label, value, note, tone, series) {
-    const spark = series && series.filter(v => v !== null && v !== undefined).length > 1
-      ? miniSpark(series, severityColor(tone))
-      : '';
+  // No sparkline here. The time series panel directly below plots the same
+  // numbers at a size you can actually read them, so a 30px copy inside one of
+  // the four stat panels was both redundant and the only thing making that
+  // panel taller than its neighbours.
+  function statPanel(label, value, note, tone) {
     return '<div class="panel"><div class="stat-panel">' +
       '<div class="stat-panel-label">' + esc(label) + '</div>' +
       '<div class="stat-panel-value ' + severity(tone) + '">' + esc(value) + '</div>' +
-      '<div class="stat-panel-note">' + esc(note) + '</div>' + spark + '</div></div>';
+      '<div class="stat-panel-note">' + esc(note) + '</div></div></div>';
   }
 
-  function miniSpark(series, color) {
-    const w = 260;
-    const h = 30;
-    const path = areaPath(series, w, h, 3);
-    if (!path) return '';
-    const id = 'sp' + Math.random().toString(36).slice(2, 8);
-    return '<svg class="stat-panel-spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true">' +
-      '<defs><linearGradient id="' + id + '" x1="0" x2="0" y1="0" y2="1">' +
-      '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.35"/>' +
-      '<stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>' +
-      '<path d="' + path.area + '" fill="url(#' + id + ')"/>' +
-      '<path d="' + path.line + '" fill="none" stroke="' + color + '" stroke-width="1.5"/></svg>';
-  }
 
-  function statRow(rate, responding, enrolledCount, blocked, unenrolled, days, series) {
+  function statRow(rate, responding, enrolledCount, blocked, unenrolled, days) {
     const respondRate = enrolledCount ? Math.round((responding / enrolledCount) * 100) : null;
     return '<div class="gf-row">' +
-      statPanel('Completion', rate + '%', 'last ' + days + ' days', rate, series) +
+      statPanel('Completion', rate + '%', 'last ' + days + ' days', rate) +
       statPanel('Responding', responding + '/' + enrolledCount, 'answered at least once', respondRate) +
       statPanel('Blockers', String(blocked), blocked === 1 ? 'day reported blocked' : 'days reported blocked',
                 blocked > 0 ? 0 : 100) +
