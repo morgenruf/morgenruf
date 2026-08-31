@@ -27,19 +27,31 @@
       --warning: #f59e0b;
       --sidebar-w: 220px;
 
-      /* Ops console. An operator scans this for gaps, so the useful unit is
-         how many members fit on one screen, not how comfortable one row is. */
-      --pad: 12px;
-      --gap: 8px;
-      --row-h: 28px;
-      --fs-sm: 12px;
+      /* Observability console. Panels sit on a darker ground, carry a titled
+         header, and use colour to mean severity rather than decoration, the
+         way Grafana and Datadog do. */
+      --pad: 16px;
+      --gap: 12px;
+      --row-h: 38px;
+      --fs-sm: 13px;
       --fs-xs: 11px;
       --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
       --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
-      /* One scale for the grid, so a half-answered day is not guesswork. */
-      --cell-on: #22c55e;
-      --cell-block: #f59e0b;
-      --cell-off: #262b31;
+
+      --panel: #181b1f;
+      --panel-head: #1f2328;
+      --panel-border: #2c3235;
+      --panel-text: #ccccdc;
+      --panel-weak: #8e8e8e;
+
+      /* Grafana's classic series colours. Thresholds read the same way an
+         operator already expects: green healthy, amber watch, red act. */
+      --sev-good: #73bf69;
+      --sev-warn: #fade2a;
+      --sev-mid: #ff9830;
+      --sev-bad: #f2495c;
+      --sev-info: #5794f2;
+      --sev-alt: #b877d9;
     }
     body {
       background: var(--bg);
@@ -798,184 +810,155 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* ── Ops console ───────────────────────────────────────────────────────
-       Density is the point. The research style for a data-dense dashboard
-       specifies 12px padding, ~36px rows and 12-14px type; the previous
-       layout was roughly double that, which is why a workspace of 26 people
-       needed three screens to read. */
+    /* ── Observability panels ──────────────────────────────────────────────
+       Grafana's shape: a titled panel on a darker ground, charts that carry
+       their own axes and legend, and colour reserved for severity. */
 
-    .ops-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface);
+    .gf-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--gap);
+      margin-bottom: var(--gap);
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 3px;
       margin-bottom: var(--gap);
       overflow: hidden;
     }
-    .ops-stat {
-      flex: 1 1 140px;
-      padding: 10px var(--pad);
-      border-right: 1px solid var(--border);
-      min-width: 0;
-    }
-    .ops-stat:last-child { border-right: 0; }
-    .ops-stat-label {
-      font-size: var(--fs-xs);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      white-space: nowrap;
-    }
-    .ops-stat-value {
-      font-family: var(--mono);
-      font-size: 20px;
-      font-weight: 700;
-      line-height: 1.2;
-      font-variant-numeric: tabular-nums;
-      margin-top: 2px;
-    }
-    .ops-stat-note { font-size: var(--fs-xs); color: var(--text-dim); }
-    .ops-stat-warn .ops-stat-value { color: var(--warning); }
-
-    .ops-panel {
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface);
-      margin-bottom: var(--gap);
-    }
-    .ops-panel-head {
+    .gf-row .panel { margin-bottom: 0; }
+    .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: var(--gap);
-      padding: 8px var(--pad);
-      border-bottom: 1px solid var(--border);
-      font-size: var(--fs-xs);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--text-dim);
+      padding: 9px var(--pad);
+      border-bottom: 1px solid var(--panel-border);
+      background: var(--panel-head);
     }
-    .ops-scroll { overflow-x: auto; }
-
-    /* The member-by-day grid. */
-    .grid-table {
-      width: 100%;
-      border-collapse: collapse;
+    .panel-title {
       font-size: var(--fs-sm);
-    }
-    .grid-table th {
-      font-family: var(--mono);
-      font-size: var(--fs-xs);
       font-weight: 500;
-      color: var(--text-dim);
-      text-align: center;
-      padding: 4px 0;
-      position: sticky;
-      top: 0;
-      background: var(--surface);
+      color: var(--panel-text);
+      letter-spacing: 0.01em;
     }
-    .grid-table th.grid-name-head { text-align: left; padding-left: var(--pad); }
-    .grid-table td { padding: 0; height: var(--row-h); }
-    .grid-table tbody tr:hover { background: var(--surface2); }
-    /* Fixed, so the day cells sit next to the names instead of being pushed
-       to the far edge by a name column absorbing all the slack. Scanning a
-       grid means reading across from a name; a gap in between defeats it. */
-    .grid-name {
-      padding-left: var(--pad);
-      padding-right: 8px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      width: 200px;
-      max-width: 200px;
+    .panel-sub { font-size: var(--fs-xs); color: var(--panel-weak); }
+    .panel-body { padding: var(--pad); }
+    .panel-flush { padding: 0; }
+
+    /* Stat panel: a big value coloured by threshold over its own sparkline. */
+    .stat-panel { position: relative; padding: 14px var(--pad) 0; min-height: 96px; }
+    .stat-panel-label {
+      font-size: var(--fs-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--panel-weak);
     }
-    /* A trailing spacer absorbs the free width, so name, cells and rate stay
-       one compact block. Stretching the rate to the far edge instead left a
-       hand's width of nothing in the middle of every row. */
-    .grid-spacer { width: 100%; }
-    .grid-cellwrap { width: 26px; text-align: center; }
-    .grid-table td.grid-total, .grid-table th.grid-total-head {
-      /* Separated from the last day column, which it would otherwise touch. */
-      padding-left: 14px;
+    .stat-panel-value {
       font-family: var(--mono);
-      font-size: var(--fs-xs);
-      color: var(--text-muted);
-      text-align: right;
-      padding-right: var(--pad);
-      white-space: nowrap;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1.1;
       font-variant-numeric: tabular-nums;
+      margin-top: 6px;
     }
+    .stat-panel-note { font-size: var(--fs-xs); color: var(--panel-weak); margin-top: 2px; }
+    .stat-panel-spark { display: block; width: 100%; height: 30px; margin-top: 6px; }
 
-    /* A cell carries its state in fill AND shape, never colour alone: solid
-       for answered, hatched for missed, a ring for a day carrying a blocker,
-       and nothing at all for a day the person was not asked about. */
-    .cell {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border-radius: 3px;
-      vertical-align: middle;
-      background: var(--cell-off);
-    }
-    .cell-none { background: transparent; box-shadow: inset 0 0 0 1px var(--border2); }
-    .cell-miss {
-      background: repeating-linear-gradient(
-        45deg, var(--cell-off), var(--cell-off) 2px, transparent 2px, transparent 4px);
-      box-shadow: inset 0 0 0 1px var(--border2);
-    }
-    .cell-part { background: linear-gradient(to top, var(--cell-on) 50%, var(--cell-off) 50%); }
-    .cell-done { background: var(--cell-on); }
-    .cell-block { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--cell-block); }
+    .sev-good { color: var(--sev-good); }
+    .sev-warn { color: var(--sev-warn); }
+    .sev-mid  { color: var(--sev-mid); }
+    .sev-bad  { color: var(--sev-bad); }
+    .sev-none { color: var(--panel-text); }
 
-    .grid-legend {
+    /* Time series. */
+    .ts-wrap { width: 100%; overflow-x: auto; }
+    .ts-svg { display: block; width: 100%; height: 190px; min-width: 420px; }
+    .ts-grid { stroke: var(--panel-border); stroke-width: 1; }
+    .ts-axis { fill: var(--panel-weak); font-size: 10px; font-family: var(--mono); }
+    .gf-legend {
       display: flex;
-      align-items: center;
-      gap: 14px;
+      gap: 16px;
       flex-wrap: wrap;
+      align-items: center;
       font-size: var(--fs-xs);
-      color: var(--text-dim);
-      text-transform: none;
-      letter-spacing: 0;
+      color: var(--panel-weak);
     }
-    .grid-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .gf-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .gf-swatch { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
 
-    /* Per-standup table with a trend line. */
-    .ops-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-    .ops-table th {
+    /* Table with an inline bar gauge, the way Grafana renders a table panel. */
+    .gf-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+    .gf-table th {
       text-align: left;
       font-size: var(--fs-xs);
       font-weight: 500;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--text-dim);
-      padding: 6px var(--pad);
-      border-bottom: 1px solid var(--border);
+      color: var(--panel-weak);
+      padding: 9px var(--pad);
+      background: var(--panel-head);
+      border-bottom: 1px solid var(--panel-border);
       white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
-    .ops-table td {
+    .gf-table td {
       padding: 0 var(--pad);
       height: var(--row-h);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid rgba(204,204,220,0.06);
       white-space: nowrap;
+      color: var(--panel-text);
     }
-    .ops-table tbody tr:last-child td { border-bottom: 0; }
-    .ops-table tbody tr:hover { background: var(--surface2); }
-    .ops-num {
+    .gf-table tbody tr:last-child td { border-bottom: 0; }
+    .gf-table tbody tr:hover { background: rgba(204,204,220,0.05); }
+    .gf-num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+    .gf-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+
+    .gauge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 190px;
+    }
+    .gauge-track {
+      flex: 1;
+      height: 14px;
+      border-radius: 2px;
+      background: rgba(204,204,220,0.07);
+      overflow: hidden;
+    }
+    .gauge-fill { display: block; height: 100%; border-radius: 2px; }
+    .gauge-value {
       font-family: var(--mono);
+      font-size: var(--fs-xs);
       font-variant-numeric: tabular-nums;
+      width: 62px;
       text-align: right;
+      color: var(--panel-weak);
     }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: var(--fs-xs);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .pill-bad { background: rgba(242,73,92,0.16); color: var(--sev-bad); }
+    .pill-quiet { color: var(--panel-weak); }
+
     .spark { display: block; }
-    .ops-empty { padding: var(--pad); color: var(--text-dim); font-size: var(--fs-sm); }
+    .gf-empty { padding: 28px var(--pad); color: var(--panel-weak); font-size: var(--fs-sm); text-align: center; }
+    .gf-scroll { overflow-x: auto; }
 
     @media (max-width: 720px) {
-      .grid-name { max-width: 120px; }
-      .ops-stat { flex-basis: 50%; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .grid-table tbody tr, .ops-table tbody tr { transition: none; }
+      .gf-name { max-width: 140px; }
+      .gauge { min-width: 120px; }
+      .stat-panel-value { font-size: 28px; }
     }
   </style>
 </head>
@@ -2990,94 +2973,204 @@
     const responding = visible.filter(r => (Number(r.responses) || 0) > 0).length;
     const blockedNow = visible.reduce((n, r) => n + (Number(r.days_with_blockers) || 0), 0);
 
+    const series = workspaceSeries(visible, windowDays);
+
     el.innerHTML =
-      opsStrip(rate, responding, enrolled.length, blockedNow, unenrolled.length, days) +
-      participationGrid(visible, windowDays) +
+      statRow(rate, responding, enrolled.length, blockedNow, unenrolled.length, days, series) +
+      timeSeriesPanel(series, windowDays, days) +
+      memberPanel(visible, days) +
       standupBreakdown(scheduleRows, windowDays) +
       hiddenNote;
   }
 
-  // ── Ops console pieces ──
+  // ── Panels ──
+  //
+  // Grafana's vocabulary, because that is what an operator already reads: a
+  // titled panel, a value coloured by threshold, a time series with its own
+  // axes, and a table whose numbers carry an inline gauge.
 
-  function opsStat(label, value, note, warn) {
-    return '<div class="ops-stat' + (warn ? ' ops-stat-warn' : '') + '">' +
-      '<div class="ops-stat-label">' + esc(label) + '</div>' +
-      '<div class="ops-stat-value">' + esc(value) + '</div>' +
-      '<div class="ops-stat-note">' + esc(note) + '</div></div>';
+  // Green healthy, amber watch, red act. The thresholds are the ones an
+  // operator expects rather than a gradient nobody can read a number off.
+  function severity(pct) {
+    if (pct === null || pct === undefined) return 'sev-none';
+    if (pct >= 70) return 'sev-good';
+    if (pct >= 40) return 'sev-warn';
+    if (pct >= 20) return 'sev-mid';
+    return 'sev-bad';
   }
 
-  function opsStrip(rate, responding, enrolledCount, blocked, unenrolled, days) {
-    return '<div class="ops-strip">' +
-      opsStat('Completion', rate + '%', 'last ' + days + ' days') +
-      opsStat('Responding', responding + '/' + enrolledCount, 'answered at least once') +
-      opsStat('Blocked', String(blocked), blocked === 1 ? 'reported blocker' : 'reported blockers', blocked > 0) +
-      opsStat('Unenrolled', String(unenrolled), 'no standup reaches them', unenrolled > 0) +
+  function severityColor(pct) {
+    const map = {
+      'sev-good': 'var(--sev-good)', 'sev-warn': 'var(--sev-warn)',
+      'sev-mid': 'var(--sev-mid)', 'sev-bad': 'var(--sev-bad)', 'sev-none': 'var(--panel-weak)'
+    };
+    return map[severity(pct)];
+  }
+
+  function panel(title, sub, body, flush) {
+    return '<div class="panel"><div class="panel-head">' +
+      '<span class="panel-title">' + esc(title) + '</span>' +
+      (sub ? '<span class="panel-sub">' + sub + '</span>' : '') +
+      '</div><div class="panel-body' + (flush ? ' panel-flush' : '') + '">' + body + '</div></div>';
+  }
+
+  // Workspace completion per day, summed across members so it matches the
+  // headline rather than averaging per-member ratios.
+  function workspaceSeries(rows, windowDays) {
+    return windowDays.map((iso, index) => {
+      let expected = 0;
+      let completed = 0;
+      rows.forEach(r => {
+        const day = Array.isArray(r.days) ? r.days[index] : null;
+        if (!day || day.date !== iso) return;
+        expected += Number(day.expected) || 0;
+        completed += Number(day.completed) || 0;
+      });
+      return expected ? Math.round((completed / expected) * 100) : null;
+    });
+  }
+
+  // A filled area under a line, which is how a Grafana time series reads.
+  function areaPath(values, width, height, pad) {
+    const usable = height - pad * 2;
+    const points = [];
+    const step = values.length > 1 ? width / (values.length - 1) : width;
+    values.forEach((value, index) => {
+      if (value === null || value === undefined) return;
+      const x = index * step;
+      const y = pad + (1 - Math.max(0, Math.min(100, Number(value))) / 100) * usable;
+      points.push([x, y]);
+    });
+    if (!points.length) return null;
+    const line = points.map((pt, i) => (i ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1)).join(' ');
+    const area = line + ' L' + points[points.length - 1][0].toFixed(1) + ' ' + (height - pad).toFixed(1) +
+      ' L' + points[0][0].toFixed(1) + ' ' + (height - pad).toFixed(1) + ' Z';
+    return { line: line, area: area, points: points };
+  }
+
+  function statPanel(label, value, note, tone, series) {
+    const spark = series && series.filter(v => v !== null && v !== undefined).length > 1
+      ? miniSpark(series, severityColor(tone))
+      : '';
+    return '<div class="panel"><div class="stat-panel">' +
+      '<div class="stat-panel-label">' + esc(label) + '</div>' +
+      '<div class="stat-panel-value ' + severity(tone) + '">' + esc(value) + '</div>' +
+      '<div class="stat-panel-note">' + esc(note) + '</div>' + spark + '</div></div>';
+  }
+
+  function miniSpark(series, color) {
+    const w = 260;
+    const h = 30;
+    const path = areaPath(series, w, h, 3);
+    if (!path) return '';
+    const id = 'sp' + Math.random().toString(36).slice(2, 8);
+    return '<svg class="stat-panel-spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<defs><linearGradient id="' + id + '" x1="0" x2="0" y1="0" y2="1">' +
+      '<stop offset="0%" stop-color="' + color + '" stop-opacity="0.35"/>' +
+      '<stop offset="100%" stop-color="' + color + '" stop-opacity="0"/></linearGradient></defs>' +
+      '<path d="' + path.area + '" fill="url(#' + id + ')"/>' +
+      '<path d="' + path.line + '" fill="none" stroke="' + color + '" stroke-width="1.5"/></svg>';
+  }
+
+  function statRow(rate, responding, enrolledCount, blocked, unenrolled, days, series) {
+    const respondRate = enrolledCount ? Math.round((responding / enrolledCount) * 100) : null;
+    return '<div class="gf-row">' +
+      statPanel('Completion', rate + '%', 'last ' + days + ' days', rate, series) +
+      statPanel('Responding', responding + '/' + enrolledCount, 'answered at least once', respondRate) +
+      statPanel('Blockers', String(blocked), blocked === 1 ? 'day reported blocked' : 'days reported blocked',
+                blocked > 0 ? 0 : 100) +
+      statPanel('Unenrolled', String(unenrolled), 'no standup reaches them', unenrolled > 0 ? 30 : 100) +
       '</div>';
   }
 
-  // A day column header: the weekday letter, with the date available on hover.
-  const WEEKDAY_INITIAL = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-  function dayHeader(iso) {
-    const d = toDate(iso);
-    const letter = d ? WEEKDAY_INITIAL[d.getDay()] : '';
-    return '<th class="grid-cellwrap" title="' + esc(formatDate(iso, iso)) + '">' + esc(letter) + '</th>';
-  }
-
-  // One cell. State is carried by fill and shape as well as colour, because a
-  // grid that means anything only in green is unreadable to a good fraction of
-  // people and prints as a blank square.
-  function gridCell(day, name) {
-    const expected = Number(day && day.expected) || 0;
-    const completed = Number(day && day.completed) || 0;
-    const when = formatDate(day && day.date, '');
-    let cls = 'cell cell-none';
-    let what = 'not scheduled';
-    if (expected > 0) {
-      if (completed >= expected) { cls = 'cell cell-done'; what = 'answered'; }
-      else if (completed > 0) { cls = 'cell cell-part'; what = completed + ' of ' + expected + ' answered'; }
-      else { cls = 'cell cell-miss'; what = 'missed'; }
+  function timeSeriesPanel(series, windowDays, days) {
+    const drawn = series.filter(v => v !== null && v !== undefined);
+    if (drawn.length < 2) {
+      return panel('Completion rate over time', '', '<div class="gf-empty">Not enough days to plot yet.</div>');
     }
-    if (day && day.blocked) { cls += ' cell-block'; what += ', reported a blocker'; }
-    const label = name + ', ' + when + ': ' + what;
-    return '<td class="grid-cellwrap"><span class="' + cls + '" title="' + esc(label) + '"></span></td>';
-  }
+    const w = 900;
+    const h = 190;
+    const padY = 14;
+    const padL = 34;
+    const inner = w - padL;
+    const path = areaPath(series, inner, h, padY);
+    const step = series.length > 1 ? inner / (series.length - 1) : inner;
 
-  function participationGrid(rows, windowDays) {
-    if (!rows.length || !windowDays.length) {
-      return '<div class="ops-panel"><div class="ops-panel-head">Participation</div>' +
-        '<div class="ops-empty">Nothing to show for these filters.</div></div>';
-    }
-    const legend = '<div class="grid-legend">' +
-      '<span><i class="cell cell-done"></i>answered</span>' +
-      '<span><i class="cell cell-part"></i>partly</span>' +
-      '<span><i class="cell cell-miss"></i>missed</span>' +
-      '<span><i class="cell cell-block cell-done"></i>blocker</span>' +
-      '<span><i class="cell cell-none"></i>not scheduled</span></div>';
-
-    const head = '<tr><th class="grid-name-head">Member</th>' +
-      windowDays.map(dayHeader).join('') +
-      '<th class="grid-total-head">Rate</th><th class="grid-spacer"></th></tr>';
-
-    const byDate = {};
-    const body = rows.map(r => {
-      const name = r.real_name || r.name || r.user_id || '';
-      const days = Array.isArray(r.days) ? r.days : [];
-      days.forEach(d => { byDate[d.date] = d; });
-      const lookup = {};
-      days.forEach(d => { lookup[d.date] = d; });
-      const cells = windowDays.map(iso => gridCell(lookup[iso], name)).join('');
-      const expected = Number(r.expected) || 0;
-      const completed = Number(r.completed) || 0;
-      const pct = expected ? Math.round((completed / expected) * 100) + '%' : EMPTY_CELL;
-      return '<tr><td class="grid-name" title="' + esc(name) + '">' + esc(name) + '</td>' +
-        cells + '<td class="grid-total">' + esc(pct) + '</td><td class="grid-spacer"></td></tr>';
+    const gridLines = [0, 25, 50, 75, 100].map(pct => {
+      const y = padY + (1 - pct / 100) * (h - padY * 2);
+      return '<line class="ts-grid" x1="' + padL + '" x2="' + w + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '"/>' +
+        '<text class="ts-axis" x="' + (padL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end">' + pct + '</text>';
     }).join('');
 
-    return '<div class="ops-panel">' +
-      '<div class="ops-panel-head"><span>Participation</span>' + legend + '</div>' +
-      '<div class="ops-scroll"><table class="grid-table"><thead>' + head +
-      '</thead><tbody>' + body + '</tbody></table></div></div>';
+    // Label about six dates, so a 30 day window does not collide.
+    const every = Math.max(1, Math.ceil(windowDays.length / 6));
+    const xLabels = windowDays.map((iso, index) => {
+      if (index % every !== 0) return '';
+      const x = padL + index * step;
+      return '<text class="ts-axis" x="' + x.toFixed(1) + '" y="' + (h - 2) + '" text-anchor="middle">' +
+        esc(shortDate(iso)) + '</text>';
+    }).join('');
+
+    const dots = path.points.map(pt =>
+      '<circle cx="' + (padL + pt[0]).toFixed(1) + '" cy="' + pt[1].toFixed(1) + '" r="2.5" fill="var(--sev-info)"/>'
+    ).join('');
+
+    const svg = '<div class="ts-wrap"><svg class="ts-svg" viewBox="0 0 ' + w + ' ' + h + '" ' +
+      'preserveAspectRatio="none" role="img" aria-label="Completion rate per day over the last ' + days + ' days">' +
+      '<defs><linearGradient id="tsfill" x1="0" x2="0" y1="0" y2="1">' +
+      '<stop offset="0%" stop-color="var(--sev-info)" stop-opacity="0.30"/>' +
+      '<stop offset="100%" stop-color="var(--sev-info)" stop-opacity="0.02"/></linearGradient></defs>' +
+      gridLines +
+      '<g transform="translate(' + padL + ',0)">' +
+      '<path d="' + path.area + '" fill="url(#tsfill)"/>' +
+      '<path d="' + path.line + '" fill="none" stroke="var(--sev-info)" stroke-width="2" ' +
+      'stroke-linejoin="round" stroke-linecap="round"/></g>' + dots + xLabels + '</svg></div>';
+
+    const legend = '<span class="gf-legend"><span>' +
+      '<i class="gf-swatch" style="background:var(--sev-info)"></i>completion %</span></span>';
+    return panel('Completion rate over time', legend, svg);
+  }
+
+  function gauge(pct) {
+    if (pct === null || pct === undefined) {
+      return '<span class="gauge"><span class="gauge-track"></span>' +
+        '<span class="gauge-value">' + EMPTY_CELL + '</span></span>';
+    }
+    const width = Math.max(0, Math.min(100, pct));
+    return '<span class="gauge"><span class="gauge-track">' +
+      '<span class="gauge-fill" style="width:' + width + '%;background:' + severityColor(pct) + '"></span>' +
+      '</span><span class="gauge-value">' + width + '%</span></span>';
+  }
+
+  function memberPanel(rows, days) {
+    if (!rows.length) {
+      return panel('By member', '', '<div class="gf-empty">No members match these filters.</div>');
+    }
+    const body = rows.map(r => {
+      const name = r.real_name || r.name || r.user_id || '';
+      const expected = Number(r.expected) || 0;
+      const completed = Number(r.completed) || 0;
+      const pct = expected ? Math.round((completed / expected) * 100) : null;
+      const blocked = Number(r.days_with_blockers) || 0;
+      if (!rowIsEnrolled(r)) {
+        return '<tr><td class="gf-name">' + esc(name) + '</td>' +
+          '<td colspan="4" class="pill-quiet">Not in any standup</td></tr>';
+      }
+      return '<tr>' +
+        '<td class="gf-name" title="' + esc(name) + '">' + esc(name) + '</td>' +
+        '<td>' + gauge(pct) + '</td>' +
+        '<td class="gf-num">' + completed + ' / ' + expected + '</td>' +
+        '<td class="gf-num">' + (blocked
+          ? '<span class="pill pill-bad">' + blocked + '</span>'
+          : '<span class="pill-quiet">' + EMPTY_CELL + '</span>') + '</td>' +
+        '<td class="gf-num pill-quiet">' + relativeCell(r.last_standup, 'Never') + '</td></tr>';
+    }).join('');
+
+    const table = '<div class="gf-scroll"><table class="gf-table"><thead><tr>' +
+      '<th>Member</th><th>Completion</th><th class="gf-num">Answered</th>' +
+      '<th class="gf-num">Blockers</th><th class="gf-num">Last seen</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    return panel('By member', '<span class="panel-sub">last ' + days + ' days</span>', table, true);
   }
 
   // A trend line for one standup. Days the schedule did not run are null and
@@ -3100,7 +3193,7 @@
           '" r="1.8" fill="var(--text-dim)"/>' : '') + '</svg>';
     }
     return '<svg class="spark" width="' + width + '" height="' + height + '" aria-hidden="true">' +
-      '<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linejoin="round" ' +
+      '<polyline fill="none" stroke="var(--sev-info)" stroke-width="1.5" stroke-linejoin="round" ' +
       'stroke-linecap="round" points="' + points.join(' ') + '"/></svg>';
   }
 
@@ -3108,20 +3201,19 @@
     if (!schedules.length) return '';
     const rows = schedules.map(s => {
       const series = Array.isArray(s.series) ? s.series : [];
-      const rate = typeof s.completion_rate === 'number' ? Math.round(s.completion_rate) + '%' : EMPTY_CELL;
-      const ran = series.filter(v => v !== null && v !== undefined).length;
+        const ran = series.filter(v => v !== null && v !== undefined).length;
+      const pct = typeof s.completion_rate === 'number' ? Math.round(s.completion_rate) : null;
       return '<tr>' +
-        '<td>' + esc(s.name || 'Standup') + '</td>' +
-        '<td class="ops-num">' + (Number(s.participants) || 0) + '</td>' +
-        '<td class="ops-num">' + esc(rate) + '</td>' +
+        '<td class="gf-name">' + esc(s.name || 'Standup') + '</td>' +
+        '<td class="gf-num">' + (Number(s.participants) || 0) + '</td>' +
+        '<td>' + gauge(pct) + '</td>' +
         '<td title="' + esc(ran + (ran === 1 ? ' day' : ' days') + ' in this window') + '">' +
           sparkline(series) + '</td></tr>';
     }).join('');
-    return '<div class="ops-panel">' +
-      '<div class="ops-panel-head"><span>By standup</span></div>' +
-      '<div class="ops-scroll"><table class="ops-table"><thead><tr>' +
-      '<th>Standup</th><th class="ops-num">People</th><th class="ops-num">Rate</th><th>Trend</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    const table = '<div class="gf-scroll"><table class="gf-table"><thead><tr>' +
+      '<th>Standup</th><th class="gf-num">People</th><th>Completion</th><th>Trend</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return panel('By standup', '', table, true);
   }
 
   function exportCSV() {
@@ -3629,6 +3721,13 @@
   }
 
   // Relative wording with the absolute value in a tooltip.
+  // "24 Aug" for a chart axis, where the year is noise.
+  function shortDate(value) {
+    const d = toDate(value);
+    if (!d) return String(value || '');
+    return d.getDate() + ' ' + MONTH_ABBR[d.getMonth()];
+  }
+
   function relativeCell(value, fallback) {
     const d = toDate(value);
     if (!d) return esc(fallback === undefined ? EMPTY_CELL : fallback);
