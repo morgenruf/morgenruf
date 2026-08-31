@@ -891,9 +891,11 @@
       width: 200px;
       max-width: 200px;
     }
-    /* The rate column takes the remaining width, keeping the grid compact. */
-    .grid-total { width: 100%; }
-    .grid-cellwrap { width: 22px; text-align: center; }
+    /* A trailing spacer absorbs the free width, so name, cells and rate stay
+       one compact block. Stretching the rate to the far edge instead left a
+       hand's width of nothing in the middle of every row. */
+    .grid-spacer { width: 100%; }
+    .grid-cellwrap { width: 26px; text-align: center; }
     .grid-table td.grid-total, .grid-table th.grid-total-head {
       font-family: var(--mono);
       font-size: var(--fs-xs);
@@ -909,8 +911,8 @@
        and nothing at all for a day the person was not asked about. */
     .cell {
       display: inline-block;
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       border-radius: 3px;
       vertical-align: middle;
       background: var(--cell-off);
@@ -3053,7 +3055,7 @@
 
     const head = '<tr><th class="grid-name-head">Member</th>' +
       windowDays.map(dayHeader).join('') +
-      '<th class="grid-total-head">Rate</th></tr>';
+      '<th class="grid-total-head">Rate</th><th class="grid-spacer"></th></tr>';
 
     const byDate = {};
     const body = rows.map(r => {
@@ -3067,7 +3069,7 @@
       const completed = Number(r.completed) || 0;
       const pct = expected ? Math.round((completed / expected) * 100) + '%' : EMPTY_CELL;
       return '<tr><td class="grid-name" title="' + esc(name) + '">' + esc(name) + '</td>' +
-        cells + '<td class="grid-total">' + esc(pct) + '</td></tr>';
+        cells + '<td class="grid-total">' + esc(pct) + '</td><td class="grid-spacer"></td></tr>';
     }).join('');
 
     return '<div class="ops-panel">' +
