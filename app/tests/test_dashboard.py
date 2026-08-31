@@ -647,3 +647,66 @@ class TestRegistrationErrorSurfacing:
         resp = authed_client.get("/dashboard/api/schedules")
         assert resp.status_code == 200
         assert resp.get_json()[0]["registration_error"] is not None
+
+
+class TestApiAnalyticsGridPayload:
+    """The analytics endpoint builds its payload from an explicit key list.
+
+    Anything added to compute_participation has to be named there too. It was
+    not, so the grid received no dates, drew no columns, and the page said
+    "Nothing to show for these filters" while the summary above it correctly
+    reported 24 enrolled members. Nothing in the unit tests noticed, because
+    both layers were individually right.
+    """
+
+    def _overview_with_grid(self):
+        return _overview(
+            members=[
+                {
+                    "user_id": "U1",
+                    "real_name": "Ada",
+                    "enrolled": True,
+                    "expected": 2,
+                    "completed": 1,
+                    "responses": 1,
+                    "days": [
+                        {"date": "2026-08-30", "expected": 1, "completed": 1, "blocked": False},
+                        {"date": "2026-08-31", "expected": 1, "completed": 0, "blocked": False},
+                    ],
+                }
+            ],
+            schedules=[{"schedule_id": 1, "name": "Morning", "series": [100, 0]}],
+            window_days=["2026-08-30", "2026-08-31"],
+        )
+
+    def test_the_window_reaches_the_client(self, authed_client):
+        _db_mock.get_participation_overview.return_value = self._overview_with_grid()
+        data = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        assert data["window_days"] == ["2026-08-30", "2026-08-31"]
+
+    def test_each_member_keeps_its_per_day_grid(self, authed_client):
+        _db_mock.get_participation_overview.return_value = self._overview_with_grid()
+        data = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        days = data["members"][0]["days"]
+        assert [d["date"] for d in days] == data["window_days"]
+        assert days[0]["completed"] == 1 and days[1]["completed"] == 0
+
+    def test_schedule_series_reaches_the_client(self, authed_client):
+        _db_mock.get_participation_overview.return_value = self._overview_with_grid()
+        data = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        assert data["schedules"][0]["series"] == [100, 0]
+
+    def test_an_overview_without_a_window_does_not_break_the_endpoint(self, authed_client):
+        """Older callers and the error path return no window_days."""
+        _db_mock.get_participation_overview.return_value = _overview()
+        resp = authed_client.get("/dashboard/api/analytics?days=7")
+        assert resp.status_code == 200
+        assert resp.get_json()["window_days"] == []
+
+    def test_schedule_ids_still_reach_the_client(self, authed_client):
+        """Guards the fix that made the standup filter work at all."""
+        _db_mock.get_participation_overview.return_value = _overview(
+            members=[{"user_id": "U1", "real_name": "Ada", "schedule_ids": [3, 7], "days": []}]
+        )
+        data = authed_client.get("/dashboard/api/analytics?days=7").get_json()
+        assert data["members"][0]["schedule_ids"] == [3, 7]
