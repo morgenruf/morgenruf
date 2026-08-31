@@ -650,3 +650,85 @@ class TestScheduleIdsOnMemberRows:
         members.append(_member("U3", "Cy", active=False))
         result = db.compute_participation(schedules, members, submissions, days=7, now=NOW)
         assert "U3" not in _by_user(result)
+
+
+# ---------------------------------------------------------------------------
+# per-day grid and per-schedule trend
+# ---------------------------------------------------------------------------
+
+
+class TestPerDayGrid:
+    """The dashboard draws a member-by-day grid, so a week cannot be one ratio.
+
+    A single "4/5" hides which days were missed and cannot show a pattern. The
+    distinction that matters is between a day nobody was asked about and a day
+    that was asked and missed; collapsing those is what makes a weekend look
+    like a failure.
+    """
+
+    def test_the_window_is_oldest_first_and_the_right_length(self):
+        result = _result(days=7)
+        assert len(result["window_days"]) == 7
+        assert result["window_days"] == sorted(result["window_days"])
+
+    def test_every_member_has_one_entry_per_day_in_the_window(self):
+        result = _result(days=7)
+        for row in result["members"]:
+            assert [d["date"] for d in row["days"]] == result["window_days"], row["user_id"]
+
+    def test_a_day_nobody_was_asked_about_expects_nothing(self):
+        """The weekend. Not the same as a missed standup."""
+        row = _by_user(_result())["U1"]
+        weekend = [d for d in row["days"] if d["date"] in ("2026-03-07", "2026-03-08")]
+        assert weekend and all(d["expected"] == 0 and d["completed"] == 0 for d in weekend)
+
+    def test_a_member_in_two_standups_expects_two_a_day(self):
+        row = _by_user(_result())["U1"]
+        weekday = [d for d in row["days"] if d["expected"]]
+        assert weekday and all(d["expected"] == 2 for d in weekday)
+
+    def test_completed_never_exceeds_expected(self):
+        for row in _result()["members"]:
+            for day in row["days"]:
+                assert day["completed"] <= day["expected"], (row["user_id"], day)
+
+    def test_the_grid_sums_to_the_row_totals(self):
+        for row in _result()["members"]:
+            assert sum(d["expected"] for d in row["days"]) == row["expected"], row["user_id"]
+            assert sum(d["completed"] for d in row["days"]) == row["completed"], row["user_id"]
+
+    def test_a_blocked_day_is_marked_on_the_day_not_just_the_member(self):
+        schedules, members, submissions = _workspace()
+        submissions.append(_submission("U2", WED, has_blockers=True))
+        result = db.compute_participation(schedules, members, submissions, days=7, now=NOW)
+        row = _by_user(result)["U2"]
+        blocked = [d["date"] for d in row["days"] if d["blocked"]]
+        assert blocked == [str(WED)]
+
+    def test_a_member_on_leave_has_an_empty_grid_rather_than_missed_days(self):
+        row = _by_user(_result())["U5"]
+        assert row["on_vacation"] is True
+        assert all(d["expected"] == 0 for d in row["days"])
+
+
+class TestScheduleSeries:
+    def test_each_schedule_gets_one_point_per_day(self):
+        result = _result(days=7)
+        for sched in result["schedules"]:
+            assert len(sched["series"]) == 7, sched["name"]
+
+    def test_a_day_the_schedule_did_not_run_is_none_not_zero(self):
+        """A mon/wed/fri standup must not draw as four days of failure."""
+        by_name = {s["name"]: s for s in _result()["schedules"]}
+        tri = by_name["Tri"]
+        assert tri["series"].count(None) >= 4
+        assert any(v == 100 for v in tri["series"] if v is not None)
+
+    def test_points_are_percentages_within_range(self):
+        for sched in _result()["schedules"]:
+            for value in sched["series"]:
+                assert value is None or 0 <= value <= 100, sched["name"]
+
+    def test_a_fully_answered_day_reads_as_one_hundred(self):
+        by_name = {s["name"]: s for s in _result()["schedules"]}
+        assert 100 in by_name["Evening"]["series"]

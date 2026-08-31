@@ -998,6 +998,9 @@ def compute_participation(
     attributed: dict[tuple[str, date], set[int]] = {}
     responses: dict[str, int] = {}
     blockers: dict[str, int] = {}
+    # (member, day) pairs where a submission actually reported a blocker, so the
+    # dashboard can mark the day rather than only the member.
+    blocked_days: set[tuple[str, date]] = set()
     last_standup: dict[str, Any] = {}
     window_start = now.astimezone(timezone.utc).date() - timedelta(days=days - 1)
     for row in submissions or []:
@@ -1013,6 +1016,7 @@ def compute_participation(
             responses[user_id] = responses.get(user_id, 0) + 1
             if row.get("has_blockers"):
                 blockers[user_id] = blockers.get(user_id, 0) + 1
+                blocked_days.add((user_id, day))
         submitted_at = row.get("submitted_at")
         if submitted_at is not None:
             previous = last_standup.get(user_id)
@@ -1073,6 +1077,10 @@ def compute_participation(
     expected_total = 0
     completed_total = 0
     per_member: dict[str, dict] = {}
+    # (schedule, day) counts, so each standup gets a trend line rather than a
+    # single number for the whole window.
+    per_schedule_day: dict[tuple[int, date], int] = {}
+    expected_per_schedule_day: dict[tuple[int, date], int] = {}
     for (user_id, day), schedule_ids in occurrences.items():
         expected_here = len(schedule_ids)
         completed_here = min(per_day.get((user_id, day), 0), expected_here)
@@ -1089,10 +1097,17 @@ def compute_participation(
         named = attributed.get((user_id, day), set()) & set(schedule_ids)
         for schedule_id in named:
             schedule_rows[schedule_id]["completed"] += 1
+            per_schedule_day[(schedule_id, day)] = per_schedule_day.get((schedule_id, day), 0) + 1
         remaining = completed_here - len(named)
         if remaining > 0:
             for schedule_id in [s for s in schedule_ids if s not in named][:remaining]:
                 schedule_rows[schedule_id]["completed"] += 1
+                per_schedule_day[(schedule_id, day)] = per_schedule_day.get((schedule_id, day), 0) + 1
+        for schedule_id in schedule_ids:
+            expected_per_schedule_day[(schedule_id, day)] = expected_per_schedule_day.get((schedule_id, day), 0) + 1
+
+    # Oldest first, so a grid reads left to right like a calendar.
+    window_days = [window_start + timedelta(days=offset) for offset in range(days)]
 
     member_rows = []
     for user_id, member in known.items():
@@ -1113,6 +1128,19 @@ def compute_participation(
                 "completion_rate": _percentage(stats["completed"], stats["expected"]),
                 "last_standup": last_standup.get(user_id),
                 "days_with_blockers": blockers.get(user_id, 0),
+                # One entry per day in the window, so the dashboard can draw a
+                # member-by-day grid instead of collapsing a week into a single
+                # ratio. A day nobody asked about is expected 0, which reads as
+                # "not scheduled" rather than "missed".
+                "days": [
+                    {
+                        "date": day.isoformat(),
+                        "expected": len(occurrences.get((user_id, day), [])),
+                        "completed": min(per_day.get((user_id, day), 0), len(occurrences.get((user_id, day), []))),
+                        "blocked": (user_id, day) in blocked_days,
+                    }
+                    for day in window_days
+                ],
                 # Which standups this person is on. Names for display, ids so
                 # the dashboard's "filter by standup" control has something to
                 # compare against: it was matching a numeric id against this
@@ -1131,12 +1159,24 @@ def compute_participation(
         )
     )
 
-    for row in schedule_rows.values():
+    for schedule_id, row in schedule_rows.items():
         row["missed"] = row["expected"] - row["completed"]
         row["completion_rate"] = _percentage(row["completed"], row["expected"])
+        # Completion rate per day. Days the schedule did not run are None rather
+        # than 0, so a weekly standup does not draw as five days of failure.
+        row["series"] = [
+            _percentage(
+                per_schedule_day.get((schedule_id, day), 0),
+                expected_per_schedule_day.get((schedule_id, day), 0),
+            )
+            if expected_per_schedule_day.get((schedule_id, day))
+            else None
+            for day in window_days
+        ]
 
     return {
         "days": days,
+        "window_days": [day.isoformat() for day in window_days],
         "expected": expected_total,
         "completed": completed_total,
         "missed": expected_total - completed_total,
