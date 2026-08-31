@@ -1039,6 +1039,11 @@ def api_analytics():
             {
                 "members": stats,
                 "days": overview["days"],
+                # The dates the grid draws columns for. This endpoint builds its
+                # payload from an explicit key list, so anything added to
+                # compute_participation has to be named here too or the client
+                # silently gets nothing.
+                "window_days": overview.get("window_days") or [],
                 "expected": overview["expected"],
                 "completed": overview["completed"],
                 "missed": overview["missed"],
