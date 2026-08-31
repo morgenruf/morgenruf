@@ -897,6 +897,8 @@
     .grid-spacer { width: 100%; }
     .grid-cellwrap { width: 26px; text-align: center; }
     .grid-table td.grid-total, .grid-table th.grid-total-head {
+      /* Separated from the last day column, which it would otherwise touch. */
+      padding-left: 14px;
       font-family: var(--mono);
       font-size: var(--fs-xs);
       color: var(--text-muted);
