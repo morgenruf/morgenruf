@@ -140,6 +140,26 @@ class TestClassesAreStyled:
 
 EMOJI = re.compile("[\U0001f000-\U0001faff]")
 
+# Emoji also hide as numeric character references, which are plain ASCII in the
+# source. Checking only for literal characters passed while the sidebar, the MCP
+# title and four copy buttons were still drawing emoji in the browser.
+ENTITY = re.compile(r"&#(\d+);|&#x([0-9a-fA-F]+);")
+
+# Geometric glyphs that render as monochrome text on every platform and are
+# conventional interface furniture rather than emoji.
+TEXT_GLYPHS = {0x2630, 0x2715, 0x2713, 0x2605, 0x2606, 0x26A0, 0x2699, 0x25B8, 0x25AA}
+
+
+def pictographic_entities(markup: str) -> list[str]:
+    found = []
+    for match in ENTITY.finditer(markup):
+        point = int(match.group(1)) if match.group(1) else int(match.group(2), 16)
+        if point in TEXT_GLYPHS:
+            continue
+        if 0x1F000 <= point <= 0x1FAFF or 0x2600 <= point <= 0x27BF:
+            found.append(f"{match.group(0)} ({chr(point)})")
+    return found
+
 
 def palette(markup: str) -> dict[str, str]:
     root = re.search(r":root \{(.*?)\n    \}", markup, re.S).group(1)
@@ -166,6 +186,15 @@ class TestNoEmojiAsIcons:
     def test_the_template_carries_no_emoji(self):
         found = sorted(set(EMOJI.findall(read_template())))
         assert not found, f"emoji in the template: {found}"
+
+    def test_no_emoji_hiding_as_a_character_reference(self):
+        """&#128268; is ASCII in the source and an emoji in the browser."""
+        found = sorted(set(pictographic_entities(read_template())))
+        assert not found, f"emoji written as entities: {found}"
+
+    def test_the_entity_check_is_actually_matching_something(self):
+        """A guard on the parser, so a broken regex cannot pass by finding nothing."""
+        assert pictographic_entities("&#128268; and &#127942;")
 
     def test_the_sidebar_uses_the_icon_set(self):
         markup = read_template()
