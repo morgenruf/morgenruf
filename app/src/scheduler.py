@@ -948,6 +948,51 @@ def register_workspace_digests_only(
     logger.info("Registered digest-only jobs for %s (schedule-level standups active)", team_id)
 
 
+def next_run_at(schedule: dict, now: Optional[datetime] = None) -> Optional[datetime]:
+    """When `schedule` next fires, in its own timezone, or None if it cannot.
+
+    Built from the same CronTrigger the scheduler registers, so it cannot drift
+    from the real firing time. Used to tell whoever saved a standup when it will
+    run (#119), which is the only way to distinguish a registered schedule from
+    one that silently never fires.
+    """
+    if schedule_config_error(schedule):
+        return None
+    try:
+        hour, minute = (schedule.get("schedule_time") or "09:00").split(":")
+        tz = pytz.timezone(schedule.get("schedule_tz") or "UTC")
+        trigger = CronTrigger(
+            hour=int(hour),
+            minute=int(minute),
+            day_of_week=schedule.get("schedule_days", "mon,tue,wed,thu,fri"),
+            timezone=tz,
+        )
+        reference = (now or datetime.now(tz=timezone.utc)).astimezone(tz)
+        return trigger.get_next_fire_time(None, reference)
+    except Exception as exc:
+        logger.debug("Could not compute next run for schedule %s: %s", schedule.get("id"), exc)
+        return None
+
+
+# How long after the standup DMs the channel summary posts when a schedule
+# carries no explicit report_time.
+_DEFAULT_REPORT_DELAY_MINUTES = 60
+
+
+def _default_report_time(schedule_time: str) -> str:
+    """The report time to use when a schedule has none: standup time plus an hour.
+
+    Wraps past midnight. Returns `schedule_time` unchanged if it cannot be parsed,
+    leaving the existing validation to reject the row.
+    """
+    try:
+        hour, minute = (int(part) for part in schedule_time.split(":"))
+    except Exception:
+        return schedule_time
+    total = (hour * 60 + minute + _DEFAULT_REPORT_DELAY_MINUTES) % (24 * 60)
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
 def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> None:
     """Register a cron job for a standup_schedules row."""
     team_id = schedule["team_id"]
@@ -1020,8 +1065,11 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
             "Registered weekend reminder job %s (%s) on Fridays at %s", schedule_id, schedule.get("name"), schedule_time
         )
 
-    # Scheduled report job — posts summary at report_time regardless of completion
-    report_time = schedule.get("report_time") or schedule_time
+    # Scheduled report job — posts summary at report_time regardless of completion.
+    # With no report_time the fallback used to be schedule_time itself, which put
+    # both jobs on the same cron minute. The report then ran in the same second as
+    # the first DM, found nothing in `standups`, and skipped every single day (#118).
+    report_time = schedule.get("report_time") or _default_report_time(schedule_time)
     try:
         r_hour, r_minute = report_time.split(":")
     except Exception:

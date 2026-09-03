@@ -99,6 +99,73 @@ def _get_bot_channels(client) -> list[dict]:
     return channels
 
 
+def _standup_saved_confirmation(schedule: dict, creator_id: str, is_edit: bool = False) -> str:
+    """The DM sent to whoever saved a standup, describing what will happen (#119)."""
+    name = schedule.get("name") or "Team Standup"
+    channel_id = schedule.get("channel_id") or ""
+    schedule_time = schedule.get("schedule_time") or "09:00"
+    schedule_tz = schedule.get("schedule_tz") or "UTC"
+    days = schedule.get("schedule_days") or "mon,tue,wed,thu,fri"
+    participants = list(schedule.get("participants") or [])
+
+    verb = "updated" if is_edit else "created"
+    lines = [
+        f"✅ *{name}* {verb}.",
+        "",
+        f"• *Channel:* <#{channel_id}>" if channel_id else "• *Channel:* not set",
+        f"• *Standup time:* {schedule_time} {schedule_tz} on {days}",
+        f"• *Participants:* {len(participants)}",
+    ]
+
+    next_run = _next_run_text(schedule)
+    if next_run:
+        lines.append(f"• *Next run:* {next_run}")
+
+    lines += [
+        "",
+        "Each participant gets a DM at the standup time. Their answers post to the "
+        "channel as they reply, so the channel stays quiet until someone answers.",
+    ]
+
+    if creator_id not in participants:
+        lines += [
+            "",
+            f"⚠️ You are *not on* the participant list, so you will not get the DM. "
+            f"Edit *{name}* to add yourself, or switch on Channel sync to follow "
+            f"channel membership.",
+        ]
+
+    return "\n".join(lines)
+
+
+def _schedule_next_run(schedule: dict) -> str:
+    """ISO 8601 next fire time for a schedules row, or "" when it will not fire."""
+    if not schedule.get("active", True):
+        return ""
+    try:
+        from scheduler import next_run_at  # noqa: PLC0415
+
+        moment = next_run_at(schedule)
+    except Exception as exc:
+        logger.debug("Could not compute next run for schedule %s: %s", schedule.get("id"), exc)
+        return ""
+    return moment.isoformat() if moment else ""
+
+
+def _next_run_text(schedule: dict) -> str:
+    """Human readable next fire time for a schedule, or "" if it cannot be computed."""
+    try:
+        from scheduler import next_run_at  # noqa: PLC0415
+
+        moment = next_run_at(schedule)
+    except Exception as exc:
+        logger.debug("Could not compute next run: %s", exc)
+        return ""
+    if moment is None:
+        return ""
+    return moment.strftime("%a %d %b at %H:%M %Z")
+
+
 _DEFAULT_LABELS = ["✅ Yesterday", "🎯 Today", "🚧 Blockers"]
 
 
@@ -837,6 +904,7 @@ def register_handlers(app: App) -> None:
                     "members": participants,
                     "active": s.get("active", True),
                     "questions": raw_q,
+                    "next_run": _schedule_next_run(s),
                     "is_participant": is_participant,
                     "user_responded_today": user_responded_today if is_participant else False,
                     "user_last_response_time": (
@@ -1061,6 +1129,7 @@ def register_handlers(app: App) -> None:
                         "members": participants,
                         "active": s.get("active", True),
                         "questions": raw_q,
+                        "next_run": _schedule_next_run(s),
                     }
                 )
             try:
@@ -1148,7 +1217,8 @@ def register_handlers(app: App) -> None:
                     "standup_id": str(schedule["id"]),
                     "channel_id": schedule.get("channel_id", ""),
                     "questions": questions,
-                    "report_time": schedule.get("schedule_time", "09:00"),
+                    "standup_time": schedule.get("schedule_time", "09:00"),
+                    "report_time": schedule.get("report_time"),
                     "timezone": schedule.get("schedule_tz", "UTC"),
                     "reminder_minutes": schedule.get("reminder_minutes", 0),
                     "days": days,
@@ -1158,6 +1228,7 @@ def register_handlers(app: App) -> None:
                     "group_by": schedule.get("group_by", "member"),
                     "standup_name": schedule.get("name", ""),
                     "prepopulate_answers": schedule.get("prepopulate_answers", False),
+                    "post_summary": schedule.get("post_summary", False),
                     "allow_edit_after_report": schedule.get("allow_edit_after_report", False),
                     "active": schedule.get("active", True),
                 }
@@ -1519,9 +1590,15 @@ def register_handlers(app: App) -> None:
         )
         questions_text = values.get("questions", {}).get("questions", {}).get("value", "")
         questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
-        report_time = (
-            values.get("report_time", {}).get("report_time", {}).get("selected_option", {}).get("value", "09:00")
-        )
+        # The DM time now comes from its own `standup_time` block. A modal opened
+        # before the rename submits it under `report_time`, so fall back to that
+        # only when `standup_time` is absent (#118).
+        standup_time = values.get("standup_time", {}).get("standup_time", {}).get("selected_option", {}).get("value")
+        legacy_time = values.get("report_time", {}).get("report_time", {}).get("selected_option", {}).get("value")
+        if standup_time:
+            report_time = legacy_time or ""
+        else:
+            standup_time, report_time = legacy_time or "09:00", ""
         timezone = values.get("timezone", {}).get("timezone", {}).get("selected_option", {}).get("value", "UTC")
         reminder_val = values.get("reminder", {}).get("reminder", {}).get("selected_option", {}).get("value", "0")
         members = values.get("members", {}).get("members", {}).get("selected_users", [])
@@ -1545,6 +1622,11 @@ def register_handlers(app: App) -> None:
         prepop_opts = values.get("prepopulate_answers", {}).get("prepopulate_answers", {}).get("selected_options", [])
         prepopulate_answers = bool(prepop_opts)
 
+        # Daily channel summary (#117). A modal opened before the toggle existed
+        # carries no block for it, so leave the value alone in that case.
+        summary_block = values.get("post_summary")
+        post_summary = bool(summary_block.get("post_summary", {}).get("selected_options")) if summary_block else None
+
         # Edit-only fields
         allow_edit_opts = (
             values.get("allow_edit_after_report", {}).get("allow_edit_after_report", {}).get("selected_options", [])
@@ -1557,7 +1639,9 @@ def register_handlers(app: App) -> None:
         # The timezone picker is an external_select over a curated list, but a
         # value the scheduler cannot resolve would save a standup that never
         # fires and never says why (#67), so check before writing the row.
-        invalid = schedule_timezone_error(timezone) or schedule_time_error(report_time)
+        invalid = schedule_timezone_error(timezone) or schedule_time_error(standup_time)
+        if not invalid and report_time:
+            invalid = schedule_time_error(report_time)
         if invalid:
             client.chat_postMessage(channel=user_id, text=f"❌ Couldn't save *{standup_name}*: {invalid}")
             return
@@ -1568,7 +1652,8 @@ def register_handlers(app: App) -> None:
             kwargs = {
                 "name": standup_name,
                 "channel_id": channel_id,
-                "schedule_time": report_time,
+                "schedule_time": standup_time,
+                "report_time": report_time or None,
                 "schedule_tz": timezone,
                 "schedule_days": ",".join(days) if days else "mon,tue,wed,thu,fri",
                 "questions": questions,
@@ -1579,6 +1664,8 @@ def register_handlers(app: App) -> None:
                 "sync_with_channel": sync_with_channel,
                 "prepopulate_answers": prepopulate_answers,
             }
+            if post_summary is not None:
+                kwargs["post_summary"] = post_summary
 
             if private_metadata:
                 # Editing existing schedule — include edit-only fields
@@ -1602,6 +1689,18 @@ def register_handlers(app: App) -> None:
                         register_schedule_job(sched_obj, sched_with_token)
                 except Exception as exc2:
                     logger.warning("Could not register schedule job from modal: %s", exc2)
+
+                # Tell the creator what was saved and when it will run (#119).
+                # Without this, a standup that fires perfectly is indistinguishable
+                # from one that never registered: the creator sees nothing at the
+                # trigger time unless they are a participant and somebody answers.
+                try:
+                    client.chat_postMessage(
+                        channel=user_id,
+                        text=_standup_saved_confirmation(schedule, user_id, is_edit=bool(private_metadata)),
+                    )
+                except Exception as exc2:
+                    logger.warning("Could not confirm standup save to %s: %s", user_id, exc2)
 
                 # Ensure members are in the DB
                 for uid in members:

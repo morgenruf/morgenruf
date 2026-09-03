@@ -1594,6 +1594,11 @@
             </div>
           </div>
           <div class="form-group">
+            <label class="form-label">Post daily summary to channel</label>
+            <div id="f-summary-toggle" class="toggle on" onclick="this.classList.toggle('on')"></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Roll everyone's answers into one message at the report time</div>
+          </div>
+          <div class="form-group">
             <label class="form-label">Notify users when report posts</label>
             <div id="f-notify-toggle" class="toggle on" onclick="this.classList.toggle('on')"></div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:4px">@mention team members in the report post</div>
@@ -1894,6 +1899,16 @@
     });
   }
 
+  // #119: a standup that never fires used to look exactly like one that does.
+  function nextRunChip(s) {
+    if (!s.next_run) return '';
+    const when = new Date(s.next_run);
+    if (isNaN(when)) return '';
+    const label = when.toLocaleString([], {weekday: 'short', day: 'numeric', month: 'short',
+                                          hour: '2-digit', minute: '2-digit'});
+    return '<span title="Next run">Next: ' + esc(label) + '</span>';
+  }
+
   function renderStandups() {
     const el = document.getElementById('standups-list');
     const caption = document.getElementById('standups-caption');
@@ -1922,6 +1937,7 @@
         '<span>#' + esc(chName) + '</span>' +
         '<span>' + esc(s.schedule_time || '09:00') + ' ' + esc(s.schedule_tz || 'UTC') + '</span>' +
         '<span>' + esc(peopleLabel) + '</span>' +
+        nextRunChip(s) +
         dayChips +
         badge +
         '</div></div>' +
@@ -2770,6 +2786,7 @@
     document.getElementById('f-reminder').value = '0';
     document.getElementById('f-post-channel').checked = true;
     document.getElementById('f-notify-toggle').classList.add('on');
+    document.getElementById('f-summary-toggle').classList.add('on');
     document.getElementById('f-ai-summary-toggle').classList.remove('on');
     document.getElementById('f-ai-provider').value = 'openai';
     selectDays(['mon','tue','wed','thu','fri']);
@@ -2804,6 +2821,7 @@
     document.getElementById(s.post_to_thread ? 'f-post-thread' : 'f-post-channel').checked = true;
     const notifyToggle = document.getElementById('f-notify-toggle');
     if (s.notify_on_report !== false) notifyToggle.classList.add('on'); else notifyToggle.classList.remove('on');
+    document.getElementById('f-summary-toggle').classList.toggle('on', !!s.post_summary);
     document.getElementById('f-ai-summary-toggle').classList.toggle('on', !!s.ai_summary_enabled);
     document.getElementById('f-ai-provider').value = s.ai_provider || 'openai';
     selectDays(s.schedule_days || []);
@@ -2855,6 +2873,7 @@
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
       post_to_thread: document.getElementById('f-post-thread').checked,
       notify_on_report: document.getElementById('f-notify-toggle').classList.contains('on'),
+      post_summary: document.getElementById('f-summary-toggle').classList.contains('on'),
       ai_summary_enabled: document.getElementById('f-ai-summary-toggle').classList.contains('on'),
       ai_provider: document.getElementById('f-ai-provider').value,
     };
@@ -3582,6 +3601,21 @@
     'india': 'Asia/Kolkata', 'japan': 'Asia/Tokyo',
     'china': 'Asia/Shanghai', 'korea': 'Asia/Seoul',
   };
+  // The list above is a shortlist of 63 zones out of the ~430 the tz database
+  // carries. It is a good suggestion set, but on its own it meant the dropdown
+  // could not offer Manila, Halifax, Lisbon and 360-odd others (#121). Seed the
+  // rest from the browser's own tz database, keeping the curated labels for the
+  // zones that have one.
+  (function seedRemainingTimezones() {
+    if (typeof Intl.supportedValuesOf !== 'function') return;
+    let zones;
+    try { zones = Intl.supportedValuesOf('timeZone'); } catch (e) { return; }
+    const known = new Set(ALL_TIMEZONES.map(tz => tz.value));
+    zones.forEach(zone => {
+      if (!known.has(zone)) ALL_TIMEZONES.push({ value: zone, label: zone });
+    });
+  })();
+
   const tzInput = document.getElementById('f-tz');
   const tzDropdown = document.getElementById('tz-dropdown');
   let tzHighlightIdx = -1;

@@ -146,6 +146,35 @@ def logout():
 # ---------------------------------------------------------------------------
 
 
+def _next_run(row: dict) -> str:
+    """When this schedule next fires, ISO 8601 in its own timezone, or "".
+
+    Derived from the schedule's own config, so it is the same answer here in the
+    forked dashboard worker as in the process holding the live jobs. Empty for an
+    inactive schedule and for one the scheduler would refuse (#119).
+    """
+    if not row.get("active", True):
+        return ""
+    try:
+        from scheduler import next_run_at  # noqa: PLC0415
+
+        moment = next_run_at(row)
+    except Exception as exc:
+        logger.debug("Could not compute next run for schedule %s: %s", row.get("id"), exc)
+        return ""
+    return moment.isoformat() if moment else ""
+
+
+def _post_summary_default(data: dict) -> bool:
+    """Whether a new standup posts its daily summary.
+
+    Migration 021 defaulted this to FALSE and shipped no control to change it,
+    so no install could post a summary at all (#117). New standups post one
+    unless the caller says otherwise.
+    """
+    return bool(data.get("post_summary", True))
+
+
 def _schedule_to_standup(row: dict) -> dict:
     """Normalise a standup_schedules row into a standup API object."""
     questions = row.get("questions") or []
@@ -201,6 +230,9 @@ def _schedule_to_standup(row: dict) -> dict:
         # parse is never registered, so it silently never fires. None when the
         # schedule is fine (or inactive, where not firing is the point).
         "registration_error": schedule_config_error(row) if row.get("active", True) else None,
+        # #119: when it next fires, so a standup that runs can be told apart from
+        # one that silently never will.
+        "next_run": _next_run(row),
     }
 
 
@@ -243,7 +275,7 @@ def api_create_standup():
             reminder_minutes=int(data.get("reminder_minutes") or 0),
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
-            post_summary=bool(data.get("post_summary", False)),
+            post_summary=_post_summary_default(data),
         )
         return jsonify(_schedule_to_standup(row)), 201
     except Exception as exc:
@@ -1188,6 +1220,7 @@ def api_list_schedules():
             # #67: flag rows the scheduler will refuse, so an Active schedule
             # that can never fire does not look healthy.
             row["registration_error"] = schedule_config_error(row) if row.get("active", True) else None
+            row["next_run"] = _next_run(row)
         return jsonify(schedules)
     except Exception as exc:
         logger.error("api_list_schedules: %s", exc)
@@ -1222,7 +1255,7 @@ def api_create_schedule():
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
             weekend_reminder=bool(data.get("weekend_reminder", False)),
-            post_summary=bool(data.get("post_summary", False)),
+            post_summary=_post_summary_default(data),
         )
         try:
             from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415

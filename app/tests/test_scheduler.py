@@ -295,3 +295,73 @@ class TestInvalidScheduleIsReportable(_SyncTestBase):
         db.get_all_active_schedules.side_effect = RuntimeError("db down")
         with patch.dict(sys.modules, {"db": db}):
             assert sched_mod.get_unregistered_schedules(self.scheduler) == []
+
+
+class TestReportTimeFallback(_SyncTestBase):
+    """#118 — a schedule with no report_time must not fire its report in the
+    same minute as the standup DMs, or the report always finds zero
+    submissions and skips."""
+
+    def _trigger_hm(self, job_id):
+        trigger = str(self.scheduler.get_job(job_id).trigger)
+        hour = trigger.split("hour='")[1].split("'")[0]
+        minute = trigger.split("minute='")[1].split("'")[0]
+        return hour, minute
+
+    def test_report_defaults_an_hour_after_the_standup(self):
+        db = _make_db(
+            schedules=[_schedule_row(schedule_time="16:45", report_time=None)],
+            installations=[_installation_row()],
+        )
+        self.sync(db)
+        assert self._trigger_hm("schedule_T1_1") == ("16", "45")
+        assert self._trigger_hm("report_schedule_T1_1") == ("17", "45")
+
+    def test_report_default_wraps_past_midnight(self):
+        db = _make_db(
+            schedules=[_schedule_row(schedule_time="23:30", report_time=None)],
+            installations=[_installation_row()],
+        )
+        self.sync(db)
+        assert self._trigger_hm("report_schedule_T1_1") == ("0", "30")
+
+    def test_explicit_report_time_is_respected(self):
+        db = _make_db(
+            schedules=[_schedule_row(schedule_time="09:00", report_time="18:15")],
+            installations=[_installation_row()],
+        )
+        self.sync(db)
+        assert self._trigger_hm("report_schedule_T1_1") == ("18", "15")
+
+
+class TestNextRunAt:
+    """#119 — the creator is told when a standup will next fire, so a saved
+    schedule can be told apart from one that never registered."""
+
+    def test_returns_the_next_matching_weekday_in_the_schedule_timezone(self):
+        from datetime import datetime
+
+        import pytz
+
+        row = _schedule_row(schedule_time="16:45", schedule_tz="America/Chicago", schedule_days="mon,tue,wed,thu,fri")
+        # A Wednesday morning, so the answer is that same afternoon.
+        now = pytz.timezone("America/Chicago").localize(datetime(2026, 9, 2, 9, 0))
+        moment = sched_mod.next_run_at(row, now=now)
+        assert (moment.year, moment.month, moment.day) == (2026, 9, 2)
+        assert (moment.hour, moment.minute) == (16, 45)
+        assert moment.tzinfo is not None
+
+    def test_skips_to_monday_when_the_week_is_over(self):
+        from datetime import datetime
+
+        import pytz
+
+        row = _schedule_row(schedule_time="09:00", schedule_tz="UTC", schedule_days="mon,tue,wed,thu,fri")
+        saturday = pytz.utc.localize(datetime(2026, 9, 5, 12, 0))
+        moment = sched_mod.next_run_at(row, now=saturday)
+        assert moment.strftime("%a") == "Mon"
+        assert (moment.hour, moment.minute) == (9, 0)
+
+    def test_unusable_schedule_returns_none(self):
+        assert sched_mod.next_run_at(_schedule_row(schedule_time="9am")) is None
+        assert sched_mod.next_run_at(_schedule_row(schedule_tz="Asia/Kolkatta")) is None
