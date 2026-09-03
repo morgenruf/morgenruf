@@ -718,9 +718,7 @@ class TestNextRunIsSurfaced:
     correct in the dashboard's forked worker as well as in the scheduler."""
 
     def test_healthy_schedule_reports_its_next_run(self, authed_client):
-        _db_mock.get_standup_schedules.return_value = [
-            _schedule_row(schedule_tz="Asia/Kolkata", schedule_time="16:45")
-        ]
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkata", schedule_time="16:45")]
         resp = authed_client.get("/dashboard/api/standups")
         assert resp.status_code == 200
         assert resp.get_json()[0]["next_run"], "a firing standup must say when it next runs"

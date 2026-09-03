@@ -136,9 +136,7 @@ class TestAppHomeShowsNextRun:
         import blocks as blocks_mod
 
         view = blocks_mod.app_home_configure_view([standup], user_id="U1")
-        return "\n".join(
-            b.get("text", {}).get("text", "") for b in view["blocks"] if b.get("type") == "section"
-        )
+        return "\n".join(b.get("text", {}).get("text", "") for b in view["blocks"] if b.get("type") == "section")
 
     def test_next_run_is_rendered(self):
         text = self._text(
