@@ -3,10 +3,56 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _format_next_run(value: object) -> str:
+    """An ISO 8601 next-run stamp rendered for display, or "" if there is none."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return ""
+    if not isinstance(value, datetime):
+        return ""
+    return value.strftime("%a %d %b at %H:%M")
+
+
+_POST_SUMMARY_OPTION = {
+    "text": {"type": "mrkdwn", "text": "Post a summary of everyone's answers to the channel at the report time"},
+    "value": "post_summary",
+}
+
+
+def _summary_on_by_default(cfg: dict) -> bool:
+    """Whether the daily-summary box starts checked.
+
+    New standups post their summary. An existing one keeps whatever it has, so
+    opening the edit modal never silently turns it back on.
+    """
+    if cfg.get("standup_id"):
+        return bool(cfg.get("post_summary"))
+    return bool(cfg.get("post_summary", True))
+
+
+def _plus_an_hour(hhmm: str) -> str:
+    """`hhmm` shifted forward 60 minutes, wrapping past midnight.
+
+    The default gap between the standup DMs and the channel summary. Returns the
+    input unchanged when it cannot be parsed, leaving validation to reject it.
+    """
+    try:
+        hour, minute = (int(part) for part in hhmm.split(":"))
+    except Exception:
+        return hhmm
+    total = (hour * 60 + minute + 60) % (24 * 60)
+    return f"{total // 60:02d}:{total % 60:02d}"
 
 
 def _time_options() -> list[dict]:
@@ -262,7 +308,19 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
     reminder_options = _reminder_options()
     day_options = _day_options()
 
-    selected_time = _find_option(time_options, cfg.get("report_time", "09:00")) or time_options[36]
+    # `standup_time` is when the DMs go out. It was called `report_time` here and
+    # labelled "Report time", so people set it expecting to control when the channel
+    # summary posts (#118). `report_time` now means what its name says, and defaults
+    # to an hour after the standup rather than the same minute.
+    if "standup_time" in cfg:
+        standup_time_value = cfg.get("standup_time") or "09:00"
+        report_time_value = cfg.get("report_time") or _plus_an_hour(standup_time_value)
+    else:
+        # Callers that predate the rename pass the DM time as `report_time`.
+        standup_time_value = cfg.get("report_time") or "09:00"
+        report_time_value = _plus_an_hour(standup_time_value)
+    selected_time = _find_option(time_options, standup_time_value) or time_options[36]
+    selected_report_time = _find_option(time_options, report_time_value) or time_options[40]
     tz_value = cfg.get("timezone", "UTC")
     selected_tz = _find_option(tz_options, tz_value) or tz_options[0]
     selected_reminder = _find_option(reminder_options, str(cfg.get("reminder_minutes", 60))) or reminder_options[3]
@@ -326,16 +384,34 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
                 },
             },
         },
-        # Report time
+        # Standup time — when each participant is DMed
+        {
+            "type": "input",
+            "block_id": "standup_time",
+            "label": {"type": "plain_text", "text": "Standup time"},
+            "hint": {"type": "plain_text", "text": "When each member gets their standup DM"},
+            "element": {
+                "type": "static_select",
+                "action_id": "standup_time",
+                "options": time_options,
+                "initial_option": selected_time,
+            },
+        },
+        # Report time — when the channel summary posts
         {
             "type": "input",
             "block_id": "report_time",
             "label": {"type": "plain_text", "text": "Report time"},
+            "optional": True,
+            "hint": {
+                "type": "plain_text",
+                "text": "When the summary posts to the channel. Leave it an hour after the standup so people have time to answer.",
+            },
             "element": {
                 "type": "static_select",
                 "action_id": "report_time",
                 "options": time_options,
-                "initial_option": selected_time,
+                "initial_option": selected_report_time,
             },
         },
         # Timezone
@@ -492,6 +568,20 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
                     if cfg.get("prepopulate_answers")
                     else {}
                 ),
+            },
+        },
+        # Daily summary. Migration 021 turned this off by default and left no way
+        # to turn it back on, so no install could post a summary at all (#117).
+        {
+            "type": "input",
+            "block_id": "post_summary",
+            "label": {"type": "plain_text", "text": "Daily summary"},
+            "optional": True,
+            "element": {
+                "type": "checkboxes",
+                "action_id": "post_summary",
+                "options": [_POST_SUMMARY_OPTION],
+                **({"initial_options": [_POST_SUMMARY_OPTION]} if _summary_on_by_default(cfg) else {}),
             },
         },
     ]
@@ -1190,6 +1280,11 @@ def app_home_configure_view(
                 f"{member_count} participant{'s' if member_count != 1 else ''} · {q_count} question{'s' if q_count != 1 else ''}",
                 f"{days_label} @ {report_time} ({tz})",
             ]
+            # #119: without this the list cannot tell a standup that fires apart
+            # from one that is Active and silently never registered.
+            next_run = _format_next_run(standup.get("next_run"))
+            if next_run:
+                detail_lines.append(f"Next: {next_run}")
             if not active:
                 detail_lines.append("*Paused*")
 

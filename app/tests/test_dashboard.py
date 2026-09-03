@@ -710,3 +710,27 @@ class TestApiAnalyticsGridPayload:
         )
         data = authed_client.get("/dashboard/api/analytics?days=7").get_json()
         assert data["members"][0]["schedule_ids"] == [3, 7]
+
+
+class TestNextRunIsSurfaced:
+    """#119 — a standup that never fires was indistinguishable from one that
+    does. The next fire time follows from the schedule's own config, so it is
+    correct in the dashboard's forked worker as well as in the scheduler."""
+
+    def test_healthy_schedule_reports_its_next_run(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [
+            _schedule_row(schedule_tz="Asia/Kolkata", schedule_time="16:45")
+        ]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.status_code == 200
+        assert resp.get_json()[0]["next_run"], "a firing standup must say when it next runs"
+
+    def test_unusable_schedule_reports_no_next_run(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkatta")]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.get_json()[0]["next_run"] == ""
+
+    def test_inactive_schedule_reports_no_next_run(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkata", active=False)]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.get_json()[0]["next_run"] == ""
