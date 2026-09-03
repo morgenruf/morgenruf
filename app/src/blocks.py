@@ -214,7 +214,10 @@ def timezone_search(query: str) -> list[dict]:
     except Exception:
         pass
 
-    # Alias match — add to top if not already present
+    # Alias match — always first. An alias exists so a shorthand lands on the
+    # zone people mean by it, but it used to be hoisted only when it was absent
+    # from the matches, so "ist" listed Europe/Dublin above Asia/Kolkata because
+    # both labels contain those letters.
     alias_hit = _TZ_ALIASES.get(q)
     if not alias_hit:
         # Partial alias match
@@ -222,10 +225,10 @@ def timezone_search(query: str) -> list[dict]:
             if q in alias_key:
                 alias_hit = tz_value
                 break
-    if alias_hit and alias_hit not in matched_values:
-        alias_opt = _find_option(all_opts, alias_hit)
+    if alias_hit:
+        alias_opt = _find_option(all_opts, alias_hit) or timezone_option(alias_hit)
         if alias_opt:
-            matches.insert(0, alias_opt)
+            matches = [alias_opt] + [opt for opt in matches if opt["value"] != alias_hit]
 
     return matches[:100]
 

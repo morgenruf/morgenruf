@@ -112,3 +112,22 @@ class TestDashboardPickerOffersEveryZone:
 
     def test_the_curated_labels_are_still_used_where_they_exist(self):
         assert "America/Chicago (CT)" in self._template()
+
+
+class TestAliasesRankFirst:
+    """An alias exists so a common shorthand lands on the zone people mean.
+    It was only hoisted when absent from the matches, so "ist" put Europe/Dublin
+    above Asia/Kolkata because both labels contain the letters."""
+
+    def test_ist_offers_india_first(self):
+        assert blocks_mod.timezone_search("ist")[0]["value"] == "Asia/Kolkata"
+
+    def test_pst_offers_los_angeles_first(self):
+        assert blocks_mod.timezone_search("pst")[0]["value"] == "America/Los_Angeles"
+
+    def test_alias_zone_is_not_duplicated(self):
+        values = [opt["value"] for opt in blocks_mod.timezone_search("ist")]
+        assert values.count("Asia/Kolkata") == 1
+
+    def test_a_non_alias_query_is_unaffected(self):
+        assert blocks_mod.timezone_search("lisb")[0]["value"] == "Europe/Lisbon"
