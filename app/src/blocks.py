@@ -161,8 +161,37 @@ def _timezone_options() -> list[dict]:
     return [{"text": {"type": "plain_text", "text": label}, "value": value} for value, label in _TIMEZONE_ZONES]
 
 
+def timezone_option(zone: object) -> dict | None:
+    """A Slack option for `zone`, or None if it is not a real IANA timezone.
+
+    Curated zones keep their friendly label ("Asia/Kolkata (IST)"); anything else
+    is labelled by its own name. The picker is an `external_select`, so an
+    `initial_option` does not have to come from a static options array (#121).
+    """
+    if not isinstance(zone, str) or not zone.strip():
+        return None
+    zone = zone.strip()
+    curated = _find_option(_timezone_options(), zone)
+    if curated:
+        return curated
+    try:
+        import pytz as _pytz  # noqa: PLC0415
+
+        _pytz.timezone(zone)
+    except Exception:
+        return None
+    return {"text": {"type": "plain_text", "text": zone}, "value": zone}
+
+
 def timezone_search(query: str) -> list[dict]:
-    """Search timezones by substring and alias. Returns Slack option dicts."""
+    """Search timezones by substring and alias. Returns Slack option dicts.
+
+    The curated list is the suggestion set for an empty query, but it is only 63
+    of the 433 common zones. Searching used to be limited to it, so someone in
+    Manila or Halifax could neither find their zone nor keep the one Slack
+    reported for them, and silently got UTC (#121). Every valid zone is now
+    reachable.
+    """
     all_opts = _timezone_options()
     q = (query or "").lower().strip()
     if not q:
@@ -170,9 +199,22 @@ def timezone_search(query: str) -> list[dict]:
 
     # Substring match on label (case-insensitive)
     matches = [opt for opt in all_opts if q in opt["text"]["text"].lower()]
+    matched_values = {opt["value"] for opt in matches}
+
+    # Anything else in the tz database that matches, so no zone is unreachable.
+    try:
+        import pytz as _pytz  # noqa: PLC0415
+
+        for zone in _pytz.common_timezones:
+            if zone in matched_values:
+                continue
+            if q in zone.lower() or q in zone.lower().replace("_", " "):
+                matches.append({"text": {"type": "plain_text", "text": zone}, "value": zone})
+                matched_values.add(zone)
+    except Exception:
+        pass
 
     # Alias match — add to top if not already present
-    matched_values = {opt["value"] for opt in matches}
     alias_hit = _TZ_ALIASES.get(q)
     if not alias_hit:
         # Partial alias match
@@ -304,7 +346,6 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
     questions_text = "\n".join(cfg.get("questions", [])) if cfg.get("questions") else default_questions
 
     time_options = _time_options()
-    tz_options = _timezone_options()
     reminder_options = _reminder_options()
     day_options = _day_options()
 
@@ -321,8 +362,11 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
         report_time_value = _plus_an_hour(standup_time_value)
     selected_time = _find_option(time_options, standup_time_value) or time_options[36]
     selected_report_time = _find_option(time_options, report_time_value) or time_options[40]
-    tz_value = cfg.get("timezone", "UTC")
-    selected_tz = _find_option(tz_options, tz_value) or tz_options[0]
+    # No fallback to tz_options[0]. That silently turned any zone outside the
+    # curated list into UTC on a required, prefilled field, so submitting
+    # untouched looked like a deliberate choice (#121). With no initial_option
+    # Slack makes the creator pick one.
+    selected_tz = timezone_option(cfg.get("timezone"))
     selected_reminder = _find_option(reminder_options, str(cfg.get("reminder_minutes", 60))) or reminder_options[3]
 
     active_days = cfg.get("days", ["mon", "tue", "wed", "thu", "fri"])
