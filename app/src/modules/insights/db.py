@@ -90,3 +90,120 @@ def blocker_rows(team_id: str, days: int = 21) -> dict[str, list[dict]]:
     except Exception as exc:
         logger.warning("blocker_rows failed for %s: %s", team_id, exc)
     return grouped
+
+
+def todays_standups(team_id: str) -> list[dict]:
+    """Every standup filed today, newest first, with the person's name.
+
+    CURRENT_DATE rather than a per-member local day, matching how the standup
+    rows were written: standup_date is set by the server that took the answer.
+    """
+    sql = """
+        SELECT s.user_id,
+               s.standup_date,
+               s.yesterday,
+               s.today,
+               s.blockers,
+               COALESCE(s.has_blockers, FALSE) AS has_blockers,
+               s.mood,
+               s.submitted_at,
+               s.schedule_id,
+               m.real_name
+        FROM standups s
+        LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
+        WHERE s.team_id = %s
+          AND s.standup_date = CURRENT_DATE
+        ORDER BY s.submitted_at DESC NULLS LAST, s.id DESC
+    """
+    try:
+        with db_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, (team_id,))
+                return [dict(r) for r in cur.fetchall()]
+    except Exception as exc:
+        logger.warning("todays_standups failed for %s: %s", team_id, exc)
+        return []
+
+
+def active_schedules(team_id: str) -> list[dict]:
+    """Live schedules with the fields needed to work out who was asked today."""
+    sql = """
+        SELECT id, name, channel_id, schedule_time, schedule_tz, schedule_days,
+               participants, active
+        FROM standup_schedules
+        WHERE team_id = %s
+          AND active IS TRUE
+        ORDER BY schedule_time, id
+    """
+    try:
+        with db_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, (team_id,))
+                return [dict(r) for r in cur.fetchall()]
+    except Exception as exc:
+        logger.warning("active_schedules failed for %s: %s", team_id, exc)
+        return []
+
+
+def recent_kudos(team_id: str, limit: int = 5) -> list[dict]:
+    """The last few thank-yous, with both names resolved in SQL.
+
+    Joined rather than imported: the kudos module owns the table, and a
+    workspace that removed the module simply has no rows to join to.
+    """
+    sql = """
+        SELECT k.id,
+               k.from_user,
+               k.to_user,
+               k.message,
+               k.created_at,
+               gm.real_name AS from_name,
+               rm.real_name AS to_name
+        FROM kudos k
+        LEFT JOIN members gm ON gm.team_id = k.team_id AND gm.user_id = k.from_user
+        LEFT JOIN members rm ON rm.team_id = k.team_id AND rm.user_id = k.to_user
+        WHERE k.team_id = %s
+        ORDER BY k.created_at DESC, k.id DESC
+        LIMIT %s
+    """
+    try:
+        with db_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, (team_id, limit))
+                return [dict(r) for r in cur.fetchall()]
+    except Exception as exc:
+        logger.warning("recent_kudos failed for %s: %s", team_id, exc)
+        return []
+
+
+def connect_program_timing(team_id: str) -> dict | None:
+    """The oldest enabled coffee chat programme and the dates around its rounds.
+
+    Returns the next round already scheduled and the last one that ran, leaving
+    the arithmetic for a missing next round to a pure function. A workspace
+    without the connect module has no such table, which the except turns into
+    "no programme" rather than a failed page.
+    """
+    sql = """
+        SELECT p.id AS program_id,
+               p.name,
+               p.interval_weeks,
+               MIN(r.scheduled_for) FILTER (WHERE r.scheduled_for > NOW()) AS next_scheduled,
+               MAX(r.scheduled_for) AS last_round
+        FROM connect_programs p
+        LEFT JOIN connect_rounds r ON r.program_id = p.id
+        WHERE p.team_id = %s
+          AND p.enabled IS TRUE
+        GROUP BY p.id, p.name, p.interval_weeks, p.created_at
+        ORDER BY p.created_at
+        LIMIT 1
+    """
+    try:
+        with db_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql, (team_id,))
+                row = cur.fetchone()
+                return dict(row) if row else None
+    except Exception as exc:
+        logger.warning("connect_program_timing failed for %s: %s", team_id, exc)
+        return None

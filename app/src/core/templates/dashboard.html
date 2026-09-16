@@ -1260,6 +1260,114 @@
       :root:not([data-theme="light"]) .theme-icon-sun { display: none; }
       :root:not([data-theme="light"]) .theme-icon-moon { display: block; }
     }
+
+    /* ===================================================================
+       Configuration patterns, following Donut's admin. A bare labelled
+       input tells you what a field is called; it does not tell you what the
+       setting does or what happens if you change it. Every setting here
+       carries an icon, a name and a sentence of explanation, with the
+       control to the right.
+       =================================================================== */
+
+    .set-row {
+      display: grid;
+      grid-template-columns: 34px minmax(180px, 260px) 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .set-row:last-child { border-bottom: 0; }
+    @media (max-width: 760px) {
+      .set-row { grid-template-columns: 1fr; gap: 10px; }
+      .set-row .set-ico { display: none; }
+    }
+    .set-ico {
+      width: 34px; height: 34px; border-radius: 10px;
+      display: grid; place-items: center;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-line);
+      color: var(--accent);
+    }
+    .set-ico svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .set-label { font-size: 14.5px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .set-help { font-size: 13px; color: var(--text-dim); line-height: 1.55; margin-top: 3px; max-width: 42ch; }
+    .set-control { min-width: 0; }
+
+    /* Radio cards. A dropdown hides the options and says nothing about what
+       each one does; these show all of them with a line of explanation. */
+    .pick { display: grid; gap: 8px; }
+    .pick-opt {
+      display: grid; grid-template-columns: 18px 1fr; gap: 11px;
+      padding: 13px 15px;
+      border: 1px solid var(--border2); border-radius: 11px;
+      background: var(--surface); cursor: pointer;
+      transition: border-color .12s, background .12s;
+    }
+    .pick-opt:hover { border-color: var(--accent-line); }
+    .pick-opt.on { border-color: var(--accent); background: var(--accent-dim); }
+    .pick-dot {
+      width: 17px; height: 17px; border-radius: 50%; margin-top: 1px;
+      border: 2px solid var(--border2); background: var(--surface);
+    }
+    .pick-opt.on .pick-dot { border-color: var(--accent); border-width: 5px; }
+    .pick-name { font-size: 14px; font-weight: 600; color: var(--text); }
+    .pick-desc { font-size: 12.8px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
+
+    /* A preview of the Slack message a setting produces. Donut does this on
+       their recognition settings and it is the clearest way to answer "what
+       will my team actually see". */
+    .slack-preview {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex; gap: 11px;
+    }
+    .slack-preview .sp-avatar {
+      width: 30px; height: 30px; border-radius: 8px; flex: 0 0 auto;
+      background: var(--brand-grad); color: #fff;
+      display: grid; place-items: center; font-size: 13px; font-weight: 700;
+    }
+    .sp-name { font-size: 13.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 7px; }
+    .sp-tag { background: var(--border); color: var(--text-dim); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+    .sp-body { font-size: 13.5px; color: var(--text); margin-top: 4px; line-height: 1.5; }
+    .sp-caption { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+
+    /* Empty states say what to do next rather than only that nothing exists. */
+    .empty {
+      text-align: center; padding: 52px 24px;
+      border: 1px dashed var(--border2); border-radius: 14px;
+      background: var(--surface);
+    }
+    .empty-title { font-size: 15.5px; font-weight: 600; color: var(--text); margin-bottom: 7px; }
+    .empty-body { font-size: 14px; color: var(--text-muted); max-width: 46ch; margin: 0 auto 18px; line-height: 1.6; }
+
+    /* Section heading inside a long configuration form. */
+    .set-group-title {
+      font-size: 12px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--text-dim);
+      margin: 26px 0 2px;
+    }
+    .set-group-title:first-child { margin-top: 0; }
+
+    /* Sidebar: grouped with a heading per group, and the active item marked
+       with a filled pill rather than only a colour change. Eleven flat rows
+       gave no sense of which of them mattered. */
+    .nav-group { margin-bottom: 4px; }
+    .nav-sub {
+      display: none;
+      padding: 2px 0 6px 0;
+      margin-left: 30px;
+      border-left: 1px solid var(--border);
+    }
+    .nav-group.open .nav-sub { display: block; }
+    .nav-sub .nav-item {
+      margin: 0 8px 0 0; padding: 6px 10px;
+      font-size: 13px; color: var(--text-dim);
+    }
+    .nav-sub .nav-item.active { background: transparent; color: var(--accent); font-weight: 600; }
+    .nav-sub .nav-item.active::before { display: none; }
   </style>
 </head>
 <body>
@@ -1275,6 +1383,14 @@
   <symbol id="i-webhooks" viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7L11.6 7"/><path d="M14 10.5a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></symbol>
   <symbol id="i-insights" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 3v9l6.5 6.5"/><path d="M16 3.5a9 9 0 0 1 4.5 4.5"/></symbol>
   <symbol id="i-connect" viewBox="0 0 24 24"><path d="M4 8h9v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Z"/><path d="M13 9h2.5a2 2 0 0 1 0 4H13"/><path d="M3 20h11"/><path d="M17 4v2M20 3v3"/></symbol>
+  <symbol id="i-alarm-clock" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8" />
+  <path d="M12 9v4l2 2" />
+  <path d="M5 3 2 6" />
+  <path d="m22 6-3-3" />
+  <path d="M6.38 18.7 4 21" />
+  <path d="M17.64 18.67 20 21" /></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+  <circle cx="12" cy="12" r="3" /></symbol>
   <symbol id="i-kudos" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><polyline points="8.5 14 7 22 12 19 17 22 15.5 14"/></symbol>
   <symbol id="i-automation" viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10.5 22 20 10 13 10 13 2"/></symbol>
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
@@ -1292,37 +1408,43 @@
         <div class="sub">Dashboard</div>
       </div>
     </div>
-    <div class="nav-section">Workspace</div>
+    <!-- Grouped by what the person is trying to do. The previous split put
+         Kudos and Coffee chats under "Config", which are features, not
+         settings, and gave no sense of which rows mattered. -->
+    <div class="nav-section">Run</div>
     <div class="nav-item active" data-section="standups">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> Standups
-    </div>
-    <div class="nav-item" data-section="members">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-members"/></svg> Members
-    </div>
-    <div class="nav-item" data-section="reports">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-reports"/></svg> Reports
     </div>
     <div class="nav-item" data-section="connect">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
     </div>
+    <div class="nav-item" data-section="kudos">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-kudos"/></svg> Kudos
+    </div>
+    <div class="nav-item" data-section="members">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-members"/></svg> Members
+    </div>
+
+    <div class="nav-section" style="margin-top:10px">Understand</div>
     <div class="nav-item" data-section="insights">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-insights"/></svg> Insights
+    </div>
+    <div class="nav-item" data-section="reports">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-reports"/></svg> Reports
     </div>
     <div class="nav-item" data-section="analytics">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-analytics"/></svg> Analytics
     </div>
-    <div class="nav-section" style="margin-top:8px">Config</div>
+
+    <div class="nav-section" style="margin-top:10px">Configure</div>
     <div class="nav-item" data-section="settings">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-settings"/></svg> Settings
     </div>
-    <div class="nav-item" data-section="webhooks">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-webhooks"/></svg> Webhooks
-    </div>
-    <div class="nav-item" data-section="kudos">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-kudos"/></svg> Kudos
-    </div>
     <div class="nav-item" data-section="automation">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-automation"/></svg> Automation
+    </div>
+    <div class="nav-item" data-section="webhooks">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-webhooks"/></svg> Webhooks
     </div>
     <div class="nav-item" data-section="mcp">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-mcp"/></svg> MCP
@@ -1523,21 +1645,46 @@
             Everyone gets <strong id="kudos-allowance-inline">5</strong> <span id="kudos-emoji-inline"></span> a day to give away.
             Unused ones do not carry over, which is what keeps people spending them.
           </p>
-          <div id="kudos-settings" style="display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--border)">
-            <div class="form-grid" style="align-items:end">
-              <div class="form-group">
-                <label>Token your team gives</label>
-                <input type="text" id="kudos-emoji" maxlength="16" style="font-size:1.1rem"/>
+          <div id="kudos-settings" style="display:none;margin-top:20px;padding-top:4px;border-top:1px solid var(--border)">
+            <div class="set-row">
+              <div class="set-ico"><svg aria-hidden="true"><use href="#i-kudos"/></svg></div>
+              <div>
+                <div class="set-label">The token your team gives</div>
+                <div class="set-help">Any emoji. It appears in the message and in the counts people collect.</div>
               </div>
-              <div class="form-group">
-                <label>Each per day</label>
-                <input type="number" id="kudos-allowance" min="0" max="50"/>
-              </div>
-              <div class="form-group">
-                <button class="btn btn-primary btn-sm" onclick="saveKudosConfig()">Save</button>
+              <div class="set-control">
+                <input type="text" id="kudos-emoji" maxlength="16" style="font-size:1.25rem;width:92px;text-align:center" oninput="renderKudosPreview()"/>
               </div>
             </div>
-            <p style="font-size:0.82rem;color:var(--text-dim);margin-top:4px">Set the daily amount to 0 to switch giving off without removing kudos.</p>
+            <div class="set-row">
+              <div class="set-ico"><svg aria-hidden="true"><use href="#i-alarm-clock"/></svg></div>
+              <div>
+                <div class="set-label">How many each person gets a day</div>
+                <div class="set-help">Unused ones do not carry over, which is what makes people spend them. Set it to 0 to switch giving off without removing kudos.</div>
+              </div>
+              <div class="set-control">
+                <input type="number" id="kudos-allowance" min="0" max="50" style="width:92px" oninput="renderKudosPreview()"/>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="set-ico"><svg aria-hidden="true"><use href="#i-eye"/></svg></div>
+              <div>
+                <div class="set-label">What your team will see</div>
+                <div class="set-help">The message Morgenruf posts when someone gives recognition.</div>
+              </div>
+              <div class="set-control">
+                <div class="slack-preview">
+                  <div class="sp-avatar">M</div>
+                  <div style="min-width:0">
+                    <div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>
+                    <div class="sp-body" id="kudos-preview-body"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="padding-top:16px">
+              <button class="btn btn-primary btn-sm" onclick="saveKudosConfig()">Save changes</button>
+            </div>
           </div>
         </div>
         <div class="two-col">
@@ -4665,6 +4812,21 @@
   }
 
   // ── Kudos ──
+
+  function renderKudosPreview() {
+    var el = document.getElementById('kudos-preview-body');
+    if (!el) return;
+    var emoji = (document.getElementById('kudos-emoji') || {}).value || '';
+    var allowance = parseInt((document.getElementById('kudos-allowance') || {}).value, 10);
+    var left = isNaN(allowance) ? 0 : Math.max(0, allowance - 1);
+    el.innerHTML =
+      esc(emoji) + ' <b>@priya</b> gave a ' + esc(emoji) + ' to <b>@marcus</b>' +
+      '<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border2);color:var(--text-muted)">' +
+      'caught a DST bug that would have hit every European user</div>' +
+      '<div style="margin-top:7px;color:var(--text-dim);font-size:12.5px">' +
+      (allowance === 0 ? 'Giving is switched off' : left + ' ' + esc(emoji) + ' left today') + '</div>';
+  }
+
   async function loadKudos() {
     const [kudos, board, givers, cfg, me] = await Promise.all([
       fetch('/dashboard/api/kudos').then(checkAuth).then(r => r.json()).catch(() => []),
@@ -4681,6 +4843,7 @@
       document.getElementById('kudos-allowance').value = cfg.daily_allowance;
       // Only an admin can change the token, so only an admin is shown the form.
       if (me && me.role === 'admin') document.getElementById('kudos-settings').style.display = 'block';
+      renderKudosPreview();
     }
     renderKudosBoard(board);
     renderKudosGivers(givers);
