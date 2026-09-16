@@ -24,9 +24,9 @@ from flask import (
 
 import src.core.db as db
 from src.core.oauth import verify_login_token
+from src.core.schedule_validation import schedule_config_error, schedule_payload_error
 from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
-from src.modules.standup.schedule_validation import schedule_config_error, schedule_payload_error
 
 logger = logging.getLogger(__name__)
 
@@ -1109,44 +1109,6 @@ def api_analytics_schedules():
     except Exception as exc:
         logger.error("api_analytics_schedules error: %s", exc)
         return jsonify({"summary": _participation_summary({}), "schedules": []})
-
-
-# ---------------------------------------------------------------------------
-# Kudos API
-# ---------------------------------------------------------------------------
-
-
-@dashboard_bp.route("/dashboard/api/kudos", methods=["GET"])
-@_login_required
-def api_list_kudos():
-    team_id = session["team_id"]
-    limit = int(request.args.get("limit", 50))
-    try:
-        kudos = db.get_kudos(team_id, limit)
-        for k in kudos:
-            if k.get("created_at"):
-                k["created_at"] = k["created_at"].isoformat()
-        return jsonify(kudos)
-    except Exception as exc:
-        logger.warning("api_list_kudos: %s", exc)
-        return jsonify([])
-
-
-@dashboard_bp.route("/dashboard/api/kudos/leaderboard", methods=["GET"])
-@_login_required
-def api_kudos_leaderboard():
-    team_id = session["team_id"]
-    days = int(request.args.get("days", 30))
-    try:
-        board = db.get_kudos_leaderboard(team_id, days)
-        for row in board:
-            if row.get("last_kudos"):
-                row["last_kudos"] = row["last_kudos"].isoformat()
-            row["received"] = int(row.get("received") or 0)
-        return jsonify(board)
-    except Exception as exc:
-        logger.warning("api_kudos_leaderboard: %s", exc)
-        return jsonify([])
 
 
 # ---------------------------------------------------------------------------

@@ -26,8 +26,8 @@ _ss_mock.get_session.return_value = None
 _ss_mock.has_session.return_value = False
 sys.modules["src.core.session_store"] = _ss_mock
 
+import src.core.schedule_validation as schedule_validation  # noqa: E402
 import src.modules.standup.handlers as handlers  # noqa: E402
-import src.modules.standup.schedule_validation as schedule_validation  # noqa: E402
 
 if _prior_session_store is not None:
     sys.modules["src.core.session_store"] = _prior_session_store

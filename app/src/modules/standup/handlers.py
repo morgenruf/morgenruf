@@ -14,9 +14,9 @@ import pytz
 import requests
 from slack_bolt import App
 
+from src.core.schedule_validation import schedule_time_error, schedule_timezone_error
 from src.core.slack_users import filter_human_ids, is_human
 from src.core.state import state_store
-from src.modules.standup.schedule_validation import schedule_time_error, schedule_timezone_error
 
 logger = logging.getLogger(__name__)
 
@@ -1497,46 +1497,6 @@ def register_handlers(app: App) -> None:
             ],
         )
 
-    @app.command("/kudos")
-    def handle_kudos_command(ack, body, client):  # noqa: ANN001
-        """Slash command to give kudos to a teammate."""
-        ack()
-        user_id: str = body["user_id"]
-        team_id: str = body["team_id"]
-        text: str = (body.get("text") or "").strip()
-
-        if not text:
-            client.chat_postMessage(
-                channel=user_id,
-                text="Usage: `/kudos @teammate Great job on the release! 🚀`",
-            )
-            return
-
-        # Parse @mention and message from text (e.g. "@user Great job!")
-        mention_match = re.match(r"<@([A-Z0-9]+)(?:\|[^>]*)?>\s+(.+)", text)
-        to_user = mention_match.group(1) if mention_match else ""
-        kudos_message = mention_match.group(2).strip() if mention_match else text
-
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            config = db.get_workspace_config(team_id) or {}
-            channel_id = config.get("channel_id", "")
-
-            # Persist kudos to database
-            if to_user:
-                db.save_kudos(team_id, user_id, to_user, kudos_message, channel_id)
-
-            if channel_id:
-                client.chat_postMessage(
-                    channel=channel_id,
-                    text=f"🏆 <@{user_id}> gives kudos: {text}",
-                )
-            client.chat_postMessage(channel=user_id, text=f"✅ Kudos sent: {text}")
-        except Exception as exc:
-            logger.warning("kudos command error: %s", exc)
-            client.chat_postMessage(channel=user_id, text="❌ Couldn't send kudos. Please try again.")
-
     @app.view("create_standup_modal")
     def handle_create_standup_modal(ack, body, client):  # noqa: ANN001
         """Handle submission of the create/edit standup modal from App Home."""
@@ -1852,49 +1812,6 @@ def register_handlers(app: App) -> None:
         except Exception as e:
             logger.warning("Unexpected error in handle_going_on_vacation setting vacation: %s", e)
         say("🌴 Enjoy your vacation! I won't bother you until you're back. Message me *I'm back* when you return.")
-
-    @app.message(re.compile(r"^kudos\s+<@([A-Z0-9]+)>\s+(.+)$", re.IGNORECASE))
-    def handle_kudos(message, say, client, context, logger):
-        """Handle kudos messages: kudos <@USER> Great work!"""
-        from_user = message["user"]
-        team_id = message.get("team", "")
-        to_user = context["matches"][0]
-        kudos_message = context["matches"][1].strip()
-        channel_type = message.get("channel_type", "")
-        channel_id = message.get("channel", "")
-
-        if from_user == to_user:
-            say("😄 Nice try, but you can't give kudos to yourself!")
-            return
-
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.save_kudos(team_id, from_user, to_user, kudos_message, channel_id)
-        except Exception as exc:
-            logger.warning("Could not save kudos: %s", exc)
-
-        kudos_card = f"🏆 *Kudos!*\n\n<@{from_user}> gave kudos to <@{to_user}>\n\n> {kudos_message}"
-
-        try:
-            if channel_type == "im":
-                try:
-                    import src.core.db as db  # noqa: PLC0415
-
-                    config = db.get_workspace_config(team_id) or {}
-                    post_channel = config.get("channel_id", "")
-                    if post_channel:
-                        client.chat_postMessage(channel=post_channel, text=kudos_card)
-                        say(f"✅ Kudos posted to <#{post_channel}>! 🎉")
-                    else:
-                        say(kudos_card + "\n\n_(Configure a standup channel in the dashboard to post kudos there)_")
-                except Exception:
-                    say(kudos_card)
-            else:
-                client.chat_postMessage(channel=channel_id, text=kudos_card)
-        except Exception as exc:
-            logger.error("Failed to post kudos: %s", exc)
-            say(f"✅ Kudos saved! <@{to_user}> has been recognised. 🎉")
 
     @app.message(re.compile(r"^timezone\s+(\S+)$", re.IGNORECASE))
     def handle_set_timezone(message, say, context):  # noqa: ANN001

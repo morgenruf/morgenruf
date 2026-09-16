@@ -10,6 +10,7 @@ first.
 
 from __future__ import annotations
 
+from src.modules.kudos import MODULE as KUDOS
 from src.modules.standup import MODULE as STANDUP
 
-REGISTRY = (STANDUP,)
+REGISTRY = (STANDUP, KUDOS)

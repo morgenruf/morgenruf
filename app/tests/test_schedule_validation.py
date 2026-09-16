@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 if isinstance(sys.modules.get("pytz"), MagicMock):
     del sys.modules["pytz"]
 
-from src.modules.standup.schedule_validation import (  # noqa: E402
+from src.core.schedule_validation import (  # noqa: E402
     schedule_config_error,
     schedule_payload_error,
     schedule_time_error,

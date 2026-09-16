@@ -15,6 +15,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
 
+from src.core.schedule_validation import schedule_config_error
 from src.core.slack_users import (
     fetch_human_users,
     fetch_workspace_directory,
@@ -22,7 +23,6 @@ from src.core.slack_users import (
     member_profile,
 )
 from src.core.state import state_store
-from src.modules.standup.schedule_validation import schedule_config_error
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
