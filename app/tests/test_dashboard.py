@@ -8,8 +8,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
 # schedule_validation (imported by dashboard) needs the real pytz to tell a
 # valid timezone from a typo. Drop a MagicMock left behind by another module.
 if isinstance(sys.modules.get("pytz"), MagicMock):

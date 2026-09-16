@@ -6,11 +6,8 @@ which would accept every timezone.
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub heavy third-party deps before any import of handlers
 sys.modules.setdefault("slack_bolt", MagicMock())

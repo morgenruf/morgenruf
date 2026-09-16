@@ -12,8 +12,6 @@ import re
 import sys
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
 sys.modules.setdefault("slack_bolt", MagicMock())
 sys.modules.setdefault("requests", MagicMock())
 

@@ -7,11 +7,8 @@ with the scheduler test file added by the #51 reconciliation work.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Earlier test modules leave MagicMock stubs in sys.modules (test_handlers stubs
 # pytz, test_dashboard stubs slack_sdk). The scheduler needs the real pytz for

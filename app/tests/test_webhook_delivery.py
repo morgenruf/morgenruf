@@ -17,8 +17,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
 # Earlier modules leave MagicMocks behind under these names. schedule_validation
 # needs the real pytz to tell a valid timezone from a typo, and importing the
 # real db/dashboard/handlers needs real packages underneath them.

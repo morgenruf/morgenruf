@@ -10,11 +10,8 @@ so a self-hoster following it would land in exactly that state.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # slack_sdk is a real dependency and oauth.py imports a submodule from it, so a
 # MagicMock stub breaks the import. Drop any stub an earlier test module left.

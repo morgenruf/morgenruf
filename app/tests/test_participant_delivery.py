@@ -10,11 +10,8 @@ could reach exactly 1 of them.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 for _name in ("pytz", "slack_sdk"):
     if isinstance(sys.modules.get(_name), MagicMock):

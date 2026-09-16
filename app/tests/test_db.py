@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub psycopg2 before importing the real db module.
 # Other test modules may have put a MagicMock under "db" in sys.modules, so

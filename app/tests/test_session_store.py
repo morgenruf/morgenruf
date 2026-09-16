@@ -1,12 +1,9 @@
 """Tests for session_store.py — Redis-backed session management with in-memory fallback."""
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 
 @pytest.fixture(autouse=True)

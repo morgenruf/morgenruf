@@ -1,10 +1,7 @@
 """Tests for ai_summary.py — summary generation and fallback."""
 
-import os
-import sys
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 from ai_summary import _plain_summary, generate_summary
 
 # ---------------------------------------------------------------------------

@@ -1,12 +1,8 @@
 """Tests for config.py — environment variable loading and teams.yaml parsing."""
 
-import os
-import sys
 
 import pytest
 import yaml
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 
 class TestGetSlackTokens:

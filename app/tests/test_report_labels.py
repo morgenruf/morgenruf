@@ -8,15 +8,10 @@ display half of the bug `blockers.py` fixed on the computing side.
 
 from __future__ import annotations
 
-import os
-import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
 import dashboard  # noqa: E402
+import pytest
 
 DEFAULT_Q = ["What did you do yesterday?", "What will you do today?", "Any blockers?"]
 AVAILABILITY_Q = ["Previous day work", "Plan for today", "Availability in Hours"]

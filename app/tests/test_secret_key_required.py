@@ -8,13 +8,10 @@ app/.env.example ships the variable empty.
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # slack_bolt, slack_sdk, apscheduler and pytz are real dependencies, and main.py
 # imports submodules from them. Earlier test modules stub some of these, and a

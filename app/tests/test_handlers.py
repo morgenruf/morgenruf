@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub heavy third-party deps before any import of handlers
 _slack_bolt_mock = MagicMock()

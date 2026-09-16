@@ -17,11 +17,8 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub psycopg2 before importing the real db module, and discard any MagicMock
 # another test module left under "db", so we import the real thing.

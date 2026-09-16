@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import os
-import sys
 from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 from slack_users import fetch_human_users, filter_human_ids, is_human, member_profile  # noqa: E402
 

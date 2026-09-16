@@ -12,11 +12,8 @@ points agree on identical input.
 from __future__ import annotations
 
 import datetime as dt
-import os
 import sys
 from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 for _name in ("psycopg2", "psycopg2.extras"):
     sys.modules.setdefault(_name, MagicMock())

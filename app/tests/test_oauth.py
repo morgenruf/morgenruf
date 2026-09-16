@@ -1,13 +1,10 @@
 """Tests for oauth.py — state token generation and verification."""
 
-import os
 import sys
 import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub heavy dependencies before importing oauth
 sys.modules.setdefault("flask", MagicMock())

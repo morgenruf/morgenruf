@@ -6,11 +6,8 @@ no signature. These cover both halves of that fix.
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 for _name in ("pytz", "slack_sdk"):
     if isinstance(sys.modules.get(_name), MagicMock):
