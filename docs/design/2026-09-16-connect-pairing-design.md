@@ -58,6 +58,16 @@ Findings that shape the plan:
    job store, no leader election and no lock.
 6. One test file carries the comment "Earlier test modules leave MagicMock
    stubs in sys.modules". Test isolation already leaks between modules.
+7. **The manifest and the OAuth authorize URL request different scopes.**
+   `slack-manifest.yaml` declares `app_mentions:read`, `channels:join`,
+   `chat:write.public` and `team:read`, none of which appear in `_SCOPES` in
+   `oauth.py:28`. `_SCOPES` additionally requests `commands`, which the
+   manifest omits. The authorize URL governs what is actually granted, so
+   OAuth-installed workspaces do not hold those four scopes. Consequence:
+   the `app_mention` listener at `handlers.py:1339` is dead for those
+   workspaces. This is a pre-existing bug, tracked separately, and it is the
+   reason `granted_scopes` must be read from the `oauth.v2.access` response
+   rather than inferred from `_SCOPES`.
 
 ## 3. Decisions
 
@@ -68,7 +78,7 @@ Findings that shape the plan:
 | D3 | Module contract, not a plain package split | Adding or removing a module must be one directory plus one registry line. |
 | D4 | One deployable, one Slack app | A second container doubles ops surface at current install count. |
 | D5 | Standup, mcp, google_chat and kudos all convert to the contract in Phase 0 | One registration mechanism. A contract designed against four consumers is far likelier to be right than one designed against one. |
-| D6 | Pairing pool comes from channel membership | Donut's own model. Reuses `channels:read` and `channels:join`, already granted. Pool grows automatically, no admin maintenance. |
+| D6 | Pairing pool comes from channel membership | Donut's own model. Reads membership via `conversations.members`, which needs only `channels:read`, already granted. Connect does not post to the channel, so `channels:join` is not required (see Finding 7: it is declared in the manifest but never actually requested at install). Pool grows automatically, no admin maintenance. |
 | D7 | Pairs, with the odd member joining a trio. Avoid repeats until the pool is exhausted | Nobody ever sits out. Matches Donut behavior, which is what users notice when it is wrong. |
 | D8 | New scopes are opt-in per workspace; Connect is gated behind re-auth | Standup keeps working on the existing token. Existing installs are untouched until their admin chooses to enable Connect. |
 | D9 | Connect calls Slack directly, not through `PlatformAdapter` | `PlatformAdapter` has no group DM concept, Google Chat has no MPIM equivalent, and the abstraction is at 0% coverage with one caller. Revisit when a second platform actually needs pairing. |
@@ -189,9 +199,15 @@ to a fresh OAuth with the extended scope set. Connect routes and jobs no-op for
 workspaces that have not re-authorized. Standup code paths never check scopes,
 so existing installs are untouched.
 
-Scopes added to the extended manifest: `mpim:write` (open the group DM),
-`mpim:history` (detect silence before nudging), `users.profile:read` (name,
-title and photo for the intro card).
+Scopes added for Connect: `mpim:write` (open the group DM), `mpim:history`
+(detect silence before nudging), `users.profile:read` (name, title and photo
+for the intro card). These are added to both `slack-manifest.yaml` and the
+Connect variant of `_SCOPES`, because Finding 7 shows those two lists have
+already drifted apart once.
+
+`granted_scopes` is populated from the `scope` field of the `oauth.v2.access`
+response, which is the authoritative record of what Slack actually granted.
+It is never inferred from the requested scope list.
 
 ### 4.9 Dead code removed in Phase 0
 
@@ -245,6 +261,12 @@ Notes:
   fires and scheduler restarts are a known failure mode in this codebase, so
   double-matching is made impossible in the database rather than in application
   logic.
+- Every `connect_` table carries `team_id` with a foreign key to
+  `installations(team_id) ON DELETE CASCADE`, matching the existing
+  convention. Uninstall therefore cleans up automatically through
+  `delete_installation` (`db.py:1759`), and `ModuleSpec.purge` exists for the
+  narrower case of a workspace disabling the module and asking for its data to
+  be removed.
 - No message content is stored. Only user ids, the MPIM channel id and
   timestamps. This keeps the self-hosted privacy position honest and keeps
   `purge` trivial.
