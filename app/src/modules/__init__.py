@@ -10,7 +10,9 @@ first.
 
 from __future__ import annotations
 
+from src.modules.google_chat import MODULE as GOOGLE_CHAT
 from src.modules.kudos import MODULE as KUDOS
+from src.modules.mcp import MODULE as MCP
 from src.modules.standup import MODULE as STANDUP
 
-REGISTRY = (STANDUP, KUDOS)
+REGISTRY = (STANDUP, KUDOS, MCP, GOOGLE_CHAT)

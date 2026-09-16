@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import pathlib
 import subprocess
 from unittest.mock import MagicMock
 
@@ -25,11 +26,35 @@ def test_kudos_requires_no_new_scopes():
     assert MODULE.required_scopes == ()
 
 
+def _last_core_db_with_kudos() -> str:
+    """Source of core/db.py from the last revision that still defined kudos.
+
+    Pinning to HEAD would break as soon as another commit lands, and pinning a
+    SHA would break on rebase, so walk the file's history instead.
+    """
+    # git pathspecs resolve against cwd, and the suite runs from app/, so
+    # anchor every call to the repository root.
+    root = pathlib.Path(__file__).resolve().parents[2]
+    revs = subprocess.run(
+        ["git", "log", "--follow", "--format=%H", "--", "app/src/core/db.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    for rev in revs:
+        # the file was app/src/db.py before the package split, so try both
+        for path in ("app/src/core/db.py", "app/src/db.py"):
+            body = subprocess.run(
+                ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True
+            ).stdout
+            if "def save_kudos" in body:
+                return body
+    raise AssertionError("no revision of core/db.py defines save_kudos")
+
+
 def test_the_three_functions_moved_verbatim():
     """The extraction must not have altered a single statement."""
-    old = subprocess.run(
-        ["git", "show", "HEAD:app/src/core/db.py"], capture_output=True, text=True
-    ).stdout
+    old = _last_core_db_with_kudos()
     new = inspect.getsource(kudos_db)
     assert changed_functions(old, new, FUNCS) == []
 

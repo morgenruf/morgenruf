@@ -1724,3 +1724,22 @@ def delete_installation(team_id: str) -> bool:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id,))
             return cur.rowcount > 0
+
+
+def granted_scopes(team_id: str) -> set[str]:
+    """Scopes Slack actually granted this workspace.
+
+    Placeholder until the granted_scopes column exists. Returning an empty set
+    is safe: it only gates modules that declare required_scopes, and every
+    module in the registry today declares none.
+    """
+    return set()
+
+
+def module_settings(team_id: str) -> dict[str, bool]:
+    """Explicit per-workspace module toggles.
+
+    Placeholder until the workspace_modules table exists. An empty mapping
+    means every module falls back to its own default_enabled.
+    """
+    return {}
