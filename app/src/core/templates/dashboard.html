@@ -527,6 +527,7 @@
       display: flex; align-items: flex-start; gap: 12px;
     }
     .member-avatar {
+      position: relative;
       width: 36px; height: 36px;
       border-radius: 8px;
       background: var(--accent-dim);
@@ -537,7 +538,8 @@
       flex-shrink: 0;
       overflow: hidden;
     }
-    .member-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .member-avatar img { position: absolute; inset: 0; width: 100%; height: 100%;
+                         object-fit: cover; display: block; border-radius: inherit; }
     .member-info { flex: 1; min-width: 0; }
     .member-name { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
     .member-handle { font-size: 12px; color: var(--text-muted); margin-top: 1px; overflow-wrap: anywhere; }
@@ -3468,9 +3470,9 @@
       return;
     }
     el.innerHTML = shown.map(m => {
-      const avatarHtml = m.avatar
-        ? '<div class="member-avatar"><img src="' + esc(m.avatar) + '" alt=""/></div>'
-        : '<div class="member-avatar">' + esc(memberInitials(m)) + '</div>';
+      const avatarHtml = '<div class="member-avatar">' + esc(memberInitials(m)) +
+        (m.avatar ? '<img src="' + esc(m.avatar) + '" alt="" loading="lazy" onerror="this.remove()"/>' : '') +
+        '</div>';
       const role = m.role || 'member';
       const badgeHtml = role === 'admin'
         ? '<span class="role-badge">Admin</span>'
@@ -3638,9 +3640,16 @@
         const url = resolveAvatar(id);
         const name = resolveName(id);
         const initials = name.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-        return url
-          ? `<img src="${esc(url)}" alt="" style="width:${size}px;height:${size}px;border-radius:50%;vertical-align:middle;margin-right:6px">`
-          : `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:var(--surface2);color:var(--text-muted);font-size:${Math.round(size*0.4)}px;font-weight:600;vertical-align:middle;margin-right:6px">${esc(initials)}</span>`;
+        const box = `display:inline-flex;position:relative;align-items:center;justify-content:center;` +
+          `width:${size}px;height:${size}px;border-radius:50%;background:var(--surface2);` +
+          `color:var(--text-muted);font-size:${Math.round(size*0.4)}px;font-weight:600;` +
+          `vertical-align:middle;margin-right:6px;overflow:hidden`;
+        // A Slack CDN url 404s once someone changes their picture, and a broken
+        // image icon on every row is worse than initials.
+        const img = url
+          ? `<img src="${esc(url)}" alt="" loading="lazy" onerror="this.remove()" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">`
+          : '';
+        return `<span style="${box}">${esc(initials)}${img}</span>`;
       };
 
       // Clamped. `stars` is derived from a percentage server side, so a rate
