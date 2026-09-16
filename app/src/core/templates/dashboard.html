@@ -1413,6 +1413,14 @@
   <path d="M17.64 18.67 20 21" /></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
   <circle cx="12" cy="12" r="3" /></symbol>
+  <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M12 2v8" />
+  <path d="m4.93 10.93 1.41 1.41" />
+  <path d="M2 18h2" />
+  <path d="M20 18h2" />
+  <path d="m19.07 10.93-1.41 1.41" />
+  <path d="M22 22H2" />
+  <path d="m8 6 4-4 4 4" />
+  <path d="M16 18a4 4 0 0 0-8 0" /></symbol>
   <symbol id="i-kudos" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><polyline points="8.5 14 7 22 12 19 17 22 15.5 14"/></symbol>
   <symbol id="i-automation" viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10.5 22 20 10 13 10 13 2"/></symbol>
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
@@ -1433,6 +1441,10 @@
     <!-- Grouped by what the person is trying to do. The previous split put
          Kudos and Coffee chats under "Config", which are features, not
          settings, and gave no sense of which rows mattered. -->
+    <div class="nav-item" data-section="today" style="margin-top:6px">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-sunrise"/></svg> Today
+    </div>
+
     <div class="nav-section">Run</div>
     <div class="nav-item active" data-section="standups">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> Standups
@@ -1488,6 +1500,17 @@
 
   <!-- ── Main ── -->
   <div id="main">
+    <!-- Today -->
+    <div id="section-today" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title" id="today-greeting">Today</div>
+          <div class="page-subtitle" id="today-date"></div>
+        </div>
+      </div>
+      <div id="today-body"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+
     <!-- Standups -->
     <div id="section-standups" class="section active">
       <div class="topbar">
@@ -2324,6 +2347,7 @@
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
       if (sec === 'analytics') loadAnalytics(7);
+      if (sec === 'today') loadToday();
       if (sec === 'insights') loadInsights();
       if (sec === 'connect') loadConnect();
       if (sec === 'kudos') loadKudos();
@@ -2440,6 +2464,122 @@
         '<div class="stat-value">' + (s.total_responses || 0) + '</div>', 'Total submissions');
   }
 
+
+
+  // ── Today ─────────────────────────────────────────────────────────────────
+  // The landing page. Standups was a list of schedule configuration, which
+  // tells a manager nothing about their team; this answers what happened this
+  // morning and what needs them.
+  async function loadToday() {
+    const body = document.getElementById('today-body');
+    let d;
+    try {
+      d = await api('GET', '/today');
+    } catch (e) {
+      body.innerHTML = '<p style="color:var(--text-dim);padding:24px">Could not load today.</p>';
+      return;
+    }
+
+    const hour = new Date().getHours();
+    document.getElementById('today-greeting').textContent =
+      hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('today-date').textContent =
+      new Date(d.date + 'T00:00:00').toLocaleDateString(undefined,
+        { weekday: 'long', day: 'numeric', month: 'long' });
+
+    const c = d.counts || {};
+    const pct = c.expected ? Math.round((c.answered / c.expected) * 100) : 0;
+
+    body.innerHTML =
+      '<div class="stats-grid">' +
+        todayStat('Answered', c.answered + ' of ' + c.expected, 'i-standups',
+                  c.expected ? pct + '% of the team' : 'Nobody is scheduled today') +
+        todayStat('Still to answer', String(c.awaiting || 0), 'i-members',
+                  (c.awaiting ? 'Waiting on them' : 'Everyone has replied')) +
+        todayStat('Blocked', String(c.blocked || 0), 'i-insights',
+                  (c.blocked ? 'Needs attention' : 'Nothing reported'), c.blocked ? 'danger' : '') +
+      '</div>' +
+      (d.blocked && d.blocked.length ? todayBlocked(d.blocked) : '') +
+      '<div class="two-col" style="margin-top:20px">' +
+        todayResponses(d.responses || [], d.awaiting || []) +
+        '<div>' + todayKudos(d.kudos || []) + todayNextChat(d.next_chat) + '</div>' +
+      '</div>';
+  }
+
+  function todayStat(label, value, icon, sub, tone) {
+    return '<div class="stat-card">' +
+      '<div class="stat-head"><div class="stat-label">' + esc(label) + '</div>' +
+      '<div class="stat-ico"><svg aria-hidden="true"><use href="#' + icon + '"/></svg></div></div>' +
+      '<div class="stat-value"' + (tone === 'danger' ? ' style="color:var(--danger)"' : '') + '>' + esc(value) + '</div>' +
+      '<div class="stat-sub">' + esc(sub) + '</div></div>';
+  }
+
+  function todayBlocked(rows) {
+    return '<div class="stat-card" style="margin-top:20px;border-color:var(--danger)">' +
+      '<div class="stat-head"><div class="stat-label" style="color:var(--danger)">Blocked right now</div>' +
+      '<div class="stat-ico" style="background:rgba(214,43,61,0.10);border-color:rgba(214,43,61,0.28);color:var(--danger)">' +
+      '<svg aria-hidden="true"><use href="#i-insights"/></svg></div></div>' +
+      rows.map(function (r) {
+        return '<div style="padding:11px 0;border-bottom:1px solid var(--border)">' +
+          '<div style="font-weight:600;color:var(--text)">' + esc(r.real_name || ('@' + r.user_id)) + '</div>' +
+          '<div style="font-size:0.9rem;color:var(--text-muted);margin-top:3px">' + slackToHtml(r.blockers) + '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+  }
+
+  function todayResponses(rows, awaiting) {
+    let html = '<div class="stat-card"><div class="stat-label" style="margin-bottom:14px">This morning</div>';
+    if (!rows.length) {
+      html += '<div class="empty" style="padding:34px 20px"><div class="empty-title">No answers yet</div>' +
+        '<div class="empty-body">When your team replies to the bot, their answers appear here.</div></div>';
+    } else {
+      html += rows.map(function (r) {
+        return '<div style="padding:13px 0;border-bottom:1px solid var(--border)">' +
+          '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px">' +
+            '<span style="font-weight:600;color:var(--text)">' + esc(r.real_name || ('@' + r.user_id)) + '</span>' +
+            (r.has_blockers ? '<span class="pill-quiet" style="color:var(--danger);border-color:rgba(214,43,61,0.3)">Blocked</span>' : '') +
+            (r.mood ? '<span style="margin-left:auto">' + esc(r.mood) + '</span>' : '') +
+          '</div>' +
+          '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.55">' + slackToHtml(r.today || r.yesterday || '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+    if (awaiting.length) {
+      html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
+        '<div class="stat-label" style="margin-bottom:8px">Still to answer</div>' +
+        awaiting.map(function (a) {
+          return '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">' +
+            esc(a.real_name || ('@' + a.user_id)) + '</span>';
+        }).join('') + '</div>';
+    }
+    return html + '</div>';
+  }
+
+  function todayKudos(rows) {
+    if (!rows.length) {
+      return '<div class="stat-card"><div class="stat-label" style="margin-bottom:12px">Recent recognition</div>' +
+        '<div class="empty" style="padding:28px 18px"><div class="empty-title">Nothing yet this week</div>' +
+        '<div class="empty-body">Kudos given in Slack show up here.</div></div></div>';
+    }
+    return '<div class="stat-card"><div class="stat-label" style="margin-bottom:12px">Recent recognition</div>' +
+      rows.map(function (k) {
+        return '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
+          '<div style="font-size:0.88rem;color:var(--text)">' +
+            '<b>' + esc(k.from_name || k.from_user) + '</b> thanked <b>' + esc(k.to_name || k.to_user) + '</b></div>' +
+          '<div style="font-size:0.86rem;color:var(--text-muted);margin-top:3px">' + esc(k.message) + '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+  }
+
+  function todayNextChat(next) {
+    if (!next) return '';
+    return '<div class="stat-card" style="margin-top:20px">' +
+      '<div class="stat-head"><div class="stat-label">Next coffee chat</div>' +
+      '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div></div>' +
+      '<div style="font-weight:600;color:var(--text);margin-top:10px">' + esc(next.name) + '</div>' +
+      '<div class="stat-sub">' + new Date(next.date + 'T00:00:00').toLocaleDateString(undefined,
+        { weekday: 'long', day: 'numeric', month: 'long' }) + '</div></div>';
+  }
 
   // ── Insights ──────────────────────────────────────────────────────────────
   async function loadInsights() {
