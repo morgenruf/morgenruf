@@ -60,20 +60,30 @@ app:
 # and provide an external DATABASE_URL (managed RDS, CloudNativePG, etc.)
 # NOTE: Bitnami images were removed from Docker Hub; you may need to configure
 #       a custom registry mirror or use an external database instead.
+# ---------------------------------------------------------------------------
+# Optional: bundled PostgreSQL, for trials and small self-hosted installs.
+# Runs the official postgres image in a single StatefulSet. For anything with
+# real data behind it, leave this off and use externalDatabase.url instead.
+# ---------------------------------------------------------------------------
 postgresql:
   enabled: false
   auth:
     username: morgenruf
-    password: ""          # auto-generated if empty
+    # Required when enabled. Generate one with: openssl rand -hex 16
+    # Keep it in your values file: changing it later will not change the
+    # password already initialised inside the database volume.
+    password: ""
     database: morgenruf
   primary:
     persistence:
       enabled: true
       size: 5Gi
+      storageClass: ""     # "" uses the cluster default
   image:
-    registry: registry-1.docker.io
-    repository: bitnami/postgresql
-    tag: "16"
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  resources: {}
 
 # ---------------------------------------------------------------------------
 # Required: External PostgreSQL (recommended)
