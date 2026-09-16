@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import os
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -1517,3 +1518,38 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
 
     _scheduler = scheduler
     return scheduler
+
+
+@dataclass(frozen=True)
+class JobSpec:
+    """One scheduled job a module wants to exist for a workspace."""
+
+    key: str
+    trigger: Any
+    func: Any
+    args: tuple = ()
+
+
+def job_id(module: str, team_id: str, key: str) -> str:
+    """Namespaced job id, so a module's jobs can be found and removed as a set."""
+    return f"{module}:{team_id}:{key}"
+
+
+def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
+    """Make the live job set match `desired`, for namespaced ids only.
+
+    Ids without a colon are left alone. Every job id this scheduler creates
+    today is of the form standup_T01ABC, report_schedule_T01ABC_7, member_sync
+    and so on, none of which contain a colon, so reconciliation provably cannot
+    remove a live standup job.
+    """
+    live = {j.id for j in scheduler.get_jobs() if ":" in j.id}
+    wanted = set(desired)
+    added = sorted(wanted - live)
+    removed = sorted(live - wanted)
+    for jid in removed:
+        scheduler.remove_job(jid)
+    for jid in added:
+        spec = desired[jid]
+        scheduler.add_job(spec.func, spec.trigger, args=spec.args, id=jid, replace_existing=True)
+    return added, removed
