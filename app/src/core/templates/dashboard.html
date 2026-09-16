@@ -1188,6 +1188,7 @@
   <symbol id="i-analytics" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><line x1="5" y1="21" x2="5" y2="14"/><line x1="5" y1="10" x2="5" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="19" y1="21" x2="19" y2="16"/><line x1="19" y1="12" x2="19" y2="3"/><line x1="2" y1="14" x2="8" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="16" y1="16" x2="22" y2="16"/></symbol>
   <symbol id="i-webhooks" viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7L11.6 7"/><path d="M14 10.5a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></symbol>
+  <symbol id="i-insights" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 3v9l6.5 6.5"/><path d="M16 3.5a9 9 0 0 1 4.5 4.5"/></symbol>
   <symbol id="i-connect" viewBox="0 0 24 24"><path d="M4 8h9v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Z"/><path d="M13 9h2.5a2 2 0 0 1 0 4H13"/><path d="M3 20h11"/><path d="M17 4v2M20 3v3"/></symbol>
   <symbol id="i-kudos" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><polyline points="8.5 14 7 22 12 19 17 22 15.5 14"/></symbol>
   <symbol id="i-automation" viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10.5 22 20 10 13 10 13 2"/></symbol>
@@ -1218,6 +1219,9 @@
     </div>
     <div class="nav-item" data-section="connect">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
+    </div>
+    <div class="nav-item" data-section="insights">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-insights"/></svg> Insights
     </div>
     <div class="nav-item" data-section="analytics">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-analytics"/></svg> Analytics
@@ -1263,6 +1267,38 @@
       <div id="stats-grid" class="stats-grid"></div>
       <div id="standups-caption" class="list-caption"></div>
       <div id="standups-list" class="standups-grid"></div>
+    </div>
+
+    <!-- Insights -->
+    <div id="section-insights" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Insights</div>
+          <div class="page-subtitle">What the standup and kudos data says when you read it together</div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="stat-card">
+          <div class="stat-head">
+            <div class="stat-label">Shipping without recognition</div>
+            <div class="stat-ico"><svg aria-hidden="true"><use href="#i-kudos"/></svg></div>
+          </div>
+          <p style="font-size:0.88rem;color:var(--text-dim);margin:10px 0 16px;line-height:1.6;max-width:52ch">
+            Answered standup consistently over the last 30 days and received no kudos at all.
+          </p>
+          <div id="insights-unrecognised"><div class="loading-center"><div class="spinner"></div></div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-head">
+            <div class="stat-label">Stuck on the same thing</div>
+            <div class="stat-ico"><svg aria-hidden="true"><use href="#i-insights"/></svg></div>
+          </div>
+          <p style="font-size:0.88rem;color:var(--text-dim);margin:10px 0 16px;line-height:1.6;max-width:52ch">
+            The same blocker reported on three or more standup days in a row.
+          </p>
+          <div id="insights-stuck"><div class="loading-center"><div class="spinner"></div></div></div>
+        </div>
+      </div>
     </div>
 
     <!-- Coffee chats -->
@@ -1992,6 +2028,7 @@
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
       if (sec === 'analytics') loadAnalytics(7);
+      if (sec === 'insights') loadInsights();
       if (sec === 'connect') loadConnect();
       if (sec === 'kudos') loadKudos();
       if (sec === 'automation') loadRules();
@@ -2107,6 +2144,56 @@
         '<div class="stat-value">' + (s.total_responses || 0) + '</div>', 'Total submissions');
   }
 
+
+  // ── Insights ──────────────────────────────────────────────────────────────
+  async function loadInsights() {
+    let data;
+    try {
+      data = await api('GET', '/insights?days=30');
+    } catch (e) {
+      document.getElementById('insights-unrecognised').innerHTML =
+        '<p style="color:var(--text-dim)">Could not load insights.</p>';
+      document.getElementById('insights-stuck').innerHTML = '';
+      return;
+    }
+    renderUnrecognised(data.unrecognised || []);
+    renderStuck(data.stuck || []);
+  }
+
+  function personLabel(row) {
+    return esc(row.real_name || ('@' + row.user_id));
+  }
+
+  function renderUnrecognised(rows) {
+    const el = document.getElementById('insights-unrecognised');
+    if (!rows.length) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">Everyone who showed up has been thanked by someone. Rare and worth keeping.</p>';
+      return;
+    }
+    el.innerHTML = rows.map(r =>
+      '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="flex:1;font-weight:500">' + personLabel(r) + '</span>' +
+        '<span class="pill-quiet" style="padding:2px 10px">' + r.standups + ' standups</span>' +
+        '<span class="pill-quiet" style="padding:2px 10px;color:var(--warning);border-color:rgba(255,152,48,0.3)">0 kudos</span>' +
+      '</div>').join('');
+  }
+
+  function renderStuck(rows) {
+    const el = document.getElementById('insights-stuck');
+    if (!rows.length) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem">Nobody is repeating a blocker. Nothing to chase.</p>';
+      return;
+    }
+    el.innerHTML = rows.map(r =>
+      '<div style="padding:11px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">' +
+          '<span style="flex:1;font-weight:500">' + personLabel(r) + '</span>' +
+          '<span class="pill-quiet" style="padding:2px 10px;color:var(--danger);border-color:rgba(242,73,92,0.3)">' +
+            r.days + ' days</span>' +
+        '</div>' +
+        '<div style="font-size:0.88rem;color:var(--text-muted);line-height:1.5">' + esc(r.text) + '</div>' +
+      '</div>').join('');
+  }
 
   // ── Coffee chats ──────────────────────────────────────────────────────────
   const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];

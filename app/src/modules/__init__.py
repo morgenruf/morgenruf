@@ -12,8 +12,9 @@ from __future__ import annotations
 
 from src.modules.connect import MODULE as CONNECT
 from src.modules.google_chat import MODULE as GOOGLE_CHAT
+from src.modules.insights import MODULE as INSIGHTS
 from src.modules.kudos import MODULE as KUDOS
 from src.modules.mcp import MODULE as MCP
 from src.modules.standup import MODULE as STANDUP
 
-REGISTRY = (STANDUP, KUDOS, CONNECT, MCP, GOOGLE_CHAT)
+REGISTRY = (STANDUP, KUDOS, CONNECT, INSIGHTS, MCP, GOOGLE_CHAT)
