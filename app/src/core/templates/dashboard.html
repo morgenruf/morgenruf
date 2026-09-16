@@ -29,6 +29,8 @@
       --accent: #4B54E0;
       --accent-dim: rgba(75, 84, 224, 0.10);
       --accent-line: rgba(75, 84, 224, 0.26);
+      --accent-strong: #363DB0;   /* accent as text on its own tint: 7.4:1 */
+      --on-accent: #FFFFFF;       /* on --accent: 5.76:1 */
       --brand-grad: linear-gradient(120deg, #4B54E0 0%, #2F5BFF 48%, #2FA8FF 100%);
       --sky: #2358C9;
       --text: #14161B;
@@ -37,6 +39,10 @@
       --danger: #C62B3D;
       --warning: #9A5B00;
       --good: #127145;
+      --indigo-soft: rgba(75,84,224,0.14);
+      --indigo-ink: #3A34B0;
+      --amber-soft: rgba(245,158,11,0.16);
+      --amber-ink: #8A4B08;
       --sidebar-w: 248px;
 
       /* Observability console. Panels sit on a darker ground, carry a titled
@@ -149,7 +155,7 @@
       background: var(--accent);
       border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 700; color: #000;
+      font-size: 14px; font-weight: 700; color: var(--on-accent);
       flex-shrink: 0;
     }
     .ws-name { font-weight: 500; color: var(--text); font-size: 13px; }
@@ -211,10 +217,10 @@
       border: none;
       transition: all 0.15s;
     }
-    .btn-primary { background: #2d333b; color: var(--text); border: 1px solid var(--border2); }
+    .btn-primary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
     .btn-primary:hover { background: #373e47; border-color: #555; }
     .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
-    .btn-secondary:hover { border-color: #444; background: #1e1e1e; }
+    .btn-secondary:hover { border-color: var(--border2); background: var(--surface2); }
     .btn-danger { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
     .btn-danger:hover { background: rgba(239,68,68,0.2); }
     .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border2); }
@@ -690,8 +696,9 @@
     /* ── Slack mrkdwn rendered into HTML ── */
     .slack-text { white-space: normal; word-break: break-word; }
     .slack-text a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+    .slack-mention,
     .slack-text .slack-mention {
-      background: var(--accent-dim); color: var(--accent);
+      background: var(--accent-dim); color: var(--accent-strong);
       border-radius: 4px; padding: 0 4px; font-weight: 500;
     }
     .slack-text .slack-code {
@@ -749,7 +756,7 @@
     /* Scrollbar */
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
     /* Participation meter. Replaces a fixed strip of five emoji that could not
        represent a denominator: 4/10 and 4/5 drew the same picture. */
@@ -782,7 +789,7 @@
       padding: 1px 7px;
       border-radius: 10px;
       background: rgba(248, 81, 73, 0.15);
-      color: #f85149;
+      color: var(--danger);
       font-size: 12px;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
@@ -963,8 +970,66 @@
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
-    .pill-bad { background: rgba(242,73,92,0.16); color: var(--sev-bad); }
+    .pill-bad { background: rgba(242,73,92,0.16); color: var(--danger); }
     .pill-quiet { color: var(--panel-weak); }
+
+    /* Coffee chat attendance. Four outcomes, four colours, because "not met"
+       covers three different problems and they need different responses. */
+    .att-met     { background: rgba(18,113,69,0.14);  color: var(--sev-good); }
+    .att-missed  { background: rgba(217,59,76,0.14);  color: var(--sev-bad); }
+    .att-silent  { background: rgba(120,124,140,0.16); color: var(--text-dim); }
+    .att-undeliv { background: rgba(180,84,27,0.14);  color: var(--sev-mid); }
+
+    .att-round {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px;
+      align-items: center; width: 100%; text-align: left;
+      appearance: none; background: none; border: none;
+      border-bottom: 1px solid var(--border);
+      padding: 11px 2px; cursor: pointer; color: inherit; font: inherit;
+    }
+    .att-round:hover { background: var(--surface2); }
+    .att-round[aria-expanded="true"] { background: var(--surface2); }
+    .att-pairs { padding: 4px 0 12px 2px; border-bottom: 1px solid var(--border); }
+    .att-pair {
+      display: grid; grid-template-columns: 1fr auto; gap: 10px;
+      align-items: center; padding: 7px 10px; font-size: 13px;
+      border-left: 2px solid var(--border2); margin: 4px 0 4px 6px;
+    }
+
+    /* Attendance charts. Colours match the chips, so a bar and a pill meaning
+       the same thing look the same. */
+    /* A pairing is two people, so it shows two faces. Same component as the
+       Members grid, sized down, with initials when Slack has no picture. */
+    .att-face {
+      position: relative;
+      width: 22px; height: 22px; border-radius: 6px;
+      background: var(--accent-dim); color: var(--accent);
+      font-weight: 700; font-size: 9.5px; letter-spacing: 0.02em;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0; overflow: hidden; vertical-align: middle;
+    }
+    /* Sits on top of the initials, so a dead Slack CDN link falls back to
+       them rather than to a broken-image icon. */
+    .att-face img { position: absolute; inset: 0; width: 100%; height: 100%;
+                    object-fit: cover; display: block; border-radius: inherit; }
+    .att-person { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+    .att-person .att-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .att-handle { color: var(--text-dim); font-size: 12px; }
+    .att-vs { color: var(--text-dim); margin: 0 4px; }
+
+    .att-cols { display: flex; align-items: flex-end; gap: 10px; height: 132px; padding: 0 2px; }
+    .att-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end;
+               height: 100%; min-width: 0; }
+    .att-seg { width: 100%; }
+    .att-col .att-seg:first-child { border-radius: 3px 3px 0 0; }
+    .att-col .att-seg:last-child  { border-radius: 0 0 3px 3px; }
+    .att-xlab { margin-top: 7px; font-size: 11px; color: var(--text-dim);
+                text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .att-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px;
+                  font-size: 12px; color: var(--text-muted); }
+    .att-key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; }
+    .att-mini { display: flex; height: 6px; width: 78px; border-radius: 3px;
+                overflow: hidden; background: var(--surface2); }
 
     .spark { display: block; }
     .gf-empty { padding: 28px var(--pad); color: var(--panel-weak); font-size: var(--fs-sm); text-align: center; }
@@ -1055,7 +1120,7 @@
       color: var(--text-muted);
     }
     .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
-    .nav-item.active { background: var(--accent-dim); color: #C3C7F5; font-weight: 500; }
+    .nav-item.active { background: var(--accent-dim); color: var(--accent-strong); font-weight: 500; }
     .nav-item.active::before {
       content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px;
       width: 2px; border-radius: 0 2px 2px 0; background: var(--accent);
@@ -1078,7 +1143,7 @@
     .btn-secondary, .btn-ghost {
       background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
     }
-    .btn-secondary:hover, .btn-ghost:hover { background: #262B36; border-color: #414A5C; }
+    .btn-secondary:hover, .btn-ghost:hover { background: var(--surface2); border-color: var(--border2); }
     .btn-danger { background: rgba(242,73,92,0.12); color: var(--danger); border: 1px solid rgba(242,73,92,0.24); }
 
     /* ── Panels and cards. Radii are differentiated by role rather than one
@@ -1106,12 +1171,12 @@
       border: 1px solid var(--border2); background: var(--surface2); color: var(--text-muted);
     }
     .day-chip.on, .day-chip.selected {
-      background: var(--accent-dim); border-color: var(--accent-line); color: #C3C7F5;
+      background: var(--accent-dim); border-color: var(--accent-line); color: var(--accent-strong);
     }
 
     /* ── Inputs ── */
     .input, .form-input, select, textarea {
-      background: #12141A; border: 1px solid var(--border2); border-radius: 8px;
+      background: var(--surface); border: 1px solid var(--border2); border-radius: 8px;
       color: var(--text); font-family: var(--sans); font-size: 13.5px;
     }
     .input:focus, .form-input:focus, select:focus, textarea:focus {
@@ -1137,7 +1202,7 @@
       border-radius: 8px;
       background: var(--accent-dim);
       border: 1px solid var(--accent-line);
-      color: #A9AEF2;
+      color: var(--accent-strong);
     }
     .stat-ico svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
     .stat-card .stat-value { margin-top: 14px; }
@@ -1196,9 +1261,11 @@
         --accent: #7D85F0;
         --accent-dim: rgba(125, 133, 240, 0.16);
         --accent-line: rgba(125, 133, 240, 0.34);
+        --accent-strong: #A9AEF5;
+        --on-accent: #12142B;   /* the dark accent is light, so ink beats white: 5.59:1 */
         --text: #E7E9EE;
         --text-muted: #9398A2;
-        --text-dim: #6E7480;
+        --text-dim: #878E9B;   /* 4.83 on surface2, the lightest thing it sits on */
         --danger: #FF6B7D;
         --warning: #FFA94D;
         --good: #3DD68C;
@@ -1212,6 +1279,10 @@
         --sev-mid: #FFA94D;
         --sev-bad: #FF6B7D;
         --sev-info: #7FC2FF;
+      --indigo-soft: rgba(125,133,240,0.16);
+      --indigo-ink: #A9AFF8;
+      --amber-soft: rgba(255,193,90,0.16);
+      --amber-ink: #FFC15A;
       }
     }
     :root[data-theme="dark"] {
@@ -1223,9 +1294,11 @@
       --accent: #7D85F0;
       --accent-dim: rgba(125, 133, 240, 0.16);
       --accent-line: rgba(125, 133, 240, 0.34);
+      --accent-strong: #A9AEF5;
+      --on-accent: #12142B;     /* the dark accent is light, so ink beats white: 5.59:1 */
       --text: #E7E9EE;
       --text-muted: #9398A2;
-      --text-dim: #6E7480;
+      --text-dim: #878E9B;   /* 4.83 on surface2, the lightest thing it sits on */
       --danger: #FF6B7D;
       --warning: #FFA94D;
       --good: #3DD68C;
@@ -1239,6 +1312,10 @@
       --sev-mid: #FFA94D;
       --sev-bad: #FF6B7D;
       --sev-info: #7FC2FF;
+      --indigo-soft: rgba(125,133,240,0.16);
+      --indigo-ink: #A9AFF8;
+      --amber-soft: rgba(255,193,90,0.16);
+      --amber-ink: #FFC15A;
     }
 
     /* The sidebar was a fixed near-black; it follows the theme now. */
@@ -1332,7 +1409,7 @@
       display: grid; place-items: center; font-size: 13px; font-weight: 700;
     }
     .sp-name { font-size: 13.5px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 7px; }
-    .sp-tag { background: var(--border); color: var(--text-dim); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+    .sp-tag { background: var(--border); color: var(--text-muted); border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
     .sp-body { font-size: 13.5px; color: var(--text); margin-top: 4px; line-height: 1.5; }
     .sp-caption { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
 
@@ -1390,6 +1467,36 @@
     .modal-tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
     .modal-pane { display: block; }
     .modal-pane[hidden] { display: none; }
+
+    /* Amber that works on both grounds. Hardcoding a hex in JS meant one theme
+       always failed: #B45309 reads on white but only 3.47 on a dark card. */
+    .mood { width: 17px; height: 17px; vertical-align: -3px; fill: none;
+            stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .mood-good { color: var(--success); }
+    .mood-okay { color: var(--text-dim); }
+    .mood-rough { color: var(--warning); }
+    /* The mascot is the kudos token. It is a drawing, not an emoji, so it
+       looks the same on every platform and matches the one people import
+       into Slack. */
+    .tok { width: 19px; height: 19px; vertical-align: -4px; }
+    .count-pill {
+      background: var(--indigo-soft); color: var(--indigo-ink);
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 2px 9px; border-radius: 99px;
+      font-size: 0.82rem; font-weight: 700;
+    }
+    .stars { color: var(--amber-ink); letter-spacing: 2px; font-size: 16px; }
+
+    /* Long lists are capped and revealed on request. With a hundred people the
+       Today page ran to nearly six screens and Reports to thirty, which is not
+       a dashboard, it is a scroll. */
+    .more-btn {
+      appearance: none; width: 100%;
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 9px; padding: 9px 12px; margin-top: 12px;
+      font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer;
+    }
+    .more-btn:hover { color: var(--text); border-color: var(--accent-line); }
   </style>
 </head>
 <body>
@@ -1421,9 +1528,13 @@
   <path d="M22 22H2" />
   <path d="m8 6 4-4 4 4" />
   <path d="M16 18a4 4 0 0 0-8 0" /></symbol>
+  <symbol id="i-mug" viewBox="0 0 24 24"><path d="M4 7h13v9a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V7Z"/><path d="M17 10h2.2a2.8 2.8 0 0 1 0 5.6H17"/><path d="M4.6 10.4h11.8"/><path d="M8.5 2.6c0 1-.9 1.3-.9 2.2M12.5 2.2c0 1.1-1 1.4-1 2.4"/></symbol>
   <symbol id="i-kudos" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><polyline points="8.5 14 7 22 12 19 17 22 15.5 14"/></symbol>
   <symbol id="i-automation" viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10.5 22 20 10 13 10 13 2"/></symbol>
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
+  <symbol id="i-mood-good" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
+  <symbol id="i-mood-okay" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
+  <symbol id="i-mood-rough" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
 </defs></svg>
   <!-- ── Sidebar drawer trigger (visible below 900px) ── -->
   <button id="sidebar-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="toggleSidebar()">&#9776;</button>
@@ -1453,7 +1564,7 @@
       <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
     </div>
     <div class="nav-item" data-section="kudos">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-kudos"/></svg> Kudos
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-mug"/></svg> Kudos
     </div>
     <div class="nav-item" data-section="members">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-members"/></svg> Members
@@ -1569,6 +1680,7 @@
       <div id="connect-locked" style="display:none"></div>
       <div id="connect-body">
         <div id="connect-list"></div>
+        <div id="connect-attendance" style="margin-top:22px"></div>
       </div>
     </div>
 
@@ -1687,7 +1799,7 @@
           </div>
           <p style="font-size:0.92rem;color:var(--text-muted);margin-top:12px;line-height:1.65;max-width:62ch">
             DM the bot <code style="background:var(--surface2);padding:2px 7px;border-radius:5px;font-size:0.88rem">kudos @teammate nice work on the deploy</code>.
-            Everyone gets <strong id="kudos-allowance-inline">5</strong> <span id="kudos-emoji-inline"></span> a day to give away.
+            Everyone gets <strong id="kudos-allowance-inline">5</strong> <img class="tok" src="/static/kudos-token-128.png" alt=""/> a day to give away.
             Unused ones do not carry over, which is what keeps people spending them.
           </p>
           <div id="kudos-settings" style="display:none;margin-top:20px;padding-top:4px;border-top:1px solid var(--border)">
@@ -1695,7 +1807,7 @@
               <div class="set-ico"><svg aria-hidden="true"><use href="#i-kudos"/></svg></div>
               <div>
                 <div class="set-label">The token your team gives</div>
-                <div class="set-help">Any emoji. It appears in the message and in the counts people collect.</div>
+                <div class="set-help">What the bot posts in Slack. This dashboard always shows the Morgenruf icon, and Slack can too: <a href="/static/kudos-token-128.png" download>download the icon</a>, add it under <em>Customize workspace &rsaquo; Add custom emoji</em> with the name <code>morgenruf</code>, and leave this field as <code>:morgenruf:</code>. Until it is imported Slack shows that text literally, so use a plain emoji here if you would rather not.</div>
               </div>
               <div class="set-control">
                 <input type="text" id="kudos-emoji" maxlength="16" style="font-size:1.25rem;width:92px;text-align:center" oninput="renderKudosPreview()"/>
@@ -1997,7 +2109,7 @@
               <button class="btn btn-secondary" style="font-size:0.78rem;white-space:nowrap" onclick="copyNewKey()">Copy</button>
             </div>
           </div>
-          <div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:10px 14px;font-size:0.83rem;margin-bottom:16px">
+          <div style="background:var(--amber-soft);color:var(--amber-ink);border-radius:8px;padding:10px 14px;font-size:0.83rem;margin-bottom:16px">
             ⚠️ <strong>Save this key — it won't be shown again!</strong>
           </div>
           <div style="text-align:right">
@@ -2466,6 +2578,25 @@
 
 
 
+
+  // Cap a list and offer the rest, so one busy team does not turn a page into
+  // a scroll. Returns the visible slice plus a button when there is more.
+  function capped(rows, limit, label, id) {
+    if (rows.length <= limit) return { rows: rows, more: '' };
+    return {
+      rows: rows.slice(0, limit),
+      more: '<button class="more-btn" onclick="revealAll(this,\'' + id + '\')">' +
+            'Show all ' + rows.length + ' ' + label + '</button>'
+    };
+  }
+
+  function revealAll(btn, id) {
+    const host = document.getElementById(id);
+    if (host) host.dataset.expanded = '1';
+    btn.remove();
+    if (id === 'today-body') loadToday(true);
+  }
+
   // ── Today ─────────────────────────────────────────────────────────────────
   // The landing page. Standups was a list of schedule configuration, which
   // tells a manager nothing about their team; this answers what happened this
@@ -2506,6 +2637,28 @@
       '</div>';
   }
 
+
+  // Mood shows as one of the three icons the bot offers, so the table matches
+  // the rest of the icon set. Rows can hold either the word or the emoji the
+  // bot stored, and anything unrecognised falls back to the text.
+  const MOOD_ICONS = {
+    happy: 'good', great: 'good', good: 'good', '\u{1F642}': 'good', '\u{1F60A}': 'good',
+    neutral: 'okay', okay: 'okay', ok: 'okay', '\u{1F610}': 'okay',
+    sad: 'rough', rough: 'rough', bad: 'rough', '\u{1F641}': 'rough', '\u{1F614}': 'rough'
+  };
+  // Each id is spelled out rather than built from the key, so the template test
+  // that hunts for defined-but-unused symbols can still see these three.
+  const MOOD_SVG = {
+    good: '<svg class="mood mood-good" role="img" aria-label="Good"><use href="#i-mood-good"/></svg>',
+    okay: '<svg class="mood mood-okay" role="img" aria-label="Okay"><use href="#i-mood-okay"/></svg>',
+    rough: '<svg class="mood mood-rough" role="img" aria-label="Rough"><use href="#i-mood-rough"/></svg>'
+  };
+  function moodIcon(m) {
+    if (!m) return '';
+    const key = MOOD_ICONS[String(m).trim().toLowerCase()];
+    return key ? MOOD_SVG[key] : esc(m);
+  }
+
   function todayStat(label, value, icon, sub, tone) {
     return '<div class="stat-card">' +
       '<div class="stat-head"><div class="stat-label">' + esc(label) + '</div>' +
@@ -2514,8 +2667,10 @@
       '<div class="stat-sub">' + esc(sub) + '</div></div>';
   }
 
-  function todayBlocked(rows) {
-    return '<div class="stat-card" style="margin-top:20px;border-color:var(--danger)">' +
+  function todayBlocked(all) {
+    const c = capped(all, 6, 'blocked', 'today-blocked');
+    const rows = c.rows;
+    return '<div class="stat-card" id="today-blocked" style="margin-top:20px;border-color:var(--danger)">' +
       '<div class="stat-head"><div class="stat-label" style="color:var(--danger)">Blocked right now</div>' +
       '<div class="stat-ico" style="background:rgba(214,43,61,0.10);border-color:rgba(214,43,61,0.28);color:var(--danger)">' +
       '<svg aria-hidden="true"><use href="#i-insights"/></svg></div></div>' +
@@ -2524,11 +2679,13 @@
           '<div style="font-weight:600;color:var(--text)">' + esc(r.real_name || ('@' + r.user_id)) + '</div>' +
           '<div style="font-size:0.9rem;color:var(--text-muted);margin-top:3px">' + slackToHtml(r.blockers) + '</div>' +
         '</div>';
-      }).join('') + '</div>';
+      }).join('') + c.more + '</div>';
   }
 
-  function todayResponses(rows, awaiting) {
-    let html = '<div class="stat-card"><div class="stat-label" style="margin-bottom:14px">This morning</div>';
+  function todayResponses(allRows, awaiting) {
+    const cap = capped(allRows, 10, 'answers', 'today-morning');
+    const rows = cap.rows;
+    let html = '<div class="stat-card" id="today-morning"><div class="stat-label" style="margin-bottom:14px">This morning</div>';
     if (!rows.length) {
       html += '<div class="empty" style="padding:34px 20px"><div class="empty-title">No answers yet</div>' +
         '<div class="empty-body">When your team replies to the bot, their answers appear here.</div></div>';
@@ -2538,19 +2695,22 @@
           '<div style="display:flex;align-items:center;gap:9px;margin-bottom:5px">' +
             '<span style="font-weight:600;color:var(--text)">' + esc(r.real_name || ('@' + r.user_id)) + '</span>' +
             (r.has_blockers ? '<span class="pill-quiet" style="color:var(--danger);border-color:rgba(214,43,61,0.3)">Blocked</span>' : '') +
-            (r.mood ? '<span style="margin-left:auto">' + esc(r.mood) + '</span>' : '') +
+            (r.mood ? '<span style="margin-left:auto" title="' + esc(r.mood) + '">' + moodIcon(r.mood) + '</span>' : '') +
           '</div>' +
           '<div style="font-size:0.9rem;color:var(--text-muted);line-height:1.55">' + slackToHtml(r.today || r.yesterday || '') + '</div>' +
         '</div>';
-      }).join('');
+      }).join('') + cap.more;
     }
     if (awaiting.length) {
       html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
         '<div class="stat-label" style="margin-bottom:8px">Still to answer</div>' +
-        awaiting.map(function (a) {
+        awaiting.slice(0, 18).map(function (a) {
           return '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">' +
             esc(a.real_name || ('@' + a.user_id)) + '</span>';
-        }).join('') + '</div>';
+        }).join('') +
+        (awaiting.length > 18
+          ? '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">and ' +
+            (awaiting.length - 18) + ' more</span>' : '') + '</div>';
     }
     return html + '</div>';
   }
@@ -2724,11 +2884,270 @@
           '</div>' +
         '</div>' +
         '<div class="standup-actions">' +
+          '<button class="btn btn-secondary btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
           '<button class="toggle ' + (p.enabled ? 'on' : '') + '" title="Toggle active"' +
             ' onclick="toggleConnect(' + p.id + ', this)"></button>' +
           '<button class="btn btn-danger btn-sm" onclick="deleteConnect(' + p.id + ')">Delete</button>' +
         '</div>' +
       '</div>').join('') + '</div>';
+  }
+
+  // ── Coffee chat attendance ─────────────────────────────────────────────────
+  // The programme list answers "is this running". This answers "is it working":
+  // who was paired, who actually met, and who has quietly stopped turning up.
+
+  const ATT_LABEL = { met: 'Met', missed: 'Did not meet', no_reply: 'No reply', undelivered: 'Not delivered' };
+  const ATT_CLASS = { met: 'att-met', missed: 'att-missed', no_reply: 'att-silent', undelivered: 'att-undeliv' };
+
+  // The compact chips are a bare number, so the meaning has to survive without
+  // colour: every one carries its label for screen readers and on hover.
+  function attChip(status, text) {
+    const label = ATT_LABEL[status] || status;
+    const body = text === undefined ? label : String(text);
+    const titled = body === label ? label : body + ' ' + label.toLowerCase();
+    return '<span class="pill ' + (ATT_CLASS[status] || 'att-silent') + '"' +
+           ' title="' + esc(titled) + '" aria-label="' + esc(titled) + '">' +
+           esc(body) + '</span>';
+  }
+
+  // Just the roster, without repainting the Members page the way loadMembers does.
+  async function ensureMembers() {
+    if ((state.members || []).length) return;
+    try { state.members = await api('GET', '/members'); } catch (e) { /* ids will do */ }
+  }
+
+  async function openAttendance(programId) {
+    const el = document.getElementById('connect-attendance');
+    if (!el) return;
+    const prog = (state.connect || []).find(p => p.id === programId);
+    el.innerHTML = '<div class="stat-card"><div class="stat-label">Loading attendance…</div></div>';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    const [rounds, people] = await Promise.all([
+      api('GET', '/connect/programs/' + programId + '/rounds').catch(() => []),
+      api('GET', '/connect/programs/' + programId + '/participation').catch(() => []),
+      ensureMembers()
+    ]);
+
+    state.attendance = { programId: programId, rounds: rounds, people: people,
+                         open: null, showAllPeople: false };
+    renderAttendance(prog);
+  }
+
+  function renderAttendance(prog) {
+    const el = document.getElementById('connect-attendance');
+    const a = state.attendance;
+    if (!el || !a) return;
+    const title = prog ? esc(prog.name) : 'Coffee chats';
+
+    if (!a.rounds.length) {
+      el.innerHTML =
+        '<div class="stat-card"><div class="stat-head"><div class="stat-label">' + title +
+        ' &middot; attendance</div></div>' +
+        '<div class="empty" style="padding:28px 4px">No rounds have run yet. ' +
+        'Attendance appears here once the first pairs go out.</div></div>';
+      return;
+    }
+
+    const tot = a.rounds.reduce((acc, r) => {
+      acc.matches += +r.matches; acc.met += +r.met;
+      acc.missed += +r.missed; acc.no_reply += +r.no_reply;
+      acc.undelivered += +r.undelivered;
+      return acc;
+    }, { matches: 0, met: 0, missed: 0, no_reply: 0, undelivered: 0 });
+    const answered = tot.met + tot.missed;
+    const rate = answered ? Math.round(tot.met / answered * 100) : null;
+
+    el.innerHTML =
+      '<div class="stat-card" style="margin-bottom:18px">' +
+        '<div class="stat-head"><div class="stat-label">' + title + ' &middot; attendance</div>' +
+          '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div></div>' +
+        '<div style="display:flex;align-items:baseline;gap:10px;margin:10px 0 4px">' +
+          '<div class="stat-value">' + (rate === null ? '—' : rate + '%') + '</div>' +
+          '<div style="color:var(--text-muted);font-size:13px">' +
+            (rate === null
+              ? 'nobody has answered yet'
+              : 'of answered pairings actually met') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">' +
+          attChip('met', tot.met + ' met') +
+          attChip('missed', tot.missed + ' did not') +
+          attChip('no_reply', tot.no_reply + ' no reply') +
+          (tot.undelivered ? attChip('undelivered', tot.undelivered + ' not delivered') : '') +
+        '</div>' +
+        '<p style="color:var(--text-dim);font-size:12.5px;margin-top:12px;max-width:62ch">' +
+          'Across the last ' + a.rounds.length + ' round' + (a.rounds.length === 1 ? '' : 's') +
+          '. Nobody is forced to answer, so treat "no reply" as unknown rather than as a miss.' +
+        '</p>' +
+      '</div>' +
+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px">' +
+        '<div class="stat-card">' +
+          '<div class="stat-head"><div class="stat-label">By round</div></div>' +
+          '<div style="margin-top:14px">' + attColumns(a.rounds) + '</div>' +
+          '<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:4px">' +
+            a.rounds.map(roundRow).join('') + '</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+          '<div class="stat-head"><div class="stat-label">By person, last 6 rounds</div></div>' +
+          peopleTable(a.people) +
+        '</div>' +
+      '</div>';
+  }
+
+  // Outcome colours live in one place: the chips, the columns and the per-person
+  // bars all read from here, so they can never drift apart.
+  const ATT_COLOR = {
+    met: 'var(--sev-good)', missed: 'var(--sev-bad)',
+    no_reply: 'var(--text-dim)', undelivered: 'var(--sev-mid)'
+  };
+  const ATT_ORDER = ['met', 'missed', 'no_reply', 'undelivered'];
+
+  // One column per round, oldest on the left. Height is the number of pairings
+  // and the segments are what became of them, so a round that shrank and a
+  // round that went quiet look different at a glance.
+  function attColumns(rounds) {
+    const series = rounds.slice().reverse();
+    const peak = Math.max.apply(null, series.map(r => +r.matches || 0).concat([1]));
+    const cols = series.map(r => {
+      const total = +r.matches || 0;
+      const segs = ATT_ORDER.map(k => {
+        const n = +r[k === 'no_reply' ? 'no_reply' : k] || 0;
+        if (!n) return '';
+        const h = (n / peak) * 100;
+        return '<div class="att-seg" style="height:' + h.toFixed(2) + '%;background:' +
+               ATT_COLOR[k] + '" title="' + esc(n + ' ' + ATT_LABEL[k].toLowerCase()) + '"></div>';
+      }).join('');
+      const when = formatDate(r.scheduled_for, '—');
+      return '<div class="att-col" role="listitem" aria-label="' +
+             esc(when + ': ' + total + ' pairings, ' + r.met + ' met') + '">' + segs + '</div>';
+    }).join('');
+    const labels = series.map(r =>
+      '<div class="att-xlab" style="flex:1;min-width:0">' + esc(shortDate(r.scheduled_for)) + '</div>'
+    ).join('');
+    return '<div class="att-cols" role="list">' + cols + '</div>' +
+      '<div style="display:flex;gap:10px;padding:0 2px">' + labels + '</div>' +
+      '<div class="att-legend">' + ATT_ORDER.map(k =>
+        '<span><span class="att-key" style="background:' + ATT_COLOR[k] + '"></span>' +
+        esc(ATT_LABEL[k]) + '</span>').join('') + '</div>';
+  }
+
+  // "9 Sep" — the year is noise on an axis covering a few weeks.
+  function shortDate(value) {
+    const d = toDate(value);
+    return d ? d.getDate() + ' ' + MONTH_ABBR[d.getMonth()] : '—';
+  }
+
+  // The same four outcomes as a single row, so a person's pattern is scannable
+  // without reading four numbers.
+  function attMiniBar(r) {
+    const total = (+r.paired) || 0;
+    if (!total) return '<span class="att-mini"></span>';
+    const segs = ATT_ORDER.map(k => {
+      const n = +r[k] || 0;
+      if (!n) return '';
+      return '<span style="width:' + (n / total * 100).toFixed(2) + '%;background:' + ATT_COLOR[k] + '"></span>';
+    }).join('');
+    return '<span class="att-mini" title="' + esc(r.met + ' met of ' + total + ' pairings') + '">' + segs + '</span>';
+  }
+
+  function roundRow(r) {
+    const open = state.attendance && state.attendance.open === r.id;
+    const when = formatDate(r.scheduled_for, 'unscheduled');
+    return '<button class="att-round" aria-expanded="' + (open ? 'true' : 'false') + '"' +
+        ' onclick="toggleRound(' + r.id + ')">' +
+        '<span><span style="font-weight:600">' + esc(when) + '</span>' +
+          '<span style="color:var(--text-dim);font-size:12.5px;margin-left:8px">' +
+          r.matches + ' pairing' + (+r.matches === 1 ? '' : 's') + '</span></span>' +
+        '<span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">' +
+          (+r.met ? attChip('met', r.met) : '') +
+          (+r.missed ? attChip('missed', r.missed) : '') +
+          (+r.no_reply ? attChip('no_reply', r.no_reply) : '') +
+          (+r.undelivered ? attChip('undelivered', r.undelivered) : '') +
+        '</span>' +
+      '</button>' +
+      (open ? '<div class="att-pairs" id="att-pairs-' + r.id + '">' +
+                '<div style="color:var(--text-dim);font-size:12.5px;padding:6px 8px">Loading…</div>' +
+              '</div>' : '');
+  }
+
+  // One person, the way Slack shows them: picture, real name, handle when it
+  // adds something. Initials stand in until the next roster sync fills the
+  // avatar, and for anyone whose Slack account has no picture.
+  function personChip(id) {
+    const m = (state.members || []).find(x => x.id === id);
+    if (!m) return '<span class="att-person"><span class="att-face">?</span>' +
+                   '<span class="att-who">' + esc(id) + '</span></span>';
+    const initials = esc(memberInitials(m));
+    const face = '<span class="att-face">' + initials +
+      (m.avatar ? '<img src="' + esc(m.avatar) + '" alt="" loading="lazy"' +
+                  ' onerror="this.remove()"/>' : '') + '</span>';
+    const name = memberName(m);
+    // Two people really can share a name. The handle is the usual way to tell
+    // them apart, but only when the handle is itself unique: two Sofia Farouks
+    // both showing "@sofia" separates nothing, so those fall back to the id.
+    const all = state.members || [];
+    const handle = memberHandle(m);
+    const shared = all.filter(x => memberName(x) === name).length > 1;
+    let second = '';
+    if (shared) {
+      const handleWorks = handle && handle !== name &&
+        all.filter(x => memberHandle(x) === handle).length === 1;
+      second = handleWorks ? '@' + handle : m.id;
+    }
+    return '<span class="att-person">' + face + '<span class="att-who">' + esc(name) +
+           (second ? ' <span class="att-handle">' + esc(second) + '</span>' : '') +
+           '</span></span>';
+  }
+
+  async function toggleRound(roundId) {
+    const a = state.attendance;
+    if (!a) return;
+    a.open = a.open === roundId ? null : roundId;
+    const prog = (state.connect || []).find(p => p.id === a.programId);
+    renderAttendance(prog);
+    if (a.open !== roundId) return;
+    const pairs = await api('GET', '/connect/rounds/' + roundId + '/matches').catch(() => []);
+    const box = document.getElementById('att-pairs-' + roundId);
+    if (!box || a.open !== roundId) return;
+    box.innerHTML = pairs.length
+      ? pairs.map(m =>
+          '<div class="att-pair">' +
+            '<span style="display:flex;align-items:center;gap:2px;min-width:0;flex-wrap:wrap">' +
+              m.members.map(personChip).join('<span class="att-vs">&middot;</span>') + '</span>' +
+            attChip(m.status) +
+          '</div>').join('')
+      : '<div style="color:var(--text-dim);font-size:12.5px;padding:6px 8px">No pairings in this round.</div>';
+  }
+
+  function revealPeople() {
+    if (!state.attendance) return;
+    state.attendance.showAllPeople = true;
+    renderAttendance((state.connect || []).find(p => p.id === state.attendance.programId));
+  }
+
+  function peopleTable(people) {
+    if (!people || !people.length) {
+      return '<div class="empty" style="padding:24px 4px">Nobody has been paired yet.</div>';
+    }
+    // Ordered by fewest met, so the people worth a nudge are the ones on screen.
+    const showAll = state.attendance && state.attendance.showAllPeople;
+    const shown = showAll ? people : people.slice(0, 12);
+    const more = shown.length < people.length
+      ? '<button class="more-btn" onclick="revealPeople()">Show all ' + people.length + ' people</button>'
+      : '';
+    return '<table class="data-table" style="margin-top:6px"><thead><tr>' +
+        '<th>Person</th><th>Pattern</th><th style="text-align:right">Paired</th>' +
+        '<th style="text-align:right">Met</th><th style="text-align:right">Missed</th>' +
+        '<th style="text-align:right">No reply</th></tr></thead><tbody>' +
+      shown.map(r =>
+        '<tr><td>' + personChip(r.user_id) + '</td>' +
+        '<td>' + attMiniBar(r) + '</td>' +
+        '<td style="text-align:right">' + r.paired + '</td>' +
+        '<td style="text-align:right;color:var(--sev-good);font-weight:600">' + r.met + '</td>' +
+        '<td style="text-align:right' + (+r.missed ? ';color:var(--sev-bad);font-weight:600' : ';color:var(--text-dim)') + '">' + r.missed + '</td>' +
+        '<td style="text-align:right;color:var(--text-dim)">' + r.no_reply + '</td></tr>').join('') +
+      '</tbody></table>' + more;
   }
 
   async function toggleConnect(id, btn) {
@@ -3133,7 +3552,13 @@
 
   // ── Reports ──
   const REPORT_DAYS_PER_PAGE = 7;
-  let reportState = { dateFrom: '', dateTo: '', userId: '', range: 7, dayLimit: REPORT_DAYS_PER_PAGE };
+  const REPORT_PEOPLE_PER_DAY = 12;
+  const REPORT_PARTICIPATION_ROWS = 15;
+  let reportState = { dateFrom: '', dateTo: '', userId: '', range: 7,
+                      dayLimit: REPORT_DAYS_PER_PAGE,
+                      // Which days the reader has opened up, and whether they asked
+                      // for the whole roster. Both survive a re-render of the page.
+                      expandedDays: new Set(), allParticipation: false };
 
   // Both range buttons carried the same class, so neither ever looked
   // selected and there was no way to tell which window you were reading.
@@ -3172,10 +3597,19 @@
     loadReports({ keepWindow: true });
   }
 
+  function expandReportDay(date) {
+    reportState.expandedDays.add(date);
+    loadReports({ keepWindow: true });
+  }
+
   async function loadReports(opts = {}) {
     // Any change to the filters starts the window again, otherwise you would
     // carry an expanded view from one filter into the next.
-    if (!opts.keepWindow) reportState.dayLimit = REPORT_DAYS_PER_PAGE;
+    if (!opts.keepWindow) {
+      reportState.dayLimit = REPORT_DAYS_PER_PAGE;
+      reportState.expandedDays = new Set();
+      reportState.allParticipation = false;
+    }
     // Both lists are needed so <@Uxxx> and <#Cxxx> in the answers resolve to names.
     if (!state.members?.length) await loadMembers();
     if (!state.channels?.length) await loadChannels();
@@ -3221,7 +3655,10 @@
       // Someone in no standup was asked for nothing, so "(0/0)" beside an
       // empty row of stars read as a bad score rather than as not applicable.
       // Analytics already says "Not in any standup"; say the same here.
-      const participationRows = participation.map(p => {
+      const participationShown = reportState.allParticipation
+        ? participation : participation.slice(0, REPORT_PARTICIPATION_ROWS);
+      const participationHidden = participation.length - participationShown.length;
+      const participationRows = participationShown.map(p => {
         const name = `<td style="padding:6px 8px">${avatarHtml(p.user_id, 24)}${esc(resolveName(p.user_id, p.name))}</td>`;
         if (!p.expected) {
           return `<tr class="row-unenrolled">${name}` +
@@ -3230,7 +3667,7 @@
         }
         return `<tr>${name}` +
           `<td style="padding:6px 8px;color:var(--text-muted);font-variant-numeric:tabular-nums">${p.responses}/${p.total}</td>` +
-          `<td style="padding:6px 8px;color:#f59e0b;letter-spacing:2px;font-size:16px">${starsHtml(p.stars)}</td></tr>`;
+          `<td class="stars" style="padding:6px 8px">${starsHtml(p.stars)}</td></tr>`;
       }).join('');
 
       const memberOptions = (state.members || []).map(m =>
@@ -3256,9 +3693,14 @@
       const allDays = Object.entries(byDate).sort(dateSort);
       const shownDays = allDays.slice(0, reportState.dayLimit || REPORT_DAYS_PER_PAGE);
       const hiddenDays = allDays.length - shownDays.length;
-      const responseRows = shownDays.map(([date, entries]) => `
-        <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${esc(formatDate(date, date))}</td></tr>
-        ${entries.map(s => `
+      const responseRows = shownDays.map(([date, entries]) => {
+        const shown = reportState.expandedDays.has(date)
+          ? entries : entries.slice(0, REPORT_PEOPLE_PER_DAY);
+        const rest = entries.length - shown.length;
+        return `
+        <tr><td colspan="2" style="background:var(--surface2);font-weight:600;padding:6px 12px;font-size:12px;color:var(--text-muted)">${esc(formatDate(date, date))}
+          <span style="font-weight:500;color:var(--text-dim);margin-left:6px">${entries.length} ${entries.length === 1 ? 'response' : 'responses'}</span></td></tr>
+        ${shown.map(s => `
           <tr>
             <td style="width:180px;vertical-align:top;padding:8px 12px;font-weight:500">${avatarHtml(s.user_id, 28)}${esc(resolveName(s.user_id, s.user_name))}</td>
             <td style="padding:8px 12px">
@@ -3268,7 +3710,11 @@
             </td>
           </tr>
         `).join('')}
-      `).join('');
+        ${rest > 0 ? `<tr><td colspan="2" style="padding:0 12px 10px">
+          <button class="more-btn" onclick="expandReportDay('${esc(date)}')">Show ${rest} more from ${esc(formatDate(date, date))}</button>
+        </td></tr>` : ''}
+      `;
+      }).join('');
 
       el.innerHTML = `
         <!-- Filter bar -->
@@ -3306,6 +3752,9 @@
               <tbody>${participationRows}</tbody>
             </table>
           </div>
+          ${participationHidden > 0 ? `<button class="more-btn" style="margin-top:10px"
+            onclick="reportState.allParticipation = true; loadReports({ keepWindow: true })">
+            Show all ${participation.length} members</button>` : ''}
         </div>` : ''}
 
         <!-- Response history -->
@@ -5022,7 +5471,6 @@
     ]);
     if (cfg) {
       state.kudosConfig = cfg;
-      document.getElementById('kudos-emoji-inline').textContent = cfg.emoji;
       document.getElementById('kudos-allowance-inline').textContent = cfg.daily_allowance;
       document.getElementById('kudos-emoji').value = cfg.emoji;
       document.getElementById('kudos-allowance').value = cfg.daily_allowance;
@@ -5038,7 +5486,6 @@
   function renderKudosGivers(board) {
     const el = document.getElementById('kudos-givers');
     if (!el) return;
-    const emoji = (state.kudosConfig && state.kudosConfig.emoji) || '';
     if (!board.length) {
       el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">Nobody has given any yet.</p>';
       return;
@@ -5047,7 +5494,7 @@
       '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
       '<span class="rank' + (i < 3 ? ' rank-top' : '') + '">' + (i + 1) + '</span>' +
       '<span style="flex:1;font-weight:600;">@' + esc(r.user_id) + '</span>' +
-      '<span class="pill-quiet" style="padding:2px 10px">' + r.given + ' given ' + esc(emoji) + '</span>' +
+      '<span class="count-pill"><img class=\"tok\" src=\"/static/kudos-token-128.png\" alt=\"\"/> ' + r.given + '</span>' +
       '</div>').join('');
   }
 
@@ -5073,7 +5520,7 @@
       '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
       '<span class="rank' + (i < 3 ? ' rank-top' : '') + '">' + (i + 1) + '</span>' +
       '<span style="flex:1;font-weight:600;">@' + esc(r.to_user) + '</span>' +
-      '<span style="background:rgba(245,158,11,0.15);color:#d97706;padding:2px 10px;border-radius:99px;font-size:0.82rem;font-weight:700;">' + r.received + ' kudos</span>' +
+      '<span class="count-pill"><img class=\"tok\" src=\"/static/kudos-token-128.png\" alt=\"\"/> ' + r.received + '</span>' +
       '</div>'
     ).join('');
   }
@@ -5084,7 +5531,7 @@
     if (!kudos.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">No kudos yet — give some! DM the bot: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">kudos @teammate Great job!</code></p>'; return; }
     el.innerHTML = kudos.map(k => {
       return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;">' +
-        '<div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:6px;"><strong style="color:var(--text);">@' + esc(k.from_user) + '</strong> → <strong style="color:#818cf8;">@' + esc(k.to_user) + '</strong> · ' + relativeCell(k.created_at, '') + '</div>' +
+        '<div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:6px;"><strong style="color:var(--text);">@' + esc(k.from_user) + '</strong> → <strong style="color:var(--accent-strong);">@' + esc(k.to_user) + '</strong> · ' + relativeCell(k.created_at, '') + '</div>' +
         '<div style="font-size:0.95rem;color:var(--text-muted);font-style:italic;">"' + slackBlock(k.message) + '"</div>' +
         '</div>';
     }).join('');
@@ -5169,8 +5616,8 @@
       '<div style="flex:1;min-width:0;">' +
       '<div style="font-weight:600;margin-bottom:4px;">' + esc(r.name) + '</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<span style="background:rgba(99,102,241,0.15);color:#6366f1;padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(triggerLabels[r.trigger] || r.trigger) + '</span>' +
-      '<span style="background:rgba(16,185,129,0.15);color:#10b981;padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(actionLabels[r.action] || r.action) + '</span>' +
+      '<span style="background:rgba(99,102,241,0.15);color:var(--accent-strong);padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(triggerLabels[r.trigger] || r.trigger) + '</span>' +
+      '<span style="background:rgba(16,185,129,0.15);color:var(--sev-good);padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(actionLabels[r.action] || r.action) + '</span>' +
       '<span style="font-size:0.8rem;color:var(--text-muted);align-self:center;">' + esc(r.action_target) + '</span>' +
       '</div>' +
       '</div>' +
@@ -5304,7 +5751,7 @@
         <td class="col-name">${esc(k.name || EMPTY_CELL)}</td>
         <td class="col-date">${esc(formatDate(k.created_at, EMPTY_CELL))}</td>
         <td class="col-date">${relativeCell(k.last_used_at, 'Never')}</td>
-        <td class="col-actions"><button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#dc2626" onclick="revokeMCPKey(${k.id})">Revoke</button></td>
+        <td class="col-actions"><button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:var(--danger)" onclick="revokeMCPKey(${k.id})">Revoke</button></td>
       </tr>`).join('');
     el.innerHTML = `<div class="table-scroll"><table class="data-table" style="min-width:640px">
       <thead><tr>
