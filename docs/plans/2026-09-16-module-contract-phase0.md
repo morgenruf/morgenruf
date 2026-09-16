@@ -2978,17 +2978,60 @@ Dashboard nav is now built from active modules instead of a hardcoded list."
 
 ## Phase 0 exit criteria
 
-Before starting the Connect plan, all of these must hold:
+Status as executed on 2026-09-16, all 18 tasks complete on branch
+`feat/module-contract-phase0`.
 
-- [ ] Full suite green, with the test count at or above 580
-- [ ] `python tools/check_mechanical_move.py` reports `OK mechanical` for every file moved in R2
-- [ ] `src/core/` contains no import of anything under `src/modules/`, verified by:
-      `grep -rn "src.modules" app/src/core/ && echo "LEAK" || echo "core is clean"`
-      (the migrations runner's lazy `REGISTRY` import inside `module_migration_dirs` is the one allowed exception, since it reads the registry without importing any module by name)
-- [ ] `main.py` imports no feature module by name (asserted by `test_main_wiring.py`)
-- [ ] Production `schema_migrations` gained exactly two rows across R1 to R4: `029_granted_scopes.sql` and `030_workspace_modules.sql`
-- [ ] Standup delivery verified by a manual trigger in a live workspace after each release
-- [ ] Every release was deployed outside standup and report windows, per accepted risk AR1
+- [x] Full suite green: **626 passed**, up from a 530 baseline. ruff clean.
+- [x] Both R2 moves verified mechanical **at the commit that made them**
+      (`e5ecdb0` for the ten core files, `46de708` for the nine standup files).
+      Note the criterion as originally written was wrong: re-running the check
+      against today's tree reports differences, because R3 and R4 deliberately
+      edited some of those files afterwards. The guarantee is per-move, not
+      forever.
+- [x] `main.py` names no feature module (0 occurrences of `src.modules.`).
+- [x] Migration discovery finds 30 files across core and four modules, with
+      the original 28 basenames unchanged, so nothing re-runs in production.
+- [x] Image builds; `python src/migrate.py` and `python -m src.main` both
+      resolve inside it; all 30 SQL files ship.
+- [ ] **Not met: core no longer importing feature modules.** 14 dependencies
+      remain, one of them a top-level import (`core/oauth.py:19` imports
+      `standup.mailer.send_welcome_email`); the rest are lazy imports inside
+      functions in `core/dashboard.py`, `core/scheduler.py` and `core/db.py`.
+      Phase 0 moved the files but not all the responsibilities: core's
+      dashboard still serves standup's schedule and workflow endpoints, and
+      core's scheduler still runs standup's jobs. `test_main_wiring.py`
+      ratchets the count so it cannot grow.
+- [ ] Production verification (migration rows, `/healthz` continuity, manual
+      standup trigger) pending deployment.
+
+## Deviations from this plan, as executed
+
+1. **Test updates were not mechanical.** Under the package layout a lazy
+   `import src.core.db as db` binds from `getattr(src.core, "db")`, so the
+   existing practice of faking a module by replacing its `sys.modules` entry
+   stopped intercepting, silently. Tests began exercising the real database
+   and failed on assertions, 90 of them at the worst point. `tests/support.py`
+   adds `patch_modules`, which patches the entry and the parent attribute
+   together. Four faking styles needed rewiring.
+2. **`src/templates` had to move with `dashboard.py`**, since
+   `template_folder="templates"` resolves against the blueprint's own
+   directory.
+3. **`schedule_validation` moved to core, not standup.** `core/dashboard.py`
+   imports it, so leaving it in standup made core import a module and created
+   an import cycle once a second module registered.
+4. **Kudos owned dashboard endpoints too.** Moving only its db functions would
+   have forced core to import a module, so `/dashboard/api/kudos` and its
+   leaderboard moved into the module, keeping their paths.
+5. **Task 16 did not repoint standup at the shared roster.** Standup's
+   audience is a per-schedule participant list with vacation checked at send
+   time (`scheduler.py:418`), which is a different question from "who in this
+   workspace is contactable". Repointing it at `eligible_members(team_id)`
+   would have changed a schedule's audience to all members.
+6. **mcp is unconditional**, not gated on an `MCP_ENABLED` variable that does
+   not exist, and google_chat's `GOOGLE_CREDENTIALS` check lives in
+   `register_routes` rather than `default_enabled`, because route registration
+   happens once at process start while `default_enabled` is resolved per
+   workspace.
 
 ## Constraint inherited by the Connect plan
 
