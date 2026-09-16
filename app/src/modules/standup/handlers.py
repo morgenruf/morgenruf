@@ -801,42 +801,6 @@ def register_handlers(app: App) -> None:
         else:
             logger.warning("app_uninstalled: no installation found for team %s", team_id)
 
-    @app.event("message")
-    def handle_dm(event, say, client, logger):  # noqa: ANN001
-        """Handle incoming DMs — collect standup answers step by step."""
-        if event.get("channel_type") != "im":
-            return
-        if event.get("subtype"):
-            return
-
-        user_id: str = event["user"]
-        team_id: str = event.get("team", "")
-        text: str = event.get("text", "").strip()
-        cache_key = f"{team_id}:{user_id}"
-
-        session = state_store.get(cache_key)
-        if not session:
-            return
-
-        session = state_store.record_answer(cache_key, text)
-        n_questions = len(session.questions)
-
-        if session.step < n_questions:
-            # Still collecting question answers — send next question as Block Kit
-            _send_question_block(
-                client,
-                user_id,
-                session.questions[session.step],
-                session.step,
-                _initial_answer_for(session, session.step),
-            )
-        elif session.step == n_questions:
-            # All questions answered — ask mood
-            _send_mood_block(client, user_id)
-        else:
-            # Mood answered — finalize
-            _complete_standup(user_id, session, client)
-
     @app.event("app_home_opened")
     def handle_app_home(event, client, body=None):  # noqa: ANN001
         """Render the App Home tab when a user opens it."""
@@ -1956,3 +1920,46 @@ def register_handlers(app: App) -> None:
             say(f"⚠️ Could not save timezone: {exc}")
             return
         say(f"✅ Your timezone has been updated to *{tz_str}*.")
+
+
+def claim_dm(ctx) -> bool:
+    """Handle an in-progress standup answer sent by DM.
+
+    This was the @app.event("message") catch-all. Core now owns the single
+    catch-all listener and offers each DM to every active module in turn, so
+    this returns True when standup consumed the message and False when it did
+    not, letting the next module see it.
+
+    The three early returns below are the original listener's, unchanged.
+    """
+    event = ctx.event
+    if event.get("channel_type") != "im":
+        return False
+    if event.get("subtype"):
+        return False
+
+    cache_key = f"{ctx.team_id}:{ctx.user_id}"
+
+    session = state_store.get(cache_key)
+    if not session:
+        return False
+
+    session = state_store.record_answer(cache_key, ctx.text)
+    n_questions = len(session.questions)
+
+    if session.step < n_questions:
+        # Still collecting question answers — send next question as Block Kit
+        _send_question_block(
+            ctx.client,
+            ctx.user_id,
+            session.questions[session.step],
+            session.step,
+            _initial_answer_for(session, session.step),
+        )
+    elif session.step == n_questions:
+        # All questions answered — ask mood
+        _send_mood_block(ctx.client, ctx.user_id)
+    else:
+        # Mood answered — finalize
+        _complete_standup(ctx.user_id, session, ctx.client)
+    return True
