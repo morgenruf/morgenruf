@@ -879,6 +879,31 @@ def _answer_sections(
     return sections, bool(blocker_lines)
 
 
+def _compact_person(display_name: str, badge: str, pairs: list[tuple[str, str]], jira: str, zendesk: str) -> list[dict]:
+    """One section for one person, used when the team is too big for cards.
+
+    Slack caps a message at 50 blocks. A twenty person standup rendered as
+    cards loses half the team, so past that size everyone gets a single line
+    each instead and nobody is dropped.
+    """
+    lines = [f"*{display_name}*{badge}"]
+    for label, raw in pairs:
+        text = linkify_issues((raw or "").strip().replace("\n", " "), jira, zendesk)
+        mark = f"{_BLOCKER_ICON} " if is_blocker_question(label) and reports_a_blocker(raw) else ""
+        lines.append(f"{mark}*{label}* {text or _NO_ANSWER}")
+    body = "\n".join(lines)
+    return [{"type": "section", "text": {"type": "mrkdwn", "text": body[:2900]}}]
+
+
+def _nobody_answered() -> list[dict]:
+    """Said plainly, because an empty summary otherwise looks like a failure."""
+    return [
+        {"type": "header", "text": {"type": "plain_text", "text": "📋 Standup summary", "emoji": True}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": f"{_today_label()} · nobody answered"}]},
+        {"type": "section", "text": {"type": "mrkdwn", "text": "No answers came in today."}},
+    ]
+
+
 def _blocked_banner(names: list[str]) -> list[dict]:
     """One line naming everyone who is blocked, read before anything else."""
     if not names:
@@ -901,14 +926,16 @@ def _assemble(head: list[dict], chunks: list[list[dict]], footer: list[dict]) ->
     # A divider at the very end is a rule drawn under nothing.
     if blocks and blocks[-1].get("type") == "divider":
         blocks.pop()
-    if shown < len(chunks):
+    missing = len(chunks) - shown
+    if missing:
+        noun = "answer" if missing == 1 else "answers"
         blocks.append(
             {
                 "type": "context",
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": f"{len(chunks) - shown} more answers did not fit here. They are all in the dashboard.",
+                        "text": f"{missing} more {noun} did not fit here. Every one of them is in the dashboard.",
                     }
                 ],
             }
@@ -1696,6 +1723,8 @@ def build_summary_by_member(
     """
     user_profiles = user_profiles or {}
     edit_window_open = edit_window_open or set()
+    if not responses:
+        return _nobody_answered()
 
     q_labels = (
         list(questions)
@@ -1709,6 +1738,7 @@ def build_summary_by_member(
     answer_keys = ["yesterday", "today", "blockers"]
 
     chunks: list[list[dict]] = []
+    compact: list[list[dict]] = []
     blocked: list[str] = []
 
     for resp in responses:
@@ -1722,11 +1752,13 @@ def build_summary_by_member(
             for idx, key in enumerate(answer_keys)
         ]
         sections, found_blocker = _answer_sections(pairs, jira_base_url, zendesk_base_url)
+        badge = f"  {_BLOCKER_ICON} blocked" if found_blocker else ""
         if found_blocker:
             blocked.append(display_name)
+        compact.append(_compact_person(display_name, badge, pairs, jira_base_url, zendesk_base_url))
 
         chunk: list[dict] = [
-            _person_line(display_name, avatar_url, f"  {_BLOCKER_ICON} blocked" if found_blocker else ""),
+            _person_line(display_name, avatar_url, badge),
             *sections,
         ]
 
@@ -1765,6 +1797,9 @@ def build_summary_by_member(
     head.extend(_blocked_banner(blocked))
     head.append({"type": "divider"})
 
+    if sum(len(chunk) for chunk in chunks) > _MAX_BLOCKS - len(head):
+        chunks = compact
+
     return _assemble(head, chunks, [])
 
 
@@ -1784,6 +1819,8 @@ def build_summary_by_question(
     ``user_id`` → ``{"display_name": str, "avatar_url": str}``.
     """
     user_profiles = user_profiles or {}
+    if not responses:
+        return _nobody_answered()
 
     q_labels = (
         list(questions)
@@ -1813,7 +1850,9 @@ def build_summary_by_question(
 
     # Every question has to be shown, so the trimming happens inside a question
     # rather than dropping the last one entirely.
-    per_question = max(1, (_MAX_BLOCKS - len(head)) // max(1, len(answer_keys)) - 2)
+    # Each question costs its own heading, a possible "and N more" line and a
+    # divider on top of the people listed under it.
+    per_question = max(1, (_MAX_BLOCKS - len(head)) // max(1, len(answer_keys)) - 3)
 
     chunks: list[list[dict]] = []
     for idx, key in enumerate(answer_keys):
