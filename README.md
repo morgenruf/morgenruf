@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A self-hosted, open-source Slack standup bot. Ask structured daily questions, post formatted summaries to team channels, and keep full ownership of your standup data — no SaaS subscription required.
+A self-hosted, open-source Slack app for the rituals a distributed team runs on: async standups, random coffee chats, peer recognition, and the cross-signal insights none of them give you alone. Keep full ownership of the data, no SaaS subscription required.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-operational-brightgreen)](https://status.morgenruf.dev)
@@ -54,6 +54,57 @@ morgenruf/
 - 🐳 **Kubernetes-ready** — production Helm chart at `charts.morgenruf.dev`
 - ☁️ **Cloudflare Zero Trust** — works behind CF tunnel (no ingress controller needed)
 - 🗃️ **PostgreSQL** — full standup history, migrations auto-applied on startup
+
+---
+
+## Modules
+
+Morgenruf ships as four modules over one deployment and one database. Each one
+is independent: it owns its own migrations, Slack handlers, dashboard routes and
+scheduled jobs, and can be switched off without touching the others.
+
+| Module | What it does | On by default |
+|---|---|---|
+| **Standups** | Async daily standups, summaries, mood, blockers, webhooks | Yes |
+| **Coffee chats** | Random 1:1 pairings from a channel on a cadence, history-aware so the same two people are not matched twice in a row | No — needs extra scopes |
+| **Kudos** | Peer recognition with a daily allowance, a custom token, and leaderboards for receivers *and* givers | Yes |
+| **Insights** | Questions that need two signals at once: blockers nobody has cleared in days, people who answer every standup and are thanked by nobody | Yes |
+
+A module is only live when all four gates pass, checked in order:
+
+1. **Deploy allowlist** — `MORGENRUF_MODULES=standup,kudos` ships a build with the
+   others present but dark. Unset means no restriction.
+2. **Granted scopes** — Coffee chats needs `mpim:write`, `mpim:history` and
+   `users.profile:read`. A workspace that installed before those scopes existed
+   stays dark until it re-authorises, rather than erroring at runtime.
+3. **Workspace toggle** — per-workspace, from the dashboard.
+4. **Module default** — what a workspace that has never chosen gets.
+
+### Coffee chats
+
+Pick a channel and a cadence. Everyone in it is paired and introduced in a group
+DM; when the count is odd, one group of three forms so nobody sits out. Three
+days later the bot nudges pairs that have not met, and closes the round on day
+six by asking whether they did.
+
+That answer is the only metric worth having, and the dashboard splits it four
+ways rather than two: **met**, **did not meet**, **no reply**, and **not
+delivered**. The last one is a delivery failure on our side, not people failing
+to show up, and collapsing it into "did not meet" would hide that.
+
+### Kudos
+
+`kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a
+daily allowance that resets at midnight *in their own timezone*, and unused ones
+do not carry over — that is what makes people spend them.
+
+**Using the Morgenruf icon as your kudos token:** the dashboard always shows it,
+and Slack can too. In **Kudos → The token your team gives**, download the icon,
+then in Slack go to **Customize workspace → Add custom emoji**, upload it with
+the name `morgenruf`, and leave the token field as `:morgenruf:`.
+
+> Until that emoji exists in your workspace, Slack renders `:morgenruf:` as
+> literal text. Import it first, or set the field to a plain emoji instead.
 
 ---
 
@@ -238,7 +289,38 @@ Then posts a formatted summary to the configured channel:
 | `standup` | Start your standup now |
 | `skip` | Skip today's standup |
 | `timezone <tz>` | Set your personal timezone (e.g. `timezone Europe/London`) |
+| `kudos @teammate <reason>` | Give someone recognition (also `/kudos`) |
 | `help` | Show available commands |
+
+Coffee chat replies are buttons rather than typed commands — **We met**, **Not
+this time**, **Skip this round** and **Pause** appear on the messages the bot
+sends, so nothing there can collide with `skip`.
+
+---
+
+## MCP Server
+
+Morgenruf exposes its data to AI assistants over MCP, so you can ask questions
+in plain language instead of reading dashboards. Generate a key in the
+dashboard under **MCP**, then point your client at `https://api.morgenruf.dev/mcp`
+with an `Authorization: Bearer <key>` header.
+
+**`tools/list` is per-workspace.** Only modules that pass all four activation
+gates advertise their tools, so an assistant is never offered a tool for a
+feature the workspace has switched off.
+
+| Area | Tools |
+|---|---|
+| Standups | `get_standups`, `get_today_standups`, `get_blockers`, `get_participation`, `get_members`, `search_standups`, `get_workspace_summary`, `get_mood_summary` |
+| Kudos | `get_kudos_leaderboard`, `get_recent_kudos`, `get_kudos_settings` |
+| Coffee chats | `list_coffee_chat_programs`, `get_coffee_chat_rounds`, `get_coffee_chat_attendance`, `get_coffee_chat_pairs` |
+| Insights | `get_stuck_blockers`, `get_unrecognised_contributors` |
+
+Questions these make answerable: *"who has been blocked on the same thing for
+days?"*, *"who answers standup every day and has never been thanked?"*, *"which
+coffee chat pairings never actually happened?"*
+
+Full reference: [docs.morgenruf.dev/mcp.html](https://docs.morgenruf.dev/mcp.html)
 
 ---
 
