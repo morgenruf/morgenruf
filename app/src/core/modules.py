@@ -31,6 +31,9 @@ class ModuleSpec:
     purge: Optional[Callable]
     nav: tuple[NavItem, ...]
     default_enabled: bool
+    # Blocks this module contributes to the Slack App Home tab. Defaulted so
+    # a module that has nothing to add needs no change.
+    home_blocks: Optional[Callable] = None
 
 
 def deploy_allowlist() -> Optional[set[str]]:

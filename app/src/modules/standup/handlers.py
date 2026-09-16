@@ -902,6 +902,22 @@ def register_handlers(app: App) -> None:
             other_standups=all_other_standups if is_admin else [],
         )
 
+        # Other active modules add their own sections. Core reads the registry
+        # and hands them back, so standup never imports another module to find
+        # out what else belongs on this tab.
+        try:
+            from src.core.home import extra_home_blocks  # noqa: PLC0415
+
+            extras = extra_home_blocks(team_id, user_id, exclude="standup")
+            if extras and isinstance(view, dict) and isinstance(view.get("blocks"), list):
+                # Slack rejects a view over 100 blocks outright, so trim rather
+                # than lose the whole tab.
+                room = 100 - len(view["blocks"])
+                if room > 0:
+                    view["blocks"].extend(extras[:room])
+        except Exception:
+            logger.exception("Could not add module sections to App Home")
+
         try:
             client.views_publish(user_id=user_id, view=view)
         except Exception as exc:
