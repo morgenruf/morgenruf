@@ -45,11 +45,11 @@ def _check_allowance(team_id: str, from_user: str):
         return {"emoji": kdb.DEFAULT_EMOJI, "remaining": 1, "allowance": 0}, None
 
     if state["allowance"] == 0:
-        return state, "Kudos giving is switched off for this workspace right now."
+        return state, "Kudos are switched off for this workspace. An admin can turn them on in the dashboard."
     if not state["can_give"]:
         return state, (
-            f"You have given all {state['allowance']} of your {state['emoji']} for today. "
-            "Your allowance resets at midnight in your timezone."
+            f"That was all {state['allowance']} of your {state['emoji']} for today. "
+            "You get a fresh set at midnight where you are."
         )
     return state, None
 
@@ -61,8 +61,41 @@ def _remaining_note(state) -> str:
     if state.get("allowance", 0) <= 0:
         return ""
     if left == 0:
-        return f"\n\n_That was your last {emoji} for today._"
-    return f"\n\n_{left} {emoji} left today._"
+        return f"That was your last {emoji} for today. A fresh set arrives at midnight."
+    return f"{left} {emoji} left today."
+
+
+def _context(*lines: str) -> list[dict]:
+    """A context block per line, skipping the ones that came back empty."""
+    return [{"type": "context", "elements": [{"type": "mrkdwn", "text": line}]} for line in lines if line]
+
+
+def _quote(message: str) -> str:
+    """Every line prefixed, so a multi-line reason stays inside the quote."""
+    lines = (message or "").strip().splitlines()
+    return "\n".join(f"> {line}" if line.strip() else ">" for line in lines) or "> "
+
+
+def kudos_card(from_user: str, to_user: str, message: str, emoji: str = "🍁") -> tuple[str, list[dict]]:
+    """The card that lands in the channel.
+
+    The person being recognised is named first and in bold, because they are
+    the point of the message. The reason is quoted so it reads as their words
+    being passed on, and the last line tells everyone else how to join in.
+    """
+    if to_user:
+        headline = f"{emoji} *<@{to_user}>* got a {emoji} from <@{from_user}>"
+        text = f"{emoji} <@{from_user}> gave <@{to_user}> a {emoji}"
+    else:
+        headline = f"{emoji} *<@{from_user}>* wants to recognise someone"
+        text = f"{emoji} <@{from_user}> gave a {emoji}"
+
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": headline}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": _quote(message)}},
+        *_context("Pass one on with `kudos @someone` and a reason, or `/kudos`"),
+    ]
+    return text, blocks
 
 
 def register_handlers(app) -> None:
@@ -78,7 +111,7 @@ def register_handlers(app) -> None:
         if not text:
             client.chat_postMessage(
                 channel=user_id,
-                text="Usage: `/kudos @teammate Great job on the release! 🚀`",
+                text="Name someone and say why. For example: `/kudos @sam caught the migration bug before it shipped`",
             )
             return
 
@@ -93,20 +126,25 @@ def register_handlers(app) -> None:
 
             config = core_db.get_workspace_config(team_id) or {}
             channel_id = config.get("channel_id", "")
+            emoji = db.get_config(team_id).get("emoji") or db.DEFAULT_EMOJI
 
             # Persist kudos to database
             if to_user:
-                db.save_kudos(team_id, user_id, to_user, kudos_message, channel_id)
+                db.save_kudos(team_id, user_id, to_user, kudos_message, channel_id, emoji)
 
+            card_text, card_blocks = kudos_card(user_id, to_user, kudos_message, emoji)
             if channel_id:
+                client.chat_postMessage(channel=channel_id, text=card_text, blocks=card_blocks)
+                client.chat_postMessage(channel=user_id, text=f"Sent, and it is up in <#{channel_id}>.")
+            else:
                 client.chat_postMessage(
-                    channel=channel_id,
-                    text=f"🏆 <@{user_id}> gives kudos: {text}",
+                    channel=user_id,
+                    text=card_text,
+                    blocks=[*card_blocks, *_context("Pick a channel in the dashboard to post these where the team can see them.")],
                 )
-            client.chat_postMessage(channel=user_id, text=f"✅ Kudos sent: {text}")
         except Exception as exc:
             logger.warning("kudos command error: %s", exc)
-            client.chat_postMessage(channel=user_id, text="❌ Couldn't send kudos. Please try again.")
+            client.chat_postMessage(channel=user_id, text="That kudos did not go through. Try it once more.")
     @app.message(re.compile(r"^kudos\s+<@([A-Z0-9]+)>\s+(.+)$", re.IGNORECASE))
     def handle_kudos(message, say, client, context, logger):
         """Handle kudos messages: kudos <@USER> Great work!"""
@@ -134,7 +172,8 @@ def register_handlers(app) -> None:
             logger.warning("Could not save kudos: %s", exc)
 
         emoji = state["emoji"]
-        kudos_card = f"{emoji} <@{from_user}> gave a {emoji} to <@{to_user}>\n\n> {kudos_message}"
+        card_text, card_blocks = kudos_card(from_user, to_user, kudos_message, emoji)
+        left = _remaining_note(state)
 
         try:
             if channel_type == "im":
@@ -144,14 +183,35 @@ def register_handlers(app) -> None:
                     config = db.get_workspace_config(team_id) or {}
                     post_channel = config.get("channel_id", "")
                     if post_channel:
-                        client.chat_postMessage(channel=post_channel, text=kudos_card)
-                        say(f"Posted to <#{post_channel}>." + _remaining_note(state))
+                        client.chat_postMessage(channel=post_channel, text=card_text, blocks=card_blocks)
+                        say(
+                            text=f"Sent, and it is up in <#{post_channel}>.",
+                            blocks=[
+                                {
+                                    "type": "section",
+                                    "text": {
+                                        "type": "mrkdwn",
+                                        "text": f"Sent, and it is up in <#{post_channel}>.",
+                                    },
+                                },
+                                *_context(left),
+                            ],
+                        )
                     else:
-                        say(kudos_card + "\n\n_Set a channel in the dashboard to post these publicly._" + _remaining_note(state))
+                        say(
+                            text=card_text,
+                            blocks=[
+                                *card_blocks,
+                                *_context(
+                                    "Pick a channel in the dashboard and the next one posts where the team can see it.",
+                                    left,
+                                ),
+                            ],
+                        )
                 except Exception:
-                    say(kudos_card + _remaining_note(state))
+                    say(text=card_text, blocks=[*card_blocks, *_context(left)])
             else:
-                client.chat_postMessage(channel=channel_id, text=kudos_card)
+                client.chat_postMessage(channel=channel_id, text=card_text, blocks=card_blocks)
         except Exception as exc:
             logger.error("Failed to post kudos: %s", exc)
-            say(f"Saved. <@{to_user}> has been recognised." + _remaining_note(state))
+            say(text=f"Saved. <@{to_user}> has been recognised. {left}".strip())

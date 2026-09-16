@@ -394,8 +394,10 @@
     .accordion-body.open { display: block; }
     .accordion-arrow.open { transform: rotate(180deg); }
 
-    /* Select styled */
-    select option { background: #1a1a1a; }
+    /* Options follow the theme. This was pinned to #1a1a1a from when the
+       dashboard was dark only, which rendered the control as a black box on
+       a light background. */
+    select option { background: var(--surface); color: var(--text); }
 
     /* Multi-select */
     .multi-select-wrap { position: relative; }
@@ -1368,6 +1370,26 @@
     }
     .nav-sub .nav-item.active { background: transparent; color: var(--accent); font-weight: 600; }
     .nav-sub .nav-item.active::before { display: none; }
+
+    /* Modal tabs. Nineteen fields in one scrolling column made the important
+       ones (name, channel, who) compete with the rare ones (Jira base URL).
+       Grouping is presentational only: every input keeps its id, so saving and
+       loading are untouched. */
+    .modal-tabs {
+      display: flex; gap: 2px; flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+      margin: -4px 0 20px;
+    }
+    .modal-tab {
+      appearance: none; background: none; border: 0; cursor: pointer;
+      padding: 10px 14px; margin-bottom: -1px;
+      font-size: 13.5px; font-weight: 500; color: var(--text-dim);
+      border-bottom: 2px solid transparent;
+    }
+    .modal-tab:hover { color: var(--text); }
+    .modal-tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .modal-pane { display: block; }
+    .modal-pane[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -2011,6 +2033,13 @@
       </div>
       <div class="modal-body">
         <input type="hidden" id="modal-standup-id"/>
+        <div class="modal-tabs" role="tablist">
+          <button type="button" class="modal-tab on" data-tab="basics" onclick="showModalTab('basics')">Basics</button>
+          <button type="button" class="modal-tab" data-tab="schedule" onclick="showModalTab('schedule')">Schedule</button>
+          <button type="button" class="modal-tab" data-tab="summary" onclick="showModalTab('summary')">Summary</button>
+          <button type="button" class="modal-tab" data-tab="advanced" onclick="showModalTab('advanced')">Advanced</button>
+        </div>
+        <div class="modal-pane" id="pane-basics">
         <div class="form-grid">
           <div class="form-group">
             <label>Standup Name</label>
@@ -2034,7 +2063,8 @@
           <div class="participants-hint" id="participants-hint"></div>
         </div>
 
-        <div class="form-section-title">Schedule</div>
+        </div>
+        <div class="modal-pane" id="pane-schedule" hidden>
         <div class="form-grid">
           <div class="form-group">
             <label>Time</label>
@@ -2089,6 +2119,8 @@
         </div>
 
         <div class="form-section-title">Report</div>
+        </div>
+        <div class="modal-pane" id="pane-summary" hidden>
         <div class="form-grid">
           <div class="form-group">
             <label>Report Channel</label>
@@ -2102,6 +2134,8 @@
           </div>
         </div>
 
+        </div>
+        <div class="modal-pane" id="pane-advanced" hidden>
         <!-- Advanced -->
         <div class="accordion-header" onclick="toggleAdvanced()">
           <h4>Advanced Settings</h4>
@@ -2197,6 +2231,7 @@
           </div>
         </div>
       </div>
+        </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveStandup()">Save Standup</button>
@@ -3603,6 +3638,16 @@
     setQuestions(s.questions || []);
     setParticipants(s.participants || []);
     document.getElementById('standup-modal').classList.add('open');
+  }
+
+
+  function showModalTab(key) {
+    document.querySelectorAll('.modal-tab').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.tab === key);
+    });
+    document.querySelectorAll('.modal-pane').forEach(function (pane) {
+      pane.hidden = pane.id !== 'pane-' + key;
+    });
   }
 
   function closeModal() {

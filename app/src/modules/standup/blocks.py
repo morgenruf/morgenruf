@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
+
+from src.modules.standup.blockers import is_blocker_question, reports_a_blocker
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -697,8 +699,15 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
 
 
 def standup_dm_message(questions: list[str], standup_name: str) -> dict:
-    """DM message sent to user when it is standup time."""
+    """DM message sent to user when it is standup time.
+
+    Header carries the standup's own name, the count sits in a context line
+    rather than a paragraph, and the first question is the one thing in the
+    message styled as a question. Everything else is one tap.
+    """
+    questions = list(questions or [])
     first_question = questions[0] if questions else "What did you do yesterday?"
+    count = len(questions) or 1
     return {
         "blocks": [
             {
@@ -706,27 +715,25 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
                 "block_id": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": f"🌅 Time for your standup! — {standup_name}",
+                    "text": f"🌅 {standup_name[:140]}",
                     "emoji": True,
                 },
             },
             {
-                "type": "section",
+                "type": "context",
                 "block_id": "intro",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "You can answer each question one by one by *responding in this DM*. "
-                        "Reply with `pass` or `NA` to skip a question and move on. "
-                        "Or click *Fill in form* to answer all questions at once."
-                    ),
-                },
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"Standup time · {count} question{'' if count == 1 else 's'} · takes a minute",
+                    }
+                ],
             },
             {"type": "divider"},
             {
                 "type": "section",
                 "block_id": "first_question",
-                "text": {"type": "mrkdwn", "text": f"• *{first_question}*"},
+                "text": {"type": "mrkdwn", "text": f"*1. {first_question}*"},
             },
             {
                 "type": "actions",
@@ -735,7 +742,7 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
                     {
                         "type": "button",
                         "action_id": "fill_in_form",
-                        "text": {"type": "plain_text", "text": "Fill in form", "emoji": True},
+                        "text": {"type": "plain_text", "text": "Answer all at once", "emoji": True},
                         "style": "primary",
                         "value": "fill_in_form",
                     },
@@ -746,10 +753,10 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
                         "style": "danger",
                         "value": "skip_standup",
                         "confirm": {
-                            "title": {"type": "plain_text", "text": "Skip standup?"},
+                            "title": {"type": "plain_text", "text": "Skip today?"},
                             "text": {
                                 "type": "plain_text",
-                                "text": "Skip today's standup? Your teammates won't see an update from you.",
+                                "text": "Your team will see no update from you today. You can still answer later.",
                             },
                             "confirm": {"type": "plain_text", "text": "Yes, skip"},
                             "deny": {"type": "plain_text", "text": "Never mind"},
@@ -769,7 +776,7 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": "Or just type your answer below",
+                        "text": "Reply here and I will ask the next one. Send `pass` to leave a question blank.",
                     }
                 ],
             },
@@ -822,6 +829,93 @@ def standup_form_modal(questions: list[str], standup_name: str, previous_answers
 # Channel message: Standup summary
 # ---------------------------------------------------------------------------
 
+# Slack rejects a message of more than 50 blocks outright, so a large standup
+# used to post nothing at all. Budget below the limit and say what was trimmed.
+_MAX_BLOCKS = 48
+
+_BLOCKER_ICON = "🚨"
+_NO_ANSWER = "_Left blank_"
+
+
+def _today_label() -> str:
+    return datetime.now(timezone.utc).strftime("%a %d %b")
+
+
+def _person_line(display_name: str, avatar_url: str = "", badge: str = "") -> dict:
+    """The name strip above someone's answers: small avatar, bold name."""
+    elements: list[dict] = []
+    if avatar_url:
+        elements.append({"type": "image", "image_url": avatar_url, "alt_text": display_name})
+    elements.append({"type": "mrkdwn", "text": f"*{display_name}*{badge}"})
+    return {"type": "context", "elements": elements}
+
+
+def _answer_sections(
+    pairs: list[tuple[str, str]],
+    jira_base_url: str = "",
+    zendesk_base_url: str = "",
+) -> tuple[list[dict], bool]:
+    """Sections for one person's answers, blockers split into their own block.
+
+    A blocker is the one thing in a standup somebody has to act on, so it does
+    not get buried in the middle of a paragraph of three answers. It is moved
+    to the end with its own icon, and the flag comes back so the caller can
+    name that person at the top of the summary.
+    """
+    lines: list[str] = []
+    blocker_lines: list[str] = []
+    for label, raw in pairs:
+        text = linkify_issues((raw or "").strip(), jira_base_url, zendesk_base_url)
+        if is_blocker_question(label) and reports_a_blocker(raw):
+            blocker_lines.append(f"{_BLOCKER_ICON} *{label}*\n{text}")
+        else:
+            lines.append(f"*{label}*\n{text or _NO_ANSWER}")
+
+    sections: list[dict] = []
+    if lines:
+        sections.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n\n".join(lines)}})
+    if blocker_lines:
+        sections.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n\n".join(blocker_lines)}})
+    return sections, bool(blocker_lines)
+
+
+def _blocked_banner(names: list[str]) -> list[dict]:
+    """One line naming everyone who is blocked, read before anything else."""
+    if not names:
+        return []
+    who = ", ".join(names)
+    return [{"type": "section", "text": {"type": "mrkdwn", "text": f"{_BLOCKER_ICON} *Blocked today:* {who}"}}]
+
+
+def _assemble(head: list[dict], chunks: list[list[dict]], footer: list[dict]) -> list[dict]:
+    """Head, as many whole people as fit, then the footer."""
+    blocks = list(head)
+    budget = _MAX_BLOCKS - len(head) - len(footer)
+    shown = 0
+    for chunk in chunks:
+        if len(chunk) > budget:
+            break
+        blocks.extend(chunk)
+        budget -= len(chunk)
+        shown += 1
+    # A divider at the very end is a rule drawn under nothing.
+    if blocks and blocks[-1].get("type") == "divider":
+        blocks.pop()
+    if shown < len(chunks):
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"{len(chunks) - shown} more answers did not fit here. They are all in the dashboard.",
+                    }
+                ],
+            }
+        )
+    blocks.extend(footer)
+    return blocks
+
 
 def standup_summary_message(
     standup_name: str,
@@ -837,80 +931,52 @@ def standup_summary_message(
     Each response dict: {name, avatar_url, answers: list[str], questions: list[str], has_blockers}
     """
     total = len(responses)
-    blocks: list[dict] = [
+    head: list[dict] = [
         {
             "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"🌅 {standup_name} — {date}",
-                "emoji": True,
-            },
-        },
-        {"type": "divider"},
+            "text": {"type": "plain_text", "text": f"🌅 {standup_name[:140]}", "emoji": True},
+        }
     ]
 
     if not responses:
-        blocks.append(
+        head.append(
             {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "_No responses yet._"},
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": f"{date} · nobody has answered yet"}],
             }
         )
-    else:
-        for resp in responses:
-            name = resp.get("name", "Unknown")
-            has_blockers = resp.get("has_blockers", False)
-            answers = resp.get("answers", [])
-            questions = resp.get("questions", [])
-            avatar_url = resp.get("avatar_url")
-
-            blocker_badge = " 🚨 *Has blockers*" if has_blockers else ""
-
-            # Member header
-            member_block: dict = {
+        head.append(
+            {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{name}*{blocker_badge}"},
+                "text": {"type": "mrkdwn", "text": "No answers in yet. This posts again as soon as they land."},
             }
-            if avatar_url:
-                member_block["accessory"] = {
-                    "type": "image",
-                    "image_url": avatar_url,
-                    "alt_text": name,
-                }
-            blocks.append(member_block)
+        )
+        return {"blocks": head}
 
-            # Q&A pairs
-            qa_lines = []
-            for i, answer in enumerate(answers):
-                question = questions[i] if i < len(questions) else f"Q{i + 1}"
-                linked = linkify_issues(answer, jira_base_url, zendesk_base_url)
-                qa_lines.append(f"*{question}*\n{linked}")
+    chunks: list[list[dict]] = []
+    blocked: list[str] = []
+    for resp in responses:
+        name = resp.get("name", "Unknown")
+        answers = resp.get("answers", []) or []
+        questions = resp.get("questions", []) or []
+        pairs = [(questions[i] if i < len(questions) else f"Question {i + 1}", a) for i, a in enumerate(answers)]
+        sections, found_blocker = _answer_sections(pairs, jira_base_url, zendesk_base_url)
+        if found_blocker or resp.get("has_blockers"):
+            blocked.append(name)
+        badge = f"  {_BLOCKER_ICON} blocked" if (found_blocker or resp.get("has_blockers")) else ""
+        chunks.append([_person_line(name, resp.get("avatar_url") or "", badge), *sections, {"type": "divider"}])
 
-            if qa_lines:
-                blocks.append(
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": "\n\n".join(qa_lines)},
-                    }
-                )
-
-            blocks.append({"type": "divider"})
-
-    # Footer
     responded = len([r for r in responses if r.get("answers")])
-    blocks.append(
+    head.append(
         {
             "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"_{responded} of {total} members responded_",
-                }
-            ],
+            "elements": [{"type": "mrkdwn", "text": f"{date} · {responded} of {total} answered"}],
         }
     )
+    head.extend(_blocked_banner(blocked))
+    head.append({"type": "divider"})
 
-    return {"blocks": blocks}
+    return {"blocks": _assemble(head, chunks, [])}
 
 
 # ---------------------------------------------------------------------------
@@ -1642,13 +1708,8 @@ def build_summary_by_member(
     )
     answer_keys = ["yesterday", "today", "blockers"]
 
-    blocks: list[dict] = [
-        {
-            "type": "header",
-            "text": {"type": "plain_text", "text": "📋 Today's Standup Summary", "emoji": True},
-        },
-        {"type": "divider"},
-    ]
+    chunks: list[list[dict]] = []
+    blocked: list[str] = []
 
     for resp in responses:
         user_id: str = resp["user_id"]
@@ -1656,54 +1717,55 @@ def build_summary_by_member(
         display_name: str = profile.get("display_name") or f"<@{user_id}>"
         avatar_url: str = profile.get("avatar_url", "")
 
-        # Context block: avatar + name
-        context_elements: list[dict] = []
-        if avatar_url:
-            context_elements.append(
-                {
-                    "type": "image",
-                    "image_url": avatar_url,
-                    "alt_text": display_name,
-                }
-            )
-        context_elements.append({"type": "mrkdwn", "text": f"*{display_name}*"})
-        blocks.append({"type": "context", "elements": context_elements})
+        pairs = [
+            (q_labels[idx] if idx < len(q_labels) else key.capitalize(), resp.get(key, "") or "")
+            for idx, key in enumerate(answer_keys)
+        ]
+        sections, found_blocker = _answer_sections(pairs, jira_base_url, zendesk_base_url)
+        if found_blocker:
+            blocked.append(display_name)
 
-        # Q&A section
-        qa_lines: list[str] = []
-        for idx, key in enumerate(answer_keys):
-            raw = resp.get(key, "") or ""
-            linked = linkify_issues(raw, jira_base_url, zendesk_base_url)
-            label = q_labels[idx] if idx < len(q_labels) else key.capitalize()
-            qa_lines.append(f"*{label}*\n{linked}")
-
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "\n\n".join(qa_lines)},
-            }
-        )
+        chunk: list[dict] = [
+            _person_line(display_name, avatar_url, f"  {_BLOCKER_ICON} blocked" if found_blocker else ""),
+            *sections,
+        ]
 
         # Edit button (only if within window)
         if user_id in edit_window_open:
-            blocks.append(
+            chunk.append(
                 {
                     "type": "actions",
                     "elements": [
                         {
                             "type": "button",
-                            "text": {"type": "plain_text", "text": "✏️ Edit my standup", "emoji": True},
+                            "text": {"type": "plain_text", "text": "✏️ Edit my answers", "emoji": True},
                             "action_id": "standup_edit",
                             "value": str(resp.get("id", "")),
-                            "style": "primary",
                         }
                     ],
                 }
             )
 
-        blocks.append({"type": "divider"})
+        chunk.append({"type": "divider"})
+        chunks.append(chunk)
 
-    return blocks
+    count = len(responses)
+    head: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": "📋 Standup summary", "emoji": True}},
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"{_today_label()} · {count} {'person' if count == 1 else 'people'} answered",
+                }
+            ],
+        },
+    ]
+    head.extend(_blocked_banner(blocked))
+    head.append({"type": "divider"})
+
+    return _assemble(head, chunks, [])
 
 
 def build_summary_by_question(
@@ -1734,31 +1796,42 @@ def build_summary_by_question(
     )
     answer_keys = ["yesterday", "today", "blockers"]
 
-    blocks: list[dict] = [
+    count = len(responses)
+    head: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": "📋 Standup summary", "emoji": True}},
         {
-            "type": "header",
-            "text": {"type": "plain_text", "text": "📋 Today's Standup Summary", "emoji": True},
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"{_today_label()} · {count} {'person' if count == 1 else 'people'} answered",
+                }
+            ],
         },
         {"type": "divider"},
     ]
 
+    # Every question has to be shown, so the trimming happens inside a question
+    # rather than dropping the last one entirely.
+    per_question = max(1, (_MAX_BLOCKS - len(head)) // max(1, len(answer_keys)) - 2)
+
+    chunks: list[list[dict]] = []
     for idx, key in enumerate(answer_keys):
         label = q_labels[idx] if idx < len(q_labels) else key.capitalize()
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{label}*"},
-            }
-        )
+        asks_blockers = is_blocker_question(label)
+        chunk: list[dict] = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*{idx + 1}. {label}*"}},
+        ]
 
-        for resp in responses:
+        for resp in responses[:per_question]:
             user_id: str = resp["user_id"]
             profile = user_profiles.get(user_id, {})
             display_name: str = profile.get("display_name") or f"<@{user_id}>"
             avatar_url: str = profile.get("avatar_url", "")
 
             raw = resp.get(key, "") or ""
-            linked = linkify_issues(raw, jira_base_url, zendesk_base_url)
+            linked = linkify_issues(raw.strip(), jira_base_url, zendesk_base_url) or _NO_ANSWER
+            mark = f"{_BLOCKER_ICON} " if asks_blockers and reports_a_blocker(raw) else ""
 
             context_elements: list[dict] = []
             if avatar_url:
@@ -1772,11 +1845,19 @@ def build_summary_by_question(
             context_elements.append(
                 {
                     "type": "mrkdwn",
-                    "text": f"*{display_name}*: {linked}",
+                    "text": f"{mark}*{display_name}*: {linked}",
                 }
             )
-            blocks.append({"type": "context", "elements": context_elements})
+            chunk.append({"type": "context", "elements": context_elements})
 
-        blocks.append({"type": "divider"})
+        if count > per_question:
+            chunk.append(
+                {
+                    "type": "context",
+                    "elements": [{"type": "mrkdwn", "text": f"and {count - per_question} more in the dashboard"}],
+                }
+            )
+        chunk.append({"type": "divider"})
+        chunks.append(chunk)
 
-    return blocks
+    return _assemble(head, chunks, [])

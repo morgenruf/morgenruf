@@ -26,19 +26,28 @@ def icebreaker(seed: int) -> str:
     return ICEBREAKERS[seed % len(ICEBREAKERS)]
 
 
-def intro_message(member_ids: list[str], seed: int, program_id: int) -> tuple[str, list]:
+def _mentions(member_ids: list[str]) -> str:
+    """Mentions joined as `A, B and C`, so the message opens by naming people."""
+    if len(member_ids) == 1:
+        return f"<@{member_ids[0]}>"
     names = ", ".join(f"<@{m}>" for m in member_ids[:-1])
-    mentions = f"{names} and <@{member_ids[-1]}>" if len(member_ids) > 1 else f"<@{member_ids[0]}>"
-    trio = " You are a three this round, so nobody sits out." if len(member_ids) > 2 else ""
-    text = f"Hi {mentions}, you have been matched for a coffee chat."
+    return f"{names} and <@{member_ids[-1]}>"
+
+
+def intro_message(member_ids: list[str], seed: int, program_id: int) -> tuple[str, list]:
+    mentions = _mentions(member_ids)
+    group = "Three of you this round, so nobody sits out." if len(member_ids) > 2 else "Just the two of you."
+    text = f"Coffee chat: {mentions}, you have been matched."
 
     blocks = [
+        {"type": "header", "text": {"type": "plain_text", "text": "☕ Coffee chat", "emoji": True}},
         {"type": "section", "text": {"type": "mrkdwn",
-         "text": f"*Hi {mentions}, you have been matched for a coffee chat.*{trio}"}},
-        {"type": "section", "text": {"type": "mrkdwn",
-         "text": f"Something to open with:\n> {icebreaker(seed)}"}},
+         "text": f"{mentions}, you have been matched. Say hello right here."}},
         {"type": "context", "elements": [{"type": "mrkdwn",
-         "text": "Find a time that suits you both. Fifteen minutes is plenty."}]},
+         "text": f"{group} Fifteen minutes is plenty, and any time this week works."}]},
+        {"type": "divider"},
+        {"type": "section", "text": {"type": "mrkdwn",
+         "text": f"*Something to open with*\n> {icebreaker(seed)}"}},
         {"type": "actions", "elements": [
             {"type": "button", "text": {"type": "plain_text", "text": "Skip this round"},
              "action_id": "connect:skip_round", "value": str(program_id)},
@@ -53,13 +62,17 @@ def nudge_message(seed: int) -> tuple[str, list]:
     text = "Still time to say hello."
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn",
-         "text": f"Still time to say hello. Here is another one to start with:\n> {icebreaker(seed + 3)}"}},
+         "text": "*Still time to say hello.*\nThis chat is still open, and one message is enough to start it."}},
+        {"type": "section", "text": {"type": "mrkdwn",
+         "text": f"*Another one to try*\n> {icebreaker(seed + 3)}"}},
+        {"type": "context", "elements": [{"type": "mrkdwn",
+         "text": "You have a few more days before this round closes."}]},
     ]
     return text, blocks
 
 
 def did_you_meet_message(match_id: int) -> tuple[str, list]:
-    text = "Did you two get a chance to meet?"
+    text = "Did you get a chance to meet?"
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": "*Did you get a chance to meet?*"}},
         {"type": "actions", "elements": [
@@ -68,6 +81,8 @@ def did_you_meet_message(match_id: int) -> tuple[str, list]:
             {"type": "button", "text": {"type": "plain_text", "text": "Not yet"},
              "action_id": "connect:met_no", "value": str(match_id)},
         ]},
+        {"type": "context", "elements": [{"type": "mrkdwn",
+         "text": "One tap. This answer is the only thing we count."}]},
     ]
     return text, blocks
 

@@ -435,7 +435,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             ]
             dm_msg = standup_dm_message(default_questions, standup_name)
             _slack_dm_with_retry(
-                client, user_id, team_id=team_id, text=f"🌅 Time for your standup! — {standup_name}", **dm_msg
+                client, user_id, team_id=team_id, text=f"🌅 Time for your standup, {standup_name}", **dm_msg
             )
 
             state_store.start(
@@ -757,7 +757,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             except Exception:
                 thread_ts = None
 
-        post_kwargs = {"channel": channel_id, "text": "📋 Daily Standup Summary", "blocks": summary_blocks}
+        post_kwargs = {"channel": channel_id, "text": "📋 Standup summary", "blocks": summary_blocks}
         if thread_ts:
             post_kwargs["thread_ts"] = thread_ts
         summary_resp = client.chat_postMessage(**post_kwargs)

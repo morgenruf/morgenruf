@@ -349,7 +349,7 @@ def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int 
     dm = _blocks.standup_dm_message(session.questions, session.standup_name or "Standup")
     client.chat_postMessage(
         channel=user_id,
-        text=f"Time for your standup — {session.standup_name or 'Standup'}",
+        text=f"Time for your standup, {session.standup_name or 'Standup'}",
         blocks=dm["blocks"],
     )
 
