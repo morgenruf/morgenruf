@@ -10,20 +10,22 @@ from __future__ import annotations
 import psycopg2.extras
 
 from src.core.db import db_conn
+from src.modules.kudos.allowance import day_bounds_utc, remaining
 
 
-def save_kudos(team_id: str, from_user: str, to_user: str, message: str, channel_id: str = "") -> dict:
+def save_kudos(team_id: str, from_user: str, to_user: str, message: str, channel_id: str = "", emoji: str | None = None) -> dict:
     """Save a kudos entry and return it."""
     sql = """
-        INSERT INTO kudos (team_id, from_user, to_user, message, channel_id)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO kudos (team_id, from_user, to_user, message, channel_id, emoji)
+        VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING *
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (team_id, from_user, to_user, message, channel_id))
+            cur.execute(sql, (team_id, from_user, to_user, message, channel_id, emoji))
             row = cur.fetchone()
     return dict(row)
+
 
 def get_kudos(team_id: str, limit: int = 50) -> list[dict]:
     """Return recent kudos for a team."""
@@ -58,3 +60,88 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
             cur.execute(sql, (team_id, days))
             rows = cur.fetchall()
     return [dict(r) for r in rows]
+
+
+DEFAULT_EMOJI = "🍁"
+DEFAULT_ALLOWANCE = 5
+
+
+def get_config(team_id: str) -> dict:
+    """The workspace's token and daily allowance, with defaults applied.
+
+    A workspace that has never opened the settings has no row, which is not an
+    error: it means the defaults.
+    """
+    sql = "SELECT emoji, daily_allowance FROM kudos_config WHERE team_id = %s"
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (team_id,))
+                row = cur.fetchone()
+    except Exception:
+        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE}
+    if not row:
+        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE}
+    return {"emoji": row[0] or DEFAULT_EMOJI, "daily_allowance": row[1]}
+
+
+def set_config(team_id: str, emoji: str, daily_allowance: int) -> dict:
+    sql = """
+        INSERT INTO kudos_config (team_id, emoji, daily_allowance, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (team_id) DO UPDATE SET
+            emoji = EXCLUDED.emoji,
+            daily_allowance = EXCLUDED.daily_allowance,
+            updated_at = NOW()
+        RETURNING emoji, daily_allowance
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, emoji, daily_allowance))
+            row = cur.fetchone()
+    return {"emoji": row[0], "daily_allowance": row[1]}
+
+
+def given_today(team_id: str, from_user: str, tz_name: str, now_utc) -> int:
+    """How many kudos this person has given inside their own local day."""
+    start, end = day_bounds_utc(tz_name, now_utc)
+    sql = """
+        SELECT COUNT(*) FROM kudos
+        WHERE team_id = %s AND from_user = %s
+          AND created_at >= %s AND created_at < %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, from_user, start, end))
+            return int(cur.fetchone()[0])
+
+
+def allowance_state(team_id: str, from_user: str, tz_name: str, now_utc) -> dict:
+    """Everything the handler needs to decide whether a kudos may be sent."""
+    cfg = get_config(team_id)
+    used = given_today(team_id, from_user, tz_name, now_utc)
+    left = remaining(cfg["daily_allowance"], used)
+    return {
+        "emoji": cfg["emoji"],
+        "allowance": cfg["daily_allowance"],
+        "used": used,
+        "remaining": left,
+        "can_give": left > 0,
+    }
+
+
+def get_giver_leaderboard(team_id: str, days: int = 30) -> list[dict]:
+    """Top givers. Recognising the people who recognise others is the half
+    most tools leave out, and it is what keeps the habit alive."""
+    sql = """
+        SELECT from_user AS user_id, COUNT(*) AS given, MAX(created_at) AS last_given
+        FROM kudos
+        WHERE team_id = %s AND created_at > NOW() - (%s || ' days')::interval
+        GROUP BY from_user
+        ORDER BY given DESC, last_given DESC
+        LIMIT 10
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, days))
+            return [dict(r) for r in cur.fetchall()]

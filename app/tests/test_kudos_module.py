@@ -13,7 +13,11 @@ from src.modules.kudos import MODULE
 from src.modules.kudos import db as kudos_db
 from tools.check_mechanical_move import changed_functions
 
-FUNCS = ["save_kudos", "get_kudos", "get_kudos_leaderboard"]
+# save_kudos has since gained an emoji column on purpose, so it can no longer
+# be asserted identical to the pre-extraction original. The other two are
+# untouched, and the guard still earns its place on them: it is what proves
+# the extraction itself changed no behaviour.
+FUNCS = ["get_kudos", "get_kudos_leaderboard"]
 
 
 def test_kudos_is_a_module_spec_in_the_registry():
@@ -62,7 +66,7 @@ def test_the_three_functions_moved_verbatim():
 def test_core_db_no_longer_defines_them():
     from src.core import db as core_db
 
-    for name in FUNCS:
+    for name in FUNCS + ["save_kudos"]:
         assert not hasattr(core_db, name), f"core.db still defines {name}"
 
 

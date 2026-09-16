@@ -25,7 +25,7 @@ def register_routes(flask_app) -> None:
     from flask import Blueprint, jsonify, request, session
 
     import src.modules.kudos.db as kudos_db
-    from src.core.dashboard import _login_required
+    from src.core.dashboard import _admin_required, _login_required
 
     kudos_bp = Blueprint("kudos", __name__)
 
@@ -59,5 +59,42 @@ def register_routes(flask_app) -> None:
         except Exception as exc:
             logger.warning("api_kudos_leaderboard: %s", exc)
             return jsonify([])
+
+    @kudos_bp.route("/dashboard/api/kudos/givers", methods=["GET"])
+    @_login_required
+    def api_kudos_givers():
+        """Who is doing the recognising. The half most tools leave out."""
+        team_id = session["team_id"]
+        days = int(request.args.get("days", 30))
+        try:
+            board = kudos_db.get_giver_leaderboard(team_id, days)
+        except Exception as exc:
+            logger.warning("api_kudos_givers: %s", exc)
+            return jsonify([])
+        for row in board:
+            if row.get("last_given"):
+                row["last_given"] = row["last_given"].isoformat()
+            row["given"] = int(row.get("given") or 0)
+        return jsonify(board)
+
+    @kudos_bp.route("/dashboard/api/kudos/config", methods=["GET"])
+    @_login_required
+    def api_kudos_config():
+        return jsonify(kudos_db.get_config(session["team_id"]))
+
+    @kudos_bp.route("/dashboard/api/kudos/config", methods=["POST"])
+    @_admin_required
+    def api_set_kudos_config():
+        data = request.get_json(silent=True) or {}
+        emoji = (data.get("emoji") or "").strip()
+        if not emoji or len(emoji) > 16:
+            return jsonify({"error": "Pick a single emoji for your team to give"}), 400
+        try:
+            allowance = int(data.get("daily_allowance", 5))
+        except (TypeError, ValueError):
+            return jsonify({"error": "Daily allowance must be a whole number"}), 400
+        if allowance < 0 or allowance > 50:
+            return jsonify({"error": "Daily allowance must be between 0 and 50"}), 400
+        return jsonify(kudos_db.set_config(session["team_id"], emoji, allowance))
 
     flask_app.register_blueprint(kudos_bp)
