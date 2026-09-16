@@ -13,9 +13,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-_SRC = os.path.join(os.path.dirname(__file__), "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
+_APP = os.path.dirname(__file__)
+_SRC = os.path.join(_APP, "src")
+for _path in (_SRC, _APP):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 
 @pytest.fixture(autouse=True)
