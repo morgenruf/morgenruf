@@ -1458,3 +1458,68 @@ def api_revoke_mcp_key(key_id: int):
     team_id = session["team_id"]
     db.revoke_mcp_key(key_id, team_id)
     return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Module toggles
+# ---------------------------------------------------------------------------
+
+
+@dashboard_bp.route("/dashboard/api/modules", methods=["GET"])
+@_login_required
+def api_list_modules():
+    """Every registered module, with whether it is active for this workspace.
+
+    The registry is read lazily so core keeps no import-time dependency on any
+    module.
+    """
+    from src.core.modules import active_modules, deploy_allowlist  # noqa: PLC0415
+    from src.modules import REGISTRY  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    granted = db.granted_scopes(team_id)
+    settings = db.module_settings(team_id)
+    allowlist = deploy_allowlist()
+    active = {m.name for m in active_modules(REGISTRY, granted, settings, allowlist)}
+    return jsonify(
+        [
+            {
+                "name": spec.name,
+                "active": spec.name in active,
+                "enabled": settings.get(spec.name, spec.default_enabled),
+                "required_scopes": list(spec.required_scopes),
+                "missing_scopes": sorted(set(spec.required_scopes) - set(granted)),
+                "available": allowlist is None or spec.name in allowlist,
+                "nav": [{"label": n.label, "path": n.path} for n in spec.nav],
+            }
+            for spec in REGISTRY
+        ]
+    )
+
+
+@dashboard_bp.route("/dashboard/api/modules/<name>", methods=["POST"])
+@_admin_required
+def api_set_module(name: str):
+    """Enable or disable one module for this workspace.
+
+    Enabling a module whose scopes are not granted returns 409 rather than
+    silently doing nothing, so the dashboard can offer a re-authorise link
+    instead of a toggle that appears to work.
+    """
+    from src.modules import REGISTRY  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    spec = next((s for s in REGISTRY if s.name == name), None)
+    if spec is None:
+        return jsonify({"error": "unknown module"}), 404
+    enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
+    if enabled and not db.has_scopes(team_id, spec.required_scopes):
+        return jsonify(
+            {
+                "error": "missing_scopes",
+                "required": list(spec.required_scopes),
+                "reauthorise_url": "/install",
+            }
+        ), 409
+    db.set_module_enabled(team_id, name, enabled)
+    return jsonify({"module": name, "enabled": enabled})

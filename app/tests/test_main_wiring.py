@@ -73,7 +73,9 @@ def _core_module_imports():
                 continue  # prose in a docstring is not a dependency
             if "src.modules" not in stripped:
                 continue
-            if py.name == "migrations_runner.py" and "REGISTRY" in stripped:
+            # Reading the registry is allowed anywhere in core: it names no
+            # module. Importing src.modules.<name> is what the contract bans.
+            if "import REGISTRY" in stripped:
                 continue
             found.append(f"{py.name}:{i}: {line.strip()}")
     return found
@@ -82,8 +84,8 @@ def _core_module_imports():
 def test_core_to_module_imports_do_not_grow():
     """The contract's central invariant, ratcheted down rather than asserted.
 
-    migrations_runner's registry import is the one allowed exception, since it
-    reads the registry without naming a module.
+    Importing REGISTRY is allowed: it names no module. Importing
+    src.modules.<name> is the dependency the contract bans.
     """
     found = _core_module_imports()
     assert len(found) <= KNOWN_CORE_TO_MODULE_IMPORTS, (

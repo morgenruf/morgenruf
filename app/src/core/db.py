@@ -1765,10 +1765,37 @@ def has_scopes(team_id: str, required) -> bool:
     return set(required).issubset(granted_scopes(team_id))
 
 
+def _fetch_module_rows(team_id: str):
+    sql = "SELECT module, enabled FROM workspace_modules WHERE team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            return cur.fetchall()
+
+
 def module_settings(team_id: str) -> dict[str, bool]:
     """Explicit per-workspace module toggles.
 
-    Placeholder until the workspace_modules table exists. An empty mapping
-    means every module falls back to its own default_enabled.
+    An absent key means the module falls back to its own default_enabled, so
+    this only ever reports choices an admin actually made. A database error
+    degrades to "no explicit choices" rather than taking down a DM.
     """
-    return {}
+    try:
+        return {module: enabled for module, enabled in _fetch_module_rows(team_id)}
+    except Exception as exc:
+        logger.warning("module_settings lookup failed for %s: %s", team_id, exc)
+        return {}
+
+
+def set_module_enabled(team_id: str, module: str, enabled: bool) -> None:
+    """Record an explicit admin choice for one module."""
+    sql = """
+        INSERT INTO workspace_modules (team_id, module, enabled, updated_at)
+        VALUES (%s, %s, %s, NOW())
+        ON CONFLICT (team_id, module) DO UPDATE SET
+            enabled = EXCLUDED.enabled,
+            updated_at = NOW()
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, module, enabled))
