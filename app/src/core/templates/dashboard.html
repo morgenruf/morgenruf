@@ -16,30 +16,40 @@
       /* One set of surfaces for the whole app. Analytics moved to the panel
          palette and the other pages did not, so switching page looked like
          switching product. */
-      --bg: #111217;
-      --surface: #181b1f;
-      --surface2: #1f2328;
-      --border: #2c3235;
-      --border2: #3a4148;
-      --accent: #22c55e;
-      --accent-dim: rgba(34,197,94,0.12);
-      --text: #ccccdc;
-      --text-muted: #9fa7b3;
-      --text-dim: #7b8794;
-      --danger: #f2495c;
-      --warning: #ff9830;
-      --sidebar-w: 220px;
+      /* CloudDrove brand, dark console ground. Hexes lifted from
+         clouddrove.com rather than approximated: #4B54E0 is their primary,
+         #14161B their ink, #9398A2 their muted text, #2FD17A their success. */
+      --bg: #0F1115;
+      --surface: #171A21;
+      --surface2: #1E222B;
+      --border: #262A33;
+      --border2: #333A47;
+      --accent: #4B54E0;
+      --accent-dim: rgba(75, 84, 224, 0.14);
+      --accent-line: rgba(75, 84, 224, 0.32);
+      --brand-grad: linear-gradient(120deg, #4B54E0 0%, #2F5BFF 48%, #2FA8FF 100%);
+      --sky: #7FC2FF;
+      --text: #E7E9EE;
+      --text-muted: #9398A2;
+      /* CloudDrove's #5E636D is tuned for their light site; on these dark
+         surfaces it lands at 2.89:1. Lifted into the same hue family to clear
+         3:1 on bg, surface and surface2. */
+      --text-dim: #6E7480;
+      --danger: #F2495C;
+      --warning: #FF9830;
+      --good: #2FD17A;
+      --sidebar-w: 248px;
 
       /* Observability console. Panels sit on a darker ground, carry a titled
          header, and use colour to mean severity rather than decoration, the
          way Grafana and Datadog do. */
-      --pad: 16px;
+      --pad: 20px;
       --gap: 12px;
-      --row-h: 38px;
-      --fs-sm: 13px;
+      --row-h: 44px;
+      --fs-sm: 14px;
       --fs-xs: 11px;
       --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-      --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
       --panel: #181b1f;
       --panel-head: #1f2328;
@@ -49,11 +59,13 @@
 
       /* Grafana's classic series colours. Thresholds read the same way an
          operator already expects: green healthy, amber watch, red act. */
-      --sev-good: #73bf69;
+      --sev-good: #2FD17A;
       --sev-warn: #fade2a;
-      --sev-mid: #ff9830;
+      --sev-mid: #7FC2FF;
       --sev-bad: #f2495c;
-      --sev-info: #5794f2;
+      /* The brand primary (#4B54E0) is a UI colour, not a data colour: on
+         these panels it lands at 3.00:1. CloudDrove's sky reads clearly. */
+      --sev-info: #7FC2FF;
       --sev-alt: #b877d9;
     }
     body {
@@ -1006,6 +1018,163 @@
       stroke-linejoin: round;
       margin-bottom: 10px;
     }
+
+    /* ===================================================================
+       Console refinement. Structure follows the Xplorr console; colour is
+       CloudDrove's brand. Loaded last so it wins on equal specificity.
+       =================================================================== */
+
+    body { font-family: var(--sans); font-size: var(--fs-sm); -webkit-font-smoothing: antialiased; }
+    h1, h2, h3, .page-title, .stat-value, .modal-title {
+      letter-spacing: -0.02em;   /* clouddrove.com sets -0.02em on display type */
+    }
+    /* Numbers align in columns without a monospace face. A mono face for data
+       labels reads as generic and is not in CloudDrove's own type system. */
+    .stat-value, .gf-num, td, .count-chip, .gauge-num { font-variant-numeric: tabular-nums; }
+
+    /* ── Sidebar: identity block, grouped nav, brand-tinted active row ── */
+    #sidebar { background: #14161B; border-right: 1px solid var(--border); }
+    .sidebar-logo {
+      padding: 18px 16px 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .sidebar-logo .brand { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .sidebar-logo .sub { font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+    .nav-section {
+      padding: 14px 16px 6px;
+      font-size: 10px; font-weight: 600; letter-spacing: .09em;
+      text-transform: uppercase; color: var(--text-dim);
+    }
+    .nav-item {
+      position: relative;
+      margin: 1px 8px; padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 13.5px; font-weight: 450;
+      color: var(--text-muted);
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+    .nav-item.active { background: var(--accent-dim); color: #C3C7F5; font-weight: 500; }
+    .nav-item.active::before {
+      content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px;
+      width: 2px; border-radius: 0 2px 2px 0; background: var(--accent);
+    }
+    .nav-item .nav-icon, .nav-item svg.nav-icon { width: 17px; height: 17px; opacity: .85; }
+
+    /* ── Topbar ── */
+    .topbar { padding: 18px 28px; background: var(--bg); }
+    .page-title { font-size: 20px; font-weight: 600; }
+    .page-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 3px; }
+
+    /* ── Buttons. The CloudDrove gradient appears once per screen, on the
+       primary action, and nowhere else. ── */
+    .btn { border-radius: 8px; font-size: 13px; font-weight: 500; padding: 8px 14px; }
+    .btn-primary {
+      background: var(--brand-grad); color: #fff; border: none;
+      box-shadow: 0 1px 2px rgba(20,22,27,0.4);
+    }
+    .btn-primary:hover { filter: brightness(1.08); background: var(--brand-grad); border: none; }
+    .btn-secondary, .btn-ghost {
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border2);
+    }
+    .btn-secondary:hover, .btn-ghost:hover { background: #262B36; border-color: #414A5C; }
+    .btn-danger { background: rgba(242,73,92,0.12); color: var(--danger); border: 1px solid rgba(242,73,92,0.24); }
+
+    /* ── Panels and cards. Radii are differentiated by role rather than one
+       value everywhere: 12px panels, 8px controls, pill chips. ── */
+    .section { padding: 24px 28px 40px; }
+    .stats-grid { gap: 14px; margin-bottom: 20px; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      position: relative;
+    }
+    .stat-label {
+      font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+      text-transform: none; letter-spacing: 0; margin-bottom: 12px;
+    }
+    .stat-value { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+    .stat-sub { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+    .gauge-num { color: var(--accent); font-weight: 600; }
+
+    /* ── Chips and pills ── */
+    .day-chip, .count-chip, .pill-quiet {
+      border-radius: 999px; font-size: 11.5px; font-weight: 500;
+      border: 1px solid var(--border2); background: var(--surface2); color: var(--text-muted);
+    }
+    .day-chip.on, .day-chip.selected {
+      background: var(--accent-dim); border-color: var(--accent-line); color: #C3C7F5;
+    }
+
+    /* ── Inputs ── */
+    .input, .form-input, select, textarea {
+      background: #12141A; border: 1px solid var(--border2); border-radius: 8px;
+      color: var(--text); font-family: var(--sans); font-size: 13.5px;
+    }
+    .input:focus, .form-input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    /* ── Tables ── */
+    table { font-size: 13.5px; }
+    th {
+      font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--text-dim); border-bottom: 1px solid var(--border);
+    }
+    td { border-bottom: 1px solid rgba(38,42,51,0.6); }
+
+    /* Keyboard focus stays visible everywhere, not just on inputs. */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .stat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .stat-head .stat-label { margin-bottom: 0; }
+    .stat-ico {
+      width: 30px; height: 30px; flex-shrink: 0;
+      display: grid; place-items: center;
+      border-radius: 8px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-line);
+      color: #A9AEF2;
+    }
+    .stat-ico svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    .stat-card .stat-value { margin-top: 14px; }
+    .gauge-row { margin-top: 10px; }
+    .gauge-wrap { width: 64px; height: 64px; }
+    .gauge-num { font-size: 15px; }
+
+    /* ── Analytics panels. These carried a separate Grafana-derived palette,
+       so switching page looked like switching product. Brought onto the same
+       surfaces, type scale and casing as the rest of the console. ── */
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+    }
+    .panel-head {
+      background: transparent; border-bottom: 1px solid var(--border);
+      padding: 14px 18px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    }
+    .panel-title { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+    .panel-sub { font-size: 12px; color: var(--text-dim); }
+    .gf-table { font-size: 13.5px; }
+    .gf-table th {
+      font-size: 11px; font-weight: 600; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--text-dim);
+    }
+    .gf-row { height: auto; }
+    .gf-row td { padding: 12px 14px; }
+    .gf-name { color: var(--text); font-weight: 450; }
+    .gf-num { color: var(--text-muted); font-family: var(--sans); }
+    .gf-legend { font-size: 12px; color: var(--text-dim); }
+
+    /* Analytics stat tiles: same casing and hierarchy as the Standups cards. */
+    #section-analytics .stat-label { text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+    #section-analytics .stat-value { font-size: 26px; font-weight: 600; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
@@ -1819,25 +1988,37 @@
     const rate = s.completion_rate || 0;
     const circ = 2 * Math.PI * 28;
     const dash = circ * (rate / 100);
+    // Rate colour states the verdict: below half the team is a problem worth
+    // seeing at a glance, not a neutral number.
+    const rateColor = rate >= 70 ? 'var(--good)' : rate >= 40 ? 'var(--warning)' : 'var(--danger)';
+
+    const card = (label, icon, body, sub) =>
+      '<div class="stat-card">' +
+        '<div class="stat-head">' +
+          '<div class="stat-label">' + label + '</div>' +
+          '<div class="stat-ico"><svg aria-hidden="true"><use href="#' + icon + '"/></svg></div>' +
+        '</div>' + body +
+        (sub ? '<div class="stat-sub">' + sub + '</div>' : '') +
+      '</div>';
+
     document.getElementById('stats-grid').innerHTML =
-      '<div class="stat-card"><div class="stat-label">Completion Rate</div>' +
-      '<div style="display:flex;align-items:center;gap:16px">' +
-      '<div class="gauge-wrap">' +
-      '<svg width="80" height="80" viewBox="0 0 64 64">' +
-      '<circle cx="32" cy="32" r="28" fill="none" stroke="#1f1f1f" stroke-width="6"/>' +
-      '<circle cx="32" cy="32" r="28" fill="none" stroke="#22c55e" stroke-width="6"' +
-      ' stroke-dasharray="' + dash.toFixed(1) + ' ' + (circ - dash).toFixed(1) + '"' +
-      ' stroke-linecap="round"/></svg>' +
-      '<div class="gauge-num">' + rate + '%</div></div>' +
-      '<div><div class="stat-sub">Last 7 days</div></div></div></div>' +
+      card('Completion rate', 'i-analytics',
+        '<div class="gauge-row">' +
+          '<div class="gauge-wrap">' +
+            '<svg width="64" height="64" viewBox="0 0 64 64">' +
+            '<circle cx="32" cy="32" r="28" fill="none" stroke="var(--surface2)" stroke-width="6"/>' +
+            '<circle cx="32" cy="32" r="28" fill="none" stroke="' + rateColor + '" stroke-width="6"' +
+            ' stroke-dasharray="' + dash.toFixed(1) + ' ' + (circ - dash).toFixed(1) + '"' +
+            ' stroke-linecap="round"/></svg>' +
+            '<div class="gauge-num" style="color:' + rateColor + '">' + rate + '%</div>' +
+          '</div>' +
+        '</div>', 'Last 7 days') +
 
-      '<div class="stat-card"><div class="stat-label">Active Members</div>' +
-      '<div class="stat-value">' + (s.active_members || 0) + '</div>' +
-      '<div class="stat-sub">responded this week</div></div>' +
+      card('Active members', 'i-members',
+        '<div class="stat-value">' + (s.active_members || 0) + '</div>', 'Responded this week') +
 
-      '<div class="stat-card"><div class="stat-label">Responses This Week</div>' +
-      '<div class="stat-value">' + (s.total_responses || 0) + '</div>' +
-      '<div class="stat-sub">total submissions</div></div>';
+      card('Responses this week', 'i-reports',
+        '<div class="stat-value">' + (s.total_responses || 0) + '</div>', 'Total submissions');
   }
 
   // ── Standups ──

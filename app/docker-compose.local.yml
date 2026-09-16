@@ -1,0 +1,13 @@
+# Local testing override: build the image from this working tree instead of
+# pulling the published one.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+services:
+  migrate:
+    image: morgenruf/morgenruf:local
+    build:
+      context: .
+  app:
+    image: morgenruf/morgenruf:local
+    build:
+      context: .
