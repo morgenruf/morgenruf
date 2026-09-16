@@ -483,6 +483,10 @@ def api_members():
                     {
                         "id": r["user_id"],
                         "name": r.get("real_name", ""),
+                        # Stored on the last roster sync, so the page still
+                        # shows faces and handles when Slack is unreachable.
+                        "display_name": r.get("display_name") or "",
+                        "avatar": r.get("avatar_url") or "",
                         "email": r.get("email", ""),
                         "tz": r.get("tz", "UTC"),
                         "role": r.get("role", "member"),

@@ -152,4 +152,7 @@ class TestChannelSyncStoresProfiles:
         self.client.users_list.return_value = {"members": [_slack_user("U1")], "response_metadata": {}}
         self._run()
         _, kwargs = self.db.upsert_member.call_args
-        assert kwargs == {"real_name": None, "email": None, "tz": None}
+        assert kwargs == {
+            "real_name": None, "email": None, "tz": None,
+            "avatar_url": None, "display_name": None,
+        }

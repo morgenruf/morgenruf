@@ -379,20 +379,24 @@ def upsert_member(
     real_name: str | None = None,
     email: str | None = None,
     tz: str | None = None,
+    avatar_url: str | None = None,
+    display_name: str | None = None,
 ) -> None:
     """Insert or update a member record. Only non-None values overwrite existing ones."""
     sql = """
-        INSERT INTO members (team_id, user_id, real_name, email, tz)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO members (team_id, user_id, real_name, email, tz, avatar_url, display_name)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (team_id, user_id) DO UPDATE SET
             real_name = COALESCE(EXCLUDED.real_name, members.real_name),
             email = COALESCE(EXCLUDED.email, members.email),
             tz = COALESCE(EXCLUDED.tz, members.tz),
+            avatar_url = COALESCE(EXCLUDED.avatar_url, members.avatar_url),
+            display_name = COALESCE(EXCLUDED.display_name, members.display_name),
             active = TRUE
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id, real_name, email, tz))
+            cur.execute(sql, (team_id, user_id, real_name, email, tz, avatar_url, display_name))
 
 
 # ---------------------------------------------------------------------------

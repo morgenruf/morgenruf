@@ -116,6 +116,10 @@ def member_profile(user: dict[str, Any] | None) -> dict[str, str | None]:
         "real_name": profile.get("real_name") or profile.get("display_name") or user.get("real_name") or None,
         "email": profile.get("email") or None,
         "tz": user.get("tz") or None,
+        # 72px is the largest size Slack returns for every account, including
+        # the default generated ones. Bigger keys are absent for some users.
+        "avatar_url": profile.get("image_72") or profile.get("image_48") or None,
+        "display_name": profile.get("display_name") or None,
     }
 
 
