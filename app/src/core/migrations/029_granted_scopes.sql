@@ -1,0 +1,12 @@
+-- Record what Slack actually granted at install time.
+--
+-- The manifest and the OAuth authorize URL have already drifted apart once:
+-- the manifest declares app_mentions:read, channels:join, chat:write.public
+-- and team:read, none of which the authorize URL requests, and the authorize
+-- URL requests commands, which the manifest omits. So the requested scope
+-- list is not a reliable record of what a workspace actually holds.
+--
+-- Nullable with no default, so this is metadata-only and does not rewrite the
+-- table. NULL means "installed before we recorded this", which the lookup
+-- treats as unknown rather than as empty.
+ALTER TABLE installations ADD COLUMN IF NOT EXISTS granted_scopes TEXT[];

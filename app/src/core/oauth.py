@@ -157,6 +157,7 @@ def oauth_callback():
             installed_by_user_id=authed_user_id,
             bot_refresh_token=refresh_token or None,
             bot_token_expires_at=expires_at_str,
+            granted_scopes=db.parse_scope_field(resp.get("scope")),
         )
         db.upsert_workspace_config(team_id)
     except Exception as exc:

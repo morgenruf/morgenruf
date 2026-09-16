@@ -73,12 +73,14 @@ def save_installation(
     installed_by_user_id: str | None = None,
     bot_refresh_token: str | None = None,
     bot_token_expires_at: str | None = None,
+    granted_scopes: list[str] | None = None,
 ) -> bool:
     """Insert or update an OAuth installation record. Returns True if this is a new installation."""
     sql = """
         INSERT INTO installations (team_id, team_name, bot_token, bot_user_id, app_id,
-            installed_by_user_id, bot_refresh_token, bot_token_expires_at, updated_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            installed_by_user_id, bot_refresh_token, bot_token_expires_at,
+            granted_scopes, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (team_id) DO UPDATE SET
             team_name = EXCLUDED.team_name,
             bot_token = EXCLUDED.bot_token,
@@ -87,6 +89,7 @@ def save_installation(
             installed_by_user_id = EXCLUDED.installed_by_user_id,
             bot_refresh_token = EXCLUDED.bot_refresh_token,
             bot_token_expires_at = EXCLUDED.bot_token_expires_at,
+            granted_scopes = COALESCE(EXCLUDED.granted_scopes, installations.granted_scopes),
             updated_at = NOW()
         RETURNING (xmax = 0) AS is_new
     """
@@ -103,6 +106,7 @@ def save_installation(
                     installed_by_user_id,
                     bot_refresh_token,
                     bot_token_expires_at,
+                    granted_scopes,
                 ),
             )
             row = cur.fetchone()
@@ -1726,14 +1730,39 @@ def delete_installation(team_id: str) -> bool:
             return cur.rowcount > 0
 
 
-def granted_scopes(team_id: str) -> set[str]:
-    """Scopes Slack actually granted this workspace.
+def parse_scope_field(scope: str | None) -> list[str]:
+    """Split the comma-separated `scope` field from oauth.v2.access."""
+    if not scope:
+        return []
+    return [s.strip() for s in scope.split(",") if s.strip()]
 
-    Placeholder until the granted_scopes column exists. Returning an empty set
-    is safe: it only gates modules that declare required_scopes, and every
-    module in the registry today declares none.
+
+def granted_scopes(team_id: str) -> set[str]:
+    """Scopes Slack granted this workspace, from the OAuth response.
+
+    Returns an empty set when the column is NULL, which means the workspace
+    installed before this was recorded. Modules that declare required_scopes
+    stay off for those workspaces until an admin re-authorises, which is the
+    safe direction to fail in.
     """
-    return set()
+    sql = "SELECT granted_scopes FROM installations WHERE team_id = %s"
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (team_id,))
+                row = cur.fetchone()
+    except Exception as exc:
+        logger.warning("granted_scopes lookup failed for %s: %s", team_id, exc)
+        return set()
+    return set(row[0]) if row and row[0] else set()
+
+
+def has_scopes(team_id: str, required) -> bool:
+    """True when the workspace holds every scope in `required`."""
+    required = list(required)
+    if not required:
+        return True
+    return set(required).issubset(granted_scopes(team_id))
 
 
 def module_settings(team_id: str) -> dict[str, bool]:
