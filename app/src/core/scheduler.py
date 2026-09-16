@@ -1516,6 +1516,18 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # Modules declare their own jobs. Reconciled on an interval as well as at
+    # startup so a program created from the dashboard takes effect without a
+    # restart, and so disabling a module removes its jobs.
+    scheduler.add_job(
+        sync_module_jobs,
+        trigger=IntervalTrigger(minutes=_SYNC_INTERVAL_MINUTES),
+        id="module_job_sync",
+        name="Module job sync",
+        replace_existing=True,
+        next_run_time=datetime.now(tz=timezone.utc) + timedelta(seconds=20),
+    )
+
     _scheduler = scheduler
     return scheduler
 
@@ -1552,4 +1564,69 @@ def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
     for jid in added:
         spec = desired[jid]
         scheduler.add_job(spec.func, spec.trigger, args=spec.args, id=jid, replace_existing=True)
+    return added, removed
+
+
+def _module_job_context(team_id: str, bot_token: str):
+    """What a module needs to plan its jobs for one workspace."""
+    return {"team_id": team_id, "bot_token": bot_token}
+
+
+def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
+    """Ask every active module what jobs it wants, and make it so.
+
+    Runs on an interval as well as at startup, so a program created from the
+    dashboard (which lives in a forked worker) takes effect without a restart,
+    and so disabling a module removes its jobs on the next pass.
+
+    Reads the registry rather than importing any module by name, keeping core
+    module-agnostic.
+    """
+    scheduler = scheduler or _scheduler
+    if scheduler is None:
+        return [], []
+    try:
+        from src.core.modules import active_modules, deploy_allowlist  # noqa: PLC0415
+        from src.modules import REGISTRY  # noqa: PLC0415
+    except Exception:
+        return [], []
+
+    import src.core.db as db  # noqa: PLC0415
+
+    desired: dict = {}
+    try:
+        installations = db.get_all_installations()
+    except Exception as exc:
+        logger.warning("module job sync could not list installations: %s", exc)
+        return [], []
+
+    allowlist = deploy_allowlist()
+    for inst in installations:
+        team_id = inst.get("team_id")
+        if not team_id:
+            continue
+        try:
+            mods = active_modules(
+                REGISTRY,
+                granted_scopes=db.granted_scopes(team_id),
+                settings=db.module_settings(team_id),
+                allowlist=allowlist,
+            )
+        except Exception as exc:
+            logger.warning("could not resolve modules for %s: %s", team_id, exc)
+            continue
+
+        ctx = _module_job_context(team_id, inst.get("bot_token", ""))
+        for spec in mods:
+            if spec.plan_jobs is None:
+                continue
+            try:
+                for job in spec.plan_jobs(ctx) or []:
+                    desired[job_id(spec.name, team_id, job.key)] = job
+            except Exception:
+                logger.exception("module %s failed to plan jobs for %s", spec.name, team_id)
+
+    added, removed = reconcile_jobs(scheduler, desired)
+    if added or removed:
+        logger.info("module jobs reconciled: +%d -%d", len(added), len(removed))
     return added, removed

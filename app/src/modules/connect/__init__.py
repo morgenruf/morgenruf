@@ -13,6 +13,8 @@ from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.connect.dashboard import register_routes
+from src.modules.connect.handlers import register_handlers
+from src.modules.connect.jobs import plan_jobs
 
 
 def purge(team_id: str) -> None:
@@ -33,9 +35,9 @@ MODULE = ModuleSpec(
     # tokens do not carry these, so Connect stays dark until re-authorised.
     required_scopes=("mpim:write", "mpim:history", "users.profile:read"),
     migrations_dir=Path(__file__).parent / "migrations",
-    register_slack=None,
+    register_slack=register_handlers,
     register_routes=register_routes,
-    plan_jobs=None,
+    plan_jobs=plan_jobs,
     claim_dm=None,
     purge=purge,
     nav=(NavItem(label="Coffee chats", path="#connect"),),

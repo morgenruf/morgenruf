@@ -8,6 +8,7 @@ collide on the same action id.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 
@@ -18,7 +19,35 @@ GRANDFATHERED = {"standup"}
 # ("action_id": "edit_standup") and the Bolt decorator kwarg
 # (@app.action(action_id="...")). Match both.
 ACTION_RE = re.compile(r'["\']?action_id["\']?\s*[=:]\s*["\']([^"\']+)["\']')
-MESSAGE_RE = re.compile(r'@app\.message\(\s*["\']([^"\']+)["\']')
+def bare_message_patterns(path: pathlib.Path) -> set[str]:
+    """Plain-string @app.message patterns, read from the syntax tree.
+
+    A regex cannot tell a decorator from prose: the first version of this
+    matched the phrase @app.message("skip") inside a docstring explaining why
+    a module avoids that very pattern, and reported it as a collision. Parsing
+    means only real decorators count.
+
+    Regex patterns (re.compile(...)) are excluded deliberately; they anchor,
+    so they do not substring-match another module's command.
+    """
+    found: set[str] = set()
+    try:
+        tree = ast.parse(path.read_text())
+    except SyntaxError:
+        return found
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call) or not dec.args:
+                continue
+            fn = dec.func
+            if not (isinstance(fn, ast.Attribute) and fn.attr == "message"):
+                continue
+            arg = dec.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                found.add(arg.value)
+    return found
 
 
 def module_dirs():
@@ -60,7 +89,7 @@ def test_no_two_modules_share_a_bare_string_message_pattern():
     for d in module_dirs():
         pats = set()
         for py in d.rglob("*.py"):
-            pats.update(MESSAGE_RE.findall(py.read_text()))
+            pats.update(bare_message_patterns(py))
         by_module[d.name] = pats
 
     collisions = []
@@ -80,7 +109,7 @@ def test_standups_reserved_words_are_recorded():
     standup = SRC / "modules" / "standup"
     pats = set()
     for py in standup.rglob("*.py"):
-        pats.update(MESSAGE_RE.findall(py.read_text()))
+        pats.update(bare_message_patterns(py))
     assert pats == {"help", "standup", "skip"}, (
         f"standup's bare message patterns changed to {sorted(pats)}; "
         "update the Connect design constraint to match"
