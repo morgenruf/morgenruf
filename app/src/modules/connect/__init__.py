@@ -15,6 +15,7 @@ from src.core.modules import ModuleSpec, NavItem
 from src.modules.connect.dashboard import register_routes
 from src.modules.connect.handlers import register_handlers
 from src.modules.connect.jobs import plan_jobs
+from src.modules.connect.mcp import tools as mcp_tools
 
 
 def purge(team_id: str) -> None:
@@ -42,4 +43,5 @@ MODULE = ModuleSpec(
     purge=purge,
     nav=(NavItem(label="Coffee chats", path="#connect"),),
     default_enabled=False,
+    mcp_tools=mcp_tools,
 )

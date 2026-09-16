@@ -34,6 +34,10 @@ class ModuleSpec:
     # Blocks this module contributes to the Slack App Home tab. Defaulted so
     # a module that has nothing to add needs no change.
     home_blocks: Optional[Callable] = None
+    # Tools this module exposes over MCP. Same reasoning as home_blocks: the
+    # MCP endpoint should not have to import every module to know what it can
+    # answer, and a module shipped dark must not advertise tools.
+    mcp_tools: Optional[Callable] = None
 
 
 def deploy_allowlist() -> Optional[set[str]]:

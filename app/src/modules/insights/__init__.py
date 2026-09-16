@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.insights.dashboard import register_routes
+from src.modules.insights.mcp import tools as mcp_tools
 
 MODULE = ModuleSpec(
     name="insights",
@@ -21,4 +22,5 @@ MODULE = ModuleSpec(
     purge=None,            # stores nothing, so there is nothing to purge
     nav=(NavItem(label="Insights", path="#insights"),),
     default_enabled=True,
+    mcp_tools=mcp_tools,
 )

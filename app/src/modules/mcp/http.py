@@ -188,7 +188,37 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         counts = Counter(moods)
         return _fmt({"total_responses": len(moods), "mood_counts": dict(counts)})
 
+    # Not a standup tool. Modules register their own, and only the ones this
+    # workspace has active are reachable.
+    handler = _module_handler(team_id, name)
+    if handler is not None:
+        return _fmt(handler(args, team_id))
+
     return f"Unknown tool: {name}"
+
+
+def _module_tool_list(team_id: str) -> list[dict]:
+    """Tools contributed by active modules, or nothing if the registry fails.
+
+    A module problem must not take the standup tools offline with it.
+    """
+    try:
+        from src.core.mcp_tools import public_tools  # noqa: PLC0415
+
+        return public_tools(team_id)
+    except Exception:
+        logger.exception("could not list module MCP tools")
+        return []
+
+
+def _module_handler(team_id: str, name: str):
+    try:
+        from src.core.mcp_tools import handler_for  # noqa: PLC0415
+
+        return handler_for(team_id, name)
+    except Exception:
+        logger.exception("could not resolve module MCP tool %r", name)
+        return None
 
 
 @mcp_bp.route("/mcp", methods=["GET"])
@@ -203,6 +233,10 @@ def mcp_info():
             "auth": "Bearer token — generate from your Morgenruf dashboard",
             "docs": "https://docs.morgenruf.dev/mcp.html",
             "tools": [t["name"] for t in TOOLS],
+            "note": (
+                "Authenticated tools/list returns more: coffee chats, kudos and insights "
+                "tools appear for workspaces that have those modules switched on."
+            ),
         }
     )
 
@@ -244,7 +278,7 @@ def mcp_endpoint():
         )
 
     if method == "tools/list":
-        return ok({"tools": TOOLS})
+        return ok({"tools": TOOLS + _module_tool_list(team_id)})
 
     if method == "tools/call":
         tool_name = params.get("name", "")
