@@ -33,3 +33,19 @@ def next_round_date(interval_weeks: int, last_round: date | None) -> date | None
     if last_round is None:
         return None
     return last_round + timedelta(days=max(1, int(interval_weeks)) * 7)
+
+
+def match_status(met, delivered_at) -> str:
+    """What became of one pairing.
+
+    "Not met" hides three different problems: they said no, they never
+    answered, or the invite never reached them. Only the first is about the
+    people; the last is a bug on our side.
+    """
+    if met is True:
+        return "met"
+    if met is False:
+        return "missed"
+    if delivered_at is None:
+        return "undelivered"
+    return "no_reply"

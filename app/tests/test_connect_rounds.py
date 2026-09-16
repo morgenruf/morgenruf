@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from src.modules.connect.rounds import is_round_due, next_round_date
+from src.modules.connect.rounds import is_round_due, match_status, next_round_date
 
 
 def d(m, day):
@@ -63,3 +63,28 @@ def test_next_round_is_one_interval_on():
 
 def test_next_round_without_history_is_unknown():
     assert next_round_date(interval_weeks=1, last_round=None) is None
+
+
+# ── match_status ─────────────────────────────────────────────────────────────
+
+def test_a_confirmed_pairing_is_met():
+    assert match_status(True, dt(9, 16)) == "met"
+
+
+def test_an_explicit_no_is_a_miss():
+    assert match_status(False, dt(9, 16)) == "missed"
+
+
+def test_silence_after_delivery_is_not_a_miss():
+    """Nobody is obliged to answer, so an unanswered pairing is unknown."""
+    assert match_status(None, dt(9, 16)) == "no_reply"
+
+
+def test_never_delivered_is_our_problem_not_theirs():
+    """A pairing Slack never carried must not read as people not showing up."""
+    assert match_status(None, None) == "undelivered"
+
+
+def test_an_answer_counts_even_if_delivery_was_never_recorded():
+    assert match_status(True, None) == "met"
+    assert match_status(False, None) == "missed"

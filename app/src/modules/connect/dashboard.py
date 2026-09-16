@@ -17,6 +17,7 @@ def register_routes(flask_app) -> None:
     import src.modules.connect.db as cdb
     from src.core.dashboard import _admin_required, _login_required
     from src.core.roster import eligible_members
+    from src.modules.connect.rounds import match_status
 
     bp = Blueprint("connect", __name__)
 
@@ -86,8 +87,9 @@ def register_routes(flask_app) -> None:
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/rounds", methods=["GET"])
     @_login_required
     def list_rounds(program_id: int):
+        team_id = session["team_id"]
         try:
-            rounds = cdb.recent_rounds(program_id)
+            rounds = cdb.recent_rounds(team_id, program_id)
         except Exception as exc:
             logger.warning("connect list_rounds: %s", exc)
             return jsonify([])
@@ -95,5 +97,45 @@ def register_routes(flask_app) -> None:
             r["scheduled_for"] = r["scheduled_for"].isoformat() if r.get("scheduled_for") else None
             r["created_at"] = r["created_at"].isoformat() if r.get("created_at") else None
         return jsonify(rounds)
+
+    @bp.route("/dashboard/api/connect/rounds/<int:round_id>/matches", methods=["GET"])
+    @_login_required
+    def list_round_matches(round_id: int):
+        """Who was put with whom, and whether it happened."""
+        team_id = session["team_id"]
+        try:
+            matches = cdb.round_matches(team_id, round_id)
+        except Exception as exc:
+            logger.warning("connect list_round_matches: %s", exc)
+            return jsonify([])
+        out = []
+        for m in matches:
+            delivered = m.get("delivered_at")
+            out.append({
+                "id": m["id"],
+                "members": list(m["member_ids"] or []),
+                "status": match_status(m["met"], delivered),
+                "delivered_at": delivered.isoformat() if delivered else None,
+                "nudged_at": m["nudged_at"].isoformat() if m.get("nudged_at") else None,
+            })
+        return jsonify(out)
+
+    @bp.route("/dashboard/api/connect/programs/<int:program_id>/participation", methods=["GET"])
+    @_login_required
+    def program_participation(program_id: int):
+        team_id = session["team_id"]
+        try:
+            rounds = int(request.args.get("rounds", 6))
+        except (TypeError, ValueError):
+            rounds = 6
+        rounds = max(1, min(rounds, 52))
+        try:
+            rows = cdb.participation(team_id, program_id, rounds)
+        except Exception as exc:
+            logger.warning("connect participation: %s", exc)
+            return jsonify([])
+        for r in rows:
+            r["last_met"] = r["last_met"].isoformat() if r.get("last_met") else None
+        return jsonify(rows)
 
     flask_app.register_blueprint(bp)

@@ -103,20 +103,94 @@ def optout_user_ids(team_id: str, program_id: int) -> set[str]:
             return {r[0] for r in cur.fetchall()}
 
 
-def recent_rounds(program_id: int, limit: int = 10) -> list[dict]:
+def recent_rounds(team_id: str, program_id: int, limit: int = 10) -> list[dict]:
+    """Round history with attendance broken out.
+
+    A match sits in exactly one of four states, and the three that are not
+    "met" mean different things: said no, never answered, or never reached
+    them at all. Collapsing them into "not met" hides whether the problem is
+    the people or the delivery.
+    """
     sql = """
         SELECT r.*,
-               (SELECT COUNT(*) FROM connect_matches m WHERE m.round_id = r.id) AS matches,
-               (SELECT COUNT(*) FROM connect_matches m WHERE m.round_id = r.id AND m.met IS TRUE) AS met
+               COUNT(m.id) AS matches,
+               COUNT(*) FILTER (WHERE m.met IS TRUE) AS met,
+               COUNT(*) FILTER (WHERE m.met IS FALSE) AS missed,
+               COUNT(*) FILTER (WHERE m.met IS NULL AND m.delivered_at IS NOT NULL) AS no_reply,
+               COUNT(*) FILTER (WHERE m.delivered_at IS NULL) AS undelivered
         FROM connect_rounds r
-        WHERE r.program_id = %s
+        LEFT JOIN connect_matches m ON m.round_id = r.id
+        WHERE r.program_id = %s AND r.team_id = %s
+        GROUP BY r.id
         ORDER BY r.scheduled_for DESC
         LIMIT %s
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (program_id, limit))
+            cur.execute(sql, (program_id, team_id, limit))
             return [dict(r) for r in cur.fetchall()]
+
+
+def round_matches(team_id: str, round_id: int) -> list[dict]:
+    """Every pairing in one round, and what became of it."""
+    sql = """
+        SELECT m.id, m.member_ids, m.met, m.delivered_at, m.nudged_at,
+               m.mpim_channel_id
+        FROM connect_matches m
+        WHERE m.round_id = %s AND m.team_id = %s
+        ORDER BY m.id
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (round_id, team_id))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def participation(team_id: str, program_id: int, rounds: int = 6) -> list[dict]:
+    """Per person, across the last N rounds: paired, met, missed, silent.
+
+    Ordered by who is drifting, because that is the question this answers.
+    Someone matched four times who met nobody is the reason to look at all.
+    """
+    sql = """
+        WITH recent AS (
+            SELECT id FROM connect_rounds
+            WHERE program_id = %s AND team_id = %s
+            ORDER BY scheduled_for DESC
+            LIMIT %s
+        ),
+        per_person AS (
+            SELECT UNNEST(m.member_ids) AS user_id, m.met, m.delivered_at,
+                   r.scheduled_for
+            FROM connect_matches m
+            JOIN connect_rounds r ON r.id = m.round_id
+            WHERE m.round_id IN (SELECT id FROM recent)
+        )
+        SELECT user_id,
+               COUNT(*) AS paired,
+               COUNT(*) FILTER (WHERE met IS TRUE) AS met,
+               COUNT(*) FILTER (WHERE met IS FALSE) AS missed,
+               COUNT(*) FILTER (WHERE met IS NULL AND delivered_at IS NOT NULL) AS no_reply,
+               MAX(scheduled_for) FILTER (WHERE met IS TRUE) AS last_met
+        FROM per_person
+        GROUP BY user_id
+        ORDER BY COUNT(*) FILTER (WHERE met IS TRUE) ASC, COUNT(*) DESC, user_id
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (program_id, team_id, rounds))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def owns_program(team_id: str, program_id: int) -> bool:
+    """Guard for anything addressed by programme id alone."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM connect_programs WHERE id = %s AND team_id = %s",
+                (program_id, team_id),
+            )
+            return cur.fetchone() is not None
 
 
 def purge(team_id: str) -> None:
