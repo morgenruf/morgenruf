@@ -62,7 +62,7 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-DEFAULT_EMOJI = "🍁"
+DEFAULT_EMOJI = ":morgenruf:"   # the workspace imports the icon under this name
 DEFAULT_ALLOWANCE = 5
 
 

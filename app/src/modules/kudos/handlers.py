@@ -76,13 +76,17 @@ def _quote(message: str) -> str:
     return "\n".join(f"> {line}" if line.strip() else ">" for line in lines) or "> "
 
 
-def kudos_card(from_user: str, to_user: str, message: str, emoji: str = "🍁") -> tuple[str, list[dict]]:
+def kudos_card(from_user: str, to_user: str, message: str, emoji: str | None = None) -> tuple[str, list[dict]]:
     """The card that lands in the channel.
 
     The person being recognised is named first and in bold, because they are
     the point of the message. The reason is quoted so it reads as their words
     being passed on, and the last line tells everyone else how to join in.
     """
+    if emoji is None:
+        from src.modules.kudos.db import DEFAULT_EMOJI  # noqa: PLC0415
+
+        emoji = DEFAULT_EMOJI
     if to_user:
         headline = f"{emoji} *<@{to_user}>* got a {emoji} from <@{from_user}>"
         text = f"{emoji} <@{from_user}> gave <@{to_user}> a {emoji}"
