@@ -10,7 +10,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
-COPY migrations/ ./migrations/
 COPY teams.yaml.example ./teams.yaml
 
 ENV PYTHONUNBUFFERED=1
@@ -24,4 +23,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
 RUN useradd -m -u 1000 -s /bin/sh morgenruf && chown -R morgenruf:morgenruf /app
 USER morgenruf
 
-CMD ["python", "src/main.py"]
+CMD ["python", "-m", "src.main"]
