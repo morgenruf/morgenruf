@@ -84,6 +84,7 @@ Findings that shape the plan:
 | D9 | Connect calls Slack directly, not through `PlatformAdapter` | `PlatformAdapter` has no group DM concept, Google Chat has no MPIM equivalent, and the abstraction is at 0% coverage with one caller. Revisit when a second platform actually needs pairing. |
 | D10 | UI reference is Donut for Slack copy and flow, existing dashboard for chrome | Same app, so a second visual language would be worse than consistency. |
 | D11 | Scheduler leader lock is deferred, with a deploy-window requirement | Product owner decision. See Accepted Risk AR1. |
+| D12 | Standup's substring message patterns stay unchanged; Connect avoids those words | Bolt's `@app.message("skip")` is a substring match, so any Connect command containing help, standup or skip fires standup's handler. Anchoring standup's patterns would narrow what live users can type. Connect uses button-only opt-out instead. |
 
 ## 4. Phase 0: the module contract
 
@@ -322,9 +323,11 @@ and posts a single nudge only if no member has posted. Never more than once.
 **Close.** At round end each match receives a "did you two meet?" prompt with
 two buttons, writing `met`.
 
-**Opt-out.** `skip this round` or `pause connect` in a DM, routed through core's
-`dm_router` via `claim_dm`. Paused members are filtered by `connect_optouts`
-before matching.
+**Opt-out.** Button-only, through the `Skip this round` and `Pause` actions on
+the intro message, never a DM keyword. Per decision D12, Connect cannot use a
+DM command containing help, standup or skip, because standup's bare string
+patterns are substring matches and would claim it. Paused members are filtered
+by `connect_optouts` before matching.
 
 ## 8. UI
 

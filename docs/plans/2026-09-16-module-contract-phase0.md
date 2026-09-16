@@ -2434,13 +2434,15 @@ cd app && python -m pytest tests/test_action_id_namespacing.py -v
 
 Expected: 3 passed. The collision test passes today because standup is the only module with bare string patterns. It starts failing the moment a second module adds one, which is exactly when the decision below has to be made.
 
-**Flagged behavior change, requires sign-off before the Connect plan:**
+**Decision (2026-09-16): standup's patterns stay exactly as they are.**
 
-Standup registers three bare string patterns: `@app.message("help")`, `@app.message("standup")` and `@app.message("skip")`. All three are substring matches, so today a DM reading "I need help with the skip button" fires two standup handlers. Connect cannot add any command containing those words without colliding.
+Standup registers three bare string patterns: `@app.message("help")`, `@app.message("standup")` and `@app.message("skip")`. All three are substring matches, so a DM reading "can I skip today" fires standup's skip handler.
 
-The fix is to anchor standup's three patterns as regexes (`re.compile(r"^help$", re.I)` and so on). That narrows what standup accepts: a user who types "skip today" or "can I skip" and currently gets the skip behavior would stop getting it.
+Anchoring them as regexes was considered and rejected. It would narrow what standup accepts for users who already rely on the loose matching, and standup is live in production. No behavior change for existing users wins.
 
-This is not part of Phase 0. It is recorded here because the guard test above is what will surface it, and because the Connect plan cannot define its DM commands until it is decided.
+The constraint this places on Connect: **Connect must not register any DM command containing the words help, standup or skip.** Opt-out is button-only, through the interactive elements on the intro message, rather than a DM keyword. The Connect plan inherits this as a hard requirement.
+
+The guard test above still earns its place: it goes red if any future module adds a bare string pattern that overlaps, which is precisely the mistake this decision is designed to avoid.
 
 - [ ] **Step 5: Commit**
 
@@ -2988,9 +2990,9 @@ Before starting the Connect plan, all of these must hold:
 - [ ] Standup delivery verified by a manual trigger in a live workspace after each release
 - [ ] Every release was deployed outside standup and report windows, per accepted risk AR1
 
-## Open decision carried into the Connect plan
+## Constraint inherited by the Connect plan
 
-Standup's `@app.message("help")`, `@app.message("standup")` and `@app.message("skip")` are substring matches. Connect cannot define a DM command containing any of those words without firing standup's handler. Anchoring them as regexes fixes it and narrows what standup accepts. Decide before writing the Connect plan's DM surface. Recorded in Task 15.
+Standup's `@app.message` patterns stay as-is (decision recorded in Task 15). Connect must therefore not register any DM command containing the words **help**, **standup** or **skip**. Connect's opt-out is button-only, driven by the interactive elements on the intro message.
 
 ## Next plan
 
