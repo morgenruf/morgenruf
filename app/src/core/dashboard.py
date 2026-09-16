@@ -1464,7 +1464,7 @@ def api_mcp_config():
         {
             "team_id": team_id,
             "app_url": app_url,
-            "mcp_server_path": "app/src/mcp_server.py",
+            "mcp_server_path": "app/src/modules/mcp/server.py",
             "docs_url": "https://docs.morgenruf.dev/mcp.html",
         }
     )

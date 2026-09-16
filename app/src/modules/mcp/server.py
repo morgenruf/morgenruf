@@ -4,7 +4,7 @@ Allows Claude, Cursor, Copilot, and other MCP-capable tools to query
 standup history, participation, blockers, and more.
 
 Usage:
-    python src/mcp_server.py
+    python src/modules/mcp/server.py
 
 Configuration (env vars):
     DATABASE_URL    PostgreSQL connection URL (required)
@@ -16,7 +16,7 @@ Example claude_desktop_config.json:
       "mcpServers": {
         "morgenruf": {
           "command": "python",
-          "args": ["/path/to/morgenruf/app/src/mcp_server.py"],
+          "args": ["/path/to/morgenruf/app/src/modules/mcp/server.py"],
           "env": {
             "DATABASE_URL": "postgresql://morgenruf:pass@localhost:5432/morgenruf",
             "MCP_TEAM_ID": "T01EXAMPLE"

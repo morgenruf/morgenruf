@@ -135,14 +135,14 @@ def create_app() -> tuple[App, Flask]:
     flask_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     flask_app.register_blueprint(oauth_bp)
     flask_app.register_blueprint(dashboard_bp)
-    from mcp_http import mcp_bp  # noqa: PLC0415
+    from src.modules.mcp.http import mcp_bp  # noqa: PLC0415
 
     flask_app.register_blueprint(mcp_bp)
     logger.info("MCP HTTP endpoint enabled at /mcp")
 
     if os.environ.get("GOOGLE_CREDENTIALS"):
         try:
-            from google_chat_handler import google_chat_bp  # noqa: PLC0415
+            from src.modules.google_chat.handler import google_chat_bp  # noqa: PLC0415
 
             flask_app.register_blueprint(google_chat_bp)
             logger.info("Google Chat integration enabled")

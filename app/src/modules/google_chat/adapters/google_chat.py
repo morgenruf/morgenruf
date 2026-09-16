@@ -4,7 +4,8 @@ import json
 import logging
 
 import requests
-from adapters.base import PlatformAdapter
+
+from src.modules.google_chat.adapters.base import PlatformAdapter
 
 logger = logging.getLogger(__name__)
 

@@ -27,7 +27,7 @@ def _get_adapter():
     if not creds:
         return None
     try:
-        from adapters.google_chat import GoogleChatAdapter
+        from src.modules.google_chat.adapters.google_chat import GoogleChatAdapter
 
         return GoogleChatAdapter(creds)
     except Exception as exc:
