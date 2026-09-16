@@ -13,7 +13,7 @@ from datetime import datetime
 from threading import Lock
 from typing import Optional
 
-import session_store
+import src.core.session_store as session_store
 
 QUESTIONS = [
     "✅ *What did you complete yesterday?*\n> List by project (e.g. `Proj-Bridj: deployed TF module`)",

@@ -17,11 +17,11 @@ _pool_mod_mock.ThreadedConnectionPool.return_value = None  # skip pool init at i
 sys.modules["psycopg2"] = _psycopg2_mock
 sys.modules["psycopg2.extras"] = _psycopg2_extras_mock
 sys.modules["psycopg2.pool"] = _pool_mod_mock
-sys.modules.pop("db", None)  # discard any mock from other test files
+sys.modules.pop("src.core.db", None)  # discard any mock from other test files
 
 import importlib  # noqa: E402
 
-import db as _db_real  # noqa: E402  — this is the real db module
+import src.core.db as _db_real  # noqa: E402  — this is the real db module
 
 importlib.reload(_db_real)  # re-run module body now that psycopg2 stubs are in place
 db = _db_real

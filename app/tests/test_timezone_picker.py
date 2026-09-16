@@ -90,7 +90,7 @@ class TestNoSilentUtcDefault:
         assert _tz_block().get("optional") is not True
 
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/templates/dashboard.html")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
 
 
 class TestDashboardPickerOffersEveryZone:

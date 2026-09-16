@@ -12,6 +12,8 @@ import re
 import sys
 from unittest.mock import MagicMock, patch
 
+from tests.support import patch_modules
+
 sys.modules.setdefault("slack_bolt", MagicMock())
 sys.modules.setdefault("requests", MagicMock())
 
@@ -19,23 +21,23 @@ if isinstance(sys.modules.get("pytz"), MagicMock):
     del sys.modules["pytz"]
 import pytz as _real_pytz  # noqa: E402
 
-_prior_session_store = sys.modules.get("session_store")
+_prior_session_store = sys.modules.get("src.core.session_store")
 _ss_mock = MagicMock()
 _ss_mock.get_session.return_value = None
 _ss_mock.has_session.return_value = False
-sys.modules["session_store"] = _ss_mock
+sys.modules["src.core.session_store"] = _ss_mock
 
 import blocks as blocks_mod  # noqa: E402
 import handlers  # noqa: E402
 import schedule_validation  # noqa: E402
 
 if _prior_session_store is not None:
-    sys.modules["session_store"] = _prior_session_store
+    sys.modules["src.core.session_store"] = _prior_session_store
 else:
-    sys.modules.pop("session_store", None)
+    sys.modules.pop("src.core.session_store", None)
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/templates/dashboard.html")
-MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "../migrations")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
+MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "../src/core/migrations")
 
 
 def _find_block(blocks, block_id):
@@ -108,7 +110,7 @@ class TestModalSubmissionPersistsTheToggle:
             },
         }
         with (
-            patch.dict(sys.modules, {"db": self.db}),
+            patch_modules({"src.core.db": self.db}),
             patch.object(schedule_validation, "pytz", _real_pytz),
         ):
             self.handler(MagicMock(), body, self.client)
@@ -130,11 +132,11 @@ class TestDashboardExposesTheToggle:
 
 class TestNewSchedulesDefaultToPosting:
     def test_api_create_defaults_to_true(self):
-        import dashboard
+        import src.core.dashboard as dashboard
 
         db = MagicMock()
         db.create_standup_schedule.return_value = {"id": 1}
-        with patch.dict(sys.modules, {"db": db}):
+        with patch_modules({"src.core.db": db}):
             dashboard.db = db
         # The payload a client sends without the key must still post its summary.
         assert dashboard._post_summary_default({}) is True

@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import logging
 
-import db
 from flask import Blueprint, jsonify, request
+
+import src.core.db as db
 
 logger = logging.getLogger(__name__)
 mcp_bp = Blueprint("mcp", __name__)

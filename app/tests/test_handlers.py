@@ -6,6 +6,8 @@ import sys
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
+from tests.support import patch_modules
+
 # Stub heavy third-party deps before any import of handlers
 _slack_bolt_mock = MagicMock()
 _requests_mock = MagicMock()
@@ -17,19 +19,19 @@ sys.modules.setdefault("pytz", _pytz_mock)
 # Stub session_store before importing state (state.py imports it at module level).
 # Save the prior value so we can restore it after the import — this prevents
 # test_session_store.py from receiving the mock when it imports session_store.
-_prior_session_store = sys.modules.get("session_store")
+_prior_session_store = sys.modules.get("src.core.session_store")
 _ss_mock = MagicMock()
 _ss_mock.get_session.return_value = None
 _ss_mock.has_session.return_value = False
-sys.modules["session_store"] = _ss_mock
+sys.modules["src.core.session_store"] = _ss_mock
 
-import state  # noqa: E402 — must come after session_store stub
+import src.core.state as state  # noqa: E402 — must come after session_store stub
 
 # Restore session_store so subsequent test modules see the real one
 if _prior_session_store is not None:
-    sys.modules["session_store"] = _prior_session_store
+    sys.modules["src.core.session_store"] = _prior_session_store
 else:
-    sys.modules.pop("session_store", None)
+    sys.modules.pop("src.core.session_store", None)
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +98,7 @@ class TestFormatStandup:
 class TestPersistStandup:
     def test_calls_db_save_standup(self):
         db_mock = MagicMock()
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import _persist_standup
 
             _persist_standup("T1", "U1", ["y", "t", "b"], mood="😊")
@@ -109,7 +111,7 @@ class TestPersistStandup:
     def test_does_not_raise_on_db_error(self):
         db_mock = MagicMock()
         db_mock.save_standup.side_effect = Exception("DB unavailable")
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import _persist_standup
 
             _persist_standup("T1", "U1", ["y", "t", "b"])  # should not raise
@@ -169,7 +171,7 @@ class TestStartStandupSession:
             questions=["Q1", "Q2", "Q3"],
         )
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(state.state_store, "is_active", return_value=True):
                 with patch.object(state.state_store, "clear") as mock_clear:
                     with patch.object(state.state_store, "start", return_value=fake_session):
@@ -198,7 +200,7 @@ class TestStartStandupSession:
             questions=["Q1", "Q2", "Q3"],
         )
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(state.state_store, "start", return_value=fake_session):
                 with patch.object(state.state_store, "is_active", return_value=False):
                     from handlers import _start_standup_session
@@ -226,7 +228,7 @@ class TestFireWebhooks:
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T1", "standup.completed", {"user": "U1"})
 
@@ -243,7 +245,7 @@ class TestFireWebhooks:
         ]
         requests_mock = MagicMock()
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T1", "standup.completed", {"user": "U1"})
 
@@ -256,7 +258,7 @@ class TestFireWebhooks:
         db_mock.get_webhooks.return_value = []
         requests_mock = MagicMock()
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T1", "standup.completed", {})
 
@@ -272,7 +274,7 @@ class TestFireWebhooks:
         requests_mock = MagicMock()
         requests_mock.post.side_effect = Exception("Connection error")
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T1", "standup.completed", {})  # should not raise
 
@@ -290,7 +292,7 @@ class TestFireWebhooks:
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T1", "standup.completed", {"user": "U1"})
 
@@ -319,7 +321,7 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.return_value = self._standup(hours_ago=1)
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 4}
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
@@ -329,7 +331,7 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.return_value = self._standup(hours_ago=5)
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 4}
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is False
@@ -338,7 +340,7 @@ class TestCanEditResponse:
         db_mock = MagicMock()
         db_mock.get_standup_by_id.return_value = None
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 999) is False
@@ -348,7 +350,7 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.return_value = self._standup(user_id="U2")
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 4}
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is False
@@ -358,7 +360,7 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.return_value = self._standup(hours_ago=100)
         db_mock.get_workspace_config.return_value = {"edit_window_hours": None}
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
@@ -368,7 +370,7 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.return_value = self._standup(hours_ago=100)
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 0}
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
@@ -377,7 +379,7 @@ class TestCanEditResponse:
         db_mock = MagicMock()
         db_mock.get_standup_by_id.side_effect = Exception("DB down")
 
-        with patch.dict(sys.modules, {"db": db_mock}):
+        with patch_modules({"src.core.db": db_mock}):
             from handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is False

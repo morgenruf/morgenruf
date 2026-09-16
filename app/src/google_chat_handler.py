@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 import os
 
-import db
 from flask import Blueprint, jsonify, request
-from state import QUESTIONS, state_store
+
+import src.core.db as db
+from src.core.state import QUESTIONS, state_store
 
 logger = logging.getLogger(__name__)
 google_chat_bp = Blueprint("google_chat", __name__)

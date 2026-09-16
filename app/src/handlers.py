@@ -14,8 +14,9 @@ import pytz
 import requests
 from schedule_validation import schedule_time_error, schedule_timezone_error
 from slack_bolt import App
-from slack_users import filter_human_ids, is_human
-from state import state_store
+
+from src.core.slack_users import filter_human_ids, is_human
+from src.core.state import state_store
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ def _schedule_next_run(schedule: dict) -> str:
     if not schedule.get("active", True):
         return ""
     try:
-        from scheduler import next_run_at  # noqa: PLC0415
+        from src.core.scheduler import next_run_at  # noqa: PLC0415
 
         moment = next_run_at(schedule)
     except Exception as exc:
@@ -155,7 +156,7 @@ def _schedule_next_run(schedule: dict) -> str:
 def _next_run_text(schedule: dict) -> str:
     """Human readable next fire time for a schedule, or "" if it cannot be computed."""
     try:
-        from scheduler import next_run_at  # noqa: PLC0415
+        from src.core.scheduler import next_run_at  # noqa: PLC0415
 
         moment = next_run_at(schedule)
     except Exception as exc:
@@ -209,7 +210,7 @@ def _persist_standup(
     that asks something else there.
     """
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         return db.save_standup(
             team_id=team_id,
@@ -303,7 +304,7 @@ def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int 
     standup_name = "Team Standup"
     resolved_schedule_id: int | None = schedule_id
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         sched = None
         if schedule_id is not None:
@@ -366,7 +367,7 @@ def _complete_standup(user_id: str, session, client) -> None:
     standup_id: int | None = None
     if is_edit:
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             update_fields: dict = {
                 "yesterday": question_answers[0] if len(question_answers) > 0 else "",
@@ -426,7 +427,7 @@ def _complete_standup(user_id: str, session, client) -> None:
     channel = session.channel
     if channel:
         try:
-            import db as _db  # noqa: PLC0415
+            import src.core.db as _db  # noqa: PLC0415
 
             sched_config = {}
             try:
@@ -517,7 +518,7 @@ def _complete_standup(user_id: str, session, client) -> None:
 
     # Ensure member exists in DB for reports/participation
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         user_info = client.users_info(user=user_id).get("user", {})
         profile = user_info.get("profile", {})
@@ -606,7 +607,7 @@ def _record_delivery(hook: dict, event_type: str, team_id: str | None, result: d
     if not webhook_id:
         return  # unsaved or synthetic hook, nothing to attach the log row to
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         db.record_webhook_delivery(
             team_id=team_id or hook.get("team_id") or "",
@@ -703,7 +704,7 @@ def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
     break the main flow.
     """
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         webhooks = db.get_webhooks(team_id)
     except Exception as exc:
@@ -731,7 +732,7 @@ def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
       * ``None`` — no limit
     """
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         standup = db.get_standup_by_id(standup_id)
         if not standup:
@@ -773,7 +774,7 @@ def register_handlers(app: App) -> None:
     @app.event("tokens_revoked")
     def handle_tokens_revoked(event, logger) -> None:  # noqa: ANN001
         """Handle token revocation — remove workspace installation and all data."""
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         team_id = event.get("team_id") or (event.get("authorizations") or [{}])[0].get("team_id", "")
         if not team_id:
@@ -788,7 +789,7 @@ def register_handlers(app: App) -> None:
     @app.event("app_uninstalled")
     def handle_app_uninstalled(event, logger) -> None:  # noqa: ANN001
         """Handle app uninstall — remove workspace installation and all data."""
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         team_id = event.get("team_id", "")
         if not team_id:
@@ -865,7 +866,7 @@ def register_handlers(app: App) -> None:
             pass
 
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             on_vacation = db.is_on_vacation(team_id, user_id)
             streak = db.get_standup_streak(team_id, user_id)
@@ -948,7 +949,7 @@ def register_handlers(app: App) -> None:
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, False)
         except Exception as e:
@@ -962,7 +963,7 @@ def register_handlers(app: App) -> None:
         user_id: str = body["user"]["id"]
         team_id: str = body["user"]["team_id"]
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, True)
         except Exception as e:
@@ -984,7 +985,7 @@ def register_handlers(app: App) -> None:
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.skip_today(team_id, user_id)
         except Exception as e:
@@ -1013,7 +1014,7 @@ def register_handlers(app: App) -> None:
         # Try to prefill with previous answers (if enabled for this standup)
         previous_answers = []
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             sched = db.get_standup_schedule_for_channel(team_id, session.channel)
             if sched and sched.get("prepopulate_answers", False):
@@ -1067,7 +1068,7 @@ def register_handlers(app: App) -> None:
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
 
-        import db as _db  # noqa: PLC0415
+        import src.core.db as _db  # noqa: PLC0415
 
         if _db.get_member_role(team_id, user_id) != "admin":
             return
@@ -1101,7 +1102,8 @@ def register_handlers(app: App) -> None:
     def _publish_configure_view(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Render and publish the configure mode App Home."""
         import blocks as _blocks  # noqa: PLC0415
-        import db  # noqa: PLC0415
+
+        import src.core.db as db  # noqa: PLC0415
 
         standups: list[dict] = []
         workspace_name = ""
@@ -1174,7 +1176,8 @@ def register_handlers(app: App) -> None:
         team_id: str = body["user"]["team_id"]
         try:
             import blocks as _blocks  # noqa: PLC0415
-            import db  # noqa: PLC0415
+
+            import src.core.db as db  # noqa: PLC0415
 
             standups = db.get_standups(team_id, days=14)
             user_standups = [s for s in standups if s["user_id"] == user_id]
@@ -1200,7 +1203,8 @@ def register_handlers(app: App) -> None:
         team_id = body["user"]["team_id"]
         try:
             import blocks as _blocks  # noqa: PLC0415
-            import db  # noqa: PLC0415
+
+            import src.core.db as db  # noqa: PLC0415
 
             schedule = db.get_standup_schedule(team_id, int(standup_id))
             if schedule:
@@ -1246,12 +1250,12 @@ def register_handlers(app: App) -> None:
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.delete_standup_schedule(team_id, int(standup_id))
             # Remove from scheduler
             try:
-                from scheduler import get_scheduler  # noqa: PLC0415
+                from src.core.scheduler import get_scheduler  # noqa: PLC0415
 
                 sched_obj = get_scheduler()
                 if sched_obj:
@@ -1280,7 +1284,7 @@ def register_handlers(app: App) -> None:
         if action_value.startswith("delete_"):
             standup_id = action_value.split("_", 1)[1]
             try:
-                import db  # noqa: PLC0415
+                import src.core.db as db  # noqa: PLC0415
 
                 db.delete_standup_schedule(team_id, int(standup_id))
                 _refresh_home(team_id, user_id, client)
@@ -1289,12 +1293,12 @@ def register_handlers(app: App) -> None:
         elif action_value.startswith("pause_"):
             standup_id = action_value.split("_", 1)[1]
             try:
-                import db  # noqa: PLC0415
+                import src.core.db as db  # noqa: PLC0415
 
                 db.update_standup_schedule(team_id, int(standup_id), active=False)
                 # Remove from scheduler
                 try:
-                    from scheduler import get_scheduler  # noqa: PLC0415
+                    from src.core.scheduler import get_scheduler  # noqa: PLC0415
 
                     sched_obj = get_scheduler()
                     if sched_obj:
@@ -1311,13 +1315,13 @@ def register_handlers(app: App) -> None:
         elif action_value.startswith("enable_"):
             standup_id = action_value.split("_", 1)[1]
             try:
-                import db  # noqa: PLC0415
+                import src.core.db as db  # noqa: PLC0415
 
                 schedule = db.update_standup_schedule(team_id, int(standup_id), active=True)
                 # Re-register in scheduler
                 if schedule:
                     try:
-                        from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+                        from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
 
                         inst = db.get_installation(team_id)
                         sched_obj = get_scheduler()
@@ -1350,7 +1354,7 @@ def register_handlers(app: App) -> None:
         if not user_id or not team_id:
             return
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             user_info = client.users_info(user=user_id).get("user", {})
             if not is_human(user_info):
@@ -1492,7 +1496,7 @@ def register_handlers(app: App) -> None:
         user_id: str = body["user_id"]
         team_id: str = body["team_id"]
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.skip_today(team_id, user_id)
         except Exception as e:
@@ -1553,7 +1557,7 @@ def register_handlers(app: App) -> None:
         kudos_message = mention_match.group(2).strip() if mention_match else text
 
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             config = db.get_workspace_config(team_id) or {}
             channel_id = config.get("channel_id", "")
@@ -1647,7 +1651,7 @@ def register_handlers(app: App) -> None:
             return
 
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             kwargs = {
                 "name": standup_name,
@@ -1679,7 +1683,7 @@ def register_handlers(app: App) -> None:
             # Register/update in scheduler
             if schedule:
                 try:
-                    from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+                    from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
 
                     inst = db.get_installation(team_id)
                     sched_obj = get_scheduler()
@@ -1778,7 +1782,7 @@ def register_handlers(app: App) -> None:
         schedule_id: int | None = None
         standup_name = "Team Standup"
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             # Resolve the user's schedule first so edits post to the same
             # channel as the original standup (see _start_standup_session).
@@ -1810,7 +1814,7 @@ def register_handlers(app: App) -> None:
         # retype everything just to correct a typo.
         initial_answers: list[str] = []
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             prev = db.get_standup_by_id(standup_id)
             if prev:
@@ -1846,7 +1850,7 @@ def register_handlers(app: App) -> None:
         user_id = message["user"]
         team_id = message.get("team", "")
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.skip_today(team_id, user_id)
         except Exception as e:
@@ -1864,7 +1868,7 @@ def register_handlers(app: App) -> None:
         user_id = message["user"]
         team_id = message.get("team", "")
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, False)
         except Exception as e:
@@ -1881,7 +1885,7 @@ def register_handlers(app: App) -> None:
         user_id = message["user"]
         team_id = message.get("team", "")
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.set_vacation(team_id, user_id, True)
         except Exception as e:
@@ -1903,7 +1907,7 @@ def register_handlers(app: App) -> None:
             return
 
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.save_kudos(team_id, from_user, to_user, kudos_message, channel_id)
         except Exception as exc:
@@ -1914,7 +1918,7 @@ def register_handlers(app: App) -> None:
         try:
             if channel_type == "im":
                 try:
-                    import db  # noqa: PLC0415
+                    import src.core.db as db  # noqa: PLC0415
 
                     config = db.get_workspace_config(team_id) or {}
                     post_channel = config.get("channel_id", "")
@@ -1948,7 +1952,7 @@ def register_handlers(app: App) -> None:
             )
             return
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             db.upsert_member(team_id, user_id, tz=tz_str)
         except Exception as exc:

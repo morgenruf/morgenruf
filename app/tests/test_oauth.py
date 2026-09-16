@@ -25,27 +25,27 @@ def set_env(monkeypatch):
 
 class TestOAuthStateToken:
     def test_make_state_returns_string(self):
-        from oauth import _make_state
+        from src.core.oauth import _make_state
 
         state = _make_state()
         assert isinstance(state, str)
         assert len(state) > 0
 
     def test_state_has_three_parts(self):
-        from oauth import _make_state
+        from src.core.oauth import _make_state
 
         state = _make_state()
         parts = state.split(".")
         assert len(parts) == 3  # ts.nonce.sig
 
     def test_valid_state_verifies(self):
-        from oauth import _make_state, _verify_state
+        from src.core.oauth import _make_state, _verify_state
 
         state = _make_state()
         assert _verify_state(state) is True
 
     def test_tampered_signature_rejected(self):
-        from oauth import _make_state, _verify_state
+        from src.core.oauth import _make_state, _verify_state
 
         state = _make_state()
         parts = state.rsplit(".", 1)
@@ -53,7 +53,7 @@ class TestOAuthStateToken:
         assert _verify_state(tampered) is False
 
     def test_tampered_timestamp_rejected(self):
-        from oauth import _make_state, _verify_state
+        from src.core.oauth import _make_state, _verify_state
 
         state = _make_state()
         ts, nonce, sig = state.split(".")
@@ -61,7 +61,7 @@ class TestOAuthStateToken:
         assert _verify_state(tampered) is False
 
     def test_expired_state_rejected(self):
-        from oauth import _make_state, _verify_state
+        from src.core.oauth import _make_state, _verify_state
 
         state = _make_state()
         # Simulate 11 minutes in the future
@@ -69,7 +69,7 @@ class TestOAuthStateToken:
             assert _verify_state(state) is False
 
     def test_fresh_state_within_window(self):
-        from oauth import _make_state, _verify_state
+        from src.core.oauth import _make_state, _verify_state
 
         state = _make_state()
         # 9 minutes later — still valid
@@ -77,27 +77,27 @@ class TestOAuthStateToken:
             assert _verify_state(state) is True
 
     def test_garbage_state_rejected(self):
-        from oauth import _verify_state
+        from src.core.oauth import _verify_state
 
         assert _verify_state("notavalidstate") is False
         assert _verify_state("") is False
         assert _verify_state("a.b") is False
 
     def test_different_secret_rejected(self, monkeypatch):
-        from oauth import _make_state
+        from src.core.oauth import _make_state
 
         state = _make_state()
         monkeypatch.setenv("FLASK_SECRET_KEY", "different-secret")
         # Reimport to pick up new secret
         import importlib
 
-        import oauth as oauth_mod
+        import src.core.oauth as oauth_mod
 
         importlib.reload(oauth_mod)
         assert oauth_mod._verify_state(state) is False
 
     def test_two_states_are_unique(self):
-        from oauth import _make_state
+        from src.core.oauth import _make_state
 
         s1 = _make_state()
         s2 = _make_state()
@@ -106,14 +106,14 @@ class TestOAuthStateToken:
 
 class TestLoginToken:
     def test_make_and_verify_login_token(self):
-        from oauth import _make_login_token, verify_login_token
+        from src.core.oauth import _make_login_token, verify_login_token
 
         token = _make_login_token("T123", "U456")
         result = verify_login_token(token)
         assert result == ("T123", "U456")
 
     def test_expired_login_token_rejected(self):
-        from oauth import _make_login_token, verify_login_token
+        from src.core.oauth import _make_login_token, verify_login_token
 
         token = _make_login_token("T123", "U456")
         with patch("time.time", return_value=time.time() + 400):  # 6+ min later
@@ -121,13 +121,13 @@ class TestLoginToken:
         assert result is None
 
     def test_tampered_login_token_rejected(self):
-        from oauth import verify_login_token
+        from src.core.oauth import verify_login_token
 
         assert verify_login_token("garbage.token.value") is None
         assert verify_login_token("") is None
 
     def test_login_token_fresh_within_window(self):
-        from oauth import _make_login_token, verify_login_token
+        from src.core.oauth import _make_login_token, verify_login_token
 
         token = _make_login_token("T123", "U456")
         with patch("time.time", return_value=time.time() + 250):  # ~4 min later

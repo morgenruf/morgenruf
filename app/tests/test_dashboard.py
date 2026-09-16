@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
+
+from tests.support import patch_modules
 
 # schedule_validation (imported by dashboard) needs the real pytz to tell a
 # valid timezone from a typo. Drop a MagicMock left behind by another module.
@@ -24,31 +26,31 @@ sys.modules.setdefault("markupsafe", MagicMock())
 # Stub db and oauth at the module level before dashboard imports them.
 # Save any prior values so we can restore them after dashboard is imported
 # (avoiding interference with test_oauth.py which tests the real oauth module).
-_prior_db = sys.modules.get("db")
-_prior_oauth = sys.modules.get("oauth")
+_prior_db = sys.modules.get("src.core.db")
+_prior_oauth = sys.modules.get("src.core.oauth")
 
 _db_mock = MagicMock()
 _oauth_mock = MagicMock()
-sys.modules["db"] = _db_mock
-sys.modules["oauth"] = _oauth_mock
+sys.modules["src.core.db"] = _db_mock
+sys.modules["src.core.oauth"] = _oauth_mock
 
-import dashboard  # noqa: E402
+import src.core.dashboard as dashboard  # noqa: E402
 from flask import Flask  # noqa: E402
 
 # Restore so test_oauth.py (and others) get the real modules
 if _prior_db is not None:
-    sys.modules["db"] = _prior_db
+    sys.modules["src.core.db"] = _prior_db
 else:
-    sys.modules.pop("db", None)
+    sys.modules.pop("src.core.db", None)
 if _prior_oauth is not None:
-    sys.modules["oauth"] = _prior_oauth
+    sys.modules["src.core.oauth"] = _prior_oauth
 else:
-    sys.modules.pop("oauth", None)
+    sys.modules.pop("src.core.oauth", None)
 
 
 @pytest.fixture()
 def app():
-    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/templates"))
+    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
     flask_app.config["TESTING"] = True
     flask_app.config["SECRET_KEY"] = "test-secret"
     flask_app.register_blueprint(dashboard.dashboard_bp)
@@ -124,7 +126,7 @@ class TestApiMembers:
 
         slack_sdk_mod = MagicMock()
         slack_sdk_mod.WebClient.return_value = slack_client_mock
-        with patch.dict(sys.modules, {"slack_sdk": slack_sdk_mod}):
+        with patch_modules({"slack_sdk": slack_sdk_mod}):
             resp = authed_client.get("/dashboard/api/members")
 
         assert resp.status_code == 200
@@ -145,7 +147,7 @@ class TestApiMembers:
 
         slack_sdk_mod = MagicMock()
         slack_sdk_mod.WebClient.side_effect = Exception("Slack down")
-        with patch.dict(sys.modules, {"slack_sdk": slack_sdk_mod}):
+        with patch_modules({"slack_sdk": slack_sdk_mod}):
             resp = authed_client.get("/dashboard/api/members")
 
         assert resp.status_code == 200
@@ -484,32 +486,32 @@ class TestApiAnalytics:
 
 class TestIsSafeWebhookUrl:
     def test_localhost_rejected(self):
-        from dashboard import _is_safe_webhook_url
+        from src.core.dashboard import _is_safe_webhook_url
 
         assert _is_safe_webhook_url("http://localhost/hook") is False
 
     def test_loopback_ip_rejected(self):
-        from dashboard import _is_safe_webhook_url
+        from src.core.dashboard import _is_safe_webhook_url
 
         assert _is_safe_webhook_url("https://127.0.0.1/hook") is False
 
     def test_private_ip_rejected(self):
-        from dashboard import _is_safe_webhook_url
+        from src.core.dashboard import _is_safe_webhook_url
 
         assert _is_safe_webhook_url("https://192.168.1.1/hook") is False
 
     def test_public_url_allowed(self):
-        from dashboard import _is_safe_webhook_url
+        from src.core.dashboard import _is_safe_webhook_url
 
         assert _is_safe_webhook_url("https://hooks.example.com/standup") is True
 
     def test_non_http_scheme_rejected(self):
-        from dashboard import _is_safe_webhook_url
+        from src.core.dashboard import _is_safe_webhook_url
 
         assert _is_safe_webhook_url("ftp://hooks.example.com/hook") is False
 
     def test_invalid_url_rejected(self):
-        from dashboard import _is_safe_webhook_url
+        from src.core.dashboard import _is_safe_webhook_url
 
         assert _is_safe_webhook_url("not-a-url") is False
 
@@ -521,7 +523,7 @@ class TestIsSafeWebhookUrl:
 
 class TestScheduleToStandup:
     def test_minimal_row_fills_defaults(self):
-        from dashboard import _schedule_to_standup
+        from src.core.dashboard import _schedule_to_standup
 
         row = {"id": 1}
         result = _schedule_to_standup(row)
@@ -532,14 +534,14 @@ class TestScheduleToStandup:
         assert isinstance(result["participants"], list)
 
     def test_json_string_questions_parsed(self):
-        from dashboard import _schedule_to_standup
+        from src.core.dashboard import _schedule_to_standup
 
         row = {"id": 2, "questions": '["Q1","Q2"]', "participants": "[]"}
         result = _schedule_to_standup(row)
         assert result["questions"] == ["Q1", "Q2"]
 
     def test_schedule_days_split(self):
-        from dashboard import _schedule_to_standup
+        from src.core.dashboard import _schedule_to_standup
 
         row = {"id": 3, "schedule_days": "mon,wed,fri"}
         result = _schedule_to_standup(row)

@@ -58,7 +58,7 @@ except ImportError:
     sys.exit(1)
 
 sys.path.insert(0, os.path.dirname(__file__))
-import db  # noqa: E402
+import src.core.db as db  # noqa: E402
 
 _DEFAULT_TEAM_ID = os.environ.get("MCP_TEAM_ID", "")
 

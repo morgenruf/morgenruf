@@ -7,14 +7,16 @@ no signature. These cover both halves of that fix.
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+from tests.support import patch_modules
 
 for _name in ("pytz", "slack_sdk"):
     if isinstance(sys.modules.get(_name), MagicMock):
         del sys.modules[_name]
 
 import workflow  # noqa: E402
-from url_guard import is_safe_webhook_url  # noqa: E402
+from src.core.url_guard import is_safe_webhook_url  # noqa: E402
 
 
 def _rule(target, rule_id=7):
@@ -36,7 +38,7 @@ def _run(rule, webhooks=None, deliver=None):
     db.get_webhooks.return_value = webhooks if webhooks is not None else []
     handlers = MagicMock()
     handlers.deliver_webhook = deliver
-    with patch.dict(sys.modules, {"db": db, "handlers": handlers}):
+    with patch_modules({"src.core.db": db, "handlers": handlers}):
         workflow._fire_rule("T1", rule, "standup_complete", {"team": "T1"}, MagicMock())
     return deliver
 
@@ -103,7 +105,7 @@ class TestRuleWebhookSigns:
         db.get_webhooks.side_effect = Exception("db down")
         handlers = MagicMock()
         handlers.deliver_webhook = deliver
-        with patch.dict(sys.modules, {"db": db, "handlers": handlers}):
+        with patch_modules({"src.core.db": db, "handlers": handlers}):
             workflow._fire_rule("T1", _rule("https://hooks.example.com/abc"), "standup_complete", {}, MagicMock())
         deliver.assert_called_once()
 
@@ -117,7 +119,7 @@ class TestLowParticipationCountsEnrolledOnly:
 
     @staticmethod
     def _pct(stats):
-        import scheduler  # noqa: PLC0415
+        import src.core.scheduler as scheduler  # noqa: PLC0415
 
         return scheduler.participation_pct(stats)
 

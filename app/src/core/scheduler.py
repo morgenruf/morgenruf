@@ -15,13 +15,14 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from schedule_validation import schedule_config_error
 from slack_sdk import WebClient
-from slack_users import (
+
+from src.core.slack_users import (
     fetch_human_users,
     fetch_workspace_directory,
     is_dead_install,
     member_profile,
 )
-from state import state_store
+from src.core.state import state_store
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
@@ -85,7 +86,7 @@ def _refresh_bot_token_if_needed(team_id: str, inst: dict) -> str | None:
         datetime.fromtimestamp(time.time() + expires_in, tz=timezone.utc).isoformat() if expires_in > 0 else None
     )
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         db.save_installation(
             team_id=team_id,
@@ -106,7 +107,7 @@ def _refresh_bot_token_if_needed(team_id: str, inst: dict) -> str | None:
 def _fresh_bot_token(team_id: str, fallback_token: str) -> str:
     """Return the latest bot_token from the DB, refreshing via OAuth if near/past expiry."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         inst = db.get_installation(team_id)
         if inst:
@@ -129,7 +130,7 @@ def _is_auth_error(exc: Exception) -> bool:
 def _force_refresh_bot_token(team_id: str) -> str | None:
     """Force a refresh regardless of stored expiry. Returns new bot_token or None."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         inst = db.get_installation(team_id)
         if not inst:
@@ -220,7 +221,7 @@ def _schedule_standup_retry(
 def _refresh_all_tokens_job() -> None:
     """Background job: refresh any bot tokens nearing expiry across all installations."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         installations = db.get_all_installations()
     except Exception as exc:
@@ -295,7 +296,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
     """DM participants of a standup schedule (or all active members if no schedule)."""
     bot_token = _fresh_bot_token(team_id, bot_token)
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         if schedule_id:
             schedule = db.get_standup_schedule(team_id, schedule_id)
@@ -400,7 +401,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
 
             # Check if user skipped today
             try:
-                import db  # noqa: PLC0415
+                import src.core.db as db  # noqa: PLC0415
 
                 if db.is_skipped_today(team_id, user_id):
                     logger.debug("Skipping %s — user opted out today", user_id)
@@ -411,7 +412,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
                 )
 
             try:
-                import db  # noqa: PLC0415
+                import src.core.db as db  # noqa: PLC0415
 
                 if db.is_on_vacation(team_id, user_id):
                     logger.debug("Skipping %s — on vacation", user_id)
@@ -485,7 +486,7 @@ def resolve_participants(client, team_id: str, participants, members: list[dict]
     and included. A Slack lookup failure leaves them out of this run rather than
     guessing, and the next run retries.
     """
-    import db  # noqa: PLC0415
+    import src.core.db as db  # noqa: PLC0415
 
     wanted = [p for p in (participants or []) if p]
     if not wanted:
@@ -539,7 +540,7 @@ def _send_reminder_to_workspace(
     """DM active members a heads-up before standup time."""
     bot_token = _fresh_bot_token(team_id, bot_token)
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         members = db.get_active_members(team_id)
         standup_label: str | None = None
@@ -576,7 +577,7 @@ def _send_reminder_to_workspace(
     for member in members:
         user_id = member["user_id"]
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             if db.is_skipped_today(team_id, user_id):
                 continue
@@ -592,8 +593,9 @@ def _send_reminder_to_workspace(
 
     # Evaluate low_participation workflow rules
     try:
-        import db  # noqa: PLC0415
         from workflow import evaluate_rules  # noqa: PLC0415
+
+        import src.core.db as db  # noqa: PLC0415
 
         stats = db.get_participation_stats(team_id, days=1)
         pct = participation_pct(stats)
@@ -605,8 +607,9 @@ def _send_reminder_to_workspace(
 def _send_weekly_digest(team_id: str, bot_token: str) -> None:
     """Send a weekly summary email to the workspace admin."""
     try:
-        import db  # noqa: PLC0415
         from mailer import send_weekly_digest  # noqa: PLC0415
+
+        import src.core.db as db  # noqa: PLC0415
 
         inst = db.get_installation(team_id)
         if not inst:
@@ -627,8 +630,9 @@ def _send_weekly_digest(team_id: str, bot_token: str) -> None:
 def _send_manager_digest(team_id: str) -> None:
     """Send today's standup digest to the configured manager email (if enabled)."""
     try:
-        import db  # noqa: PLC0415
         from mailer import send_manager_digest  # noqa: PLC0415
+
+        import src.core.db as db  # noqa: PLC0415
 
         config = db.get_workspace_config(team_id)
         if not config:
@@ -658,7 +662,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
     try:
         import json as _json
 
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         today_standups = db.get_today_standups(team_id)
         if not today_standups:
@@ -1180,7 +1184,7 @@ def get_unregistered_schedules(
     """
     if schedules is None:
         try:
-            import db  # noqa: PLC0415
+            import src.core.db as db  # noqa: PLC0415
 
             schedules = db.get_all_active_schedules()
         except Exception as exc:
@@ -1222,7 +1226,7 @@ def _sync_jobs_from_db() -> None:
     if _scheduler is None:
         return
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         schedules = db.get_all_active_schedules()
         installations = db.get_all_installations()
@@ -1319,7 +1323,7 @@ def sync_members_from_slack() -> None:
     failed lookup as "nobody is here" would deactivate the whole workspace.
     """
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         installations = db.get_all_installations()
     except Exception as exc:
@@ -1463,7 +1467,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
     # duplicate workspace-level standup/report jobs for them.
     teams_with_schedules: set[str] = set()
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         all_schedules = db.get_all_active_schedules()
         for sched in all_schedules:

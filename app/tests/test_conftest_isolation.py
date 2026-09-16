@@ -11,14 +11,14 @@ from unittest.mock import MagicMock
 
 
 def test_a_stubs_a_real_module():
-    import url_guard  # noqa: F401  real module, imported so it is in sys.modules
+    import src.core.url_guard as url_guard  # noqa: F401  real module, imported so it is in sys.modules
 
-    sys.modules["url_guard"] = MagicMock()
-    assert isinstance(sys.modules["url_guard"], MagicMock)
+    sys.modules["src.core.url_guard"] = MagicMock()
+    assert isinstance(sys.modules["src.core.url_guard"], MagicMock)
 
 
 def test_b_sees_the_real_module_again():
-    assert not isinstance(sys.modules.get("url_guard"), MagicMock)
-    import url_guard
+    assert not isinstance(sys.modules.get("src.core.url_guard"), MagicMock)
+    import src.core.url_guard as url_guard
 
     assert callable(url_guard.is_safe_webhook_url)

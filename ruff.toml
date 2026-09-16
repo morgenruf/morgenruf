@@ -6,4 +6,4 @@ ignore = ["E501"]
 
 [lint.per-file-ignores]
 "app/src/main.py" = ["E402"]
-"app/src/db.py" = ["E402"]
+"app/src/core/db.py" = ["E402"]

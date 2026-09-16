@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import dashboard  # noqa: E402
 import pytest
+import src.core.dashboard as dashboard  # noqa: E402
 
 DEFAULT_Q = ["What did you do yesterday?", "What will you do today?", "Any blockers?"]
 AVAILABILITY_Q = ["Previous day work", "Plan for today", "Availability in Hours"]

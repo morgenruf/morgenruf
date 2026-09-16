@@ -25,16 +25,17 @@ if _sentry_dsn:
     )
     logging.getLogger(__name__).info("Sentry error monitoring enabled")
 
-from dashboard import dashboard_bp
 from flask import Flask, jsonify, request
 from handlers import register_handlers
-from installation_store import PostgresInstallationStore
-from oauth import oauth_bp
-from scheduler import build_scheduler
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from src.core.dashboard import dashboard_bp
+from src.core.installation_store import PostgresInstallationStore
+from src.core.oauth import oauth_bp
+from src.core.scheduler import build_scheduler
 
 log_level = logging.DEBUG if os.environ.get("LOG_LEVEL", "").upper() == "DEBUG" else logging.INFO
 logging.basicConfig(
@@ -47,7 +48,7 @@ logger = logging.getLogger(__name__)
 def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
     """Load all active installations and their configs from DB."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         installations = db.get_all_installations()
         jobs = []

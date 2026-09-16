@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from slack_users import fetch_human_users, filter_human_ids, is_human, member_profile  # noqa: E402
+from src.core.slack_users import fetch_human_users, filter_human_ids, is_human, member_profile  # noqa: E402
 
 
 def _user(uid, **overrides):

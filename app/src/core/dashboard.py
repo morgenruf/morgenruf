@@ -11,7 +11,6 @@ import re
 import secrets
 from functools import wraps
 
-import db
 from flask import (
     Blueprint,
     Response,
@@ -22,10 +21,12 @@ from flask import (
     session,
     url_for,
 )
-from oauth import verify_login_token
 from schedule_validation import schedule_config_error, schedule_payload_error
-from slack_users import is_human
-from url_guard import is_safe_webhook_url
+
+import src.core.db as db
+from src.core.oauth import verify_login_token
+from src.core.slack_users import is_human
+from src.core.url_guard import is_safe_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ def _next_run(row: dict) -> str:
     if not row.get("active", True):
         return ""
     try:
-        from scheduler import next_run_at  # noqa: PLC0415
+        from src.core.scheduler import next_run_at  # noqa: PLC0415
 
         moment = next_run_at(row)
     except Exception as exc:
@@ -1258,7 +1259,7 @@ def api_create_schedule():
             post_summary=_post_summary_default(data),
         )
         try:
-            from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+            from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
 
             inst = db.get_installation(team_id)
             if inst and get_scheduler():
@@ -1317,7 +1318,7 @@ def api_update_schedule(schedule_id: int):
             return jsonify({"error": "Not found"}), 404
         # Refresh the running scheduler so the new time/days take effect immediately
         try:
-            from scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
+            from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
 
             inst = db.get_installation(team_id)
             sched_obj = get_scheduler()
@@ -1349,7 +1350,7 @@ def api_delete_schedule(schedule_id: int):
         db.delete_standup_schedule(team_id, schedule_id)
         # Remove jobs from the running scheduler
         try:
-            from scheduler import get_scheduler  # noqa: PLC0415
+            from src.core.scheduler import get_scheduler  # noqa: PLC0415
 
             sched_obj = get_scheduler()
             if sched_obj:

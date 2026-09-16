@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def get_rules(team_id: str) -> list[dict]:
     """Fetch active workflow rules for a team."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         if db._pool is None:
             return []
@@ -49,7 +49,7 @@ def save_rule(
 ) -> int | None:
     """Insert a new workflow rule and return its id."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         if db._pool is None:
             return None
@@ -73,7 +73,7 @@ def save_rule(
 def delete_rule(rule_id: int, team_id: str) -> None:
     """Soft-delete a workflow rule (set active=False)."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         if db._pool is None:
             return
@@ -154,7 +154,7 @@ def _fire_rule_webhook(team_id: str, rule: dict, trigger: str, context: dict) ->
     does not, it still goes out, but unsigned and flagged as such in the log, so
     the gap is visible rather than silent.
     """
-    from url_guard import is_safe_webhook_url  # noqa: PLC0415
+    from src.core.url_guard import is_safe_webhook_url  # noqa: PLC0415
 
     target = (rule.get("action_target") or "").strip()
     rule_id = rule.get("id")
@@ -175,7 +175,7 @@ def _fire_rule_webhook(team_id: str, rule: dict, trigger: str, context: dict) ->
 
     hook = {"id": None, "webhook_url": target, "secret": None}
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         for registered in db.get_webhooks(team_id) or []:
             if (registered.get("webhook_url") or "").strip() == target:

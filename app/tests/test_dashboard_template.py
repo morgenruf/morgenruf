@@ -12,7 +12,7 @@ import os
 import re
 from collections import Counter
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/templates/dashboard.html")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
 
 # An id built at runtime ("sc-' + s.id + '") is not a literal id, so only plain
 # HTML id values count.

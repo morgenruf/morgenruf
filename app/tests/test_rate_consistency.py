@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 for _name in ("psycopg2", "psycopg2.extras"):
     sys.modules.setdefault(_name, MagicMock())
 
-import db  # noqa: E402
+import src.core.db as db  # noqa: E402
 
 
 def _workspace():

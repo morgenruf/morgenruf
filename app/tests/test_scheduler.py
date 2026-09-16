@@ -6,6 +6,8 @@ import importlib
 import sys
 from unittest.mock import MagicMock, patch
 
+from tests.support import patch_modules
+
 # Earlier test modules leave MagicMock stubs in sys.modules (test_handlers stubs
 # pytz, test_dashboard stubs slack_sdk). The scheduler needs the real pytz for
 # CronTrigger timezones, so drop leaked stubs before importing it.
@@ -14,25 +16,25 @@ for _name in ("pytz", "slack_sdk"):
         del sys.modules[_name]
 
 # Stub session_store before importing state (state.py imports it at module level).
-_prior_session_store = sys.modules.get("session_store")
+_prior_session_store = sys.modules.get("src.core.session_store")
 _ss_mock = MagicMock()
 _ss_mock.get_session.return_value = None
 # Without this the bare MagicMock answers "yes" and every member looks like they
 # already have a session open, which only shows up when this module runs alone.
 _ss_mock.has_session.return_value = False
-sys.modules["session_store"] = _ss_mock
+sys.modules["src.core.session_store"] = _ss_mock
 
 _had_scheduler = "scheduler" in sys.modules
-import scheduler as sched_mod  # noqa: E402
+import src.core.scheduler as sched_mod  # noqa: E402
 
 if _had_scheduler:
     # Re-import so module-level bindings (pytz, WebClient) point at the real deps.
     sched_mod = importlib.reload(sched_mod)
 
 if _prior_session_store is not None:
-    sys.modules["session_store"] = _prior_session_store
+    sys.modules["src.core.session_store"] = _prior_session_store
 else:
-    sys.modules.pop("session_store", None)
+    sys.modules.pop("src.core.session_store", None)
 
 from apscheduler.schedulers.background import BackgroundScheduler  # noqa: E402
 
@@ -83,7 +85,7 @@ class _SyncTestBase:
         sched_mod._synced_workspace_fps.clear()
 
     def sync(self, db):
-        with patch.dict(sys.modules, {"db": db}):
+        with patch_modules({"src.core.db": db}):
             sched_mod._sync_jobs_from_db()
 
 
@@ -176,7 +178,7 @@ class TestSyncResilience(_SyncTestBase):
 class TestBuildSchedulerRegistersSyncJob(_SyncTestBase):
     def test_sync_job_present(self):
         db = _make_db(schedules=[_schedule_row()])
-        with patch.dict(sys.modules, {"db": db}):
+        with patch_modules({"src.core.db": db}):
             scheduler = sched_mod.build_scheduler([])
         assert scheduler.get_job("schedule_sync") is not None
         # build seeds fingerprints so the first sync run doesn't re-register
@@ -209,7 +211,7 @@ class TestEndToEndStandupDelivery(_SyncTestBase):
         client = MagicMock()
         client.conversations_open.return_value = {"channel": {"id": "D123"}}
         with (
-            patch.dict(sys.modules, {"db": db}),
+            patch_modules({"src.core.db": db}),
             patch.object(sched_mod, "WebClient", return_value=client),
         ):
             job.func(*job.args)
@@ -227,7 +229,7 @@ class TestReminderSkipsInactiveSchedule(_SyncTestBase):
         db.get_standup_schedule.return_value = sched_row
         db.get_installation.return_value = None
         with (
-            patch.dict(sys.modules, {"db": db}),
+            patch_modules({"src.core.db": db}),
             patch.object(sched_mod, "WebClient") as web_client,
             patch.object(sched_mod, "evaluate_rules", create=True),
         ):
@@ -283,14 +285,14 @@ class TestInvalidScheduleIsReportable(_SyncTestBase):
 
     def test_schedules_are_read_from_the_db_when_not_supplied(self):
         db = _make_db(schedules=[_schedule_row(schedule_tz="Asia/Kolkatta")])
-        with patch.dict(sys.modules, {"db": db}):
+        with patch_modules({"src.core.db": db}):
             problems = sched_mod.get_unregistered_schedules(self.scheduler)
         assert len(problems) == 1
 
     def test_db_error_reports_nothing(self):
         db = MagicMock()
         db.get_all_active_schedules.side_effect = RuntimeError("db down")
-        with patch.dict(sys.modules, {"db": db}):
+        with patch_modules({"src.core.db": db}):
             assert sched_mod.get_unregistered_schedules(self.scheduler) == []
 
 

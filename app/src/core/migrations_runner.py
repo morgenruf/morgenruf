@@ -6,7 +6,12 @@ import psycopg2
 
 
 def get_migrations_dir():
-    default = os.path.join(os.path.dirname(__file__), "..", "migrations")
+    """Default to the core migrations directory that now ships inside the package.
+
+    MIGRATIONS_DIR still wins when set, because self-hosted deployments may
+    point it somewhere else.
+    """
+    default = os.path.join(os.path.dirname(__file__), "migrations")
     return os.environ.get("MIGRATIONS_DIR", default)
 
 

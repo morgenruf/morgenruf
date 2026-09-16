@@ -10,12 +10,13 @@ import time
 from datetime import datetime
 from datetime import timezone as tz
 
-import db
 from flask import Blueprint, jsonify, redirect, request, session
 from mailer import send_welcome_email
 from markupsafe import escape
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
+
+import src.core.db as db
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +260,7 @@ def verify_login_token(token: str) -> tuple[str, str] | None:
 def _schedule_workspace(team_id: str, bot_token: str) -> None:
     """Register a scheduler job for a newly installed workspace."""
     try:
-        from scheduler import get_scheduler, register_workspace_job  # noqa: PLC0415
+        from src.core.scheduler import get_scheduler, register_workspace_job  # noqa: PLC0415
 
         scheduler = get_scheduler()
         if scheduler is None:

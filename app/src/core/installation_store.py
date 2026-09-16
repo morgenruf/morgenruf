@@ -6,8 +6,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-import db
 from slack_sdk.oauth.installation_store import Bot, Installation, InstallationStore
+
+import src.core.db as db
 
 logger = logging.getLogger(__name__)
 

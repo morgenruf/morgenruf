@@ -6,7 +6,7 @@ from tools.check_mechanical_move import changed_functions, modules_equivalent
 
 OLD = '''
 import os
-from db import get_conn
+from src.core.db import get_conn
 
 def add(a, b):
     return a + b
