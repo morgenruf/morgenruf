@@ -1389,13 +1389,38 @@
       </div>
       <div class="wide-col">
         <div class="stat-card" style="margin-bottom:20px">
-          <div class="stat-label" style="margin-bottom:12px">How to give kudos</div>
-          <p style="font-size:0.92rem;color:var(--text-muted)">DM the bot: <code style="background:var(--surface2);padding:2px 7px;border-radius:5px;font-size:0.88rem">kudos @teammate Great work on the deploy!</code></p>
+          <div class="stat-head">
+            <div class="stat-label">How it works</div>
+            <div class="stat-ico"><svg aria-hidden="true"><use href="#i-kudos"/></svg></div>
+          </div>
+          <p style="font-size:0.92rem;color:var(--text-muted);margin-top:12px;line-height:1.65;max-width:62ch">
+            DM the bot <code style="background:var(--surface2);padding:2px 7px;border-radius:5px;font-size:0.88rem">kudos @teammate nice work on the deploy</code>.
+            Everyone gets <strong id="kudos-allowance-inline">5</strong> <span id="kudos-emoji-inline"></span> a day to give away.
+            Unused ones do not carry over, which is what keeps people spending them.
+          </p>
+          <div id="kudos-settings" style="display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--border)">
+            <div class="form-grid" style="align-items:end">
+              <div class="form-group">
+                <label>Token your team gives</label>
+                <input type="text" id="kudos-emoji" maxlength="16" style="font-size:1.1rem"/>
+              </div>
+              <div class="form-group">
+                <label>Each per day</label>
+                <input type="number" id="kudos-allowance" min="0" max="50"/>
+              </div>
+              <div class="form-group">
+                <button class="btn btn-primary btn-sm" onclick="saveKudosConfig()">Save</button>
+              </div>
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-dim);margin-top:4px">Set the daily amount to 0 to switch giving off without removing kudos.</p>
+          </div>
         </div>
         <div class="two-col">
           <div class="stat-card">
-            <div class="stat-label" style="margin-bottom:12px">Leaderboard, last 30 days</div>
+            <div class="stat-label" style="margin-bottom:12px">Most recognised, last 30 days</div>
             <div id="kudos-board"><div class="loading-center"><div class="spinner"></div></div></div>
+            <div class="stat-label" style="margin:22px 0 12px">Most generous, last 30 days</div>
+            <div id="kudos-givers"><div class="loading-center"><div class="spinner"></div></div></div>
           </div>
           <div>
             <div class="stat-label" style="margin-bottom:12px;padding-left:2px">Recent Kudos</div>
@@ -4440,12 +4465,54 @@
 
   // ── Kudos ──
   async function loadKudos() {
-    const [kudos, board] = await Promise.all([
+    const [kudos, board, givers, cfg, me] = await Promise.all([
       fetch('/dashboard/api/kudos').then(checkAuth).then(r => r.json()).catch(() => []),
-      fetch('/dashboard/api/kudos/leaderboard').then(checkAuth).then(r => r.json()).catch(() => [])
+      fetch('/dashboard/api/kudos/leaderboard').then(checkAuth).then(r => r.json()).catch(() => []),
+      fetch('/dashboard/api/kudos/givers').then(checkAuth).then(r => r.json()).catch(() => []),
+      fetch('/dashboard/api/kudos/config').then(checkAuth).then(r => r.json()).catch(() => null),
+      fetch('/dashboard/api/me').then(checkAuth).then(r => r.json()).catch(() => ({}))
     ]);
+    if (cfg) {
+      state.kudosConfig = cfg;
+      document.getElementById('kudos-emoji-inline').textContent = cfg.emoji;
+      document.getElementById('kudos-allowance-inline').textContent = cfg.daily_allowance;
+      document.getElementById('kudos-emoji').value = cfg.emoji;
+      document.getElementById('kudos-allowance').value = cfg.daily_allowance;
+      // Only an admin can change the token, so only an admin is shown the form.
+      if (me && me.role === 'admin') document.getElementById('kudos-settings').style.display = 'block';
+    }
     renderKudosBoard(board);
+    renderKudosGivers(givers);
     renderKudosFeed(kudos);
+  }
+
+  function renderKudosGivers(board) {
+    const el = document.getElementById('kudos-givers');
+    if (!el) return;
+    const emoji = (state.kudosConfig && state.kudosConfig.emoji) || '';
+    if (!board.length) {
+      el.innerHTML = '<p style="color:var(--text-muted);font-size:0.9rem;">Nobody has given any yet.</p>';
+      return;
+    }
+    el.innerHTML = board.slice(0, 10).map((r, i) =>
+      '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
+      '<span class="rank' + (i < 3 ? ' rank-top' : '') + '">' + (i + 1) + '</span>' +
+      '<span style="flex:1;font-weight:600;">@' + esc(r.user_id) + '</span>' +
+      '<span class="pill-quiet" style="padding:2px 10px">' + r.given + ' given ' + esc(emoji) + '</span>' +
+      '</div>').join('');
+  }
+
+  async function saveKudosConfig() {
+    const emoji = document.getElementById('kudos-emoji').value.trim();
+    const allowance = parseInt(document.getElementById('kudos-allowance').value, 10);
+    try {
+      const cfg = await api('POST', '/kudos/config', { emoji: emoji, daily_allowance: allowance });
+      state.kudosConfig = cfg;
+      toast('Kudos settings saved');
+      loadKudos();
+    } catch (e) {
+      toast((e && e.message) || 'Could not save kudos settings');
+    }
   }
 
   function renderKudosBoard(board) {
