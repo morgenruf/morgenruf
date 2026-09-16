@@ -1188,6 +1188,7 @@
   <symbol id="i-analytics" viewBox="0 0 24 24"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><line x1="5" y1="21" x2="5" y2="14"/><line x1="5" y1="10" x2="5" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="19" y1="21" x2="19" y2="16"/><line x1="19" y1="12" x2="19" y2="3"/><line x1="2" y1="14" x2="8" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="16" y1="16" x2="22" y2="16"/></symbol>
   <symbol id="i-webhooks" viewBox="0 0 24 24"><path d="M10 13.5a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7L11.6 7"/><path d="M14 10.5a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/></symbol>
+  <symbol id="i-connect" viewBox="0 0 24 24"><path d="M4 8h9v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8Z"/><path d="M13 9h2.5a2 2 0 0 1 0 4H13"/><path d="M3 20h11"/><path d="M17 4v2M20 3v3"/></symbol>
   <symbol id="i-kudos" viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><polyline points="8.5 14 7 22 12 19 17 22 15.5 14"/></symbol>
   <symbol id="i-automation" viewBox="0 0 24 24"><polygon points="13 2 4 14 11 14 10.5 22 20 10 13 10 13 2"/></symbol>
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
@@ -1214,6 +1215,9 @@
     </div>
     <div class="nav-item" data-section="reports">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-reports"/></svg> Reports
+    </div>
+    <div class="nav-item" data-section="connect">
+      <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
     </div>
     <div class="nav-item" data-section="analytics">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-analytics"/></svg> Analytics
@@ -1259,6 +1263,21 @@
       <div id="stats-grid" class="stats-grid"></div>
       <div id="standups-caption" class="list-caption"></div>
       <div id="standups-list" class="standups-grid"></div>
+    </div>
+
+    <!-- Coffee chats -->
+    <div id="section-connect" class="section">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Coffee chats</div>
+          <div class="page-subtitle">Introduce people from a channel on a regular cadence</div>
+        </div>
+        <button class="btn btn-primary" onclick="openConnectModal()">&#43; New coffee chat</button>
+      </div>
+      <div id="connect-locked" style="display:none"></div>
+      <div id="connect-body">
+        <div id="connect-list"></div>
+      </div>
     </div>
 
     <!-- Members -->
@@ -1646,6 +1665,47 @@
       </div>
     </div>
   </div>
+  <div class="modal-overlay" id="connect-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">New coffee chat</div>
+        <button class="modal-close" onclick="closeConnectModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="cc-name" maxlength="80" placeholder="Coffee chats"/>
+        </div>
+        <div class="form-group">
+          <label>Draw people from</label>
+          <select id="cc-channel"></select>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Repeat every</label>
+            <select id="cc-interval">
+              <option value="1">Week</option>
+              <option value="2">2 weeks</option>
+              <option value="3">3 weeks</option>
+              <option value="4">4 weeks</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>On</label>
+            <select id="cc-day"></select>
+          </div>
+          <div class="form-group">
+            <label>At</label>
+            <input type="time" id="cc-time" value="10:00"/>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConnectModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveConnect()">Create coffee chat</button>
+      </div>
+    </div>
+  </div>
   <div class="modal-overlay" id="standup-modal">
     <div class="modal">
       <div class="modal-header">
@@ -1907,6 +1967,7 @@
       if (sec === 'settings') loadSettings();
       if (sec === 'webhooks') loadWebhooks();
       if (sec === 'analytics') loadAnalytics(7);
+      if (sec === 'connect') loadConnect();
       if (sec === 'kudos') loadKudos();
       if (sec === 'automation') loadRules();
       if (sec === 'mcp') loadMCPKeys();
@@ -2019,6 +2080,166 @@
 
       card('Responses this week', 'i-reports',
         '<div class="stat-value">' + (s.total_responses || 0) + '</div>', 'Total submissions');
+  }
+
+
+  // ── Coffee chats ──────────────────────────────────────────────────────────
+  const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+  function cadenceLabel(p) {
+    const every = p.interval_weeks === 1 ? 'Every' : 'Every ' + p.interval_weeks + ' weeks on';
+    const hh = String(p.hour).padStart(2, '0'), mm = String(p.minute).padStart(2, '0');
+    return every + ' ' + DAY_NAMES[p.day_of_week] + ' at ' + hh + ':' + mm;
+  }
+
+  function connectChannelName(id) {
+    const ch = (state.channels || []).find(c => c.id === id);
+    return ch ? ch.name : id;
+  }
+
+  async function loadConnect() {
+    const locked = document.getElementById('connect-locked');
+    const body = document.getElementById('connect-body');
+    const list = document.getElementById('connect-list');
+    list.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+    // Connect needs Slack permissions a workspace installed earlier will not
+    // have granted. Say so plainly instead of failing when a round is due.
+    let mod = null;
+    try {
+      const mods = await api('GET', '/modules');
+      mod = (mods || []).find(m => m.name === 'connect');
+    } catch (e) { /* fall through and try loading anyway */ }
+
+    if (mod && mod.missing_scopes && mod.missing_scopes.length) {
+      body.style.display = 'none';
+      locked.style.display = 'block';
+      locked.innerHTML =
+        '<div class="stat-card" style="max-width:640px">' +
+          '<div class="stat-head">' +
+            '<div class="stat-label">Connect needs more Slack access</div>' +
+            '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>' +
+          '</div>' +
+          '<p style="color:var(--text-muted);margin:14px 0 6px;line-height:1.65;max-width:56ch">' +
+            'To introduce two people privately, the bot needs permission to open a group ' +
+            'direct message and to see whether anyone replied. Standups keep working either way.' +
+          '</p>' +
+          '<p style="color:var(--text-dim);font-size:12.5px;margin:0 0 18px">Missing: ' +
+            esc(mod.missing_scopes.join(', ')) + '</p>' +
+          '<a class="btn btn-primary" href="/install">Re-authorise Slack</a>' +
+        '</div>';
+      return;
+    }
+
+    locked.style.display = 'none';
+    body.style.display = 'block';
+    await loadChannels();
+    try {
+      state.connect = await api('GET', '/connect/programs');
+    } catch (e) {
+      list.innerHTML = '<p style="color:var(--text-dim);padding:24px">Could not load coffee chats.</p>';
+      return;
+    }
+    renderConnect();
+  }
+
+  function renderConnect() {
+    const list = document.getElementById('connect-list');
+    const programs = state.connect || [];
+
+    if (!programs.length) {
+      list.innerHTML =
+        '<div class="stat-card" style="text-align:center;padding:48px 24px">' +
+          '<div style="font-size:15px;font-weight:600;margin-bottom:8px">No coffee chats yet</div>' +
+          '<p style="color:var(--text-muted);margin:0 auto 20px;line-height:1.65;max-width:52ch">' +
+            'Pick a channel and a cadence. Everyone in it gets paired up and introduced in a ' +
+            'group DM. When the count is odd, one group of three forms so nobody sits out.' +
+          '</p>' +
+          '<button class="btn btn-primary" onclick="openConnectModal()">Create the first one</button>' +
+        '</div>';
+      return;
+    }
+
+    list.innerHTML = '<div class="standups-grid">' + programs.map(p =>
+      '<div class="standup-card">' +
+        '<div class="standup-icon"><svg aria-hidden="true" class="nav-icon"><use href="#i-connect"/></svg></div>' +
+        '<div class="standup-info">' +
+          '<div class="standup-name">' + esc(p.name) + '</div>' +
+          '<div class="standup-meta">' +
+            '<span>#' + esc(connectChannelName(p.channel_id)) + '</span>' +
+            '<span>' + esc(cadenceLabel(p)) + '</span>' +
+            '<span>' + esc(p.timezone) + '</span>' +
+            (p.pool_size === null || p.pool_size === undefined
+              ? '' : '<span>' + p.pool_size + ' in the pool</span>') +
+            '<span>' + (p.round_count || 0) + ' rounds run</span>' +
+            '<span class="pill-quiet">' + (p.enabled ? 'Active' : 'Paused') + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="standup-actions">' +
+          '<button class="toggle ' + (p.enabled ? 'on' : '') + '" title="Toggle active"' +
+            ' onclick="toggleConnect(' + p.id + ', this)"></button>' +
+          '<button class="btn btn-danger btn-sm" onclick="deleteConnect(' + p.id + ')">Delete</button>' +
+        '</div>' +
+      '</div>').join('') + '</div>';
+  }
+
+  async function toggleConnect(id, btn) {
+    const p = (state.connect || []).find(x => x.id === id);
+    if (!p) return;
+    const next = !p.enabled;
+    try {
+      await api('POST', '/connect/programs/' + id, { enabled: next });
+      p.enabled = next;
+      btn.classList.toggle('on', next);
+      renderConnect();
+      toast(next ? 'Coffee chats resumed' : 'Coffee chats paused');
+    } catch (e) { toast('Could not update this coffee chat'); }
+  }
+
+  async function deleteConnect(id) {
+    if (!confirm('Delete this coffee chat? Its past rounds go too.')) return;
+    try {
+      await api('DELETE', '/connect/programs/' + id);
+      state.connect = (state.connect || []).filter(x => x.id !== id);
+      renderConnect();
+      toast('Coffee chat deleted');
+    } catch (e) { toast('Could not delete this coffee chat'); }
+  }
+
+  async function openConnectModal() {
+    await loadChannels();
+    const sel = document.getElementById('cc-channel');
+    sel.innerHTML = (state.channels || []).map(c =>
+      '<option value="' + esc(c.id) + '">#' + esc(c.name) + '</option>').join('');
+    document.getElementById('cc-day').innerHTML = DAY_NAMES.map((d, i) =>
+      '<option value="' + i + '"' + (i === 0 ? ' selected' : '') + '>' + d + '</option>').join('');
+    document.getElementById('cc-name').value = 'Coffee chats';
+    document.getElementById('cc-time').value = '10:00';
+    document.getElementById('connect-modal').classList.add('open');
+  }
+
+  function closeConnectModal() {
+    document.getElementById('connect-modal').classList.remove('open');
+  }
+
+  async function saveConnect() {
+    const time = (document.getElementById('cc-time').value || '10:00').split(':');
+    try {
+      await api('POST', '/connect/programs', {
+        name: document.getElementById('cc-name').value,
+        channel_id: document.getElementById('cc-channel').value,
+        interval_weeks: parseInt(document.getElementById('cc-interval').value, 10),
+        day_of_week: parseInt(document.getElementById('cc-day').value, 10),
+        hour: parseInt(time[0], 10),
+        minute: parseInt(time[1], 10),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      });
+      closeConnectModal();
+      toast('Coffee chat created');
+      loadConnect();
+    } catch (e) {
+      toast((e && e.message) || 'Could not create this coffee chat');
+    }
   }
 
   // ── Standups ──
