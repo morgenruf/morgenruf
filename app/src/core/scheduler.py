@@ -13,7 +13,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from schedule_validation import schedule_config_error
 from slack_sdk import WebClient
 
 from src.core.slack_users import (
@@ -23,6 +22,7 @@ from src.core.slack_users import (
     member_profile,
 )
 from src.core.state import state_store
+from src.modules.standup.schedule_validation import schedule_config_error
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
@@ -425,7 +425,7 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
             dm_count += 1
 
             # Send DM first — only start session if delivery succeeds
-            from blocks import standup_dm_message  # noqa: PLC0415
+            from src.modules.standup.blocks import standup_dm_message  # noqa: PLC0415
 
             default_questions = questions or [
                 "What did you complete yesterday?",
@@ -593,9 +593,8 @@ def _send_reminder_to_workspace(
 
     # Evaluate low_participation workflow rules
     try:
-        from workflow import evaluate_rules  # noqa: PLC0415
-
         import src.core.db as db  # noqa: PLC0415
+        from src.modules.standup.workflow import evaluate_rules  # noqa: PLC0415
 
         stats = db.get_participation_stats(team_id, days=1)
         pct = participation_pct(stats)
@@ -607,9 +606,8 @@ def _send_reminder_to_workspace(
 def _send_weekly_digest(team_id: str, bot_token: str) -> None:
     """Send a weekly summary email to the workspace admin."""
     try:
-        from mailer import send_weekly_digest  # noqa: PLC0415
-
         import src.core.db as db  # noqa: PLC0415
+        from src.modules.standup.mailer import send_weekly_digest  # noqa: PLC0415
 
         inst = db.get_installation(team_id)
         if not inst:
@@ -630,9 +628,8 @@ def _send_weekly_digest(team_id: str, bot_token: str) -> None:
 def _send_manager_digest(team_id: str) -> None:
     """Send today's standup digest to the configured manager email (if enabled)."""
     try:
-        from mailer import send_manager_digest  # noqa: PLC0415
-
         import src.core.db as db  # noqa: PLC0415
+        from src.modules.standup.mailer import send_manager_digest  # noqa: PLC0415
 
         config = db.get_workspace_config(team_id)
         if not config:
@@ -734,7 +731,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             except Exception:
                 user_profiles[m["user_id"]] = {"display_name": m.get("real_name", ""), "avatar_url": ""}
 
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         if group_by == "question":
             summary_blocks = _blocks.build_summary_by_question(today_standups, questions, user_profiles=user_profiles)
@@ -753,7 +750,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             thread_ts = None
         if not thread_ts:
             try:
-                from handlers import _daily_thread_cache  # noqa: PLC0415
+                from src.modules.standup.handlers import _daily_thread_cache  # noqa: PLC0415
 
                 thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}:{sched_id_int}")
             except Exception:
@@ -770,7 +767,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
 
         # AI summary
         try:
-            from ai_summary import generate_summary  # noqa: PLC0415
+            from src.modules.standup.ai_summary import generate_summary  # noqa: PLC0415
 
             ws_config = db.get_workspace_config(team_id) or {}
             if ws_config.get("ai_summary_enabled"):

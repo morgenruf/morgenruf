@@ -168,7 +168,7 @@ def _fire_rule_webhook(team_id: str, rule: dict, trigger: str, context: dict) ->
         return
 
     try:
-        from handlers import deliver_webhook  # noqa: PLC0415
+        from src.modules.standup.handlers import deliver_webhook  # noqa: PLC0415
     except Exception as exc:
         logger.warning("Cannot deliver webhook for rule %s: %s", rule_id, exc)
         return

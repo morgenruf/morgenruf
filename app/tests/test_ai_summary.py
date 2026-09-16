@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from ai_summary import _plain_summary, generate_summary
+from src.modules.standup.ai_summary import _plain_summary, generate_summary
 
 # ---------------------------------------------------------------------------
 # Plain summary (no AI key)

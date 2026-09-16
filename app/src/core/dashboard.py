@@ -21,12 +21,12 @@ from flask import (
     session,
     url_for,
 )
-from schedule_validation import schedule_config_error, schedule_payload_error
 
 import src.core.db as db
 from src.core.oauth import verify_login_token
 from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
+from src.modules.standup.schedule_validation import schedule_config_error, schedule_payload_error
 
 logger = logging.getLogger(__name__)
 
@@ -975,7 +975,7 @@ def api_test_webhook(hook_id: str):
 
         from datetime import datetime, timezone  # noqa: PLC0415
 
-        from handlers import deliver_webhook  # noqa: PLC0415
+        from src.modules.standup.handlers import deliver_webhook  # noqa: PLC0415
 
         events = list(hook.get("events") or db.DEFAULT_WEBHOOK_EVENTS)
         event_type = events[0] if events else "standup.completed"
@@ -1203,7 +1203,7 @@ def api_export_csv():
 @dashboard_bp.route("/dashboard/api/templates", methods=["GET"])
 @_login_required
 def api_templates():
-    from templates_library import TEMPLATES  # noqa: PLC0415
+    from src.modules.standup.templates_library import TEMPLATES  # noqa: PLC0415
 
     return jsonify(TEMPLATES)
 
@@ -1374,7 +1374,7 @@ def api_delete_schedule(schedule_id: int):
 def api_list_rules():
     team_id = session["team_id"]
     try:
-        from workflow import get_rules  # noqa: PLC0415
+        from src.modules.standup.workflow import get_rules  # noqa: PLC0415
 
         rules = get_rules(team_id)
         return jsonify(rules)
@@ -1389,7 +1389,7 @@ def api_create_rule():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
     try:
-        from workflow import save_rule  # noqa: PLC0415
+        from src.modules.standup.workflow import save_rule  # noqa: PLC0415
 
         rule_id = save_rule(
             team_id=team_id,
@@ -1413,7 +1413,7 @@ def api_create_rule():
 def api_delete_rule(rule_id: int):
     team_id = session["team_id"]
     try:
-        from workflow import delete_rule  # noqa: PLC0415
+        from src.modules.standup.workflow import delete_rule  # noqa: PLC0415
 
         delete_rule(rule_id, team_id)
         return jsonify({"ok": True})

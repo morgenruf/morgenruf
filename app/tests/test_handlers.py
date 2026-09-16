@@ -41,49 +41,49 @@ else:
 
 class TestFormatStandup:
     def test_includes_user_mention(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["Yesterday work", "Today work", "None"])
         assert "<@U1>" in result
 
     def test_includes_date(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["y", "t", "b"])
         assert datetime.utcnow().strftime("%Y") in result
 
     def test_blockers_none_text(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["y", "t", "none"])
         assert "_None_ ✅" in result
 
     def test_blockers_n_a_text(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["y", "t", "n/a"])
         assert "_None_ ✅" in result
 
     def test_real_blocker_preserved(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["y", "t", "Waiting on PR review"])
         assert "Waiting on PR review" in result
 
     def test_mood_included_when_provided(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["y", "t", "none"], mood="😊 great")
         assert "😊 great" in result
 
     def test_mood_omitted_when_none(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["y", "t", "none"], mood=None)
         assert "Mood" not in result
 
     def test_fewer_than_three_answers_handled(self):
-        from handlers import _format_standup
+        from src.modules.standup.handlers import _format_standup
 
         result = _format_standup("U1", ["only one answer"])
         assert "only one answer" in result
@@ -99,7 +99,7 @@ class TestPersistStandup:
     def test_calls_db_save_standup(self):
         db_mock = MagicMock()
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import _persist_standup
+            from src.modules.standup.handlers import _persist_standup
 
             _persist_standup("T1", "U1", ["y", "t", "b"], mood="😊")
 
@@ -112,7 +112,7 @@ class TestPersistStandup:
         db_mock = MagicMock()
         db_mock.save_standup.side_effect = Exception("DB unavailable")
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import _persist_standup
+            from src.modules.standup.handlers import _persist_standup
 
             _persist_standup("T1", "U1", ["y", "t", "b"])  # should not raise
 
@@ -125,7 +125,7 @@ class TestPersistStandup:
 class TestSendQuestionBlock:
     def test_calls_chat_post_message_with_blocks(self):
         client = MagicMock()
-        from handlers import _send_question_block
+        from src.modules.standup.handlers import _send_question_block
 
         _send_question_block(client, "U1", "What did you do yesterday?", 0)
 
@@ -138,7 +138,7 @@ class TestSendQuestionBlock:
 
     def test_block_id_uses_step_number(self):
         client = MagicMock()
-        from handlers import _send_question_block
+        from src.modules.standup.handlers import _send_question_block
 
         _send_question_block(client, "U2", "What are blockers?", 2)
         call_kwargs = client.chat_postMessage.call_args.kwargs
@@ -175,7 +175,7 @@ class TestStartStandupSession:
             with patch.object(state.state_store, "is_active", return_value=True):
                 with patch.object(state.state_store, "clear") as mock_clear:
                     with patch.object(state.state_store, "start", return_value=fake_session):
-                        from handlers import _start_standup_session
+                        from src.modules.standup.handlers import _start_standup_session
 
                         _start_standup_session("U1", "T1", client)
 
@@ -203,7 +203,7 @@ class TestStartStandupSession:
         with patch_modules({"src.core.db": db_mock}):
             with patch.object(state.state_store, "start", return_value=fake_session):
                 with patch.object(state.state_store, "is_active", return_value=False):
-                    from handlers import _start_standup_session
+                    from src.modules.standup.handlers import _start_standup_session
 
                     _start_standup_session("U1", "T1", client)
 
@@ -219,7 +219,7 @@ class TestStartStandupSession:
 
 class TestFireWebhooks:
     def test_posts_to_registered_hooks(self):
-        import handlers
+        import src.modules.standup.handlers as handlers
 
         db_mock = MagicMock()
         db_mock.get_webhooks.return_value = [
@@ -237,7 +237,7 @@ class TestFireWebhooks:
         assert call_kwargs["headers"]["X-Morgenruf-Event"] == "standup.completed"
 
     def test_skips_hooks_for_different_event(self):
-        import handlers
+        import src.modules.standup.handlers as handlers
 
         db_mock = MagicMock()
         db_mock.get_webhooks.return_value = [
@@ -252,7 +252,7 @@ class TestFireWebhooks:
         requests_mock.post.assert_not_called()
 
     def test_no_webhooks_no_requests(self):
-        import handlers
+        import src.modules.standup.handlers as handlers
 
         db_mock = MagicMock()
         db_mock.get_webhooks.return_value = []
@@ -265,7 +265,7 @@ class TestFireWebhooks:
         requests_mock.post.assert_not_called()
 
     def test_request_failure_does_not_raise(self):
-        import handlers
+        import src.modules.standup.handlers as handlers
 
         db_mock = MagicMock()
         db_mock.get_webhooks.return_value = [
@@ -279,7 +279,7 @@ class TestFireWebhooks:
                 handlers.fire_webhooks("T1", "standup.completed", {})  # should not raise
 
     def test_adds_hmac_signature_when_secret_set(self):
-        import handlers
+        import src.modules.standup.handlers as handlers
 
         db_mock = MagicMock()
         db_mock.get_webhooks.return_value = [
@@ -322,7 +322,7 @@ class TestCanEditResponse:
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 4}
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
 
@@ -332,7 +332,7 @@ class TestCanEditResponse:
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 4}
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is False
 
@@ -341,7 +341,7 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.return_value = None
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 999) is False
 
@@ -351,7 +351,7 @@ class TestCanEditResponse:
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 4}
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is False
 
@@ -361,7 +361,7 @@ class TestCanEditResponse:
         db_mock.get_workspace_config.return_value = {"edit_window_hours": None}
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
 
@@ -371,7 +371,7 @@ class TestCanEditResponse:
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 0}
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
 
@@ -380,6 +380,6 @@ class TestCanEditResponse:
         db_mock.get_standup_by_id.side_effect = Exception("DB down")
 
         with patch_modules({"src.core.db": db_mock}):
-            from handlers import can_edit_response
+            from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is False

@@ -26,7 +26,6 @@ if _sentry_dsn:
     logging.getLogger(__name__).info("Sentry error monitoring enabled")
 
 from flask import Flask, jsonify, request
-from handlers import register_handlers
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
@@ -36,6 +35,7 @@ from src.core.dashboard import dashboard_bp
 from src.core.installation_store import PostgresInstallationStore
 from src.core.oauth import oauth_bp
 from src.core.scheduler import build_scheduler
+from src.modules.standup.handlers import register_handlers
 
 log_level = logging.DEBUG if os.environ.get("LOG_LEVEL", "").upper() == "DEBUG" else logging.INFO
 logging.basicConfig(

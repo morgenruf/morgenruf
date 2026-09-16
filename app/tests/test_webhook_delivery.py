@@ -31,9 +31,9 @@ for _name in ("db", "dashboard", "handlers", "state"):
     if isinstance(sys.modules.get(_name), MagicMock):
         del sys.modules[_name]
 
-import handlers  # noqa: E402
 import src.core.dashboard as dashboard  # noqa: E402
 import src.core.db as db  # noqa: E402
+import src.modules.standup.handlers as handlers  # noqa: E402
 from flask import Flask  # noqa: E402
 
 CANONICAL = ("standup.completed", "blocker.detected", "participation.low")

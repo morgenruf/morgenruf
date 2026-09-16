@@ -26,8 +26,8 @@ _ss_mock.get_session.return_value = None
 _ss_mock.has_session.return_value = False
 sys.modules["src.core.session_store"] = _ss_mock
 
-import handlers  # noqa: E402
-import schedule_validation  # noqa: E402
+import src.modules.standup.handlers as handlers  # noqa: E402
+import src.modules.standup.schedule_validation as schedule_validation  # noqa: E402
 
 if _prior_session_store is not None:
     sys.modules["src.core.session_store"] = _prior_session_store
@@ -132,7 +132,7 @@ class TestAppHomeShowsNextRun:
     """#119 — the standup list must say when each one next fires."""
 
     def _text(self, standup):
-        import blocks as blocks_mod
+        import src.modules.standup.blocks as blocks_mod
 
         view = blocks_mod.app_home_configure_view([standup], user_id="U1")
         return "\n".join(b.get("text", {}).get("text", "") for b in view["blocks"] if b.get("type") == "section")

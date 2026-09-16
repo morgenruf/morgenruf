@@ -11,12 +11,12 @@ from datetime import datetime
 from datetime import timezone as tz
 
 from flask import Blueprint, jsonify, redirect, request, session
-from mailer import send_welcome_email
 from markupsafe import escape
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import src.core.db as db
+from src.modules.standup.mailer import send_welcome_email
 
 logger = logging.getLogger(__name__)
 

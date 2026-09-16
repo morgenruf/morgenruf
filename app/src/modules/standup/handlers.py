@@ -12,11 +12,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytz
 import requests
-from schedule_validation import schedule_time_error, schedule_timezone_error
 from slack_bolt import App
 
 from src.core.slack_users import filter_human_ids, is_human
 from src.core.state import state_store
+from src.modules.standup.schedule_validation import schedule_time_error, schedule_timezone_error
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ def _format_standup(
     user_id: str, answers: list[str], mood: str | None = None, questions: list[str] | None = None
 ) -> str:
     """Format collected answers into a structured standup post."""
-    import blocks as _blocks  # noqa: PLC0415
+    import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
     date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
@@ -344,7 +344,7 @@ def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int 
         standup_name=standup_name,
         schedule_id=resolved_schedule_id,
     )
-    import blocks as _blocks  # noqa: PLC0415
+    import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
     dm = _blocks.standup_dm_message(session.questions, session.standup_name or "Standup")
     client.chat_postMessage(
@@ -455,7 +455,7 @@ def _complete_standup(user_id: str, session, client) -> None:
                 formatted = formatted.replace(f"<@{user_id}>", member_name)
 
             try:
-                from autolink import autolink  # noqa: PLC0415
+                from src.modules.standup.autolink import autolink  # noqa: PLC0415
 
                 cfg = _db.get_workspace_config(session.team_id) or {}
                 formatted = autolink(formatted, cfg)
@@ -562,7 +562,7 @@ def _complete_standup(user_id: str, session, client) -> None:
     # which fires at report_time regardless of whether all members submitted.
 
     try:
-        from workflow import evaluate_rules  # noqa: PLC0415
+        from src.modules.standup.workflow import evaluate_rules  # noqa: PLC0415
 
         # Check last answer for blockers (convention: last question is usually blockers)
         blocker_text = question_answers[-1] if question_answers else ""
@@ -766,7 +766,7 @@ def register_handlers(app: App) -> None:
     @app.options("timezone")
     def handle_timezone_options(ack, payload):  # noqa: ANN001
         """Server-side search for timezone external_select."""
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         query = payload.get("value", "")
         ack(options=_blocks.timezone_search(query))
@@ -846,7 +846,7 @@ def register_handlers(app: App) -> None:
         )
         logger.info("app_home_opened: user=%s team=%s", user_id, team_id)
 
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         workspace_name = ""
         on_vacation = False
@@ -1009,7 +1009,7 @@ def register_handlers(app: App) -> None:
             )
             return
 
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         # Try to prefill with previous answers (if enabled for this standup)
         previous_answers = []
@@ -1038,7 +1038,7 @@ def register_handlers(app: App) -> None:
     def handle_open_create_standup(ack, body, client):  # noqa: ANN001
         """Handle 'Create a standup' button from App Home."""
         ack()
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         # Default new standup timezone to user's Slack timezone
         user_tz = ""
@@ -1088,7 +1088,7 @@ def register_handlers(app: App) -> None:
     def handle_app_home_help(ack, body, client):  # noqa: ANN001
         """Open help modal from App Home."""
         ack()
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         client.views_open(trigger_id=body["trigger_id"], view=_blocks.help_modal())
 
@@ -1101,9 +1101,8 @@ def register_handlers(app: App) -> None:
 
     def _publish_configure_view(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Render and publish the configure mode App Home."""
-        import blocks as _blocks  # noqa: PLC0415
-
         import src.core.db as db  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         standups: list[dict] = []
         workspace_name = ""
@@ -1175,9 +1174,8 @@ def register_handlers(app: App) -> None:
         user_id: str = body["user"]["id"]
         team_id: str = body["user"]["team_id"]
         try:
-            import blocks as _blocks  # noqa: PLC0415
-
             import src.core.db as db  # noqa: PLC0415
+            import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
             standups = db.get_standups(team_id, days=14)
             user_standups = [s for s in standups if s["user_id"] == user_id]
@@ -1202,9 +1200,8 @@ def register_handlers(app: App) -> None:
         standup_id = body["actions"][0].get("value", "")
         team_id = body["user"]["team_id"]
         try:
-            import blocks as _blocks  # noqa: PLC0415
-
             import src.core.db as db  # noqa: PLC0415
+            import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
             schedule = db.get_standup_schedule(team_id, int(standup_id))
             if schedule:
@@ -1426,7 +1423,7 @@ def register_handlers(app: App) -> None:
         input_action_id = f"standup_answer_{step}"
         answer = ""
         try:
-            import blocks as _blocks  # noqa: PLC0415
+            import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
             field = body.get("state", {}).get("values", {}).get(block_id, {}).get(input_action_id, {})
             rt = field.get("rich_text_value")
@@ -1744,7 +1741,7 @@ def register_handlers(app: App) -> None:
             return
 
         # Collect answers from all question fields (rich_text_input)
-        import blocks as _blocks  # noqa: PLC0415
+        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         for i in range(len(session.questions)):
             block_id = f"question_{i}"

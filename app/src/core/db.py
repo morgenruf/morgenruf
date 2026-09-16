@@ -413,7 +413,7 @@ def save_standup(
     without the question list there is no way to tell whether the third answer
     is a blocker or an availability figure. See blockers.py.
     """
-    import blockers as _blockers  # noqa: PLC0415
+    import src.modules.standup.blockers as _blockers  # noqa: PLC0415
 
     if questions:
         has_blockers = _blockers.has_blockers(questions, [yesterday, today, blockers])

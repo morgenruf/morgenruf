@@ -17,8 +17,8 @@ sys.modules.setdefault("requests", MagicMock())
 
 if isinstance(sys.modules.get("pytz"), MagicMock):
     del sys.modules["pytz"]
-import blocks as blocks_mod  # noqa: E402
 import pytz  # noqa: E402
+import src.modules.standup.blocks as blocks_mod  # noqa: E402
 
 # Real zones absent from the curated list, spread across regions.
 UNCURATED = [

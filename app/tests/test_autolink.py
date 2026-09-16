@@ -1,7 +1,7 @@
 """Tests for autolink.py — issue reference → Slack hyperlink conversion."""
 
 
-from autolink import autolink
+from src.modules.standup.autolink import autolink
 
 # ---------------------------------------------------------------------------
 # Jira autolink
