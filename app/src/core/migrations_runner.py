@@ -15,6 +15,51 @@ def get_migrations_dir():
     return os.environ.get("MIGRATIONS_DIR", default)
 
 
+
+def module_migration_dirs() -> list:
+    """Migration directories declared by registered modules.
+
+    Reads the registry rather than importing any module by name, so core stays
+    module-agnostic. A registry that cannot be imported yet (during the split,
+    or in a trimmed deployment) simply contributes nothing.
+    """
+    try:
+        from src.modules import REGISTRY
+    except Exception:
+        return []
+    return [spec.migrations_dir for spec in REGISTRY if spec.migrations_dir]
+
+
+def collect_migration_files(core_dir, module_dirs, extra_dir=None) -> list[str]:
+    """Every .sql file across core, each module, and an optional extra directory.
+
+    Sorted by basename, because schema_migrations is keyed on the bare
+    basename and ordering must not depend on which directory a file lives in.
+    """
+    dirs = [core_dir, *module_dirs]
+    if extra_dir:
+        dirs.append(extra_dir)
+    found: list[str] = []
+    for d in dirs:
+        if d and os.path.isdir(str(d)):
+            found.extend(glob.glob(os.path.join(str(d), "*.sql")))
+    return sorted(found, key=lambda p: os.path.basename(p))
+
+
+def assert_unique_basenames(paths) -> None:
+    """Raise if two migrations share a basename.
+
+    schema_migrations.filename is the bare basename, so a collision across two
+    module directories would make one migration silently skip.
+    """
+    seen: dict[str, str] = {}
+    for p in paths:
+        name = os.path.basename(p)
+        if name in seen:
+            raise ValueError(f"duplicate migration basename {name}: {seen[name]} and {p}")
+        seen[name] = p
+
+
 def run_migrations():
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -45,7 +90,12 @@ def run_migrations():
             """)
             conn.commit()
 
-        sql_files = sorted(glob.glob(os.path.join(migrations_dir, "*.sql")))
+        sql_files = collect_migration_files(
+            core_dir=migrations_dir,
+            module_dirs=module_migration_dirs(),
+            extra_dir=os.environ.get("EXTRA_MIGRATIONS_DIR"),
+        )
+        assert_unique_basenames(sql_files)
 
         for filepath in sql_files:
             filename = os.path.basename(filepath)
