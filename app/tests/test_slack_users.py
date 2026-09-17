@@ -143,8 +143,11 @@ class TestMemberProfile:
     def test_reads_name_email_and_timezone(self):
         user = _user("U1", tz="Asia/Kolkata", profile={"real_name": "Alice", "email": "alice@example.com"})
         assert member_profile(user) == {
-            "real_name": "Alice", "email": "alice@example.com", "tz": "Asia/Kolkata",
-            "avatar_url": None, "display_name": None,
+            "real_name": "Alice",
+            "email": "alice@example.com",
+            "tz": "Asia/Kolkata",
+            "avatar_url": None,
+            "display_name": None,
         }
 
     def test_falls_back_to_display_name_then_top_level_name(self):
@@ -153,12 +156,18 @@ class TestMemberProfile:
 
     def test_missing_values_are_none_so_an_upsert_does_not_blank_them(self):
         assert member_profile({}) == {
-            "real_name": None, "email": None, "tz": None,
-            "avatar_url": None, "display_name": None,
+            "real_name": None,
+            "email": None,
+            "tz": None,
+            "avatar_url": None,
+            "display_name": None,
         }
         assert member_profile(None) == {
-            "real_name": None, "email": None, "tz": None,
-            "avatar_url": None, "display_name": None,
+            "real_name": None,
+            "email": None,
+            "tz": None,
+            "avatar_url": None,
+            "display_name": None,
         }
         assert member_profile({"profile": {"real_name": ""}, "tz": ""})["real_name"] is None
 

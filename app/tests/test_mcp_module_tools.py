@@ -58,12 +58,15 @@ def registry(monkeypatch):
 
     def install(specs, db=None):
         import types
+
         mods = types.ModuleType("src.modules")
         mods.REGISTRY = specs
-        return patch_modules({
-            "src.modules": mods,
-            "src.core.db": db or FakeDb(),
-        })
+        return patch_modules(
+            {
+                "src.modules": mods,
+                "src.core.db": db or FakeDb(),
+            }
+        )
 
     return install
 

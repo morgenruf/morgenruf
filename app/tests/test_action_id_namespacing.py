@@ -19,6 +19,8 @@ GRANDFATHERED = {"standup"}
 # ("action_id": "edit_standup") and the Bolt decorator kwarg
 # (@app.action(action_id="...")). Match both.
 ACTION_RE = re.compile(r'["\']?action_id["\']?\s*[=:]\s*["\']([^"\']+)["\']')
+
+
 def bare_message_patterns(path: pathlib.Path) -> set[str]:
     """Plain-string @app.message patterns, read from the syntax tree.
 
@@ -111,6 +113,5 @@ def test_standups_reserved_words_are_recorded():
     for py in standup.rglob("*.py"):
         pats.update(bare_message_patterns(py))
     assert pats == {"help", "standup", "skip"}, (
-        f"standup's bare message patterns changed to {sorted(pats)}; "
-        "update the Connect design constraint to match"
+        f"standup's bare message patterns changed to {sorted(pats)}; update the Connect design constraint to match"
     )

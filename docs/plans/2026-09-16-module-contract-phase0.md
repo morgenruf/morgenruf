@@ -266,7 +266,7 @@ from __future__ import annotations
 
 from tools.check_mechanical_move import changed_functions, modules_equivalent
 
-OLD = '''
+OLD = """
 import os
 from db import get_conn
 
@@ -275,9 +275,9 @@ def add(a, b):
 
 def scale(x):
     return x * 2
-'''
+"""
 
-MOVED_IMPORTS_ONLY = '''
+MOVED_IMPORTS_ONLY = """
 import os
 from src.core.db import get_conn
 
@@ -286,9 +286,9 @@ def add(a, b):
 
 def scale(x):
     return x * 2
-'''
+"""
 
-LOGIC_CHANGED = '''
+LOGIC_CHANGED = """
 import os
 from src.core.db import get_conn
 
@@ -297,7 +297,7 @@ def add(a, b):
 
 def scale(x):
     return x * 2
-'''
+"""
 
 
 def test_import_only_rewrite_is_equivalent():
@@ -1216,9 +1216,7 @@ def spec(name, claim):
 
 
 def ctx(text="hello"):
-    return DMContext(
-        team_id="T1", user_id="U1", channel_id="D1", text=text, event={}, client=MagicMock()
-    )
+    return DMContext(team_id="T1", user_id="U1", channel_id="D1", text=text, event={}, client=MagicMock())
 
 
 def test_first_claimer_wins_and_later_modules_are_not_offered():
@@ -1567,8 +1565,12 @@ def test_claim_dm_claims_a_message_when_a_session_is_in_progress():
     in-progress standup session. The `standup` keyword is handled separately by
     the @app.message("standup") listener and is not claim_dm's job."""
     ctx = DMContext(
-        team_id="T1", user_id="U1", channel_id="D1", text="finished the migration",
-        event={}, client=MagicMock(),
+        team_id="T1",
+        user_id="U1",
+        channel_id="D1",
+        text="finished the migration",
+        event={},
+        client=MagicMock(),
     )
     assert MODULE.claim_dm is not None
     with patch("src.modules.standup.handlers.state_store") as store:
@@ -1580,8 +1582,12 @@ def test_claim_dm_declines_when_no_session_is_in_progress():
     """Matches the early return at handlers.py:817. Declining lets the router
     offer the message to the next module instead of swallowing it."""
     ctx = DMContext(
-        team_id="T1", user_id="U1", channel_id="D1", text="anything",
-        event={}, client=MagicMock(),
+        team_id="T1",
+        user_id="U1",
+        channel_id="D1",
+        text="anything",
+        event={},
+        client=MagicMock(),
     )
     with patch("src.modules.standup.handlers.state_store") as store:
         store.get.return_value = None
@@ -1591,8 +1597,12 @@ def test_claim_dm_declines_when_no_session_is_in_progress():
 def test_claim_dm_declines_messages_with_a_subtype():
     """Matches the early return at handlers.py:808."""
     ctx = DMContext(
-        team_id="T1", user_id="U1", channel_id="D1", text="edited text",
-        event={"subtype": "message_changed"}, client=MagicMock(),
+        team_id="T1",
+        user_id="U1",
+        channel_id="D1",
+        text="edited text",
+        event={"subtype": "message_changed"},
+        client=MagicMock(),
     )
     assert MODULE.claim_dm(ctx) is False
 ```
@@ -1813,9 +1823,7 @@ def test_kudos_requires_no_new_scopes():
 
 
 def test_the_three_functions_moved_verbatim():
-    old = subprocess.run(
-        ["git", "show", "HEAD:app/src/core/db.py"], capture_output=True, text=True
-    ).stdout
+    old = subprocess.run(["git", "show", "HEAD:app/src/core/db.py"], capture_output=True, text=True).stdout
     new = inspect.getsource(kudos_db)
     assert changed_functions(old, new, FUNCS) == []
 
@@ -1975,9 +1983,16 @@ from src.main import register_modules
 
 def spec(name, routes=None, slack=None):
     return ModuleSpec(
-        name=name, required_scopes=(), migrations_dir=None,
-        register_slack=slack, register_routes=routes, plan_jobs=None,
-        claim_dm=None, purge=None, nav=(), default_enabled=True,
+        name=name,
+        required_scopes=(),
+        migrations_dir=None,
+        register_slack=slack,
+        register_routes=routes,
+        plan_jobs=None,
+        claim_dm=None,
+        purge=None,
+        nav=(),
+        default_enabled=True,
     )
 
 
@@ -2839,9 +2854,16 @@ from src.core.modules import ModuleSpec, NavItem, active_modules
 
 def spec(name, scopes=(), default_enabled=True, nav=()):
     return ModuleSpec(
-        name=name, required_scopes=scopes, migrations_dir=None,
-        register_slack=None, register_routes=None, plan_jobs=None,
-        claim_dm=None, purge=None, nav=nav, default_enabled=default_enabled,
+        name=name,
+        required_scopes=scopes,
+        migrations_dir=None,
+        register_slack=None,
+        register_routes=None,
+        plan_jobs=None,
+        claim_dm=None,
+        purge=None,
+        nav=nav,
+        default_enabled=default_enabled,
     )
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tools.check_mechanical_move import changed_functions, modules_equivalent
 
-OLD = '''
+OLD = """
 import os
 from src.core.db import get_conn
 
@@ -13,9 +13,9 @@ def add(a, b):
 
 def scale(x):
     return x * 2
-'''
+"""
 
-MOVED_IMPORTS_ONLY = '''
+MOVED_IMPORTS_ONLY = """
 import os
 from src.core.db import get_conn
 
@@ -24,9 +24,9 @@ def add(a, b):
 
 def scale(x):
     return x * 2
-'''
+"""
 
-LOGIC_CHANGED = '''
+LOGIC_CHANGED = """
 import os
 from src.core.db import get_conn
 
@@ -35,7 +35,7 @@ def add(a, b):
 
 def scale(x):
     return x * 2
-'''
+"""
 
 
 def test_import_only_rewrite_is_equivalent():

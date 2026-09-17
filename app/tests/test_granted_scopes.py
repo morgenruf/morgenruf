@@ -65,4 +65,4 @@ def test_the_migration_is_additive_only():
 def test_oauth_records_the_granted_scope_field():
     """The value must come from the response, never from the requested list."""
     oauth_src = (pathlib.Path(__file__).resolve().parents[1] / "src" / "core" / "oauth.py").read_text()
-    assert "parse_scope_field(resp.get(\"scope\"))" in oauth_src
+    assert 'parse_scope_field(resp.get("scope"))' in oauth_src

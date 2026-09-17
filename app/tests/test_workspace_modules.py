@@ -50,9 +50,7 @@ def test_nav_comes_from_active_modules_only():
     assert labels == ["Standups"]
 
 
-MIGRATION = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "core" / "migrations" / "030_workspace_modules.sql"
-)
+MIGRATION = pathlib.Path(__file__).resolve().parents[1] / "src" / "core" / "migrations" / "030_workspace_modules.sql"
 
 
 def test_the_migration_is_additive_only():

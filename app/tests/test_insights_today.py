@@ -35,6 +35,7 @@ def schedule(**kwargs):
 
 # -- fires_today -------------------------------------------------------------
 
+
 def test_a_weekday_schedule_fires_on_a_monday():
     assert fires_today(schedule(), NOW) is True
 
@@ -58,6 +59,7 @@ def test_an_unknown_timezone_falls_back_to_utc_instead_of_raising():
 
 
 # -- expected_today ----------------------------------------------------------
+
 
 def test_participants_of_a_schedule_running_today_are_expected():
     assert expected_today([schedule()], {"U1", "U2"}, NOW) == ["U1", "U2"]
@@ -88,6 +90,7 @@ def test_no_schedules_means_nobody_is_expected():
 
 # -- awaiting ----------------------------------------------------------------
 
+
 def test_awaiting_is_the_expected_who_have_not_answered():
     assert awaiting(["U1", "U2", "U3"], {"U2"}) == ["U1", "U3"]
 
@@ -101,6 +104,7 @@ def test_someone_who_answered_without_being_expected_changes_nothing():
 
 
 # -- blocked_from ------------------------------------------------------------
+
 
 def test_only_responses_flagged_as_blocked_are_returned():
     rows = [

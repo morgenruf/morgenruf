@@ -118,14 +118,14 @@ app/src/
 ```python
 @dataclass(frozen=True)
 class ModuleSpec:
-    name: str                                       # "standup" | "connect" | ...
+    name: str  # "standup" | "connect" | ...
     required_scopes: tuple[str, ...]
     migrations_dir: Path | None
     register_slack: Callable[[App], None] | None
     register_routes: Callable[[Blueprint], None] | None
     plan_jobs: Callable[[JobContext], list[JobSpec]] | None
     claim_dm: Callable[[DMContext], bool] | None
-    purge: Callable[[str], None] | None              # team_id -> delete module data
+    purge: Callable[[str], None] | None  # team_id -> delete module data
     nav: tuple[NavItem, ...]
     default_enabled: bool
 ```

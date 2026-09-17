@@ -1,6 +1,5 @@
 """Tests for autolink.py — issue reference → Slack hyperlink conversion."""
 
-
 from src.modules.standup.autolink import autolink
 
 # ---------------------------------------------------------------------------

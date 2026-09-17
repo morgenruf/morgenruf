@@ -88,10 +88,12 @@ def call():
             with client.session_transaction() as sess:
                 sess["team_id"] = "T1"
                 sess["user_id"] = "U1"
-            with patch.object(idb, "todays_standups", return_value=list(responses)), \
-                 patch.object(idb, "active_schedules", return_value=list(schedules)), \
-                 patch.object(idb, "recent_kudos", return_value=list(kudos)), \
-                 patch.object(idb, "connect_program_timing", return_value=program):
+            with (
+                patch.object(idb, "todays_standups", return_value=list(responses)),
+                patch.object(idb, "active_schedules", return_value=list(schedules)),
+                patch.object(idb, "recent_kudos", return_value=list(kudos)),
+                patch.object(idb, "connect_program_timing", return_value=program),
+            ):
                 return client.get("/dashboard/api/today")
 
     return run
@@ -186,10 +188,12 @@ def test_a_roster_outage_does_not_take_the_page_down(call):
         client = flask_app.test_client()
         with client.session_transaction() as sess:
             sess["team_id"] = "T1"
-        with patch.object(idb, "todays_standups", return_value=list(RESPONSES)), \
-             patch.object(idb, "active_schedules", return_value=list(SCHEDULES)), \
-             patch.object(idb, "recent_kudos", return_value=[]), \
-             patch.object(idb, "connect_program_timing", return_value=None):
+        with (
+            patch.object(idb, "todays_standups", return_value=list(RESPONSES)),
+            patch.object(idb, "active_schedules", return_value=list(SCHEDULES)),
+            patch.object(idb, "recent_kudos", return_value=[]),
+            patch.object(idb, "connect_program_timing", return_value=None),
+        ):
             body = client.get("/dashboard/api/today").get_json()
     assert body["counts"]["expected"] == 0
     assert body["responses"][0]["user_id"] == "U1"

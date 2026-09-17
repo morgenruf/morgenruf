@@ -1,6 +1,5 @@
 """Tests for config.py — environment variable loading and teams.yaml parsing."""
 
-
 import pytest
 import yaml
 

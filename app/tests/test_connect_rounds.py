@@ -21,6 +21,7 @@ def dt(m, day, hh=10):
 
 # ── is_round_due ─────────────────────────────────────────────────────────────
 
+
 def test_a_weekly_programme_with_no_history_is_due():
     assert is_round_due(interval_weeks=1, last_round=None, today=d(9, 16)) is True
 
@@ -56,6 +57,7 @@ def test_a_biweekly_programme_overdue_by_a_month_runs():
 
 # ── next_round_date ──────────────────────────────────────────────────────────
 
+
 def test_next_round_is_one_interval_on():
     assert next_round_date(interval_weeks=1, last_round=d(9, 16)) == d(9, 23)
     assert next_round_date(interval_weeks=2, last_round=d(9, 16)) == d(9, 30)
@@ -66,6 +68,7 @@ def test_next_round_without_history_is_unknown():
 
 
 # ── match_status ─────────────────────────────────────────────────────────────
+
 
 def test_a_confirmed_pairing_is_met():
     assert match_status(True, dt(9, 16)) == "met"

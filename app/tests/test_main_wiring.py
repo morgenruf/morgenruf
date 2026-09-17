@@ -97,8 +97,7 @@ def test_the_ratchet_is_tightened_when_it_improves():
     """Fails if the debt was paid down without lowering the constant."""
     found = _core_module_imports()
     assert len(found) == KNOWN_CORE_TO_MODULE_IMPORTS, (
-        f"core to module imports is now {len(found)}; lower "
-        f"KNOWN_CORE_TO_MODULE_IMPORTS to match"
+        f"core to module imports is now {len(found)}; lower KNOWN_CORE_TO_MODULE_IMPORTS to match"
     )
 
 

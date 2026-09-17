@@ -48,9 +48,7 @@ def _last_core_db_with_kudos() -> str:
     for rev in revs:
         # the file was app/src/db.py before the package split, so try both
         for path in ("app/src/core/db.py", "app/src/db.py"):
-            body = subprocess.run(
-                ["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True
-            ).stdout
+            body = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=root, capture_output=True, text=True).stdout
             if "def save_kudos" in body:
                 return body
     # A shallow clone has no history to walk. That is a missing precondition,
