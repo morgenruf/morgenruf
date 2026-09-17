@@ -1808,7 +1808,7 @@
               <div class="set-ico"><svg aria-hidden="true"><use href="#i-kudos"/></svg></div>
               <div>
                 <div class="set-label">The token your team gives</div>
-                <div class="set-help">What the bot posts in Slack. This dashboard always shows the Morgenruf icon, and Slack can too: <a href="/static/kudos-token-128.png" download>download the icon</a>, add it under <em>Customize workspace &rsaquo; Add custom emoji</em> with the name <code>morgenruf</code>, and leave this field as <code>:morgenruf:</code>. Until it is imported Slack shows that text literally, so use a plain emoji here if you would rather not.</div>
+                <div class="set-help">What the bot posts in Slack. This dashboard always shows the Morgenruf icon. To use it in Slack too, <a href="/static/kudos-token-128.png" download>download the icon</a> and import it under <em>Customize workspace &rsaquo; Add custom emoji</em> with the name <code>morgenruf</code> &mdash; the bot picks it up on its own within a day, and falls back if it is ever removed. Setting this field yourself turns that off and keeps whatever you choose.</div>
               </div>
               <div class="set-control">
                 <input type="text" id="kudos-emoji" maxlength="16" style="font-size:1.25rem;width:92px;text-align:center" oninput="renderKudosPreview()"/>
