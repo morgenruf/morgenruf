@@ -1,9 +1,9 @@
 {
   "display_information": {
     "name": "Morgenruf",
-    "description": "Daily standups for Slack — open-source & self-hosted",
+    "description": "Daily standups for Slack \u2014 open-source & self-hosted",
     "background_color": "#0d1117",
-    "long_description": "Morgenruf runs your team's daily standups directly in Slack — no expensive SaaS required.\r\n \r\nEach day at your configured time, it DMs team members 3 questions, \r\ncollects answers privately, and posts a clean summary to your team channel.\r\n \r\n Features:\r\n • Configurable schedule (time, timezone, days)\r\n • Per-project tagging for automated reporting\r\n • Blocker detection and highlighting\r\n • Open source (MIT) — self-host or use our hosted version at morgenruf.dev"
+    "long_description": "Morgenruf runs your team's daily standups directly in Slack \u2014 no expensive SaaS required.\r\n \r\nEach day at your configured time, it DMs team members 3 questions, \r\ncollects answers privately, and posts a clean summary to your team channel.\r\n \r\n Features:\r\n \u2022 Configurable schedule (time, timezone, days)\r\n \u2022 Per-project tagging for automated reporting\r\n \u2022 Blocker detection and highlighting\r\n \u2022 Open source (MIT) \u2014 self-host or use our hosted version at morgenruf.dev"
   },
   "features": {
     "app_home": {
@@ -36,7 +36,10 @@
         "users:read.email",
         "emoji:read",
         "team:read",
-        "app_mentions:read"
+        "app_mentions:read",
+        "mpim:write",
+        "mpim:history",
+        "users.profile:read"
       ]
     },
     "pkce_enabled": false

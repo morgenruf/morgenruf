@@ -88,3 +88,48 @@ def test_emoji_read_is_present_so_the_branded_token_can_be_confirmed():
 def test_no_scope_is_listed_twice():
     for name, scopes in (("oauth", _oauth_scopes()), ("dashboard", _dashboard_scopes())):
         assert len(scopes) == len(set(scopes)), f"{name} repeats a scope"
+
+
+# ── the invariant that was missing ───────────────────────────────────────────
+# A module declaring required_scopes it never requests can never activate. The
+# dashboard shows "needs more Slack access", the re-authorise button sends the
+# user through OAuth asking for the same scopes as before, and they land back
+# on the same screen. Connect shipped in that state: mpim:write, mpim:history
+# and users.profile:read appeared nowhere except its own declaration.
+
+
+def _module_required_scopes() -> dict[str, set[str]]:
+    import re as _re
+
+    out: dict[str, set[str]] = {}
+    for init in (ROOT / "app/src/modules").glob("*/__init__.py"):
+        src = init.read_text()
+        name = _re.search(r'name="([^"]+)"', src)
+        scopes = _re.search(r"required_scopes=\(([^)]*)\)", src, _re.S)
+        if not name or not scopes:
+            continue
+        out[name.group(1)] = set(_re.findall(r'"([^"]+)"', scopes.group(1)))
+    return out
+
+
+def test_every_module_scope_is_actually_requested_at_install():
+    requested = set(_oauth_scopes())
+    for module, needed in _module_required_scopes().items():
+        missing = sorted(needed - requested)
+        assert not missing, (
+            f"module {module!r} requires {missing}, which the install URL never asks for, "
+            "so the module can never activate and re-authorising cannot help"
+        )
+
+
+def test_every_module_scope_is_declared_in_both_manifests():
+    for module, needed in _module_required_scopes().items():
+        assert not sorted(needed - _manifest_scopes()), f"{module}: missing from slack-manifest.json"
+        assert not sorted(needed - _yaml_scopes()), f"{module}: missing from slack-manifest.yaml"
+
+
+def test_the_guard_can_see_connects_scopes():
+    """Guards that silently parse nothing pass for the wrong reason."""
+    found = _module_required_scopes()
+    assert "connect" in found, f"parsed modules: {sorted(found)}"
+    assert "mpim:write" in found["connect"]
