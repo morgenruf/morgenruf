@@ -34,6 +34,7 @@
         "reactions:write",
         "users:read",
         "users:read.email",
+        "emoji:read",
         "team:read",
         "app_mentions:read"
       ]

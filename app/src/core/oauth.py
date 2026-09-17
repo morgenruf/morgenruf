@@ -36,6 +36,8 @@ _SCOPES = [
     "im:write",
     "users:read",
     "users:read.email",
+    # Lets kudos confirm the branded emoji exists before switching to it.
+    "emoji:read",
 ]
 
 _url_generator = AuthorizeUrlGenerator(

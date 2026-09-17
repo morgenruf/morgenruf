@@ -12,6 +12,7 @@ from src.core.modules import ModuleSpec
 from src.modules.kudos.dashboard import register_routes
 from src.modules.kudos.handlers import register_handlers
 from src.modules.kudos.home import home_blocks
+from src.modules.kudos.jobs import plan_jobs
 from src.modules.kudos.mcp import tools as mcp_tools
 
 MODULE = ModuleSpec(
@@ -20,7 +21,7 @@ MODULE = ModuleSpec(
     migrations_dir=Path(__file__).parent / "migrations",
     register_slack=register_handlers,
     register_routes=register_routes,
-    plan_jobs=None,
+    plan_jobs=plan_jobs,
     claim_dm=None,
     purge=None,
     nav=(),

@@ -65,7 +65,7 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-DEFAULT_EMOJI = ":morgenruf:"  # the workspace imports the icon under this name
+DEFAULT_EMOJI = "\N{MAPLE LEAF}"  # upgraded to :morgenruf: once that emoji exists
 DEFAULT_ALLOWANCE = 5
 
 
@@ -75,34 +75,55 @@ def get_config(team_id: str) -> dict:
     A workspace that has never opened the settings has no row, which is not an
     error: it means the defaults.
     """
-    sql = "SELECT emoji, daily_allowance FROM kudos_config WHERE team_id = %s"
+    sql = "SELECT emoji, daily_allowance, token_auto FROM kudos_config WHERE team_id = %s"
     try:
         with db_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, (team_id,))
                 row = cur.fetchone()
     except Exception:
-        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE}
+        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE, "token_auto": True}
     if not row:
-        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE}
-    return {"emoji": row[0] or DEFAULT_EMOJI, "daily_allowance": row[1]}
+        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE, "token_auto": True}
+    return {
+        "emoji": row[0] or DEFAULT_EMOJI,
+        "daily_allowance": row[1],
+        "token_auto": bool(row[2]) if row[2] is not None else True,
+    }
 
 
 def set_config(team_id: str, emoji: str, daily_allowance: int) -> dict:
+    """An admin choosing a token turns off the automatic one for good."""
     sql = """
-        INSERT INTO kudos_config (team_id, emoji, daily_allowance, updated_at)
-        VALUES (%s, %s, %s, NOW())
+        INSERT INTO kudos_config (team_id, emoji, daily_allowance, token_auto, updated_at)
+        VALUES (%s, %s, %s, FALSE, NOW())
         ON CONFLICT (team_id) DO UPDATE SET
             emoji = EXCLUDED.emoji,
             daily_allowance = EXCLUDED.daily_allowance,
+            token_auto = FALSE,
             updated_at = NOW()
-        RETURNING emoji, daily_allowance
+        RETURNING emoji, daily_allowance, token_auto
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, emoji, daily_allowance))
             row = cur.fetchone()
-    return {"emoji": row[0], "daily_allowance": row[1]}
+    return {"emoji": row[0], "daily_allowance": row[1], "token_auto": bool(row[2])}
+
+
+def set_token_automatically(team_id: str, emoji: str) -> None:
+    """Move a workspace that has not chosen for itself. Never touches one that has."""
+    sql = """
+        INSERT INTO kudos_config (team_id, emoji, daily_allowance, token_auto, updated_at)
+        VALUES (%s, %s, %s, TRUE, NOW())
+        ON CONFLICT (team_id) DO UPDATE SET
+            emoji = EXCLUDED.emoji,
+            updated_at = NOW()
+        WHERE kudos_config.token_auto
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, emoji, DEFAULT_ALLOWANCE))
 
 
 def given_today(team_id: str, from_user: str, tz_name: str, now_utc) -> int:
