@@ -96,6 +96,22 @@ def record_pairs(program_id: int, round_id: int, groups: list[list[str]]) -> Non
                         cur.execute(sql, (program_id, lo, hi, round_id))
 
 
+def program_for_channel(team_id: str, channel_id: str) -> dict | None:
+    """The enabled programme drawing from this channel, if there is one."""
+    sql = """
+        SELECT p.*,
+               (SELECT MAX(scheduled_for) FROM connect_rounds r WHERE r.program_id = p.id) AS last_round
+        FROM connect_programs p
+        WHERE p.team_id = %s AND p.channel_id = %s AND p.enabled
+        LIMIT 1
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, channel_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def optout_user_ids(team_id: str, program_id: int) -> set[str]:
     sql = """
         SELECT user_id FROM connect_optouts
@@ -334,6 +350,14 @@ def opt_out(team_id: str, program_id: int, user_id: str, mode: str = "off", paus
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, program_id, user_id, mode, paused_until))
+
+
+def opt_in(team_id: str, program_id: int, user_id: str) -> None:
+    """Undo an opt-out. Pausing from the App Home has to be reversible there."""
+    sql = "DELETE FROM connect_optouts WHERE team_id = %s AND program_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, program_id, user_id))
 
 
 def matches_for_close(round_id: int) -> list[dict]:

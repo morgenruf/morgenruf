@@ -2159,7 +2159,6 @@
       </div>
     </div>
   </div>
-  <datalist id="tz-options"></datalist>
   <div class="modal-overlay" id="connect-modal">
     <div class="modal">
       <div class="modal-header">
@@ -2195,7 +2194,11 @@
           </div>
           <div style="flex:1;min-width:190px">
             <label>Timezone</label>
-            <input type="text" id="cc-tz" list="tz-options" placeholder="America/Toronto"/>
+            <div class="tz-search-wrap" id="cc-tz-wrap">
+              <input type="text" id="cc-tz" class="tz-search-input" placeholder="Search timezone..."
+                     autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="cc-tz-dropdown"/>
+              <div class="tz-dropdown" id="cc-tz-dropdown"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -3260,20 +3263,14 @@
       '<option value="' + i + '"' + (i === 0 ? ' selected' : '') + '>' + d + '</option>').join('');
     document.getElementById('cc-name').value = 'Coffee chats';
     document.getElementById('cc-time').value = '10:00';
-    const tzField = document.getElementById('cc-tz');
-    if (tzField && !tzField.value) {
-      tzField.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    }
+    if (connectTz) connectTz.set(workspaceTz());
     document.getElementById('connect-modal').classList.add('open');
   }
 
   // The field is prefilled with the browser's zone, but a programme often
   // belongs to a team in another one, so it has to be changeable.
   function connectTimezone() {
-    const typed = (document.getElementById('cc-tz') || {}).value || '';
-    const tz = typed.trim();
-    if (tz && isValidIanaTz(tz)) return tz;
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return connectTz ? connectTz.get() : workspaceTz();
   }
 
   function closeConnectModal() {
@@ -5129,52 +5126,10 @@
     });
   })();
 
-  // Feed the coffee chat timezone field from the same list the standup picker
-  // uses, so the two can never offer different zones.
-  (function fillTzDatalist() {
-    const dl = document.getElementById('tz-options');
-    if (!dl) return;
-    dl.innerHTML = ALL_TIMEZONES.map(tz =>
-      '<option value="' + esc(tz.value) + '">' + esc(tz.label) + '</option>').join('');
-  })();
-
-  const tzInput = document.getElementById('f-tz');
-  const tzDropdown = document.getElementById('tz-dropdown');
-  let tzHighlightIdx = -1;
-
-  function renderTzOptions(filter) {
-    const q = (filter || '').toLowerCase();
-    let matches;
-    if (!q) {
-      matches = ALL_TIMEZONES;
-    } else {
-      // Check aliases first
-      const aliasMatch = TZ_ALIASES[q];
-      matches = ALL_TIMEZONES.filter(tz => tz.label.toLowerCase().includes(q) || tz.value.toLowerCase().includes(q));
-      if (aliasMatch) {
-        const already = matches.some(tz => tz.value === aliasMatch);
-        if (!already) {
-          const found = ALL_TIMEZONES.find(tz => tz.value === aliasMatch);
-          if (found) matches.unshift(found);
-        }
-      }
-      // Also match partial alias keys
-      if (!matches.length) {
-        const partialAliasValues = [...new Set(Object.entries(TZ_ALIASES).filter(([k]) => k.includes(q)).map(([,v]) => v))];
-        matches = ALL_TIMEZONES.filter(tz => partialAliasValues.includes(tz.value));
-      }
-    }
-    tzHighlightIdx = -1;
-    if (!matches.length) {
-      tzDropdown.innerHTML = '<div class="tz-option" style="color:var(--text-dim)">No match</div>';
-    } else {
-      tzDropdown.innerHTML = matches.slice(0, 50).map((tz, i) =>
-        '<div class="tz-option" data-tz="' + esc(tz.value) + '" onmousedown="selectTz(\'' + esc(tz.value) + '\')">' + esc(tz.label) + '</div>'
-      ).join('');
-    }
-    tzDropdown.classList.add('open');
-  }
-
+  // One timezone picker, instantiated per field. It was written against a
+  // single pair of element ids, so the coffee chat form had to fall back to a
+  // native datalist: unstyled, 400-odd entries deep, and spilling out of the
+  // modal. Both fields use this now, so they behave and look the same.
   function tzLabel(value) {
     const found = ALL_TIMEZONES.find(tz => tz.value === value);
     return found ? found.label : value;
@@ -5224,45 +5179,99 @@
     return 'UTC';
   }
 
-  function selectTz(tz) {
-    const value = rememberTz(tz) ? tz : workspaceTz();
-    tzInput.dataset.tzValue = value;
-    tzInput.value = tzLabel(value);
-    tzDropdown.classList.remove('open');
+  function makeTzPicker(inputId, dropdownId, wrapId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    if (!input || !dropdown) return null;
+    let highlight = -1;
+
+    function render(filter) {
+      const q = (filter || '').toLowerCase();
+      let matches;
+      if (!q) {
+        matches = ALL_TIMEZONES;
+      } else {
+        const aliasMatch = TZ_ALIASES[q];
+        matches = ALL_TIMEZONES.filter(tz =>
+          tz.label.toLowerCase().includes(q) || tz.value.toLowerCase().includes(q));
+        if (aliasMatch && !matches.some(tz => tz.value === aliasMatch)) {
+          const found = ALL_TIMEZONES.find(tz => tz.value === aliasMatch);
+          if (found) matches.unshift(found);
+        }
+        if (!matches.length) {
+          const partial = [...new Set(Object.entries(TZ_ALIASES)
+            .filter(([k]) => k.includes(q)).map(([, v]) => v))];
+          matches = ALL_TIMEZONES.filter(tz => partial.includes(tz.value));
+        }
+      }
+      highlight = -1;
+      dropdown.innerHTML = matches.length
+        ? matches.slice(0, 50).map(tz =>
+            '<div class="tz-option" data-tz="' + esc(tz.value) + '">' + esc(tz.label) + '</div>').join('')
+        : '<div class="tz-option" style="color:var(--text-dim)">No match</div>';
+      dropdown.querySelectorAll('.tz-option[data-tz]').forEach(el => {
+        el.addEventListener('mousedown', () => api.set(el.dataset.tz));
+      });
+      dropdown.classList.add('open');
+    }
+
+    const api = {
+      set(tz) {
+        const value = rememberTz(tz) ? tz : workspaceTz();
+        input.dataset.tzValue = value;
+        input.value = tzLabel(value);
+        dropdown.classList.remove('open');
+      },
+      // Only ever hand the API a name the picker knows, so a half-typed entry
+      // can never be saved as a schedule the scheduler will silently reject.
+      get() {
+        if (isKnownTz(input.dataset.tzValue)) return input.dataset.tzValue;
+        const typed = (input.value || '').trim().toLowerCase();
+        const exact = ALL_TIMEZONES.find(tz =>
+          tz.value.toLowerCase() === typed || tz.label.toLowerCase() === typed);
+        if (exact) return exact.value;
+        if (TZ_ALIASES[typed]) return TZ_ALIASES[typed];
+        const raw = (input.value || '').trim();
+        if (isValidIanaTz(raw)) return raw;
+        return workspaceTz();
+      }
+    };
+
+    input.addEventListener('focus', () => { input.value = ''; render(''); });
+    input.addEventListener('input', () => { input.dataset.tzValue = ''; render(input.value); });
+    // On blur the field snaps back to whatever will actually be saved, so what
+    // you see is what the scheduler gets.
+    input.addEventListener('blur', () => setTimeout(() => {
+      dropdown.classList.remove('open');
+      api.set(api.get());
+    }, 150));
+    input.addEventListener('keydown', (e) => {
+      const opts = dropdown.querySelectorAll('.tz-option[data-tz]');
+      const move = (d) => {
+        highlight = Math.max(0, Math.min(highlight + d, opts.length - 1));
+        opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlight));
+        if (opts[highlight]) opts[highlight].scrollIntoView({ block: 'nearest' });
+      };
+      if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlight >= 0 && opts[highlight]) api.set(opts[highlight].dataset.tz);
+      } else if (e.key === 'Escape') { dropdown.classList.remove('open'); }
+    });
+    document.addEventListener('click', e => {
+      const wrap = document.getElementById(wrapId);
+      if (wrap && !wrap.contains(e.target)) dropdown.classList.remove('open');
+    });
+    return api;
   }
 
-  // Only ever hand the API a name the picker knows about, so a half-typed
-  // entry can never be saved as a schedule the scheduler will silently reject.
-  function getTzValue() {
-    if (isKnownTz(tzInput.dataset.tzValue)) return tzInput.dataset.tzValue;
-    const typed = (tzInput.value || '').trim().toLowerCase();
-    const exact = ALL_TIMEZONES.find(tz => tz.value.toLowerCase() === typed || tz.label.toLowerCase() === typed);
-    if (exact) return exact.value;
-    if (TZ_ALIASES[typed]) return TZ_ALIASES[typed];
-    const raw = (tzInput.value || '').trim();
-    if (isValidIanaTz(raw)) return raw;
-    return workspaceTz();
-  }
+  const standupTz = makeTzPicker('f-tz', 'tz-dropdown', 'tz-search-wrap');
+  const connectTz = makeTzPicker('cc-tz', 'cc-tz-dropdown', 'cc-tz-wrap');
 
-  tzInput.addEventListener('focus', () => { tzInput.value = ''; renderTzOptions(''); });
-  tzInput.addEventListener('input', () => { tzInput.dataset.tzValue = ''; renderTzOptions(tzInput.value); });
-  // On blur the field snaps back to whatever will actually be saved, so what
-  // you see is what the scheduler gets.
-  tzInput.addEventListener('blur', () => setTimeout(() => {
-    tzDropdown.classList.remove('open');
-    selectTz(getTzValue());
-  }, 150));
-  tzInput.addEventListener('keydown', (e) => {
-    const opts = tzDropdown.querySelectorAll('.tz-option[data-tz]');
-    if (e.key === 'ArrowDown') { e.preventDefault(); tzHighlightIdx = Math.min(tzHighlightIdx + 1, opts.length - 1); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); tzHighlightIdx = Math.max(tzHighlightIdx - 1, 0); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
-    else if (e.key === 'Enter') { e.preventDefault(); if (tzHighlightIdx >= 0 && opts[tzHighlightIdx]) selectTz(opts[tzHighlightIdx].dataset.tz); }
-    else if (e.key === 'Escape') { tzDropdown.classList.remove('open'); }
-  });
-
-  document.addEventListener('click', e => {
-    if (!document.getElementById('tz-search-wrap').contains(e.target)) tzDropdown.classList.remove('open');
-  });
+  // The standup form's existing call sites keep working unchanged.
+  function selectTz(tz) { if (standupTz) standupTz.set(tz); }
+  function getTzValue() { return standupTz ? standupTz.get() : workspaceTz(); }
 
   // ── Utilities ──
   function esc(s) {
