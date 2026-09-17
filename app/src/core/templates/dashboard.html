@@ -2954,6 +2954,7 @@
           '</div>' +
         '</div>' +
         '<div class="standup-actions">' +
+          '<button class="btn btn-secondary btn-sm" onclick="runConnectRound(' + p.id + ')">Run now</button>' +
           '<button class="btn btn-secondary btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
           '<button class="toggle ' + (p.enabled ? 'on' : '') + '" title="Toggle active"' +
             ' onclick="toggleConnect(' + p.id + ', this)"></button>' +
@@ -3229,6 +3230,20 @@
         '<td style="text-align:right' + (+r.missed ? ';color:var(--sev-bad);font-weight:600' : ';color:var(--text-dim)') + '">' + r.missed + '</td>' +
         '<td style="text-align:right;color:var(--text-dim)">' + r.no_reply + '</td></tr>').join('') +
       '</tbody></table>' + more;
+  }
+
+  // Without this a programme cannot be tried until its scheduled day comes
+  // round, which is a poor way to find out whether it works.
+  async function runConnectRound(id) {
+    if (!confirm('Send introductions now? Everyone in the channel will get a group DM.')) return;
+    toast('Starting a round…');
+    try {
+      await api('POST', '/connect/programs/' + id + '/run', {});
+      toast('Introductions sent.');
+      loadConnect();
+    } catch (e) {
+      toast((e && e.message) || 'Could not start a round', 'error');
+    }
   }
 
   async function toggleConnect(id, btn) {

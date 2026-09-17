@@ -72,8 +72,15 @@ def _client(bot_token: str, team_id: str) -> WebClient | None:
         return None
 
 
-def run_round(program_id: int, bot_token: str = "") -> None:
-    """Start today's round: build the pool, match, then deliver."""
+def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None:
+    """Start today's round: build the pool, match, then deliver.
+
+    `force` runs a round that is not due, for the "run it now" button. Everything
+    after the cadence check is unchanged, so a forced round is an ordinary round
+    in every other respect: same matching, same history, same idempotency guard
+    on (programme, scheduled_for), which is what stops a second click producing
+    a second set of introductions on the same day.
+    """
     import src.modules.connect.db as cdb  # noqa: PLC0415
     from src.core.roster import eligible_members  # noqa: PLC0415
 
@@ -82,7 +89,7 @@ def run_round(program_id: int, bot_token: str = "") -> None:
         return
 
     today = date.today()
-    if not is_round_due(program["interval_weeks"], program.get("last_round"), today):
+    if not force and not is_round_due(program["interval_weeks"], program.get("last_round"), today):
         logger.info("connect: programme %s not due today", program_id)
         return
 

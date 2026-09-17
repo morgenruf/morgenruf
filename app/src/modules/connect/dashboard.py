@@ -100,6 +100,27 @@ def register_routes(flask_app) -> None:
             return jsonify({"error": "not found"}), 404
         return jsonify({"deleted": program_id})
 
+    @bp.route("/dashboard/api/connect/programs/<int:program_id>/run", methods=["POST"])
+    @_admin_required
+    def run_now(program_id: int):
+        """Start a round immediately, rather than waiting for the cadence.
+
+        Without this a programme could not be tried at all until its scheduled
+        day came round, which is a poor way to find out whether it works.
+        """
+        team_id = session["team_id"]
+        if not cdb.owns_program(team_id, program_id):
+            return jsonify({"error": "not found"}), 404
+        try:
+            from src.modules.connect.jobs import run_round  # noqa: PLC0415
+
+            run_round(program_id, force=True)
+        except Exception as exc:
+            logger.exception("connect run_now failed for %s", program_id)
+            return jsonify({"error": str(exc)}), 500
+        rounds = cdb.recent_rounds(team_id, program_id, 1)
+        return jsonify({"started": True, "round": rounds[0]["id"] if rounds else None})
+
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/rounds", methods=["GET"])
     @_login_required
     def list_rounds(program_id: int):

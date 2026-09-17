@@ -65,6 +65,24 @@ def register_handlers(app) -> None:
         except Exception:
             logger.info("connect: could not confirm to %s", user_id)
 
+    @app.action("connect:home_snooze")
+    def handle_home_snooze(ack, body, client):  # noqa: ANN001
+        """A fortnight off, which is what most people want rather than leaving."""
+        ack()
+        from datetime import date, timedelta  # noqa: PLC0415
+
+        user_id = body["user"]["id"]
+        team_id = body.get("team", {}).get("id", "")
+        program_id = int(body["actions"][0]["value"])
+        until = date.today() + timedelta(weeks=2)
+        try:
+            import src.modules.connect.db as cdb  # noqa: PLC0415
+
+            cdb.snooze(team_id, program_id, user_id, until)
+            _confirm(client, body, f"Snoozed until {until.strftime('%d %B')}. You will be matched again after that.")
+        except Exception:
+            logger.exception("connect: could not snooze %s", user_id)
+
     @app.action("connect:home_pause")
     def handle_home_pause(ack, body, client):  # noqa: ANN001
         """Pause from the App Home, where there is no channel to reply in."""

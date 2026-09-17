@@ -360,6 +360,34 @@ def opt_in(team_id: str, program_id: int, user_id: str) -> None:
             cur.execute(sql, (team_id, program_id, user_id))
 
 
+def snooze(team_id: str, program_id: int, user_id: str, until) -> None:
+    """Stop matching this person until a date.
+
+    The eligibility query has understood mode='paused' with a paused_until for
+    as long as the table has existed; nothing ever wrote one, so a snooze was a
+    column with no feature attached.
+    """
+    opt_out(team_id, program_id, user_id, mode="paused", paused_until=until)
+
+
+def personal_state(team_id: str, program_id: int, user_id: str) -> dict:
+    """How this person currently stands with one programme."""
+    sql = """
+        SELECT mode, paused_until FROM connect_optouts
+        WHERE team_id = %s AND program_id = %s AND user_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, program_id, user_id))
+            row = cur.fetchone()
+    if not row:
+        return {"state": "in", "until": None}
+    mode, until = row
+    if mode == "paused" and until:
+        return {"state": "snoozed", "until": until}
+    return {"state": "out", "until": None}
+
+
 def matches_for_close(round_id: int) -> list[dict]:
     """Delivered matches with a real conversation, still to be asked whether
     they met. Undeliverable ones carry an empty channel and are skipped."""

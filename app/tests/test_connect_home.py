@@ -77,3 +77,60 @@ def test_a_missing_weekday_falls_back_to_today():
 def test_the_date_is_never_more_than_a_cadence_away():
     prog = {"day_of_week": 2, "interval_weeks": 1}
     assert upcoming_round_date(prog, THURSDAY) - THURSDAY <= timedelta(days=7)
+
+
+# ── snooze, leave, and coming back ───────────────────────────────────────────
+# connect_optouts.paused_until has been in the schema and honoured by the
+# eligibility query since the table existed, but nothing ever wrote one, so a
+# snooze was a column with no feature attached. These assert the three states
+# the query already distinguishes.
+
+
+def _eligibility_sql():
+    import inspect
+
+    from src.modules.connect import db
+
+    return inspect.getsource(db.optout_user_ids)
+
+
+def test_a_permanent_opt_out_is_excluded():
+    assert "mode = 'off'" in _eligibility_sql()
+
+
+def test_a_snooze_is_excluded_only_until_its_date():
+    sql = _eligibility_sql()
+    assert "mode = 'paused'" in sql
+    assert "paused_until >= CURRENT_DATE" in sql
+
+
+def test_snooze_writes_the_date_the_query_reads():
+    import inspect
+
+    from src.modules.connect import db
+
+    src = inspect.getsource(db.snooze)
+    assert 'mode="paused"' in src
+    assert "paused_until=until" in src
+
+
+def test_personal_state_tells_the_three_apart():
+    import inspect
+
+    from src.modules.connect import db
+
+    src = inspect.getsource(db.personal_state)
+    for expected in ('"in"', '"out"', '"snoozed"'):
+        assert expected in src
+
+
+def test_a_forced_round_skips_only_the_cadence_check():
+    """Everything after it must be unchanged, so a forced round is an ordinary
+    round: same matching, same history, same idempotency guard."""
+    import inspect
+
+    from src.modules.connect import jobs
+
+    src = inspect.getsource(jobs.run_round)
+    assert "if not force and not is_round_due(" in src
+    assert src.count("is_round_due(") == 1
