@@ -820,31 +820,40 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         else:
             summary_blocks = _blocks.build_summary_by_member(today_standups, questions, user_profiles=user_profiles)
 
+        # "Report Channel" on the schedule sends the summary somewhere other
+        # than the standup channel, which is how a team keeps the working
+        # channel quiet and the summary where managers read it. Empty means
+        # the standup channel, matching the field's own placeholder.
+        report_channel = (sched_cfg.get("report_channel") or "").strip() or channel_id
+
         # Thread the summary under today's daily thread parent to reduce
         # channel clutter. Prefer the DB-backed lookup (survives pod restarts)
         # and fall back to the in-memory cache used by the Bolt handler.
+        # Only when the summary lands in the standup channel: a thread_ts from
+        # one channel is not a valid parent in another, and Slack rejects it.
         thread_ts = None
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         sched_id_int = int(schedule_id or sched_cfg.get("id") or 0)
-        try:
-            thread_ts = db.get_daily_thread_ts(team_id, channel_id, today_str, sched_id_int)
-        except Exception:
-            thread_ts = None
-        if not thread_ts:
+        if report_channel == channel_id:
             try:
-                from src.modules.standup.handlers import _daily_thread_cache  # noqa: PLC0415
-
-                thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}:{sched_id_int}")
+                thread_ts = db.get_daily_thread_ts(team_id, channel_id, today_str, sched_id_int)
             except Exception:
                 thread_ts = None
+            if not thread_ts:
+                try:
+                    from src.modules.standup.handlers import _daily_thread_cache  # noqa: PLC0415
 
-        post_kwargs = {"channel": channel_id, "text": "📋 Standup summary", "blocks": summary_blocks}
+                    thread_ts = _daily_thread_cache.get(f"{team_id}:{channel_id}:{today_str}:{sched_id_int}")
+                except Exception:
+                    thread_ts = None
+
+        post_kwargs = {"channel": report_channel, "text": "📋 Standup summary", "blocks": summary_blocks}
         if thread_ts:
             post_kwargs["thread_ts"] = thread_ts
         summary_resp = client.chat_postMessage(**post_kwargs)
         summary_thread_ts = thread_ts or summary_resp.get("ts")
         logger.info(
-            "Posted scheduled report for team %s to %s (%d submissions)", team_id, channel_id, len(today_standups)
+            "Posted scheduled report for team %s to %s (%d submissions)", team_id, report_channel, len(today_standups)
         )
 
         # AI summary
@@ -855,9 +864,9 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             if ws_config.get("ai_summary_enabled"):
                 inst = db.get_installation(team_id)
                 team_name = (inst or {}).get("team_name", "")
-                summary_text = generate_summary(today_standups, team_name)
+                summary_text = generate_summary(today_standups, team_name, ws_config.get("ai_provider") or "")
                 if summary_text:
-                    ai_kwargs = {"channel": channel_id, "text": f"✨ *AI Summary*\n\n{summary_text}"}
+                    ai_kwargs = {"channel": report_channel, "text": f"✨ *AI Summary*\n\n{summary_text}"}
                     if summary_thread_ts:
                         ai_kwargs["thread_ts"] = summary_thread_ts
                     client.chat_postMessage(**ai_kwargs)
