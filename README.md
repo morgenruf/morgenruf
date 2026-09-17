@@ -359,6 +359,43 @@ Full reference: [docs.morgenruf.dev/mcp.html](https://docs.morgenruf.dev/mcp.htm
 | `FLASK_SECRET_KEY` | ✅ | Random secret for session cookies |
 | `PORT` | | HTTP port (default: `3000`) |
 | `RESEND_API_KEY` | | For welcome emails (optional) |
+| `ZOOM_CLIENT_ID` | | Zoom account linking (optional, see below) |
+| `ZOOM_CLIENT_SECRET` | | Zoom account linking (optional, see below) |
+
+---
+
+## Zoom meetings (optional)
+
+Each person connects their own Zoom account from the Morgenruf tab in Slack.
+After that, a coffee chat gets a real meeting **scheduled for the time the pair
+agree**, hosted on the account of whoever in the pairing has connected.
+
+Leave the two variables unset and the feature is absent rather than broken: no
+button appears and nothing fails.
+
+1. Create a **user-managed** OAuth app at
+   <https://marketplace.zoom.us/develop/create>.
+2. Set its redirect URL to `<APP_URL>/connect/zoom/callback`.
+3. Give it the scopes `meeting:write:meeting` and `user:read:user`.
+4. Set `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`, or `zoom.clientId` and
+   `zoom.clientSecret` in the Helm chart.
+
+Both must be set. With only one, the feature stays off rather than half on.
+
+**Distribution.** An unpublished Zoom app can only be installed by users inside
+your own Zoom account, which is enough to try it. Letting other workspaces
+connect requires publishing the app on the Zoom Marketplace, which goes through
+their review.
+
+Anyone can disconnect their own account from the same Morgenruf tab. Zoom
+refresh tokens also expire after 90 days unused, and the tab says "reconnect"
+rather than showing an unlinked state, so a link that aged out is
+distinguishable from one that was never made.
+
+Morgenruf does not ship Zoom's logo. Zoom's app review guidelines keep their
+marks off an integration's own icon and their Partner Brand Guide governs use
+of the mark, so the prompt shows an emoji unless you place an approved
+`zoom-logo.png` in `app/src/static/`.
 
 ---
 
