@@ -133,6 +133,8 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         current_round=round_row["id"],
         timezones=zones,
         minimum_overlap_hours=1.0 if program.get("match_working_hours") else 0.0,
+        group_size=int(program.get("group_size") or 2),
+        strict_group_size=bool(program.get("strict_group_size")),
     )
     if not groups:
         cdb.set_round_state(round_row["id"], "closed", 0)
@@ -234,6 +236,7 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 with_icebreaker=want_icebreaker,
                 # The accept buttons carry the match, so the message needs it.
                 match_id=m["id"],
+                tone=str(program.get("intro_tone") or "hybrid"),
             )
             api.post(client, channel, text, blocks)
             _offer_zoom(client, channel, team_id, members)

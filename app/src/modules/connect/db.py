@@ -75,6 +75,12 @@ def update_program(team_id: str, program_id: int, **fields) -> dict | None:
         "suggest_times",
         "use_icebreaker",
         "post_stats",
+        "group_size",
+        "strict_group_size",
+        "intro_tone",
+        "video_mode",
+        "next_round_date",
+        "include_guests",
     }
     changes = {k: v for k, v in fields.items() if k in allowed}
     if not changes:

@@ -59,8 +59,20 @@ def match(
     current_round: int | None = None,
     timezones: dict[str, str] | None = None,
     minimum_overlap_hours: float = 0.0,
+    group_size: int = 2,
+    strict_group_size: bool = False,
 ) -> list[list[str]]:
-    """Group a pool into pairs, with one trio when the count is odd.
+    """Group a pool into groups of `group_size`, with a larger last one when
+    the count does not divide evenly.
+
+    `group_size` of 2 is the original behaviour exactly: pairs, with one trio
+    when the count is odd. A larger size builds each group around the most
+    constrained person still waiting and adds whoever they know least, which
+    is the same rule as the pair case applied repeatedly.
+
+    `strict_group_size` leaves the remainder unmatched rather than growing a
+    group past the requested size. Useful when the size is the point, as in a
+    lunch for exactly four.
 
     `seed` derives from the round id rather than the clock, so a retried round
     produces the same matching and a test can assert on it.
@@ -73,6 +85,12 @@ def match(
     partner is not matched at all this round rather than handed an
     introduction they cannot act on.
     """
+    size = max(2, int(group_size or 2))
+    if len(pool) < size and (strict_group_size or len(pool) < 2):
+        # Strict means a group of the wrong size is worse than none. Otherwise
+        # a pool too small for the requested size still gets one smaller group,
+        # because two people meeting beats nobody meeting.
+        return []
     if len(pool) < 2:
         return []
 
@@ -86,7 +104,7 @@ def match(
     # People the working-hours constraint could not place. They are not matched
     # this round rather than handed an introduction they cannot act on.
     unmatched: list[str] = []
-    while len(remaining) >= 2:
+    while len(remaining) >= size:
         # Most constrained first. The person carrying the most history has the
         # fewest good options, so letting them choose first avoids stranding
         # them with their worst partner. Picking the globally cheapest pair
@@ -94,26 +112,72 @@ def match(
         # choices and leave the constrained one with what was left.
         a = max(remaining, key=lambda m: (_total_cost(m, remaining, history, current_round), -remaining.index(m)))
         remaining.remove(a)
-        candidates = remaining
-        if minimum_overlap_hours > 0:
-            candidates = [m for m in remaining if _can_meet(a, m, timezones or {}, minimum_overlap_hours)]
+        group = [a]
+
+        # Then fill the group one at a time, each time taking whoever the
+        # group as a whole knows least. Same rule as the pair case, applied
+        # until the group is full.
+        stranded = False
+        while len(group) < size:
+            candidates = remaining
+            if minimum_overlap_hours > 0:
+                candidates = [
+                    m for m in remaining if all(_can_meet(m, g, timezones or {}, minimum_overlap_hours) for g in group)
+                ]
             if not candidates:
                 # Nobody shares enough of a day with them. Leaving them out is
                 # honest; pairing them anyway produces a chat that cannot happen.
-                unmatched.append(a)
-                continue
-        best = min(candidates, key=lambda b: (_cost(a, b, history, current_round), remaining.index(b)))
-        remaining.remove(best)
-        groups.append(sorted([a, best]))
+                stranded = True
+                break
+            nxt = min(
+                candidates,
+                key=lambda b: (sum(_cost(b, g, history, current_round) for g in group), remaining.index(b)),
+            )
+            remaining.remove(nxt)
+            group.append(nxt)
 
-    if remaining and groups:
+        if stranded:
+            if len(group) >= 2 and not strict_group_size:
+                # A smaller group that can actually meet beats no group.
+                groups.append(sorted(group))
+            else:
+                unmatched.extend(group[:1])
+                remaining.extend(group[1:])
+                remaining.sort()
+            continue
+        groups.append(sorted(group))
+
+    # The remainder. Strict mode leaves them out rather than growing a group
+    # past the size that was asked for.
+    #
+    # Two or more left over form their own group instead of being distributed:
+    # ten people in groups of four is 4, 4 and 2, not two groups of five. Only
+    # a single leftover joins an existing group, which is the odd-one-out case
+    # the pair matching has always handled.
+    if not strict_group_size and len(remaining) >= 2:
+        leftovers = sorted(remaining)
+        if minimum_overlap_hours > 0:
+            reachable = [
+                m
+                for m in leftovers
+                if any(_can_meet(m, o, timezones or {}, minimum_overlap_hours) for o in leftovers if o != m)
+            ]
+            leftovers = reachable
+        if len(leftovers) >= 2:
+            for m in leftovers:
+                remaining.remove(m)
+            groups.append(sorted(leftovers))
+
+    while remaining and groups and not strict_group_size:
         leftover = remaining.pop()
         if minimum_overlap_hours > 0:
             reachable_groups = [
                 g for g in groups if all(_can_meet(leftover, m, timezones or {}, minimum_overlap_hours) for m in g)
             ]
             if not reachable_groups:
-                return groups
+                # This person cannot join any existing group; the others in the
+                # remainder might still be able to, so keep going.
+                continue
             groups_for_leftover = reachable_groups
         else:
             groups_for_leftover = groups
@@ -121,7 +185,7 @@ def match(
         # arbitrary one.
         target = min(
             groups_for_leftover,
-            key=lambda g: _cost(leftover, g[0], history, current_round) + _cost(leftover, g[1], history, current_round),
+            key=lambda g: (sum(_cost(leftover, m, history, current_round) for m in g), len(g)),
         )
         target.append(leftover)
         target.sort()

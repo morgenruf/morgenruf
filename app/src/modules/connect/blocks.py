@@ -71,6 +71,24 @@ def _mentions(member_ids: list[str]) -> str:
     return f"{names} and <@{member_ids[-1]}>"
 
 
+# The same introduction reads wrongly to a team that shares an office and to
+# one that has never met. One sentence differs; the mechanics do not.
+TONE_LINES = {
+    "hybrid": (
+        "It is hard to meet people outside your own team when everyone is remote, "
+        "so this introduces a few of you every so often."
+    ),
+    "remote": (
+        "Nobody bumps into anyone in a distributed team, so this introduces a few of you "
+        "every so often. A call is the usual way; a long message works too."
+    ),
+    "in_person": (
+        "Plenty of people here have still never spoken, so this introduces a few of you "
+        "every so often. A coffee or a walk is enough."
+    ),
+}
+
+
 def _accepted_line(user_ids: list[str]) -> str:
     """Who has already said a time works, so the second person sees an invitation
     to agree rather than a fresh decision to make."""
@@ -89,6 +107,7 @@ def intro_message(
     times_are_outside_hours: bool = False,
     match_id: int = 0,
     with_icebreaker: bool = True,
+    tone: str = "hybrid",
 ) -> tuple[str, list]:
     """The group DM a match receives.
 
@@ -98,7 +117,12 @@ def intro_message(
     rather than implying we checked.
     """
     mentions = _mentions(member_ids)
-    group = "Three of you this round, so nobody sits out." if len(member_ids) > 2 else "Just the two of you."
+    if len(member_ids) > 3:
+        group = f"{len(member_ids)} of you this round."
+    elif len(member_ids) > 2:
+        group = "Three of you this round, so nobody sits out."
+    else:
+        group = "Just the two of you."
     text = f"Coffee chat: {mentions}, you have been matched."
 
     blocks = [
@@ -109,8 +133,7 @@ def intro_message(
                 "type": "mrkdwn",
                 "text": (
                     f"{mentions}, you have been matched. Say hello right here.\n"
-                    "It is hard to meet people outside your own team when everyone is remote, "
-                    "so this introduces two of you every so often."
+                    + TONE_LINES.get(tone, TONE_LINES["hybrid"])
                 ),
             },
             # Top right, where Donut's "More options" sits. An overflow rather
