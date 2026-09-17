@@ -53,6 +53,38 @@ def create_program(
             return dict(cur.fetchone())
 
 
+def update_program(team_id: str, program_id: int, **fields) -> dict | None:
+    """Change a programme's settings.
+
+    A coffee chat could previously only be created and deleted, so changing a
+    time meant losing the round history with it. Only these columns may be
+    written, and unknown keys are dropped rather than trusted.
+    """
+    allowed = {
+        "name",
+        "channel_id",
+        "interval_weeks",
+        "day_of_week",
+        "hour",
+        "minute",
+        "timezone",
+        "enabled",
+        "match_working_hours",
+        "meeting_minutes",
+        "meeting_link",
+    }
+    changes = {k: v for k, v in fields.items() if k in allowed}
+    if not changes:
+        return get_program(program_id)
+    cols = ", ".join(f"{k} = %s" for k in changes)
+    sql = f"UPDATE connect_programs SET {cols} WHERE id = %s AND team_id = %s RETURNING *"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (*changes.values(), program_id, team_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def set_program_enabled(team_id: str, program_id: int, enabled: bool) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:

@@ -121,7 +121,18 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         logger.info("connect: a round already exists for programme %s today", program_id)
         return
 
-    groups = match(pool, cdb.pair_history(program_id), seed=round_row["id"], current_round=round_row["id"])
+    # Only when the programme asks for it: a team spread across distant zones
+    # shares no working day at all, and enforcing it by default would stop
+    # matching them entirely.
+    zones = _member_timezones(team_id) if program.get("match_working_hours") else {}
+    groups = match(
+        pool,
+        cdb.pair_history(program_id),
+        seed=round_row["id"],
+        current_round=round_row["id"],
+        timezones=zones,
+        minimum_overlap_hours=1.0 if program.get("match_working_hours") else 0.0,
+    )
     if not groups:
         cdb.set_round_state(round_row["id"], "closed", 0)
         return
@@ -132,6 +143,35 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
 
     deliver_round(round_row["id"], bot_token, team_id, program_id)
     _schedule_followups(round_row["id"], bot_token, team_id)
+
+
+def _member_timezones(team_id: str) -> dict[str, str]:
+    """user_id -> timezone, for working-hours decisions."""
+    try:
+        from src.core.roster import eligible_members  # noqa: PLC0415
+
+        return {m.user_id: (getattr(m, "tz", "") or "") for m in eligible_members(team_id)}
+    except Exception:
+        logger.info("connect: no timezones available, times will not be suggested")
+        return {}
+
+
+def _suggest_times(members: list[str], zones: dict[str, str], minutes: int) -> list[str]:
+    """Hours inside everyone's working day, phrased for the message.
+
+    Only offered for a pair: with three people the overlap is usually empty and
+    a wrong suggestion is worse than none.
+    """
+    if len(members) != 2:
+        return []
+    try:
+        from src.modules.connect.hours import next_slots  # noqa: PLC0415
+
+        slots = next_slots(zones.get(members[0], ""), zones.get(members[1], ""), 3, minutes)
+        return [s.strftime("%A %H:%M UTC") for s in slots]
+    except Exception:
+        logger.info("connect: could not suggest times")
+        return []
 
 
 def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) -> None:
@@ -146,12 +186,24 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
     if client is None:
         return
 
+    program = cdb.get_program(program_id) or {}
+    meeting_link = program.get("meeting_link") or ""
+    meeting_minutes = int(program.get("meeting_minutes") or 30)
+    # Timezones come from the roster, which is already loaded for matching.
+    zones = _member_timezones(team_id)
+
     pending = cdb.undelivered_matches(round_id)
     for m in pending:
         try:
-            channel = api.open_group_dm(client, list(m["member_ids"]))
+            members = list(m["member_ids"])
+            channel = api.open_group_dm(client, members)
             text, blocks = cblocks.intro_message(
-                list(m["member_ids"]), cblocks.random_seed_for(round_id, m["id"]), program_id
+                members,
+                cblocks.random_seed_for(round_id, m["id"]),
+                program_id,
+                meeting_link=meeting_link,
+                meeting_minutes=meeting_minutes,
+                suggested_times=_suggest_times(members, zones, meeting_minutes),
             )
             api.post(client, channel, text, blocks)
             cdb.mark_delivered(m["id"], channel)
