@@ -166,14 +166,19 @@ def _suggest_times(members: list[str], zones: dict[str, str], minutes: int, meet
         return []
     try:
         from src.modules.connect.calendar import google_link  # noqa: PLC0415
-        from src.modules.connect.hours import next_slots, within_working_hours  # noqa: PLC0415
+        from src.modules.connect.hours import local_label, next_slots, within_working_hours  # noqa: PLC0415
 
         slots = next_slots(zones.get(members[0], ""), zones.get(members[1], ""), 3, minutes)
         outside = not within_working_hours(zones.get(members[0], ""), zones.get(members[1], ""))
+        tz_names = [zones.get(m, "") for m in members]
         return [
             {
                 "outside_hours": outside,
-                "label": slot.strftime("%A %H:%M UTC"),
+                # Both readers' own clocks. A UTC time is one neither of them
+                # thinks in, and tells them nothing about whether the slot is
+                # their morning or their evening.
+                "label": local_label(slot, tz_names),
+                "utc": slot.replace(microsecond=0).isoformat(),
                 "add_url": google_link(
                     slot,
                     minutes,
@@ -220,6 +225,8 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 meeting_minutes=meeting_minutes,
                 suggested_times=(times := _suggest_times(members, zones, meeting_minutes, meeting_link)),
                 times_are_outside_hours=bool(times and times[0].get("outside_hours")),
+                # The accept buttons carry the match, so the message needs it.
+                match_id=m["id"],
             )
             api.post(client, channel, text, blocks)
             cdb.mark_delivered(m["id"], channel)

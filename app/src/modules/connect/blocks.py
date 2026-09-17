@@ -34,6 +34,14 @@ def _mentions(member_ids: list[str]) -> str:
     return f"{names} and <@{member_ids[-1]}>"
 
 
+def _accepted_line(user_ids: list[str]) -> str:
+    """Who has already said a time works, so the second person sees an invitation
+    to agree rather than a fresh decision to make."""
+    if len(user_ids) == 1:
+        return f"_<@{user_ids[0]}> can make this one._"
+    return "_" + _mentions(user_ids) + " can all make this one._"
+
+
 def intro_message(
     member_ids: list[str],
     seed: int,
@@ -42,6 +50,7 @@ def intro_message(
     meeting_minutes: int = 30,
     suggested_times: list | None = None,
     times_are_outside_hours: bool = False,
+    match_id: int = 0,
 ) -> tuple[str, list]:
     """The group DM a match receives.
 
@@ -76,22 +85,38 @@ def intro_message(
     ]
 
     if suggested_times:
-        # Each proposal carries a link that opens the reader's own calendar with
-        # the event filled in. They still press save, which is also the honest
-        # arrangement: we never claimed to know whether they were free.
-        lines = []
-        for slot in suggested_times[:3]:
-            if isinstance(slot, dict):
-                label, link = slot.get("label", ""), slot.get("add_url", "")
-                lines.append(f"\u2022 {label} \u00b7 <{link}|add to calendar>" if link else f"\u2022 {label}")
-            else:
-                lines.append(f"\u2022 {slot}")
+        # One tap per time that works. The bot settles it the moment everyone
+        # has accepted the same slot, which is the part that otherwise does not
+        # happen: both people are willing and neither wants to be the one who
+        # picks, so the introduction quietly dies in the DM.
         heading = (
             "*Times you could both just about make*"
             if times_are_outside_hours
             else "*Times that suit everyone's hours*"
         )
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": heading + "\n" + "\n".join(lines)}})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": heading}})
+        for slot in suggested_times[:3]:
+            if not isinstance(slot, dict):
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"\u2022 {slot}"}})
+                continue
+            label = slot.get("label", "")
+            utc = slot.get("utc", "")
+            accepted = slot.get("accepted") or []
+            who = ""
+            if accepted:
+                who = "\n" + _accepted_line(accepted)
+            block = {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*{label}*{who}"},
+            }
+            if utc:
+                block["accessory"] = {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Works for me"},
+                    "action_id": f"connect:accept_slot:{match_id}:{utc}",
+                    "value": utc,
+                }
+            blocks.append(block)
         blocks.append(
             {
                 "type": "context",
@@ -205,3 +230,51 @@ __all__ = [
     "ICEBREAKERS",
     "random",
 ]
+
+
+def agreed_message(member_ids: list[str], label: str, add_url: str = "", meeting_link: str = "") -> tuple[str, list]:
+    """Everyone has accepted the same time, so say so and stop asking.
+
+    This is the step Donut leaves to the two people. Saying it out loud is what
+    turns a willing pair into a meeting: there is a time, both agreed to it, and
+    the only thing left is one tap to put it in a calendar.
+    """
+    mentions = _mentions(member_ids)
+    text = f"Settled: {label}."
+    lines = [f"*{label}*"]
+    if meeting_link:
+        lines.append(f"<{meeting_link}|Join the room> when it comes round.")
+    blocks = [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"✅ *That is settled then.*\n{mentions} both said this works:"},
+        },
+        {"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)}},
+    ]
+    if add_url:
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Add to my calendar"},
+                        "url": add_url,
+                        "action_id": "connect:agreed_add",
+                        "style": "primary",
+                    }
+                ],
+            }
+        )
+    blocks.append(
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Nobody checked your calendars, so move it between yourselves if something clashes.",
+                }
+            ],
+        }
+    )
+    return text, blocks

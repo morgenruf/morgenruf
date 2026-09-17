@@ -434,3 +434,87 @@ def matches_for_close(round_id: int) -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (round_id,))
             return [dict(r) for r in cur.fetchall()]
+
+
+# ── Agreeing a time ─────────────────────────────────────────────────────────
+#
+# The gap Donut leaves: two willing people and nobody wanting to be the one who
+# picks. A tap per acceptable slot is enough for the bot to settle it as soon as
+# everyone has accepted the same one.
+
+
+def match_by_id(match_id: int) -> dict | None:
+    sql = "SELECT * FROM connect_matches WHERE id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (match_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def accept_slot(match_id: int, team_id: str, user_id: str, slot_utc) -> None:
+    """Record that this person can make this time. Tapping twice is harmless."""
+    sql = """
+        INSERT INTO connect_slot_votes (match_id, team_id, user_id, slot_utc)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (match_id, user_id, slot_utc) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (match_id, team_id, user_id, slot_utc))
+
+
+def withdraw_slot(match_id: int, user_id: str, slot_utc) -> None:
+    """Undo one acceptance, for a mis-tap."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM connect_slot_votes WHERE match_id = %s AND user_id = %s AND slot_utc = %s",
+                (match_id, user_id, slot_utc),
+            )
+
+
+def slot_votes(match_id: int) -> dict:
+    """`{slot_iso: [user_id, ...]}` for every slot anyone has accepted."""
+    sql = """
+        SELECT slot_utc, user_id FROM connect_slot_votes
+        WHERE match_id = %s ORDER BY slot_utc, user_id
+    """
+    out: dict = {}
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (match_id,))
+            for slot, user_id in cur.fetchall():
+                out.setdefault(slot, []).append(user_id)
+    return out
+
+
+def agree_slot(match_id: int, slot_utc) -> bool:
+    """Settle the match on this time, unless it is already settled.
+
+    Conditional on agreed_slot_utc still being NULL, so two people tapping the
+    last slot at the same moment cannot produce two confirmations.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE connect_matches SET agreed_slot_utc = %s
+                   WHERE id = %s AND agreed_slot_utc IS NULL""",
+                (slot_utc, match_id),
+            )
+            return cur.rowcount == 1
+
+
+def program_for_round(round_id: int) -> dict | None:
+    """The programme a round belongs to, for the settings a match message needs
+    (the meeting room, the length) without the caller tracking the programme id."""
+    sql = """
+        SELECT p.* FROM connect_programs p
+        JOIN connect_rounds r ON r.program_id = p.id
+        WHERE r.id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (round_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
