@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.7.5] — 2026-09-17
+
+### Fixed
+- **A module that defaults to off could never be turned on.** The workspace
+  toggle had no control anywhere: the API endpoint existed, was well-formed,
+  and had no caller. A workspace that granted the Connect scopes landed on a
+  Coffee chats page that looked ready, with a programme listed, and nothing
+  would ever run, because scheduled jobs are only planned for active modules.
+
 ## [1.7.4] — 2026-09-17
 
 ### Added
