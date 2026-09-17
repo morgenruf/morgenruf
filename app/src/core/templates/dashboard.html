@@ -550,6 +550,14 @@
       color: var(--danger);
     }
     .card-alert svg { width: 15px; height: 15px; flex: 0 0 auto; margin-top: 1px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .rule-card { display: flex; align-items: flex-start; gap: 16px; }
+    .rule-body { flex: 1; min-width: 0; }
+    .rule-name { font-weight: 600; font-size: 14.5px; }
+    .rule-sentence { font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.55; }
+    .rule-sentence strong { color: var(--text); font-weight: 600; }
+    .rule-preview { margin-top: 12px; }
+    .rule-template-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 4px; }
+    .insight-when { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
     .att-agreed { background: rgba(94,129,244,.14); border: 1px solid rgba(94,129,244,.34); color: #9db2f7; }
     .att-zoom { background: rgba(45,140,255,.12); border: 1px solid rgba(45,140,255,.3); color: #7fb4ff; }
     .att-zero {
@@ -2108,7 +2116,7 @@
       <div class="topbar">
         <div>
           <div class="page-title">Automation</div>
-          <div class="page-subtitle">Configure trigger→action workflow rules</div>
+          <div class="page-subtitle">Have Morgenruf react on its own when something happens in a standup</div>
         </div>
         <button class="btn btn-primary" onclick="openAddRuleForm()">+ Add Rule</button>
       </div>
@@ -3362,7 +3370,11 @@
       '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)">' +
         '<span style="flex:1;font-weight:500">' + personLabel(r) + '</span>' +
         '<span class="pill-quiet" style="padding:2px 10px">' + r.standups + ' standups</span>' +
-        '<span class="pill-quiet" style="padding:2px 10px;color:var(--warning);border-color:rgba(255,152,48,0.3)">0 kudos</span>' +
+        (r.last_standup
+          ? '<span class="insight-when">last filed ' + esc(formatRelative(r.last_standup, '')) + '</span>'
+          : '') +
+        '<span class="pill-quiet" style="padding:2px 10px;color:var(--warning);border-color:rgba(255,152,48,0.3)">' +
+          ((r.kudos || 0) === 0 ? 'no kudos' : esc(String(r.kudos)) + ' kudos') + '</span>' +
       '</div>').join('');
   }
 
@@ -3379,7 +3391,14 @@
           '<span class="pill-quiet" style="padding:2px 10px;color:var(--danger);border-color:rgba(242,73,92,0.3)">' +
             r.days + ' days</span>' +
         '</div>' +
-        '<div style="font-size:0.88rem;color:var(--text-muted);line-height:1.5">' + esc(r.text) + '</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);line-height:1.5">' + esc(r.text) + '</div>' +
+        (r.first_seen || r.last_seen
+          ? '<div class="insight-when" style="margin-top:5px">' +
+              (r.first_seen ? 'since ' + esc(shortDate(r.first_seen)) : '') +
+              (r.first_seen && r.last_seen ? ' \u00b7 ' : '') +
+              (r.last_seen ? 'last mentioned ' + esc(formatRelative(r.last_seen, '')) : '') +
+            '</div>'
+          : '') +
       '</div>').join('');
   }
 
@@ -5219,18 +5238,45 @@
         const codeText = (code === undefined || code === null || code === '') ? EMPTY_CELL : String(code);
         const when = d.created_at || d.attempted_at || d.delivered_at || d.timestamp;
         const err = d.error || d.error_message || '';
+        const ms = Number(d.duration_ms);
         return '<tr>' +
           '<td class="status-code ' + (good ? 'ok' : 'bad') + '">' + esc(codeText) + '</td>' +
+          '<td>' + (d.event_type ? '<span class="pill att-zero">' + esc(eventLabel(d.event_type)) +
+            '</span>' : EMPTY_CELL) + '</td>' +
           '<td class="col-date">' + relativeCell(when, EMPTY_CELL) + '</td>' +
+          '<td style="text-align:right;font-variant-numeric:tabular-nums">' +
+            (Number.isFinite(ms) ? esc(String(Math.round(ms))) + ' ms' : EMPTY_CELL) + '</td>' +
+          '<td>' + (d.signed === false
+            ? '<span class="pill att-missed" title="Sent without a signature">unsigned</span>'
+            : EMPTY_CELL) + '</td>' +
           '<td>' + (err ? esc(err) : EMPTY_CELL) + '</td>' +
           '</tr>';
       }).join('');
-      inner = '<div class="table-scroll"><table class="data-table" style="min-width:360px">' +
-        '<thead><tr><th>Status</th><th class="col-date">When</th><th>Error</th></tr></thead>' +
+      inner = '<div class="table-scroll"><table class="data-table" style="min-width:560px">' +
+        '<thead><tr><th>Status</th><th>Event</th><th class="col-date">When</th>' +
+        '<th style="text-align:right">Took</th><th>Signing</th><th>Error</th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table></div>';
     }
     return '<tr><td class="deliveries-cell" colspan="4">' +
       '<div class="stat-label" style="margin-bottom:6px">Recent deliveries</div>' + inner + '</td></tr>';
+  }
+
+  // Says what a webhook is for and which events exist, rather than only that
+  // there are none. The catalogue is already fetched for the checkboxes.
+  function webhookEmptyState() {
+    const cat = webhookEventCatalog || { events: [] };
+    const list = cat.events.length
+      ? '<p>Morgenruf will POST to your URL, signed, when any of these happen:</p>' +
+        '<div class="event-tags" style="justify-content:center;margin-bottom:18px">' +
+          cat.events.map(n => '<span class="event-tag">' + esc(eventLabel(n)) + '</span>').join('') +
+        '</div>'
+      : '';
+    return '<div class="empty-state">' +
+      '<img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/>' +
+      '<h3>No webhooks yet</h3>' +
+      '<p>Send standup activity to your own systems &mdash; a build pipeline, a status page, ' +
+        'anything that speaks HTTP.</p>' + list +
+    '</div>';
   }
 
   function renderWebhooks() {
@@ -5272,7 +5318,7 @@
       renderWebhookSecretPanel() +
       '<div class="webhooks-table-wrap">' +
       '<table class="webhooks-table" style="min-width:820px"><thead><tr><th>URL</th><th>Events</th><th>Signing</th><th>Added</th><th></th></tr></thead>' +
-      '<tbody>' + (rows || '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
+      '<tbody>' + (rows || '<tr><td colspan="5">' + webhookEmptyState() + '</td></tr>') + '</tbody>' +
       '</table></div>' +
       '<div class="add-webhook-row">' +
       '<input type="url" id="new-webhook-url" placeholder="https://example.com/webhook" value="' + esc(draft) + '"/>' +
@@ -6907,26 +6953,63 @@
     }
   }
 
+  const TRIGGER_LABELS = {
+    blocker_detected: 'a blocker is flagged',
+    low_participation: 'participation drops',
+    standup_complete: 'a standup completes',
+  };
+  const ACTION_LABELS = {
+    post_to_channel: 'post to', send_dm: 'send a DM to', fire_webhook: 'call',
+  };
+
+  // A rule reads as a sentence: when X, do Y. The old card showed two coloured
+  // pills and a raw id, so a rule firing at 50% participation and one firing at
+  // 20% were indistinguishable, and the message it would post was never shown
+  // at all even though that is the thing you want to check before saving.
+  function ruleSentence(r) {
+    const trigger = TRIGGER_LABELS[r.trigger] || r.trigger;
+    const threshold = (r.trigger === 'low_participation' && r.condition_value !== null &&
+      r.condition_value !== undefined)
+      ? ' below <strong>' + esc(String(r.condition_value)) + '%</strong>'
+      : '';
+    const action = ACTION_LABELS[r.action] || r.action;
+    const target = r.action === 'post_to_channel'
+      ? '#' + esc(channelName(r.action_target))
+      : esc(r.action_target || '');
+    return 'When ' + esc(trigger) + threshold + ', ' + esc(action) + ' <strong>' + target + '</strong>.';
+  }
+
   function renderRules(rules) {
     const el = document.getElementById('rules-list');
     if (!el) return;
     if (!rules.length) {
-      el.innerHTML = '<div class="empty-state"><img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/><h3>No automation rules</h3><p>Add a rule to automate actions when standups trigger events.</p></div>';
+      // The three templates already exist and were hidden inside a collapsed
+      // form. An empty page is exactly where they are worth showing.
+      el.innerHTML =
+        '<div class="empty-state">' +
+          '<img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/>' +
+          '<h3>Nothing runs by itself yet</h3>' +
+          '<p>A rule watches for something in a standup and does one thing about it. ' +
+            'Start from one of these, or build your own.</p>' +
+        '</div>' +
+        '<div class="rule-template-grid">' + ruleTemplateCards() + '</div>';
       return;
     }
-    const triggerLabels = { blocker_detected: 'Blockers Detected', low_participation: 'Low Participation', standup_complete: 'Standup Complete' };
-    const actionLabels = { post_to_channel: 'Post to Channel', send_dm: 'Send DM', fire_webhook: 'Webhook' };
     el.innerHTML = '<div class="standups-grid">' + rules.map(r =>
-      '<div class="stat-card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;">' +
-      '<div style="flex:1;min-width:0;">' +
-      '<div style="font-weight:600;margin-bottom:4px;">' + esc(r.name) + '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<span style="background:rgba(99,102,241,0.15);color:var(--accent-strong);padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(triggerLabels[r.trigger] || r.trigger) + '</span>' +
-      '<span style="background:rgba(16,185,129,0.15);color:var(--sev-good);padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(actionLabels[r.action] || r.action) + '</span>' +
-      '<span style="font-size:0.8rem;color:var(--text-muted);align-self:center;">' + esc(r.action_target) + '</span>' +
-      '</div>' +
-      '</div>' +
-      '<button class="btn btn-secondary btn-sm" onclick="deleteRule(' + r.id + ')" style="flex-shrink:0;">Delete</button>' +
+      '<div class="stat-card rule-card">' +
+        '<div class="rule-body">' +
+          '<div class="rule-name">' + esc(r.name) + '</div>' +
+          '<div class="rule-sentence">' + ruleSentence(r) + '</div>' +
+          (r.action_message
+            ? '<div class="slack-preview rule-preview">' +
+                '<div class="sp-avatar">M</div>' +
+                '<div style="min-width:0">' +
+                  '<div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>' +
+                  '<div class="sp-body">' + esc(r.action_message) + '</div>' +
+                '</div></div>'
+            : '') +
+        '</div>' +
+        '<button class="btn btn-secondary btn-sm" onclick="deleteRule(' + r.id + ')">Delete</button>' +
       '</div>'
     ).join('') + '</div>';
   }
@@ -6964,18 +7047,30 @@
     }
   ];
 
-  function renderRuleTemplates() {
-    const el = document.getElementById('rule-templates');
-    if (!el) return;
-    el.innerHTML = RULE_TEMPLATES.map(t =>
+  // One builder, two places: the collapsed form and the empty state. Returning
+  // the markup rather than writing it means the empty page can show the
+  // templates without a second copy of this.
+  function ruleTemplateCards() {
+    return RULE_TEMPLATES.map(t =>
       '<button type="button" class="rule-template" onclick="applyRuleTemplate(\'' + t.key + '\')">' +
         '<b>' + esc(t.title) + '</b><span>' + esc(t.blurb) + '</span>' +
       '</button>').join('');
   }
 
+  function renderRuleTemplates() {
+    const el = document.getElementById('rule-templates');
+    if (!el) return;
+    el.innerHTML = ruleTemplateCards();
+  }
+
   function applyRuleTemplate(key) {
     const t = RULE_TEMPLATES.find(x => x.key === key);
     if (!t) return;
+    // Reachable from the empty state now, where the form is still collapsed.
+    const form = document.getElementById('add-rule-form');
+    if (form && form.style.display === 'none' && typeof openAddRuleForm === 'function') {
+      openAddRuleForm();
+    }
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     set('rule-name', t.name);
     set('rule-trigger', t.trigger);
