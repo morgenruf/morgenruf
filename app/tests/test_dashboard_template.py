@@ -529,3 +529,32 @@ class TestNoDuplicateFunctionDefinitions:
 
         names = re.findall(r"^  (?:async )?function ([A-Za-z_]\w*)\s*\(", read_template(), re.M)
         assert "sparkline" in names and len(names) > 40
+
+
+class TestTheFontStackMatchesWhatIsLoaded:
+    """The page asked for Inter and downloaded IBM Plex Sans.
+
+    Neither the designer nor the browser got what they wanted: every screen
+    rendered in the system fallback while a webfont was fetched and never
+    referenced.
+    """
+
+    def _families(self, markup):
+        import re
+
+        return {f.replace("+", " ") for f in re.findall(r"family=([A-Za-z+]+)", markup)}
+
+    def test_the_first_declared_family_is_actually_fetched(self):
+        import re
+
+        markup = read_template()
+        stack = re.search(r"--sans:\s*'([^']+)'", markup)
+        assert stack, "no --sans declared"
+        assert stack.group(1) in self._families(markup), (
+            f"--sans asks for {stack.group(1)!r} which is never loaded, so the page renders in the system fallback"
+        )
+
+    def test_no_family_is_downloaded_and_never_used(self):
+        markup = read_template()
+        for family in self._families(markup):
+            assert family in markup.split("<style>", 1)[1], f"{family} is fetched but never referenced in CSS"
