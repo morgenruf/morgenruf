@@ -417,7 +417,13 @@
       background: var(--surface2); border: 1px solid var(--border2); color: var(--text-dim);
     }
     .event-picker { display: flex; flex-wrap: wrap; gap: 4px 14px; }
-    .event-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; margin: 0; }
+    /* nowrap because "Standup completed" broke across two lines beside its
+       checkbox, which read as two separate options. */
+    .event-opt {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12.5px; color: var(--text-muted); cursor: pointer; margin: 0;
+      white-space: nowrap;
+    }
     .event-opt input { cursor: pointer; }
     .event-tags { display: flex; flex-wrap: wrap; gap: 4px; }
     .event-tag {
@@ -1899,7 +1905,7 @@
       <div class="topbar">
         <div>
           <div class="page-title">Webhooks</div>
-          <div class="page-subtitle">Receive POST notifications when standups complete</div>
+          <div class="page-subtitle">Receive POST notifications when a standup completes, a blocker is flagged or participation drops</div>
         </div>
       </div>
       <div id="webhooks-content"></div>
