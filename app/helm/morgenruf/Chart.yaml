@@ -1,12 +1,14 @@
 apiVersion: v2
 name: morgenruf
-description: Self-hosted Slack standup bot with PostgreSQL
+description: Self-hosted Slack app for async standups, coffee chats, kudos and insights
 type: application
-version: 0.10.5
+version: 0.10.6
 appVersion: "1.7.5"
 keywords:
   - slack
   - standup
+  - coffee-chats
+  - recognition
   - bot
 home: https://morgenruf.dev
 sources:
