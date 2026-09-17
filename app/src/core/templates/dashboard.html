@@ -1489,6 +1489,28 @@
     .token-preview img { width: 22px; height: 22px; display: block; }
     .token-preview .unknown { font-size: 11px; color: var(--text-dim); font-weight: 600; }
 
+    .rule-templates { display: grid; gap: 10px; margin-bottom: 18px;
+                      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .rule-template {
+      appearance: none; text-align: left; cursor: pointer; font: inherit;
+      background: var(--surface2); color: inherit;
+      border: 1px solid var(--border2); border-radius: 10px; padding: 12px 14px;
+    }
+    .rule-template:hover { border-color: var(--accent-line); background: var(--accent-dim); }
+    .rule-template b { display: block; font-size: 0.92rem; margin-bottom: 3px; }
+    .rule-template span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; }
+
+    /* Twenty-odd names as full-size pills wrapped into ragged rows. These
+       are sized for a list rather than for a single status. */
+    .name-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    .name-chip {
+      font-size: 12.5px; line-height: 1.35;
+      padding: 3px 9px; border-radius: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted); white-space: nowrap;
+    }
+    .name-chip.more { background: none; border-style: dashed; color: var(--text-dim); }
+
     .tok { width: 19px; height: 19px; vertical-align: -4px; }
     .count-pill {
       background: var(--indigo-soft); color: var(--indigo-ink);
@@ -1887,7 +1909,11 @@
 
         <!-- Add Rule form (hidden by default) -->
         <div id="add-rule-form" class="stat-card" style="display:none;margin-top:20px">
-          <div class="stat-label" style="margin-bottom:16px">New Automation Rule</div>
+          <div class="stat-label" style="margin-bottom:6px">New Automation Rule</div>
+          <div style="color:var(--text-muted);font-size:0.86rem;margin-bottom:10px">
+            Start from one of these, or fill the form in yourself. Everything stays editable.
+          </div>
+          <div id="rule-templates" class="rule-templates"></div>
           <form onsubmit="saveRule(event)" style="display:grid;gap:12px">
             <div>
               <label style="font-size:0.85rem;color:var(--text-muted)">Rule Name</label>
@@ -2133,6 +2159,7 @@
       </div>
     </div>
   </div>
+  <datalist id="tz-options"></datalist>
   <div class="modal-overlay" id="connect-modal">
     <div class="modal">
       <div class="modal-header">
@@ -2284,6 +2311,20 @@
           <div class="form-group">
             <label>Report Time</label>
             <input type="time" id="f-report-time"/>
+          </div>
+          <div class="form-group">
+            <label>Daily email to</label>
+            <input type="email" id="f-digest-email" placeholder="lead@company.com"/>
+            <div class="set-help" style="margin-top:5px">
+              This standup's answers only, sent after the reporting window. A
+              workspace running several standups can give each lead their own.
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="f-digest-enabled" style="width:auto"/>
+              Send that email daily
+            </label>
           </div>
         </div>
 
@@ -2721,14 +2762,15 @@
     }
     if (awaiting.length) {
       html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
-        '<div class="stat-label" style="margin-bottom:8px">Still to answer</div>' +
-        awaiting.slice(0, 18).map(function (a) {
-          return '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">' +
-            esc(a.real_name || ('@' + a.user_id)) + '</span>';
+        '<div class="stat-label" style="margin-bottom:8px">Still to answer ' +
+          '<span style="color:var(--text-dim);font-weight:400">' + awaiting.length + '</span></div>' +
+        '<div class="name-row">' +
+        awaiting.slice(0, 24).map(function (a) {
+          return '<span class="name-chip">' + esc(a.real_name || ('@' + a.user_id)) + '</span>';
         }).join('') +
-        (awaiting.length > 18
-          ? '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">and ' +
-            (awaiting.length - 18) + ' more</span>' : '') + '</div>';
+        (awaiting.length > 24
+          ? '<span class="name-chip more">and ' + (awaiting.length - 24) + ' more</span>' : '') +
+        '</div></div>';
     }
     return html + '</div>';
   }
@@ -4262,6 +4304,10 @@
     document.getElementById('f-time').value = s.schedule_time || '09:00';
     selectTz(s.schedule_tz || workspaceTz());
     document.getElementById('f-report-channel').value = s.report_channel || '';
+    const dEmail = document.getElementById('f-digest-email');
+    if (dEmail) dEmail.value = s.digest_email || '';
+    const dOn = document.getElementById('f-digest-enabled');
+    if (dOn) dOn.checked = !!s.digest_enabled;
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
     document.getElementById('f-post-as').value = s.post_as || 'combined';
@@ -4325,6 +4371,8 @@
       questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
       participants: state.participants,
       report_channel: document.getElementById('f-report-channel').value,
+      digest_email: (document.getElementById('f-digest-email') || {}).value || '',
+      digest_enabled: !!(document.getElementById('f-digest-enabled') || {}).checked,
       report_time: document.getElementById('f-report-time').value,
       group_by: document.getElementById('f-group-by').value,
       post_as: document.getElementById('f-post-as').value,
@@ -5081,6 +5129,15 @@
     });
   })();
 
+  // Feed the coffee chat timezone field from the same list the standup picker
+  // uses, so the two can never offer different zones.
+  (function fillTzDatalist() {
+    const dl = document.getElementById('tz-options');
+    if (!dl) return;
+    dl.innerHTML = ALL_TIMEZONES.map(tz =>
+      '<option value="' + esc(tz.value) + '">' + esc(tz.label) + '</option>').join('');
+  })();
+
   const tzInput = document.getElementById('f-tz');
   const tzDropdown = document.getElementById('tz-dropdown');
   let tzHighlightIdx = -1;
@@ -5506,6 +5563,17 @@
   // :morgenruf: is our own icon, so we can show it. Any other shortcode is a
   // custom emoji we have no image for, and pretending otherwise would be worse
   // than saying so.
+  // Slack renders :morgenruf: as the imported image, so the preview has to as
+  // well. Any other shortcode belongs to an emoji we have no picture for, and
+  // showing the text is then the honest preview rather than a wrong picture.
+  function tokenAsHtml(value) {
+    const v = (value || '').trim();
+    if (v === ':morgenruf:') {
+      return '<img class="tok" src="/static/kudos-token-128.png" alt="the Morgenruf icon"/>';
+    }
+    return esc(v);
+  }
+
   function renderTokenPreview(value) {
     const el = document.getElementById('kudos-token-shows');
     if (!el) return;
@@ -5529,12 +5597,13 @@
     if (!el) return;
     var allowance = parseInt((document.getElementById('kudos-allowance') || {}).value, 10);
     var left = isNaN(allowance) ? 0 : Math.max(0, allowance - 1);
+    const shown = tokenAsHtml(emoji);
     el.innerHTML =
-      esc(emoji) + ' <b>@priya</b> gave a ' + esc(emoji) + ' to <b>@marcus</b>' +
+      shown + ' <b>@priya</b> gave a ' + shown + ' to <b>@marcus</b>' +
       '<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border2);color:var(--text-muted)">' +
       'caught a DST bug that would have hit every European user</div>' +
       '<div style="margin-top:7px;color:var(--text-dim);font-size:12.5px">' +
-      (allowance === 0 ? 'Giving is switched off' : left + ' ' + esc(emoji) + ' left today') + '</div>';
+      (allowance === 0 ? 'Giving is switched off' : left + ' ' + shown + ' left today') + '</div>';
   }
 
   async function loadKudos() {
@@ -5702,6 +5771,62 @@
     ).join('') + '</div>';
   }
 
+  // The three rules these triggers and actions were built for. Picking one
+  // fills the form rather than saving anything, so it is a starting point and
+  // not a decision.
+  const RULE_TEMPLATES = [
+    {
+      key: 'blockers',
+      title: 'Tell the channel about blockers',
+      blurb: 'When someone reports a blocker, post it where the team will see it.',
+      name: 'Alert on blockers',
+      trigger: 'blocker_detected',
+      action: 'post_to_channel',
+      template: ':rotating_light: {team} has blockers today:\n{blockers}'
+    },
+    {
+      key: 'quiet',
+      title: 'Notice a quiet standup',
+      blurb: 'When participation drops, say so instead of letting it slide.',
+      name: 'Low participation warning',
+      trigger: 'low_participation',
+      action: 'post_to_channel',
+      template: 'Only {participation} answered standup in {team} today.'
+    },
+    {
+      key: 'webhook',
+      title: 'Send it somewhere else',
+      blurb: 'Fire a webhook when a standup finishes, for a dashboard or another tool.',
+      name: 'Standup complete webhook',
+      trigger: 'standup_complete',
+      action: 'fire_webhook',
+      template: ''
+    }
+  ];
+
+  function renderRuleTemplates() {
+    const el = document.getElementById('rule-templates');
+    if (!el) return;
+    el.innerHTML = RULE_TEMPLATES.map(t =>
+      '<button type="button" class="rule-template" onclick="applyRuleTemplate(\'' + t.key + '\')">' +
+        '<b>' + esc(t.title) + '</b><span>' + esc(t.blurb) + '</span>' +
+      '</button>').join('');
+  }
+
+  function applyRuleTemplate(key) {
+    const t = RULE_TEMPLATES.find(x => x.key === key);
+    if (!t) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('rule-name', t.name);
+    set('rule-trigger', t.trigger);
+    set('rule-action', t.action);
+    set('rule-message', t.template);
+    if (typeof toggleConditionValue === 'function') toggleConditionValue();
+    const target = document.getElementById('rule-target');
+    if (target) target.focus();
+    toast('Filled in. Pick a target and save.');
+  }
+
   async function deleteRule(id) {
     if (!confirm('Delete this automation rule?')) return;
     try {
@@ -5714,6 +5839,7 @@
 
   function openAddRuleForm() {
     document.getElementById('add-rule-form').style.display = '';
+    renderRuleTemplates();
     toggleConditionValue();
   }
 

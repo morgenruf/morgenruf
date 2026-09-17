@@ -215,6 +215,8 @@ def _schedule_to_standup(row: dict) -> dict:
         "reminder_minutes": int(row.get("reminder_minutes") or 0),
         # Extended fields — may not be present in all rows
         "report_channel": row.get("report_channel") or "",
+        "digest_email": row.get("digest_email") or "",
+        "digest_enabled": bool(row.get("digest_enabled")),
         "report_time": row.get("report_time") or "",
         "group_by": row.get("group_by") or "member",
         "post_as": row.get("post_as") or "combined",
@@ -311,6 +313,8 @@ def api_update_standup(standup_id: str):
             "active",
             "report_channel",
             "report_time",
+            "digest_email",
+            "digest_enabled",
             "group_by",
             "post_as",
             "sort_order",
