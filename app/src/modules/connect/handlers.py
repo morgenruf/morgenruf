@@ -192,6 +192,30 @@ def register_handlers(app) -> None:
         """A url button; Slack still posts an interaction that has to be acked."""
         ack()
 
+    @app.action("connect:zoom_unlink")
+    def handle_zoom_unlink(ack, body, client):  # noqa: ANN001
+        """Disconnect Zoom. The person who connected it has to be able to undo it."""
+        ack()
+        user_id = body["user"]["id"]
+        team_id = (body.get("team") or {}).get("id", "")
+        try:
+            import src.modules.connect.db as cdb  # noqa: PLC0415
+
+            cdb.revoke_zoom_link(team_id, user_id)
+        except Exception:
+            logger.exception("connect: could not disconnect Zoom for %s", user_id)
+            _confirm(client, body, "That did not save. Please try again.")
+            return
+        # The App Home is assembled from every module's blocks, so this handler
+        # cannot republish its own section. Same as the pause handlers above:
+        # say what happened and say when the page will catch up.
+        _confirm(
+            client,
+            body,
+            "Zoom disconnected. No further meetings will be created on your account, "
+            "and the App Home will say so next time you open it.",
+        )
+
     @app.action("connect:agreed_add")
     def handle_agreed_add(ack):  # noqa: ANN001
         """The button is a url link; Slack still posts an interaction for it."""

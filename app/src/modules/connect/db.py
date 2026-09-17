@@ -170,7 +170,14 @@ def recent_rounds(team_id: str, program_id: int, limit: int = 10) -> list[dict]:
                COUNT(*) FILTER (WHERE m.met IS TRUE) AS met,
                COUNT(*) FILTER (WHERE m.met IS FALSE) AS missed,
                COUNT(*) FILTER (WHERE m.met IS NULL AND m.delivered_at IS NOT NULL) AS no_reply,
-               COUNT(*) FILTER (WHERE m.delivered_at IS NULL) AS undelivered
+               COUNT(*) FILTER (WHERE m.delivered_at IS NULL) AS undelivered,
+               -- Agreeing a time is the step between an introduction and a
+               -- meeting, so it is the leading indicator: a round where nobody
+               -- agreed anything is failing earlier than one where they agreed
+               -- and did not turn up.
+               COUNT(*) FILTER (WHERE m.agreed_slot_utc IS NOT NULL) AS agreed,
+               COUNT(*) FILTER (WHERE m.zoom_join_url IS NOT NULL) AS with_zoom,
+               (SELECT COUNT(*) FROM connect_rematch_requests q WHERE q.round_id = r.id) AS rematch_requests
         FROM connect_rounds r
         LEFT JOIN connect_matches m ON m.round_id = r.id
         WHERE r.program_id = %s AND r.team_id = %s
@@ -188,7 +195,7 @@ def round_matches(team_id: str, round_id: int) -> list[dict]:
     """Every pairing in one round, and what became of it."""
     sql = """
         SELECT m.id, m.member_ids, m.met, m.delivered_at, m.nudged_at,
-               m.mpim_channel_id
+               m.mpim_channel_id, m.agreed_slot_utc, m.zoom_join_url
         FROM connect_matches m
         WHERE m.round_id = %s AND m.team_id = %s
         ORDER BY m.id
@@ -691,3 +698,22 @@ def open_rematch_count(round_id: int) -> int:
                 (round_id,),
             )
             return int(cur.fetchone()[0])
+
+
+def zoom_link_summary(team_id: str) -> dict:
+    """How many people have Zoom connected, and how many need reconnecting.
+
+    A revoked row is kept precisely so this can tell the two apart: somebody
+    who never linked needs an invitation, somebody whose refresh token expired
+    needs telling.
+    """
+    sql = """
+        SELECT COUNT(*) FILTER (WHERE revoked_at IS NULL)  AS linked,
+               COUNT(*) FILTER (WHERE revoked_at IS NOT NULL) AS needs_reconnect
+        FROM connect_zoom_links WHERE team_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            linked, stale = cur.fetchone()
+    return {"linked": int(linked or 0), "needs_reconnect": int(stale or 0)}

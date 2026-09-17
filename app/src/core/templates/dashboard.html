@@ -411,6 +411,8 @@
     @media (max-width: 640px) {
       .cc-meta, .cc-acts { padding-left: 0; }
     }
+    .att-agreed { background: rgba(94,129,244,.14); border: 1px solid rgba(94,129,244,.34); color: #9db2f7; }
+    .att-zoom { background: rgba(45,140,255,.12); border: 1px solid rgba(45,140,255,.3); color: #7fb4ff; }
     .att-zero {
       background: var(--surface2); border: 1px solid var(--border2); color: var(--text-dim);
     }
@@ -3126,6 +3128,9 @@
     locked.style.display = 'none';
     body.style.display = 'block';
     await loadChannels();
+    // Whether Zoom exists on this deployment at all, and how many people have
+    // connected. Fetched once per page load rather than per card.
+    state.connectZoom = await api('GET', '/connect/zoom').catch(() => null);
     try {
       state.connect = await api('GET', '/connect/programs');
     } catch (e) {
@@ -3164,7 +3169,32 @@
       return;
     }
 
-    list.innerHTML = '<div class="standups-grid">' + programs.map(ccCard).join('') + '</div>';
+    list.innerHTML = '<div class="standups-grid">' + programs.map(ccCard).join('') + '</div>'
+      + zoomStatusRow();
+  }
+
+  // Zoom is a workspace-wide setting, so it reads once under the list rather
+  // than on every card. Silent when the deployment has no Zoom credentials:
+  // offering a status for something that cannot exist here is noise.
+  function zoomStatusRow() {
+    const z = state.connectZoom;
+    if (!z || !z.configured) return '';
+    const bits = [];
+    if (z.linked) {
+      bits.push('<strong>' + z.linked + '</strong> ' +
+        (z.linked === 1 ? 'person has' : 'people have') + ' connected Zoom');
+    } else {
+      bits.push('Nobody has connected Zoom yet');
+    }
+    if (z.needs_reconnect) {
+      // A separate number because it is a different problem: these people did
+      // connect, and their authorisation aged out.
+      bits.push('<strong>' + z.needs_reconnect + '</strong> need to reconnect');
+    }
+    return '<p style="color:var(--text-muted);font-size:12.5px;margin:14px 2px 0">' +
+      bits.join(' &middot; ') +
+      '. Meetings are scheduled on the account of whoever in a pairing has connected. ' +
+      'Everyone connects their own from the Morgenruf tab in Slack.</p>';
   }
 
   // The channel is what a coffee chat *is*, so it leads. Everything else is two
@@ -3306,8 +3336,10 @@
       acc.matches += +r.matches; acc.met += +r.met;
       acc.missed += +r.missed; acc.no_reply += +r.no_reply;
       acc.undelivered += +r.undelivered;
+      acc.agreed += +(r.agreed || 0);
+      acc.rematch += +(r.rematch_requests || 0);
       return acc;
-    }, { matches: 0, met: 0, missed: 0, no_reply: 0, undelivered: 0 });
+    }, { matches: 0, met: 0, missed: 0, no_reply: 0, undelivered: 0, agreed: 0, rematch: 0 });
     const answered = tot.met + tot.missed;
     const rate = answered ? Math.round(tot.met / answered * 100) : null;
 
@@ -3338,6 +3370,10 @@
           attChip('missed', tot.missed + ' did not') +
           attChip('no_reply', tot.no_reply + ' no reply') +
           (tot.undelivered ? attChip('undelivered', tot.undelivered + ' not delivered') : '') +
+          (tot.agreed
+            ? '<span class="pill att-agreed" title="Pairings where both accepted a time">' +
+                tot.agreed + ' agreed a time</span>'
+            : '') +
         '</div>' +
         '<p style="color:var(--text-dim);font-size:12.5px;margin-top:12px;max-width:62ch">' +
           'Across the last ' + a.rounds.length + ' round' + (a.rounds.length === 1 ? '' : 's') +
@@ -3432,7 +3468,13 @@
         ' onclick="toggleRound(' + r.id + ')">' +
         '<span><span style="font-weight:600">' + esc(when) + '</span>' +
           '<span style="color:var(--text-dim);font-size:12.5px;margin-left:8px">' +
-          r.matches + ' pairing' + (+r.matches === 1 ? '' : 's') + '</span></span>' +
+          r.matches + ' pairing' + (+r.matches === 1 ? '' : 's') +
+          // Somebody asking for a different partner is a signal about the
+          // matching, not about them, so it belongs next to the round.
+          (+r.rematch_requests
+            ? ' &middot; ' + r.rematch_requests + ' asked for a new match'
+            : '') +
+          '</span></span>' +
         '<span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">' +
           (+r.met ? attChip('met', r.met) : '') +
           (+r.missed ? attChip('missed', r.missed) : '') +
@@ -3500,7 +3542,18 @@
           '<div class="att-pair">' +
             '<span style="display:flex;align-items:center;gap:2px;min-width:0;flex-wrap:wrap">' +
               m.members.map(personChip).join('<span class="att-vs">&middot;</span>') + '</span>' +
-            attChip(m.status) +
+            '<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
+              // Agreeing a time happens before anyone answers whether they
+              // met, so it tells a different story: a pairing that settled on
+              // a time and then said nothing is not the same as one that never
+              // engaged at all.
+              (m.agreed_at
+                ? '<span class="pill att-agreed" title="Both accepted this time">' +
+                    esc(formatDateTime(m.agreed_at, '')) + '</span>'
+                : '') +
+              (m.has_zoom ? '<span class="pill att-zoom" title="A Zoom meeting was created">Zoom</span>' : '') +
+              attChip(m.status) +
+            '</span>' +
           '</div>').join('')
       : '<div style="color:var(--text-dim);font-size:12.5px;padding:6px 8px">No pairings in this round.</div>';
   }

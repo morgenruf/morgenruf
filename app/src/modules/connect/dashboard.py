@@ -208,9 +208,36 @@ def register_routes(flask_app) -> None:
                     "status": match_status(m["met"], delivered),
                     "delivered_at": delivered.isoformat() if delivered else None,
                     "nudged_at": m["nudged_at"].isoformat() if m.get("nudged_at") else None,
+                    # Agreeing a time is the step between an introduction and a
+                    # meeting, so a pairing that settled one reads differently
+                    # from one that went quiet, even before anybody answers
+                    # whether they met.
+                    "agreed_at": m["agreed_slot_utc"].isoformat() if m.get("agreed_slot_utc") else None,
+                    "has_zoom": bool(m.get("zoom_join_url")),
                 }
             )
         return jsonify(out)
+
+    @bp.route("/dashboard/api/connect/zoom", methods=["GET"])
+    @_login_required
+    def zoom_summary():
+        """Whether Zoom is available here, and how many people have connected.
+
+        `configured` is what lets the page say "not set up on this deployment"
+        rather than "nobody has connected", which are different problems with
+        different fixes.
+        """
+        from src.modules.connect import zoom as zoom_mod
+
+        team_id = session["team_id"]
+        if not zoom_mod.configured():
+            return jsonify({"configured": False, "linked": 0, "needs_reconnect": 0})
+        try:
+            summary = cdb.zoom_link_summary(team_id)
+        except Exception as exc:
+            logger.warning("connect zoom_summary: %s", exc)
+            summary = {"linked": 0, "needs_reconnect": 0}
+        return jsonify({"configured": True, **summary})
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/participation", methods=["GET"])
     @_login_required
