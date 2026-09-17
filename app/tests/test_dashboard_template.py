@@ -558,3 +558,41 @@ class TestTheFontStackMatchesWhatIsLoaded:
         markup = read_template()
         for family in self._families(markup):
             assert family in markup.split("<style>", 1)[1], f"{family} is fetched but never referenced in CSS"
+
+
+class TestNoDeadCss:
+    """A class defined and never used is a component nobody can see.
+
+    An audit found twenty such rules, two of them written the same day they
+    were orphaned: .cc-preview was replaced by .slack-preview an hour later,
+    and .mascot-sm was built beside .mascot and never applied.
+    """
+
+    # Classes applied only from Python, from a library, or as a state hook.
+    ALLOWED_UNUSED = {
+        "section",  # toggled by switchSection
+        "active",
+        "on",
+        "open",
+        "hidden",
+        "soon",
+        "danger",
+    }
+
+    def _defined(self, css):
+        import re
+
+        return {m.group(1) for m in re.finditer(r"^\s*\.([a-z][a-z0-9-]*)(?:[,:\s{])", css, re.M)}
+
+    def test_every_defined_class_is_used_somewhere(self):
+        markup = read_template()
+        css = markup[markup.index("<style>") : markup.index("</style>")]
+        body = markup[markup.index("</style>") :]
+        unused = sorted(c for c in self._defined(css) - self.ALLOWED_UNUSED if c not in body)
+        assert not unused, f"defined and never used, so invisible: {unused}"
+
+    def test_the_scan_sees_real_classes(self):
+        markup = read_template()
+        css = markup[markup.index("<style>") : markup.index("</style>")]
+        found = self._defined(css)
+        assert "stat-card" in found and len(found) > 100
