@@ -10,7 +10,7 @@ psycopg2-binary==2.9.12
 resend==2.42.0
 requests==2.34.2
 PyJWT==2.13.0
-mcp==1.29.1
+mcp==2.2.0
 redis==8.1.0
 sentry-sdk[flask]==2.58.0
 gunicorn==26.0.0
