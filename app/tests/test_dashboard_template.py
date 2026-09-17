@@ -502,3 +502,30 @@ class TestCheckboxesAreNotTextFields:
         # to be the later of the two.
         css = read_template()
         assert css.index("input, select, textarea {") < css.index('input[type="checkbox"], input[type="radio"]')
+
+
+class TestNoDuplicateFunctionDefinitions:
+    """Two functions with the same name silently shadow each other.
+
+    A second sparkline() was added beside the one that already existed, and
+    which of the two ran depended on source order. The chart rendered in the
+    other one's colour and nothing said why. The same mistake had already been
+    made with the .pick cards and the Slack preview, both of which existed
+    unused.
+    """
+
+    def test_no_top_level_function_is_declared_twice(self):
+        import re
+        from collections import Counter
+
+        markup = read_template()
+        # Two-space indent is the file's top level inside <script>.
+        names = re.findall(r"^  (?:async )?function ([A-Za-z_]\w*)\s*\(", markup, re.M)
+        dupes = sorted({n for n, c in Counter(names).items() if c > 1})
+        assert not dupes, f"declared more than once, so one silently wins: {dupes}"
+
+    def test_the_scan_sees_the_real_functions(self):
+        import re
+
+        names = re.findall(r"^  (?:async )?function ([A-Za-z_]\w*)\s*\(", read_template(), re.M)
+        assert "sparkline" in names and len(names) > 40

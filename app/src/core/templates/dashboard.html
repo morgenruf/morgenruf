@@ -496,6 +496,22 @@
       .cc-set-cols { grid-template-columns: 1fr; }
       .cc-preview { position: static; }
     }
+    /* A standup's health, on the card rather than a page away. Colour carries
+       state and the word is always beside it, so the colour is never the only
+       thing saying what is wrong. */
+    .standup-health {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-top: 8px; font-size: 12.5px;
+    }
+    .spark-wrap { display: inline-flex; align-items: center; }
+    .spark { display: block; }
+    .health-word { font-weight: 600; }
+    .health-rate { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .health-note { color: var(--text-dim); }
+    .health-good  { color: var(--good); }
+    .health-mid   { color: var(--warning); }
+    .health-bad   { color: var(--danger); }
+    .health-unknown { color: var(--text-dim); }
     .att-agreed { background: rgba(94,129,244,.14); border: 1px solid rgba(94,129,244,.34); color: #9db2f7; }
     .att-zoom { background: rgba(45,140,255,.12); border: 1px solid rgba(45,140,255,.3); color: #7fb4ff; }
     .att-zero {
@@ -3766,7 +3782,11 @@
   // "9 Sep" — the year is noise on an axis covering a few weeks.
   function shortDate(value) {
     const d = toDate(value);
-    return d ? d.getDate() + ' ' + MONTH_ABBR[d.getMonth()] : '—';
+    if (d) return d.getDate() + ' ' + MONTH_ABBR[d.getMonth()];
+    // Two definitions of this existed with different answers here: one gave a
+    // dash, the other the raw value, and which ran depended on source order.
+    // Showing the value is the more useful of the two when there is one.
+    return value ? String(value) : EMPTY_CELL;
   }
 
   // The same four outcomes as a single row, so a person's pattern is scannable
@@ -4308,7 +4328,9 @@
   // ── Standups ──
   async function loadStandups() {
     document.getElementById('standups-list').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
-    await Promise.all([loadStats(), loadChannels()]);
+    // Health is fetched alongside the rest: the cards are not worth much
+    // without it, and a second round trip after render makes them jump.
+    await Promise.all([loadStats(), loadChannels(), loadStandupHealth()]);
     try {
       state.standups = await api('GET', '/standups');
       state.standupsFetched = true;
@@ -4374,6 +4396,31 @@
     return '<span title="Next run">Next: ' + esc(label) + '</span>';
   }
 
+  // sparkline() already exists further down: it draws the same per-day series
+  // as a polyline in --sev-info and handles a single point. A second copy of
+  // it here silently shadowed one of the two depending on source order, which
+  // is how a chart ends up in the wrong colour with nobody able to say why.
+
+  // Colour means state here, not decoration: three bands, and the word is
+  // always present so the colour is never the only carrier.
+  function healthOf(rate) {
+    if (rate === null || rate === undefined) return { cls: 'health-unknown', word: 'No data yet' };
+    if (rate >= 75) return { cls: 'health-good', word: 'Healthy' };
+    if (rate >= 40) return { cls: 'health-mid', word: 'Slipping' };
+    return { cls: 'health-bad', word: 'Needs a look' };
+  }
+
+  // Per-schedule participation, fetched once and reused by every card.
+  async function loadStandupHealth() {
+    try {
+      const a = await api('GET', '/analytics?days=14');
+      state.standupHealth = {};
+      (a.schedules || []).forEach(r => { state.standupHealth[r.schedule_id] = r; });
+    } catch (e) {
+      state.standupHealth = {};
+    }
+  }
+
   function renderStandups() {
     const el = document.getElementById('standups-list');
     const caption = document.getElementById('standups-caption');
@@ -4405,13 +4452,31 @@
         nextRunChip(s) +
         dayChips +
         badge +
-        '</div></div>' +
+        '</div>' +
+        standupHealthStrip(s) +
+        '</div>' +
         '<div class="standup-actions">' +
         '<button class="toggle ' + (s.active ? 'on' : '') + '" onclick="toggleStandup(' + s.id + ', this)" title="Toggle active"></button>' +
         '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + ')">Edit</button>' +
         '<button class="btn btn-danger btn-sm" onclick="deleteStandup(' + s.id + ')">Delete</button>' +
         '</div></div>';
     }).join('');
+  }
+
+  function standupHealthStrip(s) {
+    const row = (state.standupHealth || {})[s.id];
+    if (!row) return '';
+    const rate = typeof row.completion_rate === 'number' ? row.completion_rate : null;
+    const h = healthOf(rate);
+    const spark = sparkline(row.series);
+    if (!spark && rate === null) return '';
+    return '<div class="standup-health ' + h.cls + '">' +
+      (spark ? '<span class="spark-wrap">' + spark + '</span>' : '') +
+      '<span class="health-word">' + h.word + '</span>' +
+      (rate === null ? '' : '<span class="health-rate">' + rate + '%</span>') +
+      '<span class="health-note">' + (row.completed || 0) + ' of ' + (row.expected || 0) +
+        ' filed, last 14 days</span>' +
+    '</div>';
   }
 
   async function toggleStandup(id, btn) {
@@ -6441,11 +6506,7 @@
 
   // Relative wording with the absolute value in a tooltip.
   // "24 Aug" for a chart axis, where the year is noise.
-  function shortDate(value) {
-    const d = toDate(value);
-    if (!d) return String(value || '');
-    return d.getDate() + ' ' + MONTH_ABBR[d.getMonth()];
-  }
+
 
   function relativeCell(value, fallback) {
     const d = toDate(value);
