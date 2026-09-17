@@ -96,6 +96,19 @@
       transition: border-color 0.15s;
       outline: none;
     }
+    /* Checkboxes and radios are not text fields. The rule above gave them
+       width:100% and 8px of padding, so a checkbox rendered ~190px wide and
+       shoved its own label out of the row. Every checkbox in the settings
+       rows was affected. */
+    input[type="checkbox"], input[type="radio"] {
+      width: auto;
+      padding: 0;
+      background: none;
+      border: 0;
+      border-radius: 0;
+      accent-color: var(--accent);
+      flex: 0 0 auto;
+    }
     input:focus, select:focus, textarea:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 80px; }
     label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
@@ -412,21 +425,40 @@
       .cc-meta, .cc-acts { padding-left: 0; }
     }
     /* Coffee chat settings: controls beside a live preview of the message the
-       pair will receive. The settings are abstract on their own — "suggest
+       pair will receive. The settings are abstract on their own - "suggest
        times" means nothing until you see the three lines it produces. */
     .cc-set-body { padding-top: 0; }
-    .cc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 18px; }
+    .cc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 4px; overflow-x: auto; }
     .cc-tab {
       appearance: none; border: 0; background: none; cursor: pointer;
-      padding: 10px 14px; font: inherit; font-size: 13.5px; font-weight: 500;
+      padding: 11px 15px; font: inherit; font-size: 14px; font-weight: 500;
       color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+      white-space: nowrap;
     }
     .cc-tab:hover { color: var(--text); }
     .cc-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
-    .cc-set-cols { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 24px; align-items: start; }
+    .cc-set-cols { display: grid; grid-template-columns: minmax(0,1fr) 370px; gap: 28px; align-items: start; }
     .cc-set-controls { min-width: 0; }
-    /* Panes are shown and hidden with the hidden attribute; this exists so a
-       pane cannot pick up flow from a neighbour mid-transition. */
+    .cc-pane { display: block; }
+    .cc-pane[hidden] { display: none; }
+    .cc-side { position: sticky; top: 4px; display: grid; gap: 10px; }
+    .cc-side-note { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+    /* Group size: every option visible and one tap away. A dropdown for eight
+       numbers hides seven of them behind a click and tells you nothing about
+       which is normal. */
+    /* Sized so all seven fit one line inside the settings column. Wrapping
+       them split the scale across two rows, which reads as two controls. */
+    .seg { display: flex; flex-wrap: wrap; gap: 3px; }
+    .seg button {
+      appearance: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
+      min-width: 34px; padding: 8px 0;
+      border: 1px solid var(--border2); border-radius: 8px;
+      background: var(--surface); color: var(--text-muted);
+    }
+    .seg button:hover { border-color: var(--accent-line); color: var(--text); }
+    .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
     .member-state {
       background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px;
       color: var(--text); font: inherit; font-size: 12.5px; padding: 4px 6px;
@@ -1539,8 +1571,10 @@
       border: 2px solid var(--border2); background: var(--surface);
     }
     .pick-opt.on .pick-dot { border-color: var(--accent); border-width: 5px; }
-    .pick-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .pick-desc { font-size: 12.8px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
+    /* Block, so the name sits above its sentence. As inline spans they ran
+       together on one line and the card read as a run-on. */
+    .pick-name { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
+    .pick-desc { display: block; font-size: 12.8px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
 
     /* A preview of the Slack message a setting produces. Donut does this on
        their recognition settings and it is the clearest way to answer "what
@@ -1724,7 +1758,11 @@
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
   <symbol id="i-mood-good" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
   <symbol id="i-mood-okay" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
-  <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" /> <rect x="2" y="6" width="14" height="12" rx="2" /></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /> <path d="M16 3.128a4 4 0 0 1 0 7.744" /> <path d="M22 21v-2a4 4 0 0 0-3-3.87" /> <circle cx="9" cy="7" r="4" /></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M12 6v6l4 2" /></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M14 14a2 2 0 0 0 2-2V8h-2" /> <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" /> <path d="M8 14a2 2 0 0 0 2-2V8H8" /></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
   <symbol id="i-mood-rough" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
 </defs></svg>
   <!-- ── Sidebar drawer trigger (visible below 900px) ── -->
@@ -2342,7 +2380,8 @@
       <div class="modal-body cc-set-body">
         <div class="cc-tabs" role="tablist">
           <button class="cc-tab on" role="tab" data-cs-tab="basics" onclick="ccTab('basics')">Basics</button>
-          <button class="cc-tab" role="tab" data-cs-tab="engagement" onclick="ccTab('engagement')">Engagement</button>
+          <button class="cc-tab" role="tab" data-cs-tab="message" onclick="ccTab('message')">Message</button>
+          <button class="cc-tab" role="tab" data-cs-tab="meeting" onclick="ccTab('meeting')">Meeting</button>
           <button class="cc-tab" role="tab" data-cs-tab="members" onclick="ccTab('members')">Members</button>
         </div>
 
@@ -2427,29 +2466,76 @@
             </label>
           </div>
         </div>
-            </div>
+            
 
-            <div class="cc-pane" data-cs-pane="engagement" hidden>
-              <div class="set-row">
-                <div class="set-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>
+              
+<div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-users"/></svg></div>
                 <div>
-                  <div class="set-label">Suggest times they could both make</div>
+                  <div class="set-label">How many people in each group</div>
                   <div class="set-help">
-                    Three slots inside everyone's working day, each in both people's own
-                    clocks, with one tap to accept. When both accept the same slot the bot
-                    settles it. Nobody's calendar is read, so the times are proposals.
+                    Two is the usual answer and the easiest to schedule. Larger groups
+                    take the pressure off any one person to carry the conversation, and
+                    are harder to find a time for.
                   </div>
                 </div>
                 <div class="set-control">
-                  <label style="display:flex;align-items:center;gap:8px">
-                    <input type="checkbox" id="cs-suggest" checked onchange="renderCcPreview()"/>
-                    <span style="font-size:13px;color:var(--text-muted)">On</span>
+                  <input type="hidden" id="cs-group-size" value="2"/>
+                  <div class="seg" role="group" aria-label="Group size">
+                    <button type="button" data-size="2" class="on" onclick="ccGroupSize(2)">2</button>
+                    <button type="button" data-size="3" onclick="ccGroupSize(3)">3</button>
+                    <button type="button" data-size="4" onclick="ccGroupSize(4)">4</button>
+                    <button type="button" data-size="5" onclick="ccGroupSize(5)">5</button>
+                    <button type="button" data-size="6" onclick="ccGroupSize(6)">6</button>
+                    <button type="button" data-size="7" onclick="ccGroupSize(7)">7</button>
+                    <button type="button" data-size="8" onclick="ccGroupSize(8)">8</button>
+                  </div>
+                  <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer">
+                    <input type="checkbox" id="cs-strict" style="margin-top:2px;flex:0 0 auto"/>
+                    <span style="font-size:13px;color:var(--text-muted);line-height:1.5">
+                      Keep groups exactly this size, even if that leaves someone out
+                    </span>
                   </label>
+                </div>
+              </div>
+            
+
+            
+            </div>
+
+            <div class="cc-pane" data-cs-pane="message" hidden>
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>
+                <div>
+                  <div class="set-label">How your team works</div>
+                  <div class="set-help">
+                    Changes one sentence in the introduction. The same wording reads
+                    wrongly to a team that shares an office and to one that has never met.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <div class="pick" role="radiogroup" aria-label="How your team works">
+                    <label class="pick-opt on" data-pick="tone" data-value="hybrid" onclick="ccPick('tone','hybrid')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">Some of us are remote</span>
+                        <span class="pick-desc">A mix of office and home. A call or a coffee, whichever suits.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="tone" data-value="remote" onclick="ccPick('tone','remote')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">Fully remote</span>
+                        <span class="pick-desc">Nobody bumps into anyone. The message suggests a call.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="tone" data-value="in_person" onclick="ccPick('tone','in_person')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">Mostly in one place</span>
+                        <span class="pick-desc">The message suggests a coffee or a walk rather than a call.</span></span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
               <div class="set-row">
-                <div class="set-ico"><svg aria-hidden="true"><use href="#i-mug"/></svg></div>
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-quote"/></svg></div>
                 <div>
                   <div class="set-label">Open with a question</div>
                   <div class="set-help">
@@ -2461,15 +2547,15 @@
                 <div class="set-control">
                   <label style="display:flex;align-items:center;gap:8px">
                     <input type="checkbox" id="cs-icebreaker" checked onchange="renderCcPreview()"/>
-                    <span style="font-size:13px;color:var(--text-muted)">On</span>
+                    <span style="font-size:13px;color:var(--text-muted)">Include one</span>
                   </label>
                 </div>
               </div>
 
               <div class="set-row">
-                <div class="set-ico"><svg aria-hidden="true"><use href="#i-standups"/></svg></div>
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-analytics"/></svg></div>
                 <div>
-                  <div class="set-label">Post the round's results in the channel</div>
+                  <div class="set-label">Post the results in the channel</div>
                   <div class="set-help">
                     After each round, how many pairs met, in the channel rather than only
                     on this page. Teams that see it tend to answer the check-in.
@@ -2477,11 +2563,67 @@
                 </div>
                 <div class="set-control">
                   <label style="display:flex;align-items:center;gap:8px">
-                    <input type="checkbox" id="cs-post-stats"/>
-                    <span style="font-size:13px;color:var(--text-muted)">Off</span>
+                    <input type="checkbox" id="cs-post-stats" onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">Post a summary</span>
                   </label>
                 </div>
               </div>
+            
+
+            
+            </div>
+
+            <div class="cc-pane" data-cs-pane="meeting" hidden>
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-clock"/></svg></div>
+                <div>
+                  <div class="set-label">Suggest times they could both make</div>
+                  <div class="set-help">
+                    Three slots inside everyone's working day, each shown in both people's
+                    own clocks, with one tap to accept. When everyone accepts the same slot
+                    the bot settles it. No calendar is read, so these are proposals.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-suggest" checked onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">Suggest times</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-video"/></svg></div>
+                <div>
+                  <div class="set-label">How they meet</div>
+                  <div class="set-help">
+                    Where the call happens, if it is a call. Zoom needs each person to
+                    connect their own account once, from the Morgenruf tab in Slack.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <div class="pick" role="radiogroup" aria-label="How they meet">
+                    <label class="pick-opt on" data-pick="video" data-value="link" onclick="ccPick('video','link')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">One shared room</span>
+                        <span class="pick-desc">A Meet, Zoom or Teams link you paste once. No setup for anyone.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="video" data-value="zoom" onclick="ccPick('video','zoom')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">A Zoom meeting each time</span>
+                        <span class="pick-desc">Created on a linked account, scheduled for the time they agree.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="video" data-value="none" onclick="ccPick('video','none')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">They sort it out</span>
+                        <span class="pick-desc">No room and no link. Fine for a team that shares an office.</span></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            
+
+            
             </div>
 
             <div class="cc-pane" data-cs-pane="members" hidden>
@@ -2493,12 +2635,14 @@
 
           <!-- What the pair will actually receive. The settings on the left are
                abstract until you can see the message they produce. -->
-          <aside class="cc-preview" aria-label="Preview of the Slack message">
-            <div class="cc-preview-head">In Slack, they will see</div>
-            <div class="cc-preview-body" id="cs-preview"></div>
+          <aside class="cc-side" aria-label="Preview of the Slack message">
+            <div class="sp-caption">What your team will see in Slack</div>
+            <div id="cs-preview"></div>
+            <div class="cc-side-note">
+              Updates as you change things. Nothing is sent until you save.
+            </div>
           </aside>
         </div>
-      </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeConnectSettings()">Cancel</button>
         <button class="btn btn-primary" onclick="saveConnectSettings()">Save changes</button>
@@ -3800,6 +3944,10 @@
     check('cs-suggest', p.suggest_times !== false);
     check('cs-icebreaker', p.use_icebreaker !== false);
     check('cs-post-stats', !!p.post_stats);
+    check('cs-strict', !!p.strict_group_size);
+    ccGroupSize(p.group_size || 2);
+    ccPick('tone', p.intro_tone || 'hybrid');
+    ccPick('video', p.video_mode || 'link');
     ccTab('basics');
     renderCcPreview();
     document.getElementById('cc-settings-modal').classList.add('open');
@@ -3858,56 +4006,94 @@
     if (!el) return;
     const val = id => (document.getElementById(id) || {}).value || '';
     const on = id => !!(document.getElementById(id) || {}).checked;
+    const picked = name => {
+      const sel = document.querySelector('[data-pick="' + name + '"].on');
+      return sel ? sel.dataset.value : '';
+    };
     const minutes = parseInt(val('cs-minutes'), 10) || 30;
-    const link = val('cs-link').trim();
+    const size = parseInt(val('cs-group-size'), 10) || 2;
+    const tone = picked('tone') || 'hybrid';
+    const video = picked('video') || 'link';
 
-    const bits = [];
-    bits.push('<div class="cc-pv-msg">');
-    bits.push('<div class="cc-pv-h">' +
-      '<svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chat</div>');
-    bits.push('<div><span class="cc-pv-m">@you</span> and <span class="cc-pv-m">@someone</span>' +
-      ' have been matched. Say hello right here.</div>');
-    bits.push('<div class="cc-pv-dim" style="margin-top:4px">Just the two of you. ' +
-      minutes + ' minutes is plenty.</div>');
+    const others = size <= 2 ? '<span class="cc-pv-m">@sam</span>'
+      : size === 3 ? '<span class="cc-pv-m">@sam</span> and <span class="cc-pv-m">@priya</span>'
+      : '<span class="cc-pv-m">@sam</span>, <span class="cc-pv-m">@priya</span> and ' + (size - 2) + ' more';
+    const toneLine = {
+      hybrid: 'It is hard to meet people outside your own team when everyone is remote, so this introduces a few of you every so often.',
+      remote: 'Nobody bumps into anyone in a distributed team, so this introduces a few of you every so often. A call is the usual way; a long message works too.',
+      in_person: 'Plenty of people here have still never spoken, so this introduces a few of you every so often. A coffee or a walk is enough.'
+    }[tone];
+    const groupLine = size > 3 ? size + ' of you this round.'
+      : size === 3 ? 'Three of you this round, so nobody sits out.'
+      : 'Just the two of you.';
+
+    const b = [];
+    b.push('<div><span class="cc-pv-m">@you</span> and ' + others +
+      ' have been matched. Say hello right here.<br/>' + esc(toneLine) + '</div>');
+    b.push('<div class="cc-pv-dim" style="margin-top:6px">' + groupLine +
+      ' ' + minutes + ' minutes is plenty.</div>');
 
     if (on('cs-icebreaker')) {
-      bits.push('<div class="cc-pv-sep"></div>');
-      bits.push('<div><strong>Something to open with</strong></div>');
-      bits.push('<div class="cc-pv-quote">What is something you are proud of that nobody noticed?</div>');
+      b.push('<div class="cc-pv-sep"></div><div><strong>Something to open with</strong></div>');
+      b.push('<div class="cc-pv-quote">What is something you are proud of that nobody noticed?</div>');
     }
-
     if (on('cs-suggest')) {
-      bits.push('<div style="margin-top:8px"><strong>Times that suit everyone\'s hours</strong></div>');
-      // Two zones, because one clock is the thing the old message got wrong.
-      ['Amsterdam 09:00 &middot; Kolkata 12:30',
-       'Amsterdam 11:00 &middot; Kolkata 14:30',
-       'Amsterdam 13:00 &middot; Kolkata 16:30'].forEach(t => {
-        bits.push('<div class="cc-pv-slot"><span>Friday &middot; ' + t + '</span>' +
-          '<span class="cc-pv-btn">Works for me</span></div>');
-      });
-      bits.push('<div class="cc-pv-dim">Nobody has checked your calendars.</div>');
+      b.push('<div style="margin-top:9px"><strong>Times that suit everyone&rsquo;s hours</strong></div>');
+      ['Amsterdam 09:00 &middot; Kolkata 12:30', 'Amsterdam 11:00 &middot; Kolkata 14:30'].forEach(t =>
+        b.push('<div class="cc-pv-slot"><span>Friday &middot; ' + t + '</span>' +
+          '<span class="cc-pv-btn">Works for me</span></div>'));
+      b.push('<div class="cc-pv-dim">Nobody has checked your calendars.</div>');
     }
-
-    if (link) {
-      bits.push('<div style="margin-top:8px"><strong>Where</strong><br/>' +
-        '<span class="cc-pv-m">Join the room</span></div>');
+    if (video === 'link' && val('cs-link').trim()) {
+      b.push('<div style="margin-top:9px"><strong>Where</strong><br/><span class="cc-pv-m">Join the room</span></div>');
+    } else if (video === 'zoom') {
+      b.push('<div class="cc-pv-dim" style="margin-top:9px">A Zoom meeting is created once you agree a time.</div>');
     }
-    if (state.connectZoom && state.connectZoom.configured) {
-      bits.push('<div class="cc-pv-dim" style="margin-top:8px">' +
-        'Anyone who has connected Zoom gets a meeting on the agreed time.</div>');
-    }
-    bits.push('<div class="cc-pv-sep"></div>');
-    bits.push('<div class="cc-pv-dim">&#8943; More options: another starter, a new match, ' +
+    b.push('<div class="cc-pv-sep"></div>');
+    b.push('<div class="cc-pv-dim">&#8943; More options &mdash; another starter, a new match, ' +
       'unavailable this round, pause</div>');
-    bits.push('</div>');
+
+    let html =
+      '<div class="slack-preview">' +
+        '<div class="sp-avatar">M</div>' +
+        '<div style="min-width:0">' +
+          '<div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>' +
+          '<div class="sp-body">' + b.join('') + '</div>' +
+        '</div>' +
+      '</div>';
 
     if (on('cs-post-stats')) {
-      bits.push('<div class="cc-pv-msg" style="margin-top:14px;border-left-color:var(--border2)">' +
-        '<div class="cc-pv-h">' +
-          '<svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> After the round</div>' +
-        '<div class="cc-pv-dim">3 of 5 pairs met. Posted in the channel.</div></div>');
+      html += '<div class="slack-preview" style="margin-top:10px">' +
+        '<div class="sp-avatar">M</div>' +
+        '<div style="min-width:0">' +
+          '<div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>' +
+          '<div class="sp-body"><strong>How the last round went</strong><br/>' +
+            '<span class="cc-pv-dim">5 pairs were introduced. 3 of the 4 who answered met up.</span></div>' +
+        '</div></div>';
     }
-    el.innerHTML = bits.join('');
+    el.innerHTML = html;
+  }
+
+  // A pick group behaves as a radio set: one on at a time, and the preview
+  // follows. Cards rather than a dropdown, because each option needs a
+  // sentence to explain it.
+  function ccPick(name, value) {
+    document.querySelectorAll('[data-pick="' + name + '"]').forEach(el =>
+      el.classList.toggle('on', el.dataset.value === value));
+    renderCcPreview();
+  }
+
+  function ccPickValue(name, fallback) {
+    const sel = document.querySelector('[data-pick="' + name + '"].on');
+    return sel ? sel.dataset.value : fallback;
+  }
+
+  function ccGroupSize(n) {
+    const hidden = document.getElementById('cs-group-size');
+    if (hidden) hidden.value = String(n);
+    document.querySelectorAll('[data-size]').forEach(b =>
+      b.classList.toggle('on', Number(b.dataset.size) === Number(n)));
+    renderCcPreview();
   }
 
   async function loadProgramMembers() {
@@ -4008,7 +4194,11 @@
         match_working_hours: document.getElementById('cs-hours').checked,
         suggest_times: document.getElementById('cs-suggest').checked,
         use_icebreaker: document.getElementById('cs-icebreaker').checked,
-        post_stats: document.getElementById('cs-post-stats').checked
+        post_stats: document.getElementById('cs-post-stats').checked,
+        group_size: parseInt(document.getElementById('cs-group-size').value, 10) || 2,
+        strict_group_size: document.getElementById('cs-strict').checked,
+        intro_tone: ccPickValue('tone', 'hybrid'),
+        video_mode: ccPickValue('video', 'link')
       });
       closeConnectSettings();
       toast('Settings saved');

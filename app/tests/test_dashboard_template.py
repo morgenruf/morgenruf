@@ -437,3 +437,68 @@ class TestMemberStatusRespectsRole:
 
     def test_and_the_page_says_why_it_is_read_only(self):
         assert "Only an admin can change these." in read_template()
+
+
+class TestIconsAreOfficialAndMeaningful:
+    """Icons come from Lucide, and each one means the row it sits on.
+
+    The set was already Lucide; the mistake was reusing whichever symbol
+    existed. "How they meet" is a video call and had an eye on it.
+    """
+
+    def test_the_icons_used_are_all_defined(self):
+        import re
+
+        markup = read_template()
+        used = set(re.findall(r'href="#(i-[a-z-]+)"', markup))
+        defined = set(re.findall(r'<symbol id="(i-[a-z-]+)"', markup))
+        missing = sorted(used - defined)
+        assert not missing, f"referenced but never defined, so they render nothing: {missing}"
+
+    def test_no_symbol_is_defined_twice(self):
+        import re
+        from collections import Counter
+
+        counts = Counter(re.findall(r'<symbol id="(i-[a-z-]+)"', read_template()))
+        dupes = [k for k, n in counts.items() if n > 1]
+        assert not dupes, f"a duplicate symbol id makes the later one unreachable: {dupes}"
+
+    def test_the_meeting_row_uses_a_video_icon_not_an_eye(self):
+        markup = read_template()
+        row = markup[markup.index('<div class="set-label">How they meet') - 300 :]
+        head = row[: row.index("How they meet")]
+        assert "#i-video" in head
+        assert "#i-eye" not in head
+
+    def test_the_group_size_row_uses_the_users_icon(self):
+        markup = read_template()
+        row = markup[markup.index("How many people in each group") - 300 :]
+        assert "#i-users" in row[: row.index("How many people in each group")]
+
+    def test_the_chevron_is_the_official_one(self):
+        # Lucide's chevron-down is a path, not the polyline I first drew.
+        markup = read_template()
+        sym = markup[markup.index('<symbol id="i-chevron"') :][:220]
+        assert "polyline" not in sym
+
+
+class TestCheckboxesAreNotTextFields:
+    """A checkbox must not inherit the text-field rule.
+
+    `input, select, textarea` sets width:100% and 8px of padding, so every
+    checkbox rendered about 190px wide and pushed its own label out of the
+    row. It affected every checkbox in the settings rows, not only the new
+    ones, and it read as a layout bug rather than a styling one.
+    """
+
+    def test_checkboxes_and_radios_are_excluded(self):
+        css = read_template()
+        rule = css[css.index('input[type="checkbox"], input[type="radio"]') :][:320]
+        assert "width: auto" in rule
+        assert "padding: 0" in rule
+
+    def test_the_exclusion_comes_after_the_rule_it_undoes(self):
+        # Same specificity would let source order decide, so the override has
+        # to be the later of the two.
+        css = read_template()
+        assert css.index("input, select, textarea {") < css.index('input[type="checkbox"], input[type="radio"]')
