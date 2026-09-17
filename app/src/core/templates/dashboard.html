@@ -447,7 +447,10 @@
     /* Slack's own shapes, roughly: a bar down the left, mentions tinted, the
        secondary controls as outlined pills. */
     .cc-pv-msg { border-left: 3px solid var(--accent); padding-left: 10px; }
-    .cc-pv-h { font-weight: 700; margin-bottom: 6px; }
+    .cc-pv-h { font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    /* Sized explicitly: .nav-icon is sized by the sidebar rules, and without a
+       size here the sprite filled the whole preview pane. */
+    .cc-pv-h svg { width: 15px; height: 15px; flex-shrink: 0; }
     .cc-pv-m { color: var(--accent-strong, var(--accent)); }
     .cc-pv-quote { border-left: 2px solid var(--border2); padding-left: 8px; color: var(--text-muted); margin: 6px 0; }
     .cc-pv-dim { color: var(--text-dim); font-size: 12px; }
@@ -1593,6 +1596,15 @@
     }
     .nav-sub .nav-item.active { background: transparent; color: var(--accent); font-weight: 600; }
     .nav-sub .nav-item.active::before { display: none; }
+    .nav-sub .nav-item:hover { color: var(--text); }
+    /* The caret only collapses the group; the row itself still opens the page,
+       so clicking the label never has two meanings. */
+    .nav-caret {
+      width: 13px; height: 13px; margin-left: auto; opacity: .5;
+      transition: transform .15s;
+    }
+    .nav-caret:hover { opacity: 1; }
+    .nav-group:not(.open) .nav-caret { transform: rotate(-90deg); }
 
     /* Modal tabs. Nineteen fields in one scrolling column made the important
        ones (name, channel, who) compete with the rare ones (Jira base URL).
@@ -1712,6 +1724,7 @@
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
   <symbol id="i-mood-good" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
   <symbol id="i-mood-okay" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
   <symbol id="i-mood-rough" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
 </defs></svg>
   <!-- ── Sidebar drawer trigger (visible below 900px) ── -->
@@ -1738,8 +1751,24 @@
     <div class="nav-item active" data-section="standups">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> Standups
     </div>
-    <div class="nav-item" data-section="connect" data-module="connect">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
+    <!-- Coffee chats is a group rather than a row: it is three places, not
+         one, and Donut splits the same product the same way. The .nav-sub
+         styles have existed unused since the sidebar was grouped. -->
+    <div class="nav-group open" id="nav-group-connect">
+      <div class="nav-item" data-section="connect" data-module="connect">
+        <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
+        <svg class="nav-caret" aria-hidden="true" onclick="toggleNavGroup(event, 'nav-group-connect')">
+          <use href="#i-chevron"/>
+        </svg>
+      </div>
+      <div class="nav-sub">
+        <!-- No data-section on the children: switchSection marks every element
+             carrying the section as active, which lit all three at once. They
+             track their own active state instead. -->
+        <div class="nav-item active" data-connect-sub="list" onclick="goConnect('list')">All coffee chats</div>
+        <div class="nav-item" data-connect-sub="new" onclick="goConnect('new')">New coffee chat</div>
+        <div class="nav-item" data-connect-sub="attendance" onclick="goConnect('attendance')">Attendance</div>
+      </div>
     </div>
     <div class="nav-item" data-section="kudos" data-module="kudos">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-mug"/></svg> Kudos
@@ -2843,6 +2872,11 @@
     sec = resolveSection(sec);
     document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === sec));
     document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + sec));
+    // The line above clears every nav item, sub-items included, so the group's
+    // current place has to be re-marked. Landing on the section directly, by
+    // hash or by clicking the parent, means the list.
+    document.querySelectorAll('[data-connect-sub]').forEach(el =>
+      el.classList.toggle('active', sec === 'connect' && el.dataset.connectSub === 'list'));
     state.section = sec;
     if (window.location.hash.replace(/^#/, '') !== sec) {
       try { history.replaceState(null, '', '#' + sec); } catch (e) { /* older browsers keep the old hash */ }
@@ -3771,6 +3805,41 @@
     document.getElementById('cc-settings-modal').classList.add('open');
   }
 
+  // Collapsing a nav group is a separate gesture from opening its page, so the
+  // caret stops the click rather than letting the row act twice.
+  function toggleNavGroup(ev, id) {
+    if (ev) ev.stopPropagation();
+    const g = document.getElementById(id);
+    if (g) g.classList.toggle('open');
+  }
+
+  // The three sub-items are three places within one section rather than three
+  // sections: Slack's own settings pages work the same way, and splitting them
+  // into separate sections would break the back button and the deep links.
+  function goConnect(where) {
+    switchSection('connect');
+    // "New" opens a modal over the list, so the list stays the current place.
+    const current = where === 'new' ? 'list' : where;
+    document.querySelectorAll('[data-connect-sub]').forEach(el =>
+      el.classList.toggle('active', el.dataset.connectSub === current));
+    if (where === 'new') {
+      openConnectModal();
+      return;
+    }
+    if (where === 'attendance') {
+      const first = (state.connect || [])[0];
+      if (!first) {
+        toast('Create a coffee chat first');
+        return;
+      }
+      openAttendance(first.id);
+      return;
+    }
+    // "All coffee chats" is the section itself; close anything open over it.
+    const panel = document.getElementById('connect-attendance');
+    if (panel) panel.innerHTML = '';
+  }
+
   // ── Coffee chat settings: tabs, live preview, members ────────────────────
 
   function ccTab(name) {
@@ -3863,7 +3932,8 @@
         '<strong>' + (counts.in || 0) + '</strong> in the pool' +
         (counts.snoozed ? ' &middot; ' + counts.snoozed + ' snoozed' : '') +
         (counts.out ? ' &middot; ' + counts.out + ' excluded' : '') +
-        '. Everyone in the channel is matched unless they are out.</p>' +
+        '. Everyone in the channel is matched unless they are out.' +
+        (window._myRole === 'admin' ? '' : ' Only an admin can change these.') + '</p>' +
       '<table class="data-table"><thead><tr><th>Member</th>' +
         '<th style="text-align:right">Paired</th><th>Status</th></tr></thead><tbody>' +
       rows.map(r =>
@@ -3881,6 +3951,14 @@
 
   function memberStateControl(r) {
     const until = r.until ? ' until ' + esc(formatDate(r.until, '')) : '';
+    // Only an admin may change this, so anyone else reads it. Offering a
+    // control that answers 403 looks like the page is broken.
+    if (window._myRole !== 'admin') {
+      const label = r.state === 'in' ? 'In the pool'
+        : r.state === 'snoozed' ? 'Snoozed' + until
+        : 'Excluded';
+      return '<span class="pill ' + (r.state === 'in' ? 'att-met' : 'att-zero') + '">' + esc(label) + '</span>';
+    }
     return '<select class="member-state" onchange="setMemberState(\'' + esc(r.user_id) + '\', this.value)">' +
         '<option value="in"' + (r.state === 'in' ? ' selected' : '') + '>In the pool</option>' +
         '<option value="snoozed"' + (r.state === 'snoozed' ? ' selected' : '') + '>Snoozed 2 weeks' + until + '</option>' +

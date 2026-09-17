@@ -387,3 +387,53 @@ class TestAttendancePanelHonesty:
         # read as a rendering fault rather than "no data".
         markup = read_template()
         assert "No outcomes yet, " in markup
+
+
+class TestCoffeeChatNavGroup:
+    """Coffee chats is three places, so it is a group rather than a row.
+
+    The .nav-sub and .nav-group styles had existed unused since the sidebar was
+    grouped; this is what they were for.
+    """
+
+    def test_it_is_a_group_with_three_children(self):
+        markup = read_template()
+        assert 'id="nav-group-connect"' in markup
+        assert markup.count("data-connect-sub=") == 3
+
+    def test_children_do_not_carry_the_section(self):
+        """switchSection marks every element carrying the section as active,
+        which lit all three children at once."""
+        markup = read_template()
+        group = markup[markup.index('id="nav-group-connect"') :][:1400]
+        sub = group[group.index('class="nav-sub"') :]
+        assert 'data-section="connect"' not in sub
+
+    def test_switch_section_re_marks_the_group(self):
+        # It clears every nav item, sub-items included, so the current place
+        # has to be restored or a fresh load shows none of them selected.
+        markup = read_template()
+        assert "el.dataset.connectSub === 'list'" in markup
+
+    def test_the_caret_collapses_without_navigating(self):
+        markup = read_template()
+        fn = markup[markup.index("function toggleNavGroup") :][:400]
+        assert "stopPropagation" in fn
+
+    def test_the_chevron_icon_is_defined(self):
+        # A <use> pointing at a symbol that does not exist renders nothing.
+        markup = read_template()
+        assert 'symbol id="i-chevron"' in markup
+
+
+class TestMemberStatusRespectsRole:
+    def test_a_non_admin_gets_a_label_not_a_control(self):
+        """The endpoint is admin-only, so offering everyone a dropdown means a
+        403 that looks like a broken page."""
+        markup = read_template()
+        fn = markup[markup.index("function memberStateControl") :][:900]
+        assert "window._myRole !== 'admin'" in fn
+        assert "att-zero" in fn
+
+    def test_and_the_page_says_why_it_is_read_only(self):
+        assert "Only an admin can change these." in read_template()
