@@ -193,7 +193,14 @@ def _schedule_to_standup(row: dict) -> dict:
             participants = []
 
     raw_days = row.get("schedule_days") or "mon,tue,wed,thu,fri"
-    schedule_days = raw_days.split(",") if isinstance(raw_days, str) else raw_days
+    if isinstance(raw_days, str):
+        # The column is TEXT, so it may hold a plain list or a Postgres array
+        # literal such as {mon,tue}. Splitting the latter on commas leaves the
+        # braces attached to the first and last day.
+        schedule_days = [d.strip().strip('{}"') for d in raw_days.strip("{}").split(",")]
+        schedule_days = [d for d in schedule_days if d]
+    else:
+        schedule_days = raw_days
 
     return {
         "id": row["id"],

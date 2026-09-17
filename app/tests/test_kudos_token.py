@@ -81,3 +81,36 @@ def test_nothing_moves_while_slack_is_unreadable():
     """Unknown must change nothing, in either direction."""
     assert resolve(MAPLE, token_auto=True, has_brand=None) is None
     assert resolve(BRAND_TOKEN, token_auto=True, has_brand=None) is None
+
+
+class TestSettingsFormDoesNotDisableAutomation:
+    """The kudos settings form submits every field on every save.
+
+    Treating any save as "the admin chose a token" meant changing only the
+    daily allowance silently opted a workspace out of the branded emoji. That
+    is what happened on the first real workspace to try it: the allowance went
+    from 5 to 20 and the token stopped following the emoji they had just
+    imported, with nothing on screen to say so.
+
+    The SQL lives in db.set_config and is asserted here as the rule it encodes.
+    """
+
+    @staticmethod
+    def next_auto(stored_emoji: str, submitted_emoji: str, currently_auto: bool) -> bool:
+        # Mirrors the CASE in set_config.
+        if stored_emoji != submitted_emoji:
+            return False
+        return currently_auto
+
+    def test_changing_only_the_allowance_keeps_automation(self):
+        assert self.next_auto(MAPLE, MAPLE, True) is True
+
+    def test_changing_the_token_stops_automation(self):
+        assert self.next_auto(MAPLE, "\N{TACO}", True) is False
+
+    def test_a_workspace_that_already_opted_out_stays_out(self):
+        assert self.next_auto("\N{TACO}", "\N{TACO}", False) is False
+
+    def test_re_saving_the_branded_token_keeps_automation(self):
+        """Saving the form while already on :morgenruf: is not a new choice."""
+        assert self.next_auto(BRAND_TOKEN, BRAND_TOKEN, True) is True

@@ -93,14 +93,23 @@ def get_config(team_id: str) -> dict:
 
 
 def set_config(team_id: str, emoji: str, daily_allowance: int) -> dict:
-    """An admin choosing a token turns off the automatic one for good."""
+    """Save the settings form.
+
+    Choosing a token turns off the automatic one for good. Changing only the
+    allowance must not: the form submits every field, so treating any save as
+    a token choice quietly opted people out of the branded emoji for editing
+    an unrelated number.
+    """
     sql = """
         INSERT INTO kudos_config (team_id, emoji, daily_allowance, token_auto, updated_at)
         VALUES (%s, %s, %s, FALSE, NOW())
         ON CONFLICT (team_id) DO UPDATE SET
             emoji = EXCLUDED.emoji,
             daily_allowance = EXCLUDED.daily_allowance,
-            token_auto = FALSE,
+            token_auto = CASE
+                WHEN kudos_config.emoji IS DISTINCT FROM EXCLUDED.emoji THEN FALSE
+                ELSE kudos_config.token_auto
+            END,
             updated_at = NOW()
         RETURNING emoji, daily_allowance, token_auto
     """
