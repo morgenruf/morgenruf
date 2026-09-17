@@ -280,20 +280,66 @@ def agreed_message(member_ids: list[str], label: str, add_url: str = "", meeting
     return text, blocks
 
 
+ZOOM_LOGO_FILE = "zoom-logo.png"
+
+
+def zoom_logo_url() -> str:
+    """The public url of the official Zoom mark, or "" if it is not installed.
+
+    Zoom's app review guidelines forbid putting their marks on an integration's
+    own icon, and proper use of the mark is governed by their Partner Brand
+    Guide, so the file is not vendored here. A deployment that has obtained it
+    drops it in src/static and it appears; one that has not gets the emoji.
+
+    Checked on disk rather than assumed, because Slack renders a 404 image as a
+    broken-image placeholder inside the message, which looks worse than no
+    logo at all.
+    """
+    import os  # noqa: PLC0415
+
+    base = (os.environ.get("APP_URL") or "").rstrip("/")
+    if not base:
+        return ""
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if not os.path.isfile(os.path.join(here, "static", ZOOM_LOGO_FILE)):
+        return ""
+    return f"{base}/static/{ZOOM_LOGO_FILE}"
+
+
 def zoom_offer_blocks(link_url: str) -> list[dict]:
     """The "connect Zoom" prompt, shown only to the person who has not linked.
 
     Ephemeral for the same reason Donut's is: it is an offer to one reader, and
     putting it in the shared message shows both people an upsell that is
     irrelevant to whichever of them has already linked.
+
+    The heading is its own block because a Slack section carries one accessory,
+    and that slot belongs to the button. A context block renders the mark small,
+    which is what a logo beside a heading should be.
     """
+    logo = zoom_logo_url()
+    if logo:
+        heading: dict = {
+            "type": "context",
+            "elements": [
+                {"type": "image", "image_url": logo, "alt_text": "Zoom"},
+                {"type": "mrkdwn", "text": "*Meet over Zoom*"},
+            ],
+        }
+    else:
+        heading = {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": "*\U0001f3a5 Meet over Zoom*"}],
+        }
+
     return [
+        heading,
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*\U0001f3a5 Meet over Zoom*\nConnect your Zoom account and the meeting gets "
-                "created for you, at the time you both agree, on your own account.",
+                "text": "Connect your Zoom account and the meeting gets created for you, "
+                "at the time you both agree, on your own account.",
             },
             "accessory": {
                 "type": "button",

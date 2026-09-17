@@ -10,6 +10,7 @@ Two Zoom behaviours make this easy to get silently wrong:
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -297,3 +298,59 @@ class TestZoomOfferIsEphemeralAndTargeted:
         client = MagicMock()
         _offer_zoom(client, "D1", "T1", ["U1"])
         assert not client.chat_postEphemeral.called
+
+
+class TestZoomLogo:
+    """The official mark is used when installed, never faked, never broken.
+
+    Zoom's app review guidelines forbid their marks on an integration's own
+    icon and their Partner Brand Guide governs use of the mark, so the file is
+    not vendored. The block has to work either way.
+    """
+
+    def _static_dir(self):
+        import src.modules.connect.blocks as b
+
+        here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(b.__file__))))
+        return os.path.join(here, "static")
+
+    def test_without_the_asset_it_falls_back_to_the_emoji(self, creds):
+        from src.modules.connect import blocks as b
+
+        path = os.path.join(self._static_dir(), b.ZOOM_LOGO_FILE)
+        if os.path.exists(path):
+            pytest.skip("the official logo is installed in this checkout")
+        blocks = b.zoom_offer_blocks("https://x/link")
+        heading = blocks[0]
+        assert not [e for e in heading["elements"] if e["type"] == "image"]
+        assert "Meet over Zoom" in heading["elements"][0]["text"]
+
+    def test_with_the_asset_the_mark_is_used(self, creds, tmp_path, monkeypatch):
+        from src.modules.connect import blocks as b
+
+        # Pretend the deployment has installed the file.
+        monkeypatch.setattr("os.path.isfile", lambda p: str(p).endswith(b.ZOOM_LOGO_FILE))
+        blocks = b.zoom_offer_blocks("https://x/link")
+        images = [e for e in blocks[0]["elements"] if e["type"] == "image"]
+        assert len(images) == 1
+        assert images[0]["image_url"] == "https://api.example.dev/static/zoom-logo.png"
+        assert images[0]["alt_text"] == "Zoom"
+
+    def test_no_app_url_means_no_image_rather_than_a_relative_one(self, monkeypatch):
+        # Slack needs an absolute url; a relative one renders as broken.
+        from src.modules.connect import blocks as b
+
+        monkeypatch.delenv("APP_URL", raising=False)
+        monkeypatch.setattr("os.path.isfile", lambda p: True)
+        assert b.zoom_logo_url() == ""
+
+    def test_the_button_survives_either_way(self, creds):
+        from src.modules.connect import blocks as b
+
+        for installed in (True, False):
+            with patch("os.path.isfile", lambda p: installed):
+                blocks = b.zoom_offer_blocks("https://x/link")
+            acc = [x["accessory"] for x in blocks if x.get("accessory")]
+            assert len(acc) == 1
+            assert acc[0]["url"] == "https://x/link"
+            assert acc[0]["action_id"] == "connect:zoom_link"
