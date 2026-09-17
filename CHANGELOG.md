@@ -5,6 +5,23 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.7.2] — 2026-09-16
+
+### Fixed
+- **Editing the kudos allowance switched off the branded token.** The settings
+  form submits every field, and any save was treated as the admin choosing a
+  token, so changing the allowance silently opted a workspace out of the emoji
+  it had just imported. Automation now stops only when the token changes.
+- **The token field was sized for a single character**, so a shortcode such as
+  `:morgenruf:` overflowed and read as broken. It fits now, beside a preview of
+  what Slack will actually render.
+- **The coffee chat pool counted the whole workspace**, so a channel with two
+  people in it advertised twenty-three. The round itself was always correct;
+  only the number was wrong.
+- **Coffee chats had no timezone control** and silently used the browser's.
+- `schedule_days` parsing no longer leaves braces on the first and last day
+  when the column holds a Postgres array literal.
+
 ## [1.7.1] — 2026-09-16
 
 ### Fixed
