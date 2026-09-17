@@ -1000,7 +1000,7 @@
        the same thing look the same. */
     /* A pairing is two people, so it shows two faces. Same component as the
        Members grid, sized down, with initials when Slack has no picture. */
-    .att-face {
+    .face {
       position: relative;
       width: 22px; height: 22px; border-radius: 6px;
       background: var(--accent-dim); color: var(--accent);
@@ -1010,7 +1010,7 @@
     }
     /* Sits on top of the initials, so a dead Slack CDN link falls back to
        them rather than to a broken-image icon. */
-    .att-face img { position: absolute; inset: 0; width: 100%; height: 100%;
+    .face img { position: absolute; inset: 0; width: 100%; height: 100%;
                     object-fit: cover; display: block; border-radius: inherit; }
     .att-person { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
     .att-person .att-who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2746,7 +2746,10 @@
   async function loadInsights() {
     let data;
     try {
-      data = await api('GET', '/insights?days=30');
+      // The roster supplies the pictures; without it the faces are initials,
+      // which is the correct fallback rather than a reason to block the page.
+      const [insights] = await Promise.all([api('GET', '/insights?days=30'), ensureMembers()]);
+      data = insights;
     } catch (e) {
       document.getElementById('insights-unrecognised').innerHTML =
         '<p style="color:var(--text-dim)">Could not load insights.</p>';
@@ -2757,8 +2760,12 @@
     renderStuck(data.stuck || []);
   }
 
+  // Insights rows carry their own name, and the roster may not be loaded on
+  // this page, so the row's name is the fallback the face renders from.
   function personLabel(row) {
-    return esc(row.real_name || ('@' + row.user_id));
+    const name = row.real_name || ('@' + row.user_id);
+    return '<span class="att-person">' + avatarFor(row.user_id, row.real_name || row.user_id) +
+           '<span class="att-who">' + esc(name) + '</span></span>';
   }
 
   function renderUnrecognised(rows) {
@@ -3075,14 +3082,25 @@
   // One person, the way Slack shows them: picture, real name, handle when it
   // adds something. Initials stand in until the next roster sync fills the
   // avatar, and for anyone whose Slack account has no picture.
+  // One face component for every list of people. Initials underneath, the
+  // picture over the top, and the picture removing itself if the url is dead:
+  // a Slack CDN url 404s as soon as someone changes their profile picture.
+  function avatarFor(userId, fallbackName) {
+    const m = (state.members || []).find(x => x.id === userId);
+    const name = (m ? memberName(m) : fallbackName) || userId || '?';
+    const initials = name.trim().split(/\s+/).filter(Boolean)
+      .map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+    const url = m && m.avatar;
+    return '<span class="face">' + esc(initials) +
+      (url ? '<img src="' + esc(url) + '" alt="" loading="lazy" onerror="this.remove()"/>' : '') +
+      '</span>';
+  }
+
   function personChip(id) {
     const m = (state.members || []).find(x => x.id === id);
-    if (!m) return '<span class="att-person"><span class="att-face">?</span>' +
+    if (!m) return '<span class="att-person"><span class="face">?</span>' +
                    '<span class="att-who">' + esc(id) + '</span></span>';
-    const initials = esc(memberInitials(m));
-    const face = '<span class="att-face">' + initials +
-      (m.avatar ? '<img src="' + esc(m.avatar) + '" alt="" loading="lazy"' +
-                  ' onerror="this.remove()"/>' : '') + '</span>';
+    const face = avatarFor(id, memberName(m));
     const name = memberName(m);
     // Two people really can share a name. The handle is the usual way to tell
     // them apart, but only when the handle is itself unique: two Sofia Farouks

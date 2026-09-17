@@ -38,6 +38,10 @@ _SCOPES = [
     "users:read.email",
     # Lets kudos confirm the branded emoji exists before switching to it.
     "emoji:read",
+    # Coffee chats: open a group DM and see whether anyone replied.
+    "mpim:write",
+    "mpim:history",
+    "users.profile:read",
 ]
 
 _url_generator = AuthorizeUrlGenerator(

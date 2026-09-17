@@ -34,9 +34,7 @@ dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
 
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
-_SCOPES = (
-    "channels:read,commands,groups:read,chat:write,im:history,im:read,im:write,users:read,users:read.email,emoji:read"
-)
+_SCOPES = "channels:read,commands,groups:read,chat:write,im:history,im:read,im:write,users:read,users:read.email,emoji:read,mpim:write,mpim:history,users.profile:read"
 
 
 def _is_safe_webhook_url(url: str) -> bool:

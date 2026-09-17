@@ -39,6 +39,9 @@ oauth_config:
       - users:read
       - users:read.email
       - emoji:read
+      - mpim:write
+      - mpim:history
+      - users.profile:read
       - team:read
 
 settings:
