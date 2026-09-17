@@ -3002,6 +3002,24 @@
       return;
     }
 
+    if (mod && !mod.active) {
+      body.style.display = 'none';
+      locked.style.display = 'block';
+      locked.innerHTML =
+        '<div class="stat-card" style="max-width:640px">' +
+          '<div class="stat-head">' +
+            '<div class="stat-label">Coffee chats are switched off</div>' +
+            '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>' +
+          '</div>' +
+          '<p style="color:var(--text-muted);margin:14px 0 18px;line-height:1.65;max-width:56ch">' +
+            'The permissions are granted. Turning this on lets the bot introduce people ' +
+            'from a channel on a schedule. Nothing is sent until you create a coffee chat.' +
+          '</p>' +
+          '<button class="btn btn-primary" onclick="enableConnect()">Turn on coffee chats</button>' +
+        '</div>';
+      return;
+    }
+
     locked.style.display = 'none';
     body.style.display = 'block';
     await loadChannels();
@@ -3012,6 +3030,18 @@
       return;
     }
     renderConnect();
+  }
+
+  // The module toggle had no control anywhere, so a module that defaults to
+  // off could never be switched on from the dashboard at all.
+  async function enableConnect() {
+    try {
+      await api('POST', '/modules/connect', { enabled: true });
+      toast('Coffee chats are on');
+      loadConnect();
+    } catch (e) {
+      toast((e && e.message) || 'Could not turn coffee chats on', 'error');
+    }
   }
 
   function renderConnect() {

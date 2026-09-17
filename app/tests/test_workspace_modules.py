@@ -145,3 +145,42 @@ def test_core_reads_the_registry_lazily():
     for line in src.splitlines():
         if line.startswith(("import ", "from ")) and "src.modules" in line:
             raise AssertionError(f"core/dashboard.py imports modules at import time: {line}")
+
+
+class TestEveryGateIsReachableFromTheDashboard:
+    """A gate the dashboard cannot open is a feature nobody can use.
+
+    Connect shipped blocked by three of them in turn. The scopes gate had a
+    re-authorise link; the workspace toggle had none, so a workspace that
+    granted the scopes still had a programme that would never run, with
+    nothing on screen to say why. The API endpoint existed and had no caller.
+    """
+
+    @staticmethod
+    def _template() -> str:
+        import pathlib
+
+        root = pathlib.Path(__file__).resolve().parents[1]
+        return (root / "src/core/templates/dashboard.html").read_text()
+
+    def test_the_dashboard_can_turn_a_module_on(self):
+        markup = self._template()
+        assert "'/modules/connect'" in markup, "no caller for the module toggle endpoint"
+        assert "enabled: true" in markup
+
+    def test_a_module_that_is_off_says_so_rather_than_looking_empty(self):
+        markup = self._template()
+        assert "Coffee chats are switched off" in markup
+
+    def test_the_scopes_gate_still_has_its_own_message(self):
+        """The two gates need different answers: one needs Slack, one needs a click."""
+        markup = self._template()
+        assert "Connect needs more Slack access" in markup
+        assert "Re-authorise Slack" in markup
+
+    def test_the_off_state_is_checked_after_scopes(self):
+        """Offering a toggle to a workspace that cannot use it would be a lie."""
+        markup = self._template()
+        scopes_at = markup.index("Connect needs more Slack access")
+        toggle_at = markup.index("Coffee chats are switched off")
+        assert scopes_at < toggle_at
