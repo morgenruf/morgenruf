@@ -177,3 +177,63 @@ class TestNoNewStorageIsOrphaned:
             if re.match(r"\d+", p.name)
         )
         assert nums == sorted(set(nums)), "duplicate migration numbers"
+
+
+class TestNoColumnIsWrittenAndNeverRead:
+    """Every column the settings page can write must change something.
+
+    video_mode shipped as a control that saved and did nothing, and
+    include_guests as a column with no feature at all. Both were mine, added
+    an hour after the audit that removed the same defect from standups, and
+    neither was caught by a test. Naming the columns individually did not
+    scale; this reads the write allowlist itself.
+    """
+
+    # Columns whose only job is to be stored and handed back. Each needs a
+    # reason, so the list cannot quietly absorb a mistake.
+    PASSTHROUGH = {
+        "name",  # shown on the card and in the settings form
+        "channel_id",  # the programme's identity, used everywhere
+        "enabled",  # read by the scheduler and the card
+    }
+
+    def _write_allowlist(self) -> set[str]:
+        import re
+
+        src = (CONNECT / "db.py").read_text()
+        block = src[src.index("def update_program") :]
+        block = block[block.index("allowed = {") : block.index("}", block.index("allowed = {"))]
+        return set(re.findall(r'"(\w+)"', block))
+
+    def _read_outside_db(self, column: str) -> list[str]:
+        """Python that acts on the column.
+
+        The template is deliberately excluded. A field that the page sends and
+        reads back is the write side, not a consumer, and counting it made the
+        first version of this test pass while video_mode did nothing: it
+        appeared in dashboard.html on both the save and the load.
+        """
+        hits = []
+        for path in list(CONNECT.rglob("*.py")) + [APP / "src/core/scheduler.py"]:
+            if path.name == "db.py" or path.parts[-2] == "tests":
+                continue
+            if column in path.read_text():
+                hits.append(path.name)
+        return hits
+
+    def test_every_writable_column_is_read_somewhere(self):
+        orphans = []
+        for column in sorted(self._write_allowlist() - self.PASSTHROUGH):
+            if not self._read_outside_db(column):
+                orphans.append(column)
+        assert not orphans, (
+            "settings the page can write that nothing acts on, so they save "
+            f"and report success while doing nothing: {orphans}"
+        )
+
+    def test_the_check_would_notice_a_new_column(self):
+        # Guard against the guard silently passing because the allowlist could
+        # not be parsed.
+        allowlist = self._write_allowlist()
+        assert "group_size" in allowlist and "video_mode" in allowlist
+        assert len(allowlist) > 10
