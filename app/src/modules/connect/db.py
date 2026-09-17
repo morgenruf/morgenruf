@@ -53,6 +53,38 @@ def create_program(
             return dict(cur.fetchone())
 
 
+def update_program(team_id: str, program_id: int, **fields) -> dict | None:
+    """Change a programme's settings.
+
+    A coffee chat could previously only be created and deleted, so changing a
+    time meant losing the round history with it. Only these columns may be
+    written, and unknown keys are dropped rather than trusted.
+    """
+    allowed = {
+        "name",
+        "channel_id",
+        "interval_weeks",
+        "day_of_week",
+        "hour",
+        "minute",
+        "timezone",
+        "enabled",
+        "match_working_hours",
+        "meeting_minutes",
+        "meeting_link",
+    }
+    changes = {k: v for k, v in fields.items() if k in allowed}
+    if not changes:
+        return get_program(program_id)
+    cols = ", ".join(f"{k} = %s" for k in changes)
+    sql = f"UPDATE connect_programs SET {cols} WHERE id = %s AND team_id = %s RETURNING *"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (*changes.values(), program_id, team_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def set_program_enabled(team_id: str, program_id: int, enabled: bool) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -358,6 +390,34 @@ def opt_in(team_id: str, program_id: int, user_id: str) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, program_id, user_id))
+
+
+def snooze(team_id: str, program_id: int, user_id: str, until) -> None:
+    """Stop matching this person until a date.
+
+    The eligibility query has understood mode='paused' with a paused_until for
+    as long as the table has existed; nothing ever wrote one, so a snooze was a
+    column with no feature attached.
+    """
+    opt_out(team_id, program_id, user_id, mode="paused", paused_until=until)
+
+
+def personal_state(team_id: str, program_id: int, user_id: str) -> dict:
+    """How this person currently stands with one programme."""
+    sql = """
+        SELECT mode, paused_until FROM connect_optouts
+        WHERE team_id = %s AND program_id = %s AND user_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, program_id, user_id))
+            row = cur.fetchone()
+    if not row:
+        return {"state": "in", "until": None}
+    mode, until = row
+    if mode == "paused" and until:
+        return {"state": "snoozed", "until": until}
+    return {"state": "out", "until": None}
 
 
 def matches_for_close(round_id: int) -> list[dict]:

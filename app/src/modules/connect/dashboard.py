@@ -87,10 +87,56 @@ def register_routes(flask_app) -> None:
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["POST"])
     @_admin_required
     def update_program(program_id: int):
+        """Change a programme. A body with only `enabled` keeps the old toggle
+        behaviour, so the switch on the card still works unchanged."""
         team_id = session["team_id"]
         data = request.get_json(silent=True) or {}
-        cdb.set_program_enabled(team_id, program_id, bool(data.get("enabled")))
-        return jsonify({"id": program_id, "enabled": bool(data.get("enabled"))})
+        if set(data) == {"enabled"}:
+            cdb.set_program_enabled(team_id, program_id, bool(data["enabled"]))
+            return jsonify({"id": program_id, "enabled": bool(data["enabled"])})
+
+        if not cdb.owns_program(team_id, program_id):
+            return jsonify({"error": "not found"}), 404
+
+        fields = {}
+        if "name" in data:
+            fields["name"] = (data.get("name") or "Coffee chats").strip()[:80]
+        if "channel_id" in data and (data.get("channel_id") or "").strip():
+            fields["channel_id"] = data["channel_id"].strip()
+        for key, lo, hi in (("interval_weeks", 1, 8), ("day_of_week", 0, 6), ("hour", 0, 23), ("minute", 0, 59)):
+            if key in data:
+                try:
+                    value = int(data[key])
+                except (TypeError, ValueError):
+                    return jsonify({"error": f"{key} must be a number"}), 400
+                if not lo <= value <= hi:
+                    return jsonify({"error": f"{key} must be between {lo} and {hi}"}), 400
+                fields[key] = value
+        if "timezone" in data:
+            fields["timezone"] = (data.get("timezone") or "UTC").strip()
+        if "match_working_hours" in data:
+            fields["match_working_hours"] = bool(data["match_working_hours"])
+        if "meeting_minutes" in data:
+            try:
+                minutes = int(data["meeting_minutes"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "meeting_minutes must be a number"}), 400
+            if minutes not in (15, 30, 45, 60):
+                return jsonify({"error": "meeting_minutes must be 15, 30, 45 or 60"}), 400
+            fields["meeting_minutes"] = minutes
+        if "meeting_link" in data:
+            link = (data.get("meeting_link") or "").strip()
+            if link and not link.startswith(("https://", "http://")):
+                return jsonify({"error": "The meeting link must be a URL"}), 400
+            fields["meeting_link"] = link or None
+        if "enabled" in data:
+            fields["enabled"] = bool(data["enabled"])
+
+        program = cdb.update_program(team_id, program_id, **fields)
+        if not program:
+            return jsonify({"error": "not found"}), 404
+        program["created_at"] = program["created_at"].isoformat() if program.get("created_at") else None
+        return jsonify(program)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["DELETE"])
     @_admin_required
@@ -99,6 +145,27 @@ def register_routes(flask_app) -> None:
         if not cdb.delete_program(team_id, program_id):
             return jsonify({"error": "not found"}), 404
         return jsonify({"deleted": program_id})
+
+    @bp.route("/dashboard/api/connect/programs/<int:program_id>/run", methods=["POST"])
+    @_admin_required
+    def run_now(program_id: int):
+        """Start a round immediately, rather than waiting for the cadence.
+
+        Without this a programme could not be tried at all until its scheduled
+        day came round, which is a poor way to find out whether it works.
+        """
+        team_id = session["team_id"]
+        if not cdb.owns_program(team_id, program_id):
+            return jsonify({"error": "not found"}), 404
+        try:
+            from src.modules.connect.jobs import run_round  # noqa: PLC0415
+
+            run_round(program_id, force=True)
+        except Exception as exc:
+            logger.exception("connect run_now failed for %s", program_id)
+            return jsonify({"error": str(exc)}), 500
+        rounds = cdb.recent_rounds(team_id, program_id, 1)
+        return jsonify({"started": True, "round": rounds[0]["id"] if rounds else None})
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/rounds", methods=["GET"])
     @_login_required

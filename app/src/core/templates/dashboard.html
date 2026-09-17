@@ -2159,6 +2159,99 @@
       </div>
     </div>
   </div>
+  <div class="modal-overlay" id="cc-settings-modal">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-header">
+        <div class="modal-title">Coffee chat settings</div>
+        <button class="modal-close" onclick="closeConnectSettings()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="cs-name" maxlength="80"/>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Repeat every</label>
+            <select id="cs-interval">
+              <option value="1">Week</option>
+              <option value="2">2 weeks</option>
+              <option value="3">3 weeks</option>
+              <option value="4">4 weeks</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>On</label>
+            <select id="cs-day"></select>
+          </div>
+          <div class="form-group">
+            <label>At</label>
+            <input type="time" id="cs-time"/>
+          </div>
+          <div class="form-group">
+            <label>Timezone</label>
+            <div class="tz-search-wrap" id="cs-tz-wrap">
+              <input type="text" id="cs-tz" class="tz-search-input" placeholder="Search timezone..."
+                     autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="cs-tz-dropdown"/>
+              <div class="tz-dropdown" id="cs-tz-dropdown"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div class="set-ico"><svg aria-hidden="true"><use href="#i-alarm-clock"/></svg></div>
+          <div>
+            <div class="set-label">How long a chat should be</div>
+            <div class="set-help">Used in the introduction and when suggesting times.</div>
+          </div>
+          <div class="set-control">
+            <select id="cs-minutes" style="width:110px">
+              <option value="15">15 min</option>
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">60 min</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div class="set-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>
+          <div>
+            <div class="set-label">Where they meet</div>
+            <div class="set-help">
+              A room everyone can use, pasted once &mdash; a Meet, Zoom or Teams link.
+              It appears in every introduction. Leave it empty and people sort it out themselves.
+            </div>
+          </div>
+          <div class="set-control">
+            <input type="url" id="cs-link" placeholder="https://meet.google.com/..." style="width:230px"/>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div class="set-ico"><svg aria-hidden="true"><use href="#i-members"/></svg></div>
+          <div>
+            <div class="set-label">Only match people whose hours overlap</div>
+            <div class="set-help">
+              Requires an hour of shared working day, from each person's timezone.
+              Leave this off for a team spread across distant zones: a nine-to-five in
+              Toronto and one in Kolkata share no hours at all, so nobody would be matched.
+            </div>
+          </div>
+          <div class="set-control">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="cs-hours" style="width:auto"/> Require overlap
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConnectSettings()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveConnectSettings()">Save changes</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="connect-modal">
     <div class="modal">
       <div class="modal-header">
@@ -2950,10 +3043,15 @@
             (p.pool_size === null || p.pool_size === undefined
               ? '' : '<span>' + p.pool_size + ' in the pool</span>') +
             '<span>' + (p.round_count || 0) + ' rounds run</span>' +
+            (p.meeting_minutes ? '<span>' + p.meeting_minutes + ' min</span>' : '') +
+            (p.match_working_hours ? '<span title="Only people with an hour of shared working day are matched">overlapping hours only</span>' : '') +
+            (p.meeting_link ? '<span>has a room</span>' : '') +
             '<span class="pill-quiet">' + (p.enabled ? 'Active' : 'Paused') + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="standup-actions">' +
+          '<button class="btn btn-secondary btn-sm" onclick="openConnectSettings(' + p.id + ')">Settings</button>' +
+          '<button class="btn btn-secondary btn-sm" onclick="runConnectRound(' + p.id + ')">Run now</button>' +
           '<button class="btn btn-secondary btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
           '<button class="toggle ' + (p.enabled ? 'on' : '') + '" title="Toggle active"' +
             ' onclick="toggleConnect(' + p.id + ', this)"></button>' +
@@ -3229,6 +3327,77 @@
         '<td style="text-align:right' + (+r.missed ? ';color:var(--sev-bad);font-weight:600' : ';color:var(--text-dim)') + '">' + r.missed + '</td>' +
         '<td style="text-align:right;color:var(--text-dim)">' + r.no_reply + '</td></tr>').join('') +
       '</tbody></table>' + more;
+  }
+
+  // Without this a programme cannot be tried until its scheduled day comes
+  // round, which is a poor way to find out whether it works.
+  // A coffee chat could be created and deleted but never changed, so altering
+  // a time meant deleting the programme and losing its round history with it.
+  const settingsTz = makeTzPicker('cs-tz', 'cs-tz-dropdown', 'cs-tz-wrap');
+  let editingProgramId = null;
+
+  function openConnectSettings(id) {
+    const p = (state.connect || []).find(x => x.id === id);
+    if (!p) return;
+    editingProgramId = id;
+    const set = (el, v) => { const e = document.getElementById(el); if (e) e.value = v; };
+    set('cs-name', p.name || '');
+    set('cs-interval', String(p.interval_weeks || 1));
+    fillDaySelect('cs-day', p.day_of_week);
+    set('cs-time', String(p.hour).padStart(2, '0') + ':' + String(p.minute).padStart(2, '0'));
+    if (settingsTz) settingsTz.set(p.timezone || workspaceTz());
+    set('cs-minutes', String(p.meeting_minutes || 30));
+    set('cs-link', p.meeting_link || '');
+    const hours = document.getElementById('cs-hours');
+    if (hours) hours.checked = !!p.match_working_hours;
+    document.getElementById('cc-settings-modal').classList.add('open');
+  }
+
+  function closeConnectSettings() {
+    document.getElementById('cc-settings-modal').classList.remove('open');
+    editingProgramId = null;
+  }
+
+  function fillDaySelect(id, selected) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = DAY_NAMES.map((d, i) =>
+      '<option value="' + i + '"' + (i === Number(selected) ? ' selected' : '') + '>' + d + '</option>').join('');
+  }
+
+  async function saveConnectSettings() {
+    if (editingProgramId === null) return;
+    const time = (document.getElementById('cs-time').value || '10:00').split(':');
+    try {
+      await api('POST', '/connect/programs/' + editingProgramId, {
+        name: document.getElementById('cs-name').value,
+        interval_weeks: parseInt(document.getElementById('cs-interval').value, 10),
+        day_of_week: parseInt(document.getElementById('cs-day').value, 10),
+        hour: parseInt(time[0], 10),
+        minute: parseInt(time[1], 10),
+        timezone: settingsTz ? settingsTz.get() : workspaceTz(),
+        meeting_minutes: parseInt(document.getElementById('cs-minutes').value, 10),
+        meeting_link: document.getElementById('cs-link').value,
+        match_working_hours: document.getElementById('cs-hours').checked
+      });
+      closeConnectSettings();
+      toast('Settings saved');
+      loadConnect();
+    } catch (e) {
+      toast((e && e.message) || 'Could not save these settings', 'error');
+    }
+  }
+
+  async function runConnectRound(id) {
+    if (!confirm('Send introductions now? Everyone in the channel will get a group DM.')) return;
+    toast('Starting a round…');
+    try {
+      await api('POST', '/connect/programs/' + id + '/run', {});
+      toast('Introductions sent.');
+      loadConnect();
+    } catch (e) {
+      toast((e && e.message) || 'Could not start a round', 'error');
+    }
   }
 
   async function toggleConnect(id, btn) {

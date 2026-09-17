@@ -34,7 +34,21 @@ def _mentions(member_ids: list[str]) -> str:
     return f"{names} and <@{member_ids[-1]}>"
 
 
-def intro_message(member_ids: list[str], seed: int, program_id: int) -> tuple[str, list]:
+def intro_message(
+    member_ids: list[str],
+    seed: int,
+    program_id: int,
+    meeting_link: str = "",
+    meeting_minutes: int = 30,
+    suggested_times: list | None = None,
+) -> tuple[str, list]:
+    """The group DM a match receives.
+
+    suggested_times are hours that fall inside everyone's working day. They are
+    proposals, not availability: without calendar access we can say an hour
+    suits their timezones, never that they are free, and the message says so
+    rather than implying we checked.
+    """
     mentions = _mentions(member_ids)
     group = "Three of you this round, so nobody sits out." if len(member_ids) > 2 else "Just the two of you."
     text = f"Coffee chat: {mentions}, you have been matched."
@@ -47,30 +61,70 @@ def intro_message(member_ids: list[str], seed: int, program_id: int) -> tuple[st
         },
         {
             "type": "context",
-            "elements": [
-                {"type": "mrkdwn", "text": f"{group} Fifteen minutes is plenty, and any time this week works."}
-            ],
+            "elements": [{"type": "mrkdwn", "text": f"{group} {meeting_minutes} minutes is plenty."}],
         },
         {"type": "divider"},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Something to open with*\n> {icebreaker(seed)}"}},
-        {
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Skip this round"},
-                    "action_id": "connect:skip_round",
-                    "value": str(program_id),
-                },
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "Pause coffee chats"},
-                    "action_id": "connect:pause",
-                    "value": str(program_id),
-                },
-            ],
-        },
     ]
+
+    if suggested_times:
+        # Each proposal carries a link that opens the reader's own calendar with
+        # the event filled in. They still press save, which is also the honest
+        # arrangement: we never claimed to know whether they were free.
+        lines = []
+        for slot in suggested_times[:3]:
+            if isinstance(slot, dict):
+                label, link = slot.get("label", ""), slot.get("add_url", "")
+                lines.append(f"\u2022 {label} \u00b7 <{link}|add to calendar>" if link else f"\u2022 {label}")
+            else:
+                lines.append(f"\u2022 {slot}")
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Times that suit everyone's hours*\n" + "\n".join(lines)},
+            }
+        )
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "These fit everyone's working hours. Nobody has checked your calendars, so pick whichever is actually free.",
+                    }
+                ],
+            }
+        )
+
+    if meeting_link:
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Where*\n<{meeting_link}|Join the room>"},
+            }
+        )
+
+    blocks.extend(
+        [
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Skip this round"},
+                        "action_id": "connect:skip_round",
+                        "value": str(program_id),
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Pause coffee chats"},
+                        "action_id": "connect:pause",
+                        "value": str(program_id),
+                    },
+                ],
+            },
+        ]
+    )
     return text, blocks
 
 

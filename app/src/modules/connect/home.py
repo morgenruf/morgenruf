@@ -39,33 +39,54 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
 
     for p in programs:
         try:
-            opted_out = cdb.optout_user_ids(team_id, p["id"])
+            personal = cdb.personal_state(team_id, p["id"], user_id)
         except Exception:
-            opted_out = set()
-        paused = user_id in opted_out
+            personal = {"state": "in", "until": None}
+        state = personal["state"]
         nxt = upcoming_round_date(p, today)
         when = nxt.strftime("%A, %d %B")
         cadence = cadence_phrase(p.get("interval_weeks"))
 
-        line = f"<#{p['channel_id']}> · introductions {cadence}\n" + (
-            "_You are paused, so you will not be matched._" if paused else f"Your next introduction is on *{when}*."
-        )
+        if state == "out":
+            status = "_You are out of this one, so you will not be matched._"
+        elif state == "snoozed":
+            status = f"_Snoozed until {personal['until'].strftime('%d %B')}._"
+        else:
+            status = f"Your next introduction is on *{when}*."
         blocks.append(
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": line},
-                "accessory": {
-                    "type": "button",
-                    "action_id": "connect:home_resume" if paused else "connect:home_pause",
-                    "text": {
-                        "type": "plain_text",
-                        "text": "Resume" if paused else "Pause me",
-                        "emoji": True,
-                    },
-                    "value": str(p["id"]),
-                },
+                "text": {"type": "mrkdwn", "text": f"<#{p['channel_id']}> \u00b7 introductions {cadence}\n{status}"},
             }
         )
+        if state == "in":
+            # Snooze is what people actually want: a fortnight off, not a
+            # decision to never do this again.
+            elements = [
+                {
+                    "type": "button",
+                    "action_id": "connect:home_snooze",
+                    "text": {"type": "plain_text", "text": "Snooze 2 weeks"},
+                    "value": str(p["id"]),
+                },
+                {
+                    "type": "button",
+                    "action_id": "connect:home_pause",
+                    "text": {"type": "plain_text", "text": "Leave this one"},
+                    "value": str(p["id"]),
+                },
+            ]
+        else:
+            elements = [
+                {
+                    "type": "button",
+                    "action_id": "connect:home_resume",
+                    "text": {"type": "plain_text", "text": "Count me back in"},
+                    "style": "primary",
+                    "value": str(p["id"]),
+                }
+            ]
+        blocks.append({"type": "actions", "elements": elements})
 
-    blocks.append(_context("Pausing stops future introductions. It does not cancel one already sent."))
+    blocks.append(_context("Snoozing or leaving stops future introductions. Neither cancels one already sent."))
     return blocks
