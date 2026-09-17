@@ -411,6 +411,56 @@
     @media (max-width: 640px) {
       .cc-meta, .cc-acts { padding-left: 0; }
     }
+    /* Coffee chat settings: controls beside a live preview of the message the
+       pair will receive. The settings are abstract on their own — "suggest
+       times" means nothing until you see the three lines it produces. */
+    .cc-set-body { padding-top: 0; }
+    .cc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 18px; }
+    .cc-tab {
+      appearance: none; border: 0; background: none; cursor: pointer;
+      padding: 10px 14px; font: inherit; font-size: 13.5px; font-weight: 500;
+      color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .cc-tab:hover { color: var(--text); }
+    .cc-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+    .cc-set-cols { display: grid; grid-template-columns: minmax(0,1fr) 340px; gap: 24px; align-items: start; }
+    .cc-set-controls { min-width: 0; }
+    /* Panes are shown and hidden with the hidden attribute; this exists so a
+       pane cannot pick up flow from a neighbour mid-transition. */
+    .member-state {
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--text); font: inherit; font-size: 12.5px; padding: 4px 6px;
+    }
+    .cc-pane { display: block; }
+    .cc-pane[hidden] { display: none; }
+    .cc-preview {
+      position: sticky; top: 0;
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px;
+      overflow: hidden;
+    }
+    .cc-preview-head {
+      padding: 9px 12px; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+    .cc-preview-body { padding: 14px 12px; font-size: 13px; line-height: 1.55; color: var(--text); }
+    /* Slack's own shapes, roughly: a bar down the left, mentions tinted, the
+       secondary controls as outlined pills. */
+    .cc-pv-msg { border-left: 3px solid var(--accent); padding-left: 10px; }
+    .cc-pv-h { font-weight: 700; margin-bottom: 6px; }
+    .cc-pv-m { color: var(--accent-strong, var(--accent)); }
+    .cc-pv-quote { border-left: 2px solid var(--border2); padding-left: 8px; color: var(--text-muted); margin: 6px 0; }
+    .cc-pv-dim { color: var(--text-dim); font-size: 12px; }
+    .cc-pv-slot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; }
+    .cc-pv-btn {
+      border: 1px solid var(--border2); border-radius: 5px; padding: 2px 8px;
+      font-size: 11.5px; color: var(--text-muted); white-space: nowrap;
+    }
+    .cc-pv-sep { height: 1px; background: var(--border); margin: 10px 0; }
+    @media (max-width: 900px) {
+      .cc-set-cols { grid-template-columns: 1fr; }
+      .cc-preview { position: static; }
+    }
     .att-agreed { background: rgba(94,129,244,.14); border: 1px solid rgba(94,129,244,.34); color: #9db2f7; }
     .att-zoom { background: rgba(45,140,255,.12); border: 1px solid rgba(45,140,255,.3); color: #7fb4ff; }
     .att-zero {
@@ -2255,12 +2305,21 @@
     </div>
   </div>
   <div class="modal-overlay" id="cc-settings-modal">
-    <div class="modal" style="max-width:640px">
+    <div class="modal" style="max-width:1040px">
       <div class="modal-header">
         <div class="modal-title">Coffee chat settings</div>
         <button class="modal-close" onclick="closeConnectSettings()">&times;</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body cc-set-body">
+        <div class="cc-tabs" role="tablist">
+          <button class="cc-tab on" role="tab" data-cs-tab="basics" onclick="ccTab('basics')">Basics</button>
+          <button class="cc-tab" role="tab" data-cs-tab="engagement" onclick="ccTab('engagement')">Engagement</button>
+          <button class="cc-tab" role="tab" data-cs-tab="members" onclick="ccTab('members')">Members</button>
+        </div>
+
+        <div class="cc-set-cols">
+          <div class="cc-set-controls">
+            <div class="cc-pane" data-cs-pane="basics">
         <div class="form-group">
           <label>Name</label>
           <input type="text" id="cs-name" maxlength="80"/>
@@ -2338,6 +2397,77 @@
               <input type="checkbox" id="cs-hours" style="width:auto"/> Require overlap
             </label>
           </div>
+        </div>
+            </div>
+
+            <div class="cc-pane" data-cs-pane="engagement" hidden>
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>
+                <div>
+                  <div class="set-label">Suggest times they could both make</div>
+                  <div class="set-help">
+                    Three slots inside everyone's working day, each in both people's own
+                    clocks, with one tap to accept. When both accept the same slot the bot
+                    settles it. Nobody's calendar is read, so the times are proposals.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-suggest" checked onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">On</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-mug"/></svg></div>
+                <div>
+                  <div class="set-label">Open with a question</div>
+                  <div class="set-help">
+                    An icebreaker in every introduction, and a menu entry to ask for a
+                    different one. Twenty-four of them, so asking twice still gives
+                    something new.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-icebreaker" checked onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">On</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-standups"/></svg></div>
+                <div>
+                  <div class="set-label">Post the round's results in the channel</div>
+                  <div class="set-help">
+                    After each round, how many pairs met, in the channel rather than only
+                    on this page. Teams that see it tend to answer the check-in.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-post-stats"/>
+                    <span style="font-size:13px;color:var(--text-muted)">Off</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="cc-pane" data-cs-pane="members" hidden>
+              <div id="cs-members">
+                <div class="loading-center"><div class="spinner"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- What the pair will actually receive. The settings on the left are
+               abstract until you can see the message they produce. -->
+          <aside class="cc-preview" aria-label="Preview of the Slack message">
+            <div class="cc-preview-head">In Slack, they will see</div>
+            <div class="cc-preview-body" id="cs-preview"></div>
+          </aside>
         </div>
       </div>
       <div class="modal-footer">
@@ -3630,7 +3760,146 @@
     set('cs-link', p.meeting_link || '');
     const hours = document.getElementById('cs-hours');
     if (hours) hours.checked = !!p.match_working_hours;
+    // Both default on, so a programme saved before these columns existed opens
+    // showing what it actually does rather than switched off.
+    const check = (id, v) => { const e = document.getElementById(id); if (e) e.checked = v; };
+    check('cs-suggest', p.suggest_times !== false);
+    check('cs-icebreaker', p.use_icebreaker !== false);
+    check('cs-post-stats', !!p.post_stats);
+    ccTab('basics');
+    renderCcPreview();
     document.getElementById('cc-settings-modal').classList.add('open');
+  }
+
+  // ── Coffee chat settings: tabs, live preview, members ────────────────────
+
+  function ccTab(name) {
+    document.querySelectorAll('[data-cs-tab]').forEach(b =>
+      b.classList.toggle('on', b.dataset.csTab === name));
+    document.querySelectorAll('[data-cs-pane]').forEach(el =>
+      el.hidden = el.dataset.csPane !== name);
+    if (name === 'members') loadProgramMembers();
+  }
+
+  // A rough Slack rendering of what the current settings produce. Deliberately
+  // built from the form rather than from the saved programme, so the preview
+  // answers "what will this do" while you are still deciding.
+  function renderCcPreview() {
+    const el = document.getElementById('cs-preview');
+    if (!el) return;
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const on = id => !!(document.getElementById(id) || {}).checked;
+    const minutes = parseInt(val('cs-minutes'), 10) || 30;
+    const link = val('cs-link').trim();
+
+    const bits = [];
+    bits.push('<div class="cc-pv-msg">');
+    bits.push('<div class="cc-pv-h">' +
+      '<svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chat</div>');
+    bits.push('<div><span class="cc-pv-m">@you</span> and <span class="cc-pv-m">@someone</span>' +
+      ' have been matched. Say hello right here.</div>');
+    bits.push('<div class="cc-pv-dim" style="margin-top:4px">Just the two of you. ' +
+      minutes + ' minutes is plenty.</div>');
+
+    if (on('cs-icebreaker')) {
+      bits.push('<div class="cc-pv-sep"></div>');
+      bits.push('<div><strong>Something to open with</strong></div>');
+      bits.push('<div class="cc-pv-quote">What is something you are proud of that nobody noticed?</div>');
+    }
+
+    if (on('cs-suggest')) {
+      bits.push('<div style="margin-top:8px"><strong>Times that suit everyone\'s hours</strong></div>');
+      // Two zones, because one clock is the thing the old message got wrong.
+      ['Amsterdam 09:00 &middot; Kolkata 12:30',
+       'Amsterdam 11:00 &middot; Kolkata 14:30',
+       'Amsterdam 13:00 &middot; Kolkata 16:30'].forEach(t => {
+        bits.push('<div class="cc-pv-slot"><span>Friday &middot; ' + t + '</span>' +
+          '<span class="cc-pv-btn">Works for me</span></div>');
+      });
+      bits.push('<div class="cc-pv-dim">Nobody has checked your calendars.</div>');
+    }
+
+    if (link) {
+      bits.push('<div style="margin-top:8px"><strong>Where</strong><br/>' +
+        '<span class="cc-pv-m">Join the room</span></div>');
+    }
+    if (state.connectZoom && state.connectZoom.configured) {
+      bits.push('<div class="cc-pv-dim" style="margin-top:8px">' +
+        'Anyone who has connected Zoom gets a meeting on the agreed time.</div>');
+    }
+    bits.push('<div class="cc-pv-sep"></div>');
+    bits.push('<div class="cc-pv-dim">&#8943; More options: another starter, a new match, ' +
+      'unavailable this round, pause</div>');
+    bits.push('</div>');
+
+    if (on('cs-post-stats')) {
+      bits.push('<div class="cc-pv-msg" style="margin-top:14px;border-left-color:var(--border2)">' +
+        '<div class="cc-pv-h">' +
+          '<svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> After the round</div>' +
+        '<div class="cc-pv-dim">3 of 5 pairs met. Posted in the channel.</div></div>');
+    }
+    el.innerHTML = bits.join('');
+  }
+
+  async function loadProgramMembers() {
+    const box = document.getElementById('cs-members');
+    if (!box || editingProgramId === null) return;
+    box.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    let rows = [];
+    try {
+      rows = await api('GET', '/connect/programs/' + editingProgramId + '/members');
+    } catch (e) {
+      box.innerHTML = '<div class="empty" style="padding:22px 4px">Could not load members.</div>';
+      return;
+    }
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty" style="padding:22px 4px">' +
+        'Nobody is in the channel yet. Invite people to it and they appear here.</div>';
+      return;
+    }
+    const counts = rows.reduce((a, r) => (a[r.state] = (a[r.state] || 0) + 1, a), {});
+    box.innerHTML =
+      '<p style="color:var(--text-muted);font-size:12.5px;margin:0 0 12px">' +
+        '<strong>' + (counts.in || 0) + '</strong> in the pool' +
+        (counts.snoozed ? ' &middot; ' + counts.snoozed + ' snoozed' : '') +
+        (counts.out ? ' &middot; ' + counts.out + ' excluded' : '') +
+        '. Everyone in the channel is matched unless they are out.</p>' +
+      '<table class="data-table"><thead><tr><th>Member</th>' +
+        '<th style="text-align:right">Paired</th><th>Status</th></tr></thead><tbody>' +
+      rows.map(r =>
+        '<tr><td>' +
+          '<span class="att-person">' + avatarFor(r.user_id, r.name) +
+            '<span class="att-who">' + esc(r.name) +
+            (r.eligible ? '' : ' <span class="att-handle">not on the roster</span>') +
+            '</span></span>' +
+        '</td>' +
+        '<td style="text-align:right' + (r.paired ? ';font-weight:600' : ';color:var(--text-dim)') + '">' +
+          r.paired + '</td>' +
+        '<td>' + memberStateControl(r) + '</td></tr>').join('') +
+      '</tbody></table>';
+  }
+
+  function memberStateControl(r) {
+    const until = r.until ? ' until ' + esc(formatDate(r.until, '')) : '';
+    return '<select class="member-state" onchange="setMemberState(\'' + esc(r.user_id) + '\', this.value)">' +
+        '<option value="in"' + (r.state === 'in' ? ' selected' : '') + '>In the pool</option>' +
+        '<option value="snoozed"' + (r.state === 'snoozed' ? ' selected' : '') + '>Snoozed 2 weeks' + until + '</option>' +
+        '<option value="out"' + (r.state === 'out' ? ' selected' : '') + '>Excluded</option>' +
+      '</select>';
+  }
+
+  async function setMemberState(userId, nextState) {
+    try {
+      await api('POST', '/connect/programs/' + editingProgramId + '/members/' + userId,
+        { state: nextState, weeks: 2 });
+      toast(nextState === 'in' ? 'Back in the pool'
+          : nextState === 'out' ? 'Excluded from this coffee chat'
+          : 'Snoozed for two weeks');
+      loadProgramMembers();
+    } catch (e) {
+      toast((e && e.message) || 'Could not change that', 'error');
+      loadProgramMembers();
+    }
   }
 
   function closeConnectSettings() {
@@ -3658,7 +3927,10 @@
         timezone: settingsTz ? settingsTz.get() : workspaceTz(),
         meeting_minutes: parseInt(document.getElementById('cs-minutes').value, 10),
         meeting_link: document.getElementById('cs-link').value,
-        match_working_hours: document.getElementById('cs-hours').checked
+        match_working_hours: document.getElementById('cs-hours').checked,
+        suggest_times: document.getElementById('cs-suggest').checked,
+        use_icebreaker: document.getElementById('cs-icebreaker').checked,
+        post_stats: document.getElementById('cs-post-stats').checked
       });
       closeConnectSettings();
       toast('Settings saved');

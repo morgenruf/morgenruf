@@ -210,8 +210,11 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
     program = cdb.get_program(program_id) or {}
     meeting_link = program.get("meeting_link") or ""
     meeting_minutes = int(program.get("meeting_minutes") or 30)
-    # Timezones come from the roster, which is already loaded for matching.
-    zones = _member_timezones(team_id)
+    # Both default on, so a programme predating these columns behaves as before.
+    want_times = program.get("suggest_times", True) is not False
+    want_icebreaker = program.get("use_icebreaker", True) is not False
+    # Reading timezones is only worth it if the times are going to be offered.
+    zones = _member_timezones(team_id) if want_times else {}
 
     pending = cdb.undelivered_matches(round_id)
     for m in pending:
@@ -224,8 +227,11 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 program_id,
                 meeting_link=meeting_link,
                 meeting_minutes=meeting_minutes,
-                suggested_times=(times := _suggest_times(members, zones, meeting_minutes, meeting_link)),
+                suggested_times=(
+                    times := (_suggest_times(members, zones, meeting_minutes, meeting_link) if want_times else [])
+                ),
                 times_are_outside_hours=bool(times and times[0].get("outside_hours")),
+                with_icebreaker=want_icebreaker,
                 # The accept buttons carry the match, so the message needs it.
                 match_id=m["id"],
             )
@@ -282,6 +288,33 @@ def close_round(round_id: int, bot_token: str, team_id: str) -> None:
         finally:
             api.throttle()
     cdb.set_round_state(round_id, "closed")
+    _post_round_stats(client, round_id, team_id)
+
+
+def _post_round_stats(client, round_id: int, team_id: str) -> None:
+    """Post how the round went to the channel, when the programme asks for it.
+
+    After closing rather than before: the check-in replies are what makes the
+    number mean anything, and they only exist once the closing question has
+    been out for a while.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+
+    try:
+        program = cdb.program_for_round(round_id) or {}
+        if not program.get("post_stats"):
+            return
+        rounds = cdb.recent_rounds(team_id, program["id"], limit=20)
+        row = next((r for r in rounds if r["id"] == round_id), None)
+        if not row:
+            return
+        met, missed = int(row["met"]), int(row["missed"])
+        text, blocks = cblocks.round_stats_message(met, met + missed, int(row["matches"]))
+        api.post(client, program["channel_id"], text, blocks)
+    except Exception:
+        # A missing stats post must never be the reason a round fails to close.
+        logger.exception("connect: could not post round stats for %s", round_id)
 
 
 def _schedule_followups(round_id: int, bot_token: str, team_id: str) -> None:

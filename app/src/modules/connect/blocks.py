@@ -88,6 +88,7 @@ def intro_message(
     suggested_times: list | None = None,
     times_are_outside_hours: bool = False,
     match_id: int = 0,
+    with_icebreaker: bool = True,
 ) -> tuple[str, list]:
     """The group DM a match receives.
 
@@ -143,9 +144,12 @@ def intro_message(
             "type": "context",
             "elements": [{"type": "mrkdwn", "text": f"{group} {meeting_minutes} minutes is plenty."}],
         },
-        {"type": "divider"},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Something to open with*\n> {icebreaker(seed)}"}},
     ]
+    if with_icebreaker:
+        blocks.append({"type": "divider"})
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Something to open with*\n> {icebreaker(seed)}"}}
+        )
 
     if suggested_times:
         # One tap per time that works. The bot settles it the moment everyone
@@ -400,3 +404,30 @@ def zoom_offer_blocks(link_url: str) -> list[dict]:
             ],
         },
     ]
+
+
+def round_stats_message(met: int, answered: int, pairings: int) -> tuple[str, list]:
+    """What became of a round, for the channel it belongs to.
+
+    Only the people who answered are counted in the rate, and the denominator
+    travels with it. A round where one pair of five answered and met is not
+    "20% met", and reporting it that way would make a quiet team look like a
+    failing one.
+    """
+    line = f"{pairings} pair" + ("" if pairings == 1 else "s") + " were introduced."
+    if answered:
+        line += f" {met} of the {answered} who answered met up."
+    else:
+        line += " Nobody has said yet whether they met."
+    return (
+        "Coffee chat round results.",
+        [
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*How the last round went*\n{line}"}},
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": "Answering the check-in is optional, so this counts only replies."}
+                ],
+            },
+        ],
+    )

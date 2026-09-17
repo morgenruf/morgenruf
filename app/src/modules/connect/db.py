@@ -72,6 +72,9 @@ def update_program(team_id: str, program_id: int, **fields) -> dict | None:
         "match_working_hours",
         "meeting_minutes",
         "meeting_link",
+        "suggest_times",
+        "use_icebreaker",
+        "post_stats",
     }
     changes = {k: v for k, v in fields.items() if k in allowed}
     if not changes:
@@ -717,3 +720,43 @@ def zoom_link_summary(team_id: str) -> dict:
             cur.execute(sql, (team_id,))
             linked, stale = cur.fetchone()
     return {"linked": int(linked or 0), "needs_reconnect": int(stale or 0)}
+
+
+def member_states(team_id: str, program_id: int) -> dict:
+    """`{user_id: {"state", "until"}}` for everyone with a recorded state.
+
+    One query rather than personal_state per person: a members table for a
+    channel of 57 would otherwise be 57 round trips, which is how a page ends
+    up taking two seconds to say almost nothing.
+    """
+    sql = """
+        SELECT user_id, mode, paused_until FROM connect_optouts
+        WHERE team_id = %s AND program_id = %s
+    """
+    out: dict = {}
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, program_id))
+            for user_id, mode, until in cur.fetchall():
+                if mode == "paused" and until:
+                    out[user_id] = {"state": "snoozed", "until": until}
+                else:
+                    out[user_id] = {"state": "out", "until": None}
+    return out
+
+
+def pair_counts(team_id: str, program_id: int) -> dict:
+    """`{user_id: times_paired}` for this programme, so the members table can
+    show who has actually been introduced and who keeps being left out."""
+    sql = """
+        SELECT member, COUNT(*) FROM (
+            SELECT UNNEST(m.member_ids) AS member
+            FROM connect_matches m
+            JOIN connect_rounds r ON r.id = m.round_id
+            WHERE r.program_id = %s AND m.team_id = %s
+        ) x GROUP BY member
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (program_id, team_id))
+            return {u: int(n) for u, n in cur.fetchall()}
