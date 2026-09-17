@@ -93,6 +93,9 @@ def _dashboard_db_mock():
 
     m.add_webhook.side_effect = _add
     m.rotate_webhook_secret.side_effect = _rotate
+    # Creating, changing and deleting webhooks is admin-only: they carry data
+    # out of the workspace and hold a signing secret.
+    m.get_member_role.return_value = "admin"
     return m
 
 

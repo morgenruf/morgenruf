@@ -13,6 +13,7 @@ from datetime import date
 from unittest.mock import MagicMock
 
 from src.modules.connect.rounds import is_round_due
+
 from tests.support import patch_modules
 
 CONNECT = pathlib.Path(__file__).resolve().parent.parent / "src/modules/connect"

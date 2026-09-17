@@ -329,7 +329,7 @@ def api_list_standups():
 
 
 @dashboard_bp.route("/dashboard/api/standups", methods=["POST"])
-@_login_required
+@_admin_required
 def api_create_standup():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -364,7 +364,7 @@ def api_create_standup():
 
 
 @dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["PUT"])
-@_login_required
+@_admin_required
 def api_update_standup(standup_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -416,7 +416,7 @@ def api_update_standup(standup_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_delete_standup(standup_id: str):
     team_id = session["team_id"]
     try:
@@ -953,7 +953,7 @@ def api_webhook_events():
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["POST"])
-@_login_required
+@_admin_required
 def api_add_webhook():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -979,7 +979,7 @@ def api_add_webhook():
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["PATCH"])
-@_login_required
+@_admin_required
 def api_update_webhook(hook_id: str):
     """Update a webhook's URL and/or its event subscription."""
     team_id = session["team_id"]
@@ -1012,7 +1012,7 @@ def api_update_webhook(hook_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/rotate", methods=["POST"])
-@_login_required
+@_admin_required
 def api_rotate_webhook_secret(hook_id: str):
     """Issue a new signing secret and return it once.
 
@@ -1039,7 +1039,7 @@ def api_rotate_webhook_secret(hook_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/test", methods=["POST"])
-@_login_required
+@_admin_required
 def api_test_webhook(hook_id: str):
     """Send a synthetic event through the real signing and logging path."""
     team_id = session["team_id"]
@@ -1095,7 +1095,7 @@ def api_webhook_deliveries(hook_id: str | None = None):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_delete_webhook(hook_id: str):
     team_id = session["team_id"]
     try:
@@ -1245,7 +1245,7 @@ def api_list_rules():
 
 
 @dashboard_bp.route("/dashboard/api/rules", methods=["POST"])
-@_login_required
+@_admin_required
 def api_create_rule():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -1270,7 +1270,7 @@ def api_create_rule():
 
 
 @dashboard_bp.route("/dashboard/api/rules/<int:rule_id>", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_delete_rule(rule_id: int):
     team_id = session["team_id"]
     try:
@@ -1299,7 +1299,7 @@ def public_feed(token: str):
 
 
 @dashboard_bp.route("/dashboard/api/feed-token", methods=["POST"])
-@_login_required
+@_admin_required
 def api_generate_feed_token():
     team_id = session["team_id"]
     token = secrets.token_urlsafe(24)
@@ -1309,7 +1309,7 @@ def api_generate_feed_token():
 
 
 @dashboard_bp.route("/dashboard/api/feed-token", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_disable_feed():
     team_id = session["team_id"]
     db.upsert_workspace_config(team_id, feed_public=False)
@@ -1328,7 +1328,7 @@ def api_get_mcp_keys():
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys", methods=["POST"])
-@_login_required
+@_admin_required
 def api_create_mcp_key():
     team_id = session["team_id"]
     name = request.json.get("name", "Default") if request.json else "Default"
@@ -1337,7 +1337,7 @@ def api_create_mcp_key():
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys/<int:key_id>", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_revoke_mcp_key(key_id: int):
     team_id = session["team_id"]
     db.revoke_mcp_key(key_id, team_id)

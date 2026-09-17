@@ -30,6 +30,9 @@ _prior_db = sys.modules.get("src.core.db")
 _prior_oauth = sys.modules.get("src.core.oauth")
 
 _db_mock = MagicMock()
+# Most dashboard mutations are admin-only, so the default session is an admin.
+# The role-specific tests set this themselves.
+_db_mock.get_member_role.return_value = "admin"
 _oauth_mock = MagicMock()
 sys.modules["src.core.db"] = _db_mock
 sys.modules["src.core.oauth"] = _oauth_mock

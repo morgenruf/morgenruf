@@ -65,6 +65,8 @@ def authed(monkeypatch):
     store: dict = {}
 
     db = MagicMock()
+    # Editing a schedule is admin-only.
+    db.get_member_role.return_value = "admin"
     db.update_standup_schedule.return_value = dict(SCHEDULE_ROW)
     db.get_standup_schedules.return_value = [dict(SCHEDULE_ROW)]
     db.get_workspace_config.side_effect = lambda team_id: dict(store)
