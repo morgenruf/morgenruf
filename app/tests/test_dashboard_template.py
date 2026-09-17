@@ -316,3 +316,74 @@ class TestWebhookEventPicker:
         picker = markup[markup.index("function eventCheckboxes") : markup.index("function readEventPicker")]
         assert "webhookEventCatalog" in picker
         assert "standup.completed" not in picker
+
+
+class TestCoffeeChatCard:
+    """The Coffee chats page presented a programme as one flex row of eleven
+    metadata spans with no separators and five equal-weight buttons.
+
+    It read as a run-on and wrapped mid-phrase ("15" then "min Active"), and
+    Delete sat at the same weight as Settings.
+    """
+
+    def test_the_channel_is_the_card_title(self):
+        markup = read_template()
+        card = markup[markup.index("function ccCard") : markup.index("function ccCloseMenus")]
+        assert "cc-title" in card
+        assert "connectChannelName" in card
+
+    def test_metadata_is_joined_with_separators(self):
+        card = read_template()
+        block = card[card.index("function ccCard") : card.index("function ccCloseMenus")]
+        # A real middot between items, so a wrap cannot split a phrase silently.
+        assert "\\u00b7" in block
+
+    def test_destructive_actions_are_behind_a_menu(self):
+        markup = read_template()
+        block = markup[markup.index("function ccCard") : markup.index("function ccCloseMenus")]
+        # Settings stays on the card; Delete and Run now move into the overflow.
+        assert "openConnectSettings" in block
+        assert "cc-menu" in block
+        assert 'class="danger"' in block
+
+    def test_the_old_five_button_row_is_gone(self):
+        markup = read_template()
+        assert "standup-actions" not in markup[markup.index("function ccCard") :][:4000]
+
+
+class TestAttendancePanelHonesty:
+    """The attendance panel drew a chart and a pattern column with no data.
+
+    Two identical grey bars, both labelled the same date, under a four-colour
+    legend where only grey appeared; an identical flat bar for every person;
+    and a Met of 0 painted green, which reads as a good number.
+    """
+
+    def test_the_chart_only_renders_when_it_could_show_a_difference(self):
+        markup = read_template()
+        assert "chartWorthIt" in markup
+        assert "a.rounds.length > 1 && answered > 0" in markup
+
+    def test_the_pattern_column_is_conditional(self):
+        markup = read_template()
+        block = markup[markup.index("function peopleTable") : markup.index("function peopleTable") + 2200]
+        assert "hasOutcomes" in block
+        assert "hasOutcomes ? '<th>Pattern</th>' : ''" in block
+
+    def test_a_zero_is_not_coloured_as_a_good_number(self):
+        markup = read_template()
+        block = markup[markup.index("function peopleTable") : markup.index("function peopleTable") + 2200]
+        assert "n === 0" in block
+        assert "var(--text-dim)" in block
+
+    def test_same_day_rounds_are_distinguishable(self):
+        markup = read_template()
+        block = markup[markup.index("function roundRow") : markup.index("function roundRow") + 1200]
+        assert "sameDay" in block
+        assert "formatDateTime" in block
+
+    def test_no_stray_dash_headline_when_nothing_is_answered(self):
+        # The panel used to lead with a bare em dash as the stat value, which
+        # read as a rendering fault rather than "no data".
+        markup = read_template()
+        assert "No outcomes yet, " in markup

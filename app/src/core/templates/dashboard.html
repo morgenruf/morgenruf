@@ -352,6 +352,60 @@
     /* Controls whose feature is not built yet. Disabled rather than hidden so
        the roadmap stays visible, and so nobody sets a value that is silently
        dropped on save. */
+    /* Coffee chat programme card.
+       The channel is the programme's identity, the way Donut presents it, so it
+       is the title rather than one of six equal-weight metadata spans. The old
+       card was a single flex row of eleven items with no separators: it read as
+       a run-on and wrapped mid-phrase ("15" / "min Active"), and five
+       equal-weight buttons put Delete beside Settings. */
+    .cc-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      transition: border-color .15s;
+    }
+    .cc-card:hover { border-color: var(--border2); }
+    .cc-top { display: flex; align-items: center; gap: 10px; }
+    .cc-ico {
+      width: 32px; height: 32px; flex-shrink: 0;
+      background: var(--accent-dim); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cc-ico svg { width: 16px; height: 16px; }
+    .cc-title { font-size: 15px; font-weight: 600; color: var(--text); min-width: 0; }
+    .cc-title .cc-sub { font-weight: 400; color: var(--text-dim); margin-left: 8px; font-size: 13px; }
+    .cc-state { margin-left: auto; flex-shrink: 0; }
+    /* Metadata as one sentence with real separators, so it cannot wrap into
+       nonsense. Each line answers one question: when, and how much. */
+    .cc-meta { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; padding-left: 42px; }
+    .cc-meta + .cc-meta { margin-top: 3px; }
+    .cc-acts { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-left: 42px; }
+    .cc-acts .cc-spacer { margin-left: auto; }
+    /* Run now, Attendance, pause and Delete behind one control: they are not
+       things you reach for on every visit, and Delete should not sit at the
+       same weight as Settings. */
+    .cc-menu-wrap { position: relative; }
+    .cc-menu {
+      position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+      min-width: 190px; padding: 5px;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      display: none;
+    }
+    .cc-menu.open { display: block; }
+    .cc-menu button {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      padding: 8px 10px; border: 0; border-radius: 7px;
+      background: none; color: var(--text); font: inherit; font-size: 13px;
+      text-align: left; cursor: pointer;
+    }
+    .cc-menu button:hover { background: var(--surface2); }
+    .cc-menu button.danger { color: var(--sev-bad); }
+    .cc-menu-sep { height: 1px; background: var(--border); margin: 5px 2px; }
+    @media (max-width: 640px) {
+      .cc-meta, .cc-acts { padding-left: 0; }
+    }
     .event-picker { display: flex; flex-wrap: wrap; gap: 4px 14px; }
     .event-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; margin: 0; }
     .event-opt input { cursor: pointer; }
@@ -3102,34 +3156,81 @@
       return;
     }
 
-    list.innerHTML = '<div class="standups-grid">' + programs.map(p =>
-      '<div class="standup-card">' +
-        '<div class="standup-icon"><svg aria-hidden="true" class="nav-icon"><use href="#i-connect"/></svg></div>' +
-        '<div class="standup-info">' +
-          '<div class="standup-name">' + esc(p.name) + '</div>' +
-          '<div class="standup-meta">' +
-            '<span>#' + esc(connectChannelName(p.channel_id)) + '</span>' +
-            '<span>' + esc(cadenceLabel(p)) + '</span>' +
-            '<span>' + esc(p.timezone) + '</span>' +
-            (p.pool_size === null || p.pool_size === undefined
-              ? '' : '<span>' + p.pool_size + ' in the pool</span>') +
-            '<span>' + (p.round_count || 0) + ' rounds run</span>' +
-            (p.meeting_minutes ? '<span>' + p.meeting_minutes + ' min</span>' : '') +
-            (p.match_working_hours ? '<span title="Only people with an hour of shared working day are matched">overlapping hours only</span>' : '') +
-            (p.meeting_link ? '<span>has a room</span>' : '') +
-            '<span class="pill-quiet">' + (p.enabled ? 'Active' : 'Paused') + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="standup-actions">' +
-          '<button class="btn btn-secondary btn-sm" onclick="openConnectSettings(' + p.id + ')">Settings</button>' +
-          '<button class="btn btn-secondary btn-sm" onclick="runConnectRound(' + p.id + ')">Run now</button>' +
-          '<button class="btn btn-secondary btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
-          '<button class="toggle ' + (p.enabled ? 'on' : '') + '" title="Toggle active"' +
-            ' onclick="toggleConnect(' + p.id + ', this)"></button>' +
-          '<button class="btn btn-danger btn-sm" onclick="deleteConnect(' + p.id + ')">Delete</button>' +
-        '</div>' +
-      '</div>').join('') + '</div>';
+    list.innerHTML = '<div class="standups-grid">' + programs.map(ccCard).join('') + '</div>';
   }
+
+  // The channel is what a coffee chat *is*, so it leads. Everything else is two
+  // lines of plain metadata with separators that survive wrapping.
+  function ccCard(p) {
+    const when = [cadenceLabel(p), String(p.hour).padStart(2, '0') + ':' +
+                  String(p.minute).padStart(2, '0') + ' ' + (p.timezone || 'UTC')];
+    const size = [];
+    if (p.pool_size !== null && p.pool_size !== undefined) size.push(p.pool_size + ' in the pool');
+    if (p.meeting_minutes) size.push(p.meeting_minutes + ' min');
+    size.push((p.round_count || 0) + ' round' + (+p.round_count === 1 ? '' : 's') + ' run');
+    if (p.match_working_hours) size.push('overlapping hours only');
+    if (p.meeting_link) size.push('has a room');
+
+    const named = p.name && p.name !== connectChannelName(p.channel_id);
+    return '<div class="cc-card">' +
+      '<div class="cc-top">' +
+        '<span class="cc-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></span>' +
+        '<span class="cc-title">#' + esc(connectChannelName(p.channel_id)) +
+          (named ? '<span class="cc-sub">' + esc(p.name) + '</span>' : '') + '</span>' +
+        '<span class="cc-state">' +
+          '<span class="pill ' + (p.enabled ? 'att-met' : 'att-silent') + '">' +
+          (p.enabled ? 'Active' : 'Paused') + '</span></span>' +
+      '</div>' +
+      '<div class="cc-meta">' + esc(when.join(' \u00b7 ')) + '</div>' +
+      '<div class="cc-meta">' + esc(size.join(' \u00b7 ')) + '</div>' +
+      '<div class="cc-acts">' +
+        '<button class="btn btn-secondary btn-sm" onclick="openConnectSettings(' + p.id + ')">Settings</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
+        '<span class="cc-spacer"></span>' +
+        '<span class="cc-menu-wrap">' +
+          '<button class="btn btn-ghost btn-sm" aria-haspopup="true" aria-expanded="false"' +
+            ' aria-label="More actions" onclick="ccMenu(' + p.id + ', event)">\u22ef</button>' +
+          '<div class="cc-menu" id="cc-menu-' + p.id + '" role="menu">' +
+            '<button role="menuitem" onclick="ccMenuDo(' + p.id + ', \'run\')">Run a round now</button>' +
+            '<button role="menuitem" onclick="ccMenuDo(' + p.id + ', \'toggle\')">' +
+              (p.enabled ? 'Pause introductions' : 'Resume introductions') + '</button>' +
+            '<div class="cc-menu-sep"></div>' +
+            '<button role="menuitem" class="danger" onclick="ccMenuDo(' + p.id + ', \'delete\')">Delete</button>' +
+          '</div>' +
+        '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function ccCloseMenus() {
+    document.querySelectorAll('.cc-menu.open').forEach(m => {
+      m.classList.remove('open');
+      const btn = m.parentElement && m.parentElement.querySelector('button[aria-haspopup]');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function ccMenu(id, ev) {
+    if (ev) ev.stopPropagation();
+    const m = document.getElementById('cc-menu-' + id);
+    const wasOpen = m && m.classList.contains('open');
+    ccCloseMenus();
+    if (m && !wasOpen) {
+      m.classList.add('open');
+      const btn = m.parentElement.querySelector('button[aria-haspopup]');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function ccMenuDo(id, what) {
+    ccCloseMenus();
+    if (what === 'run') return runConnectRound(id);
+    if (what === 'delete') return deleteConnect(id);
+    if (what === 'toggle') return toggleConnect(id, null);
+  }
+
+  document.addEventListener('click', ccCloseMenus);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') ccCloseMenus(); });
 
   // ── Coffee chat attendance ─────────────────────────────────────────────────
   // The programme list answers "is this running". This answers "is it working":
@@ -3197,17 +3298,28 @@
     const answered = tot.met + tot.missed;
     const rate = answered ? Math.round(tot.met / answered * 100) : null;
 
+    // "Worth charting" means the chart could show a difference. With no answered
+    // outcomes every column is one flat grey block and the four-colour legend
+    // describes nothing, which is what the page was doing: two identical grey
+    // bars, both labelled the same date.
+    const chartWorthIt = a.rounds.length > 1 && answered > 0;
+
+    const headline = rate === null
+      ? '<div style="margin:10px 0 2px">' +
+          '<div style="font-size:15px;font-weight:600">' +
+            'No outcomes yet, ' + tot.matches + ' pairing' + (tot.matches === 1 ? '' : 's') + ' sent' +
+          '</div>' +
+        '</div>'
+      : '<div style="display:flex;align-items:baseline;gap:10px;margin:10px 0 4px">' +
+          '<div class="stat-value">' + rate + '%</div>' +
+          '<div style="color:var(--text-muted);font-size:13px">of answered pairings actually met</div>' +
+        '</div>';
+
     el.innerHTML =
       '<div class="stat-card" style="margin-bottom:18px">' +
         '<div class="stat-head"><div class="stat-label">' + title + ' &middot; attendance</div>' +
           '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div></div>' +
-        '<div style="display:flex;align-items:baseline;gap:10px;margin:10px 0 4px">' +
-          '<div class="stat-value">' + (rate === null ? '—' : rate + '%') + '</div>' +
-          '<div style="color:var(--text-muted);font-size:13px">' +
-            (rate === null
-              ? 'nobody has answered yet'
-              : 'of answered pairings actually met') + '</div>' +
-        '</div>' +
+        headline +
         '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">' +
           attChip('met', tot.met + ' met') +
           attChip('missed', tot.missed + ' did not') +
@@ -3223,13 +3335,15 @@
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px">' +
         '<div class="stat-card">' +
           '<div class="stat-head"><div class="stat-label">By round</div></div>' +
-          '<div style="margin-top:14px">' + attColumns(a.rounds) + '</div>' +
-          '<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:4px">' +
+          (chartWorthIt ? '<div style="margin-top:14px">' + attColumns(a.rounds) + '</div>' : '') +
+          '<div style="' + (chartWorthIt
+              ? 'margin-top:18px;border-top:1px solid var(--border);padding-top:4px'
+              : 'margin-top:8px') + '">' +
             a.rounds.map(roundRow).join('') + '</div>' +
         '</div>' +
         '<div class="stat-card">' +
           '<div class="stat-head"><div class="stat-label">By person, last 6 rounds</div></div>' +
-          peopleTable(a.people) +
+          peopleTable(a.people, answered > 0) +
         '</div>' +
       '</div>';
   }
@@ -3292,7 +3406,15 @@
 
   function roundRow(r) {
     const open = state.attendance && state.attendance.open === r.id;
-    const when = formatDate(r.scheduled_for, 'unscheduled');
+    // A forced round and a scheduled one can land on the same day, and two rows
+    // both reading "17 Sep 2026" cannot be told apart. The time only appears
+    // when the date alone is ambiguous.
+    const rounds = (state.attendance && state.attendance.rounds) || [];
+    const sameDay = rounds.filter(x =>
+      formatDate(x.scheduled_for, '') === formatDate(r.scheduled_for, '')).length > 1;
+    const when = sameDay
+      ? formatDateTime(r.scheduled_for, 'unscheduled')
+      : formatDate(r.scheduled_for, 'unscheduled');
     return '<button class="att-round" aria-expanded="' + (open ? 'true' : 'false') + '"' +
         ' onclick="toggleRound(' + r.id + ')">' +
         '<span><span style="font-weight:600">' + esc(when) + '</span>' +
@@ -3376,7 +3498,11 @@
     renderAttendance((state.connect || []).find(p => p.id === state.attendance.programId));
   }
 
-  function peopleTable(people) {
+  // `hasOutcomes` is false until somebody answers. Until then the Pattern
+  // column is the same flat grey bar for every single person, and a Met of 0
+  // painted green reads as a good number. Both are dropped rather than shown
+  // as decoration.
+  function peopleTable(people, hasOutcomes) {
     if (!people || !people.length) {
       return '<div class="empty" style="padding:24px 4px">Nobody has been paired yet.</div>';
     }
@@ -3386,17 +3512,27 @@
     const more = shown.length < people.length
       ? '<button class="more-btn" onclick="revealPeople()">Show all ' + people.length + ' people</button>'
       : '';
+    const num = (v, good) => {
+      const n = +v || 0;
+      const style = n === 0
+        ? 'text-align:right;color:var(--text-dim)'
+        : 'text-align:right;font-weight:600' + (good ? ';color:' + good : '');
+      return '<td style="' + style + '">' + n + '</td>';
+    };
     return '<table class="data-table" style="margin-top:6px"><thead><tr>' +
-        '<th>Person</th><th>Pattern</th><th style="text-align:right">Paired</th>' +
+        '<th>Person</th>' +
+        (hasOutcomes ? '<th>Pattern</th>' : '') +
+        '<th style="text-align:right">Paired</th>' +
         '<th style="text-align:right">Met</th><th style="text-align:right">Missed</th>' +
         '<th style="text-align:right">No reply</th></tr></thead><tbody>' +
       shown.map(r =>
         '<tr><td>' + personChip(r.user_id) + '</td>' +
-        '<td>' + attMiniBar(r) + '</td>' +
-        '<td style="text-align:right">' + r.paired + '</td>' +
-        '<td style="text-align:right;color:var(--sev-good);font-weight:600">' + r.met + '</td>' +
-        '<td style="text-align:right' + (+r.missed ? ';color:var(--sev-bad);font-weight:600' : ';color:var(--text-dim)') + '">' + r.missed + '</td>' +
-        '<td style="text-align:right;color:var(--text-dim)">' + r.no_reply + '</td></tr>').join('') +
+        (hasOutcomes ? '<td>' + attMiniBar(r) + '</td>' : '') +
+        num(r.paired) +
+        num(r.met, 'var(--sev-good)') +
+        num(r.missed, 'var(--sev-bad)') +
+        num(r.no_reply) +
+        '</tr>').join('') +
       '</tbody></table>' + more;
   }
 
@@ -3478,7 +3614,9 @@
     try {
       await api('POST', '/connect/programs/' + id, { enabled: next });
       p.enabled = next;
-      btn.classList.toggle('on', next);
+      // The card is rebuilt below, so the caller no longer has to own a toggle
+      // element; the overflow menu passes none.
+      if (btn) btn.classList.toggle('on', next);
       renderConnect();
       toast(next ? 'Coffee chats resumed' : 'Coffee chats paused');
     } catch (e) { toast('Could not update this coffee chat'); }
