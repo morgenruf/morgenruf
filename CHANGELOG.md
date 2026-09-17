@@ -5,6 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.7.4] — 2026-09-17
+
+### Added
+- **Coffee chat programmes can be edited.** They could be created and deleted
+  but never changed, so altering a time meant deleting the programme and losing
+  its round history with it.
+- **Meeting options**: a room the whole programme shares, and a chat length.
+  Both appear in the introduction, so finding somewhere to meet is no longer
+  left entirely to the pair.
+- **Proposed times with calendar links.** Where two people's working days
+  overlap, the introduction offers hours that suit both, each opening Google
+  Calendar with the event filled in. The message says plainly that no calendars
+  were checked: without calendar access we can say an hour suits their zones,
+  never that they are free.
+- **Run a round now**, so a programme can be tried before its scheduled day.
+- **Snooze for two weeks** from the App Home. `paused_until` had been in the
+  schema and honoured by the eligibility query since the table existed, and
+  nothing ever wrote one.
+- **Working-hours matching**, off by default. A nine-to-five in Toronto and one
+  in Kolkata share no hours at all, so enforcing it everywhere would quietly
+  stop matching the teams that most need introducing.
+
 ## [1.7.3] — 2026-09-17
 
 ### Added

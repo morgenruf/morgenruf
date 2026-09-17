@@ -2,8 +2,8 @@ apiVersion: v2
 name: morgenruf
 description: Self-hosted Slack standup bot with PostgreSQL
 type: application
-version: 0.10.3
-appVersion: "1.7.3"
+version: 0.10.4
+appVersion: "1.7.4"
 keywords:
   - slack
   - standup
