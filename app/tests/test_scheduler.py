@@ -364,3 +364,46 @@ class TestNextRunAt:
     def test_unusable_schedule_returns_none(self):
         assert sched_mod.next_run_at(_schedule_row(schedule_time="9am")) is None
         assert sched_mod.next_run_at(_schedule_row(schedule_tz="Asia/Kolkatta")) is None
+
+
+class TestSyncPicksUpNudgeToggle(_SyncTestBase):
+    """Turning the missed-standup nudge on from the dashboard must take effect
+    on the next sync, not on the next pod restart.
+
+    The reconciler only re-registers a schedule whose trigger fingerprint has
+    changed. `nudge_missing` was missing from that fingerprint, so switching it
+    on saved to the DB, read back correctly through the API, and produced no
+    job at all until the process was restarted.
+    """
+
+    def test_toggling_nudge_on_registers_the_job(self):
+        off = _schedule_row()
+        off["nudge_missing"] = False
+        self.sync(_make_db(schedules=[off], installations=[_installation_row()]))
+        assert self.scheduler.get_job("nudge_missing_T1_1") is None
+
+        on = _schedule_row()
+        on["nudge_missing"] = True
+        on["nudge_minutes_before"] = 25
+        self.sync(_make_db(schedules=[on], installations=[_installation_row()]))
+        assert self.scheduler.get_job("nudge_missing_T1_1") is not None
+
+    def test_changing_the_lead_time_moves_the_job(self):
+        on = _schedule_row()
+        on["nudge_missing"] = True
+        on["nudge_minutes_before"] = 25
+        self.sync(_make_db(schedules=[on], installations=[_installation_row()]))
+        first = self.scheduler.get_job("nudge_missing_T1_1").trigger
+
+        later = dict(on, nudge_minutes_before=5)
+        self.sync(_make_db(schedules=[later], installations=[_installation_row()]))
+        assert str(self.scheduler.get_job("nudge_missing_T1_1").trigger) != str(first)
+
+    def test_deleting_the_schedule_removes_the_nudge_job(self):
+        on = _schedule_row()
+        on["nudge_missing"] = True
+        self.sync(_make_db(schedules=[on], installations=[_installation_row()]))
+        assert self.scheduler.get_job("nudge_missing_T1_1") is not None
+
+        self.sync(_make_db(schedules=[], installations=[_installation_row()]))
+        assert self.scheduler.get_job("nudge_missing_T1_1") is None

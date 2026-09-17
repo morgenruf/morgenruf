@@ -91,16 +91,23 @@ def test_the_message_offers_the_way_out_as_well_as_the_way_in():
 # ── scheduling ───────────────────────────────────────────────────────────────
 
 
-def test_it_is_registered_before_the_report_not_after():
-    """After the report posts, a nudge is only a telling-off."""
-    src = inspect.getsource(scheduler.register_workspace_job)
+def test_it_is_registered_where_schedules_actually_register():
+    """It was first added to register_workspace_job, which schedules do not go
+    through, so the job was never created for any of them and the feature did
+    nothing at all."""
+    src = inspect.getsource(scheduler.register_schedule_job)
     assert "nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)" in src
 
 
 def test_the_job_is_namespaced_per_schedule():
-    src = inspect.getsource(scheduler.register_workspace_job)
+    src = inspect.getsource(scheduler.register_schedule_job)
     assert 'f"nudge_missing_{team_id}_{schedule_id}"' in src
 
 
 def test_it_defaults_to_twenty_minutes():
-    assert 'config.get("nudge_minutes_before") or 20' in inspect.getsource(scheduler.register_workspace_job)
+    assert 'schedule.get("nudge_minutes_before") or 20' in inspect.getsource(scheduler.register_schedule_job)
+
+
+def test_the_workspace_level_registration_does_not_claim_to_do_it():
+    """Two places register jobs; only one is reached for a schedule."""
+    assert "_nudge_missing" not in inspect.getsource(scheduler.register_workspace_job)

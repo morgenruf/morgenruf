@@ -986,26 +986,6 @@ def register_workspace_job(
     except Exception:
         r_hour, r_minute = hour, minute
 
-    # A private nudge shortly before the report posts, for anyone who has not
-    # filed. Registered whatever the setting says, because the job re-reads it
-    # and returns early: a workspace switching it off should not need the
-    # scheduler rebuilt to take effect.
-    if schedule_id and config.get("nudge_missing"):
-        before = int(config.get("nudge_minutes_before") or 20)
-        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)
-        scheduler.add_job(
-            _nudge_missing,
-            trigger=CronTrigger(
-                hour=nudge_dt.hour,
-                minute=nudge_dt.minute,
-                day_of_week=schedule_days,
-                timezone=tz,
-            ),
-            args=[team_id, bot_token, schedule_id],
-            id=f"nudge_missing_{team_id}_{schedule_id}",
-            name=f"Nudge — {team_id}/{schedule_id}",
-            replace_existing=True,
-        )
     scheduler.add_job(
         _post_scheduled_report,
         trigger=CronTrigger(
@@ -1229,6 +1209,28 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     )
     logger.info("Registered report job for schedule %s at %s %s", schedule_id, report_time, schedule_tz)
 
+    # A private nudge shortly before that report, to anyone on this standup who
+    # has not filed. Registered only when asked for, and the job re-reads the
+    # setting when it runs, so switching it off takes effect without rebuilding
+    # the scheduler.
+    if schedule.get("nudge_missing"):
+        before = int(schedule.get("nudge_minutes_before") or 20)
+        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)
+        scheduler.add_job(
+            _nudge_missing,
+            trigger=CronTrigger(
+                hour=nudge_dt.hour,
+                minute=nudge_dt.minute,
+                day_of_week=schedule_days,
+                timezone=tz,
+            ),
+            args=[team_id, bot_token, schedule_id],
+            id=f"nudge_missing_{team_id}_{schedule_id}",
+            name=f"Nudge — {schedule.get('name', 'Standup')} — {team_id}",
+            replace_existing=True,
+        )
+        logger.info("Registered nudge job for schedule %s, %d minutes before %s", schedule_id, before, report_time)
+
 
 # ---------------------------------------------------------------------------
 # DB → scheduler reconciliation
@@ -1255,6 +1257,8 @@ _SCHEDULE_TRIGGER_FIELDS = (
     "reminder_minutes",
     "weekend_reminder",
     "report_time",
+    "nudge_missing",
+    "nudge_minutes_before",
 )
 _WORKSPACE_TRIGGER_FIELDS = (
     "channel_id",
@@ -1285,6 +1289,7 @@ def _schedule_job_ids(team_id: str, schedule_id: int) -> tuple[str, ...]:
         f"reminder_schedule_{team_id}_{schedule_id}",
         f"weekend_reminder_schedule_{team_id}_{schedule_id}",
         f"report_schedule_{team_id}_{schedule_id}",
+        f"nudge_missing_{team_id}_{schedule_id}",
     )
 
 
