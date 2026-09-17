@@ -2422,6 +2422,22 @@
               Send that email daily
             </label>
           </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="f-nudge-missing" style="width:auto"/>
+              Remind people who have not answered
+            </label>
+            <div class="set-help" style="margin-top:5px">
+              A private DM shortly before the report posts, to anyone on this standup
+              who has not filed. Never a channel post: naming people publicly gets you
+              shorter answers, not better ones. People on leave and anyone who has
+              skipped today are left alone.
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Send it this many minutes before the report</label>
+            <input type="number" id="f-nudge-minutes" min="5" max="120" step="5" style="width:110px"/>
+          </div>
         </div>
 
         </div>
@@ -4504,6 +4520,10 @@
     if (dEmail) dEmail.value = s.digest_email || '';
     const dOn = document.getElementById('f-digest-enabled');
     if (dOn) dOn.checked = !!s.digest_enabled;
+    const nOn = document.getElementById('f-nudge-missing');
+    if (nOn) nOn.checked = !!s.nudge_missing;
+    const nMin = document.getElementById('f-nudge-minutes');
+    if (nMin) nMin.value = s.nudge_minutes_before || 20;
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
     document.getElementById('f-post-as').value = s.post_as || 'combined';
@@ -4569,6 +4589,8 @@
       report_channel: document.getElementById('f-report-channel').value,
       digest_email: (document.getElementById('f-digest-email') || {}).value || '',
       digest_enabled: !!(document.getElementById('f-digest-enabled') || {}).checked,
+      nudge_missing: !!(document.getElementById('f-nudge-missing') || {}).checked,
+      nudge_minutes_before: parseInt((document.getElementById('f-nudge-minutes') || {}).value, 10) || 20,
       report_time: document.getElementById('f-report-time').value,
       group_by: document.getElementById('f-group-by').value,
       post_as: document.getElementById('f-post-as').value,

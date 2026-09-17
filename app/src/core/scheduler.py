@@ -675,6 +675,66 @@ def _send_manager_digest(team_id: str, schedule_id: int | None = None) -> None:
         logger.warning("Digest failed for %s/%s: %s", team_id, schedule_id or "workspace", exc)
 
 
+def _nudge_missing(team_id: str, bot_token: str, schedule_id: int) -> None:
+    """Privately remind whoever has not filed, shortly before the window closes.
+
+    A DM rather than a channel post, deliberately. Naming people in a channel
+    produces compliance through embarrassment: the answers get shorter and less
+    honest, and the bot becomes something the team works around.
+
+    Every existing way of saying "not today" is honoured, because a nudge that
+    ignores them is worse than no nudge at all: people on leave, anyone who has
+    skipped today, and anyone not on this standup.
+    """
+    import src.core.db as db  # noqa: PLC0415
+    from src.core.roster import eligible_members  # noqa: PLC0415
+
+    try:
+        schedule = db.get_standup_schedule(team_id, schedule_id)
+        if not schedule or not schedule.get("active") or not schedule.get("nudge_missing"):
+            return
+
+        participants = [p for p in (schedule.get("participants") or []) if p]
+        if not participants:
+            return
+
+        # Vacation and deactivation are handled here, by construction.
+        eligible = {m.user_id for m in eligible_members(team_id)}
+        answered = {row["user_id"] for row in db.get_standups_for_schedule(team_id, schedule_id, days=1)}
+
+        outstanding = [
+            uid
+            for uid in participants
+            if uid in eligible and uid not in answered and not db.is_skipped_today(team_id, uid)
+        ]
+        if not outstanding:
+            logger.info("nudge %s: everyone has filed", schedule_id)
+            return
+
+        bot_token = _fresh_bot_token(team_id, bot_token)
+        if not bot_token:
+            return
+        from slack_sdk import WebClient  # noqa: PLC0415
+
+        client = WebClient(token=bot_token)
+        name = schedule.get("name") or "standup"
+        minutes = int(schedule.get("nudge_minutes_before") or 20)
+        for user_id in outstanding:
+            try:
+                client.chat_postMessage(
+                    channel=user_id,
+                    text=(
+                        f"Your {name} closes in about {minutes} minutes and I have not heard from you. "
+                        "Send me `standup` to file it, or `skip` if today is not one for it."
+                    ),
+                )
+            except Exception as exc:
+                logger.info("nudge %s: could not DM %s (%s)", schedule_id, user_id, exc)
+        logger.info("nudge %s: reminded %d of %d", schedule_id, len(outstanding), len(participants))
+    except Exception:
+        logger.exception("nudge failed for %s/%s", team_id, schedule_id)
+
+
 def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
     """Post the standup report at the scheduled report_time, regardless of completion."""
     bot_token = _fresh_bot_token(team_id, bot_token)
@@ -925,6 +985,27 @@ def register_workspace_job(
         r_hour, r_minute = report_time.split(":")
     except Exception:
         r_hour, r_minute = hour, minute
+
+    # A private nudge shortly before the report posts, for anyone who has not
+    # filed. Registered whatever the setting says, because the job re-reads it
+    # and returns early: a workspace switching it off should not need the
+    # scheduler rebuilt to take effect.
+    if schedule_id and config.get("nudge_missing"):
+        before = int(config.get("nudge_minutes_before") or 20)
+        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)
+        scheduler.add_job(
+            _nudge_missing,
+            trigger=CronTrigger(
+                hour=nudge_dt.hour,
+                minute=nudge_dt.minute,
+                day_of_week=schedule_days,
+                timezone=tz,
+            ),
+            args=[team_id, bot_token, schedule_id],
+            id=f"nudge_missing_{team_id}_{schedule_id}",
+            name=f"Nudge — {team_id}/{schedule_id}",
+            replace_existing=True,
+        )
     scheduler.add_job(
         _post_scheduled_report,
         trigger=CronTrigger(
