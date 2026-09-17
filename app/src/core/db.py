@@ -1599,13 +1599,30 @@ def get_all_active_schedules() -> list[dict]:
 
 
 def get_member_role(team_id: str, user_id: str) -> str:
-    """Return 'admin' or 'member' for a user. Defaults to 'member' if not found."""
+    """Return 'admin' or 'member' for a user. Defaults to 'member' if not found.
+
+    Whoever installed the app is always an admin, whatever the members row
+    says. Without that a workspace can become permanently unmanageable: role
+    changes require admin, so the moment the last admin is deactivated nobody
+    can ever grant it again, and every admin-only route is closed for good.
+    It is not hypothetical, most workspaces have exactly one admin.
+
+    The installer is the safe choice for this: they hold the Slack side of the
+    relationship already, and it grants nothing to anyone else.
+    """
     sql = "SELECT role FROM members WHERE team_id = %s AND user_id = %s"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id))
             row = cur.fetchone()
-    return (row[0] if row else None) or "member"
+            role = (row[0] if row else None) or "member"
+            if role == "admin":
+                return role
+            cur.execute("SELECT installed_by_user_id FROM installations WHERE team_id = %s", (team_id,))
+            inst = cur.fetchone()
+    if inst and inst[0] and user_id and inst[0] == user_id:
+        return "admin"
+    return role
 
 
 def set_member_role(team_id: str, user_id: str, role: str) -> None:
@@ -1825,3 +1842,12 @@ def set_module_enabled(team_id: str, module: str, enabled: bool) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, module, enabled))
+
+
+def count_admins(team_id: str) -> int:
+    """Active admins in a workspace, for refusing to demote the last one."""
+    sql = "SELECT COUNT(*) FROM members WHERE team_id = %s AND role = 'admin' AND active"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            return int(cur.fetchone()[0])

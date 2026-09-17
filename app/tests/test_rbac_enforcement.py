@@ -122,3 +122,64 @@ class TestNoMutatingRouteIsLeftOpen:
         # Guard against a regex change making this pass vacuously.
         files = (APP / "src/core/dashboard.py").read_text()
         assert len(self.ROUTE.findall(files)) > 20
+
+
+class TestAWorkspaceCannotLockItselfOut:
+    """Role changes need admin, so losing the last admin is permanent.
+
+    Most workspaces have exactly one admin, and every admin-only route closes
+    the moment that person is deactivated: nobody can grant the role again
+    because granting it needs the role.
+    """
+
+    def _client(self, monkeypatch, role="member", installer=None, admins=1):
+        flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
+        flask_app.config["TESTING"] = True
+        flask_app.config["SECRET_KEY"] = "test-secret"
+        flask_app.register_blueprint(dashboard.dashboard_bp)
+        db = MagicMock()
+        db.get_member_role.return_value = role
+        db.count_admins.return_value = admins
+        monkeypatch.setattr(dashboard, "db", db)
+        client = flask_app.test_client()
+        with client.session_transaction() as sess:
+            sess["team_id"] = "T123"
+            sess["user_id"] = installer or "U_SOMEONE"
+        return client, db
+
+    def test_demoting_the_last_admin_is_refused(self, monkeypatch):
+        client, db = self._client(monkeypatch, role="admin", admins=1)
+        resp = client.put("/dashboard/api/members/U_ADMIN/role", json={"role": "member"})
+        assert resp.status_code == 400
+        assert "Promote someone else" in resp.get_json()["error"]
+        db.set_member_role.assert_not_called()
+
+    def test_demoting_one_of_several_admins_is_allowed(self, monkeypatch):
+        client, db = self._client(monkeypatch, role="admin", admins=3)
+        resp = client.put("/dashboard/api/members/U_ADMIN/role", json={"role": "member"})
+        assert resp.status_code == 200
+
+    def test_promoting_is_never_blocked_by_the_count(self, monkeypatch):
+        client, db = self._client(monkeypatch, role="admin", admins=1)
+        assert client.put("/dashboard/api/members/U_X/role", json={"role": "admin"}).status_code == 200
+
+
+class TestTheInstallerIsAlwaysAnAdmin:
+    """The recovery path, so a workspace is never permanently stuck."""
+
+    def test_the_installer_counts_as_admin_without_a_members_row(self):
+        import src.core.db as real_db
+
+        src = pathlib.Path(real_db.__file__).read_text()
+        fn = src[src.index("def get_member_role") : src.index("def set_member_role")]
+        assert "installed_by_user_id" in fn
+        assert 'return "admin"' in fn
+
+    def test_an_existing_admin_short_circuits_the_extra_query(self):
+        # Every admin-gated request calls this, so it must not always cost two
+        # round trips.
+        import src.core.db as real_db
+
+        src = pathlib.Path(real_db.__file__).read_text()
+        fn = src[src.index("def get_member_role") : src.index("def set_member_role")]
+        assert fn.index('if role == "admin":') < fn.index("installed_by_user_id")

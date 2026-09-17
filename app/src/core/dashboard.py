@@ -458,6 +458,16 @@ def api_set_member_role(user_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
     role = data.get("role", "member")
+
+    # Demoting the last admin leaves nobody who can promote anyone, and every
+    # admin-only route shut. The installer still counts as an admin underneath,
+    # so this is not strictly a lockout, but it is a foot-gun with no upside.
+    if role != "admin":
+        try:
+            if db.get_member_role(team_id, user_id) == "admin" and db.count_admins(team_id) <= 1:
+                return jsonify({"error": "Promote someone else to admin first"}), 400
+        except Exception as exc:
+            logger.warning("api_set_member_role admin count failed: %s", exc)
     try:
         db.set_member_role(team_id, user_id, role)
         return jsonify({"ok": True, "user_id": user_id, "role": role})
