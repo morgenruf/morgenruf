@@ -8,6 +8,7 @@ resumes from the undelivered ones rather than messaging everyone twice.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.triggers.cron import CronTrigger
@@ -229,6 +230,7 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 match_id=m["id"],
             )
             api.post(client, channel, text, blocks)
+            _offer_zoom(client, channel, team_id, members)
             cdb.mark_delivered(m["id"], channel)
         except api.PermanentSlackError as exc:
             # A deactivated member or a lost scope will not fix itself on
@@ -304,3 +306,31 @@ def _schedule_followups(round_id: int, bot_token: str, team_id: str) -> None:
         id=f"connect:{team_id}:close:{round_id}",
         replace_existing=True,
     )
+
+
+def _offer_zoom(client, channel: str, team_id: str, members: list) -> None:
+    """Offer Zoom linking to the people in this match who have not linked.
+
+    Ephemeral, and only to those who need it: the person who already linked
+    should not be shown an upsell, and neither should see the other's. Failing
+    here must never cost the introduction, which has already been delivered.
+    """
+    try:
+        import src.modules.connect.db as cdb  # noqa: PLC0415
+        from src.modules.connect import zoom  # noqa: PLC0415
+        from src.modules.connect.blocks import zoom_offer_blocks  # noqa: PLC0415
+        from src.modules.connect.zoom_routes import mint_link_token  # noqa: PLC0415
+
+        if not zoom.configured():
+            return
+        linked = set(cdb.zoom_linked_user_ids(team_id, members))
+        base = (os.environ.get("APP_URL") or "").rstrip("/")
+        for user_id in members:
+            if user_id in linked:
+                continue
+            url = f"{base}/connect/zoom/start?t={mint_link_token(team_id, user_id)}"
+            client.chat_postEphemeral(
+                channel=channel, user=user_id, blocks=zoom_offer_blocks(url), text="Meet over Zoom"
+            )
+    except Exception:
+        logger.info("connect: could not offer Zoom linking in %s", channel)

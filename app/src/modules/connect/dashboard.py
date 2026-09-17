@@ -22,6 +22,13 @@ def register_routes(flask_app) -> None:
 
     bp = Blueprint("connect", __name__)
 
+    # Zoom linking lives on the same blueprint. Its two endpoints are reached
+    # from a Slack button rather than the dashboard, so they carry a signed
+    # token instead of relying on a session.
+    from src.modules.connect.zoom_routes import register_zoom_routes  # noqa: PLC0415
+
+    register_zoom_routes(bp)
+
     @bp.route("/dashboard/api/connect/programs", methods=["GET"])
     @_login_required
     def list_programs():

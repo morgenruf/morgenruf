@@ -518,3 +518,114 @@ def program_for_round(round_id: int) -> dict | None:
             cur.execute(sql, (round_id,))
             row = cur.fetchone()
     return dict(row) if row else None
+
+
+# ── Zoom links ──────────────────────────────────────────────────────────────
+
+
+def save_zoom_link(
+    team_id: str,
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+    access_expires_at,
+    refresh_expires_at=None,
+) -> None:
+    """Store or replace one person's Zoom authorisation.
+
+    Called on first link and again on every refresh, because Zoom rotates the
+    refresh token: the one in a refresh response has already replaced the
+    stored one on Zoom's side, so not writing it here loses the link.
+
+    Re-linking clears revoked_at, so somebody who reconnects after their
+    refresh token expired is simply linked again.
+    """
+    sql = """
+        INSERT INTO connect_zoom_links
+            (team_id, user_id, access_token, refresh_token, access_expires_at, refresh_expires_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (team_id, user_id) DO UPDATE SET
+            access_token = EXCLUDED.access_token,
+            refresh_token = EXCLUDED.refresh_token,
+            access_expires_at = EXCLUDED.access_expires_at,
+            refresh_expires_at = EXCLUDED.refresh_expires_at,
+            revoked_at = NULL,
+            updated_at = NOW()
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (team_id, user_id, access_token, refresh_token, access_expires_at, refresh_expires_at),
+            )
+
+
+def set_zoom_identity(team_id: str, user_id: str, zoom_user_id: str, zoom_email: str) -> None:
+    """Record which Zoom account was linked, so the UI can name it."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE connect_zoom_links SET zoom_user_id = %s, zoom_email = %s, updated_at = NOW()
+                   WHERE team_id = %s AND user_id = %s""",
+                (zoom_user_id, zoom_email, team_id, user_id),
+            )
+
+
+def zoom_link(team_id: str, user_id: str) -> dict | None:
+    """One person's live link, or None if absent or revoked."""
+    sql = """
+        SELECT * FROM connect_zoom_links
+        WHERE team_id = %s AND user_id = %s AND revoked_at IS NULL
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def revoke_zoom_link(team_id: str, user_id: str) -> None:
+    """Mark a link unusable without deleting it.
+
+    Kept rather than deleted so the App Home can say "reconnect Zoom" instead
+    of silently showing an unlinked state, which looks like the link was never
+    made and invites a support question.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE connect_zoom_links SET revoked_at = NOW(), updated_at = NOW() "
+                "WHERE team_id = %s AND user_id = %s",
+                (team_id, user_id),
+            )
+
+
+def zoom_linked_user_ids(team_id: str, user_ids: list) -> list:
+    """Which of these people have a live Zoom link, in the order given."""
+    if not user_ids:
+        return []
+    sql = """
+        SELECT user_id FROM connect_zoom_links
+        WHERE team_id = %s AND user_id = ANY(%s) AND revoked_at IS NULL
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, list(user_ids)))
+            live = {r[0] for r in cur.fetchall()}
+    return [u for u in user_ids if u in live]
+
+
+def set_match_meeting(match_id: int, join_url: str, meeting_id: str) -> bool:
+    """Attach a created meeting to a match, once.
+
+    Conditional on there being none, so a retry or a second delivery cannot
+    leave two meetings on somebody's Zoom account.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE connect_matches SET zoom_join_url = %s, zoom_meeting_id = %s
+                   WHERE id = %s AND zoom_join_url IS NULL""",
+                (join_url, meeting_id, match_id),
+            )
+            return cur.rowcount == 1

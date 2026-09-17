@@ -179,6 +179,11 @@ def register_handlers(app) -> None:
         ack()
         _accept_slot(body, client)
 
+    @app.action("connect:zoom_link")
+    def handle_zoom_link(ack):  # noqa: ANN001
+        """A url button; Slack still posts an interaction that has to be acked."""
+        ack()
+
     @app.action("connect:agreed_add")
     def handle_agreed_add(ack):  # noqa: ANN001
         """The button is a url link; Slack still posts an interaction for it."""
@@ -286,7 +291,12 @@ def _accept_slot(body, client) -> None:
             return
 
         label, add_url = _slot_label_and_link(match, members, slot)
-        text, blocks = cblocks.agreed_message(members, label, add_url, _room(match))
+        # A real meeting at the time they agreed, if anyone in the match has
+        # linked Zoom. Donut hands you a room to join now; this schedules it
+        # for the slot both people accepted, which is what they will actually
+        # turn up to.
+        room = _zoom_room(match, members, slot) or _room(match)
+        text, blocks = cblocks.agreed_message(members, label, add_url, room)
         client.chat_postMessage(channel=channel_id, text=text, blocks=blocks)
     except Exception:
         logger.exception("connect: could not record slot acceptance on match %s", match_id)
@@ -332,3 +342,50 @@ def _slot_label_and_link(match: dict, members: list, slot) -> tuple:
         return label, google_link(slot, 30, "Coffee chat", "Your Morgenruf coffee chat.", _room(match))
     except Exception:
         return slot.strftime("%A %H:%M UTC"), ""
+
+
+def _zoom_room(match: dict, members: list, slot) -> str:
+    """Schedule a Zoom meeting for the agreed slot, if anyone has linked Zoom.
+
+    Hosted by the first person in the match who has a live link, because the
+    meeting has to sit on somebody's account. Whoever that is, both of them get
+    the same join url, and join_before_host is set so the host not turning up
+    first does not lock the other one out.
+
+    Every failure here is silent by design: no Zoom, an expired link, a Zoom
+    outage. The pair still have an agreed time and a calendar link, which is
+    the part that matters, and a scary error in a coffee chat DM helps nobody.
+    """
+    try:
+        import src.modules.connect.db as cdb  # noqa: PLC0415
+        from src.modules.connect import zoom  # noqa: PLC0415
+
+        if not zoom.configured():
+            return ""
+        if match.get("zoom_join_url"):
+            return match["zoom_join_url"]  # already made; never make a second
+
+        hosts = cdb.zoom_linked_user_ids(match["team_id"], members)
+        if not hosts:
+            return ""
+
+        program = cdb.program_for_round(match["round_id"]) or {}
+        minutes = int(program.get("meeting_minutes") or 30)
+
+        for host in hosts:
+            token = zoom.access_token_for(match["team_id"], host)
+            if not token:
+                continue  # their link died; try the other person
+            created = zoom.create_meeting(token, slot, minutes)
+            join = (created or {}).get("join_url") or ""
+            if not join:
+                continue
+            # Claim it conditionally, so a retry cannot leave two meetings.
+            if cdb.set_match_meeting(match["id"], join, str((created or {}).get("id") or "")):
+                return join
+            fresh = cdb.match_by_id(match["id"]) or {}
+            return fresh.get("zoom_join_url") or join
+        return ""
+    except Exception:
+        logger.exception("connect: could not schedule a Zoom meeting for match %s", match.get("id"))
+        return ""

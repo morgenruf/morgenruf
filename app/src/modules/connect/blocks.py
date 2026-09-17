@@ -278,3 +278,37 @@ def agreed_message(member_ids: list[str], label: str, add_url: str = "", meeting
         }
     )
     return text, blocks
+
+
+def zoom_offer_blocks(link_url: str) -> list[dict]:
+    """The "connect Zoom" prompt, shown only to the person who has not linked.
+
+    Ephemeral for the same reason Donut's is: it is an offer to one reader, and
+    putting it in the shared message shows both people an upsell that is
+    irrelevant to whichever of them has already linked.
+    """
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*\U0001f3a5 Meet over Zoom*\nConnect your Zoom account and the meeting gets "
+                "created for you, at the time you both agree, on your own account.",
+            },
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Connect Zoom"},
+                "url": link_url,
+                "action_id": "connect:zoom_link",
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Only you can see this. Nothing is created until a time is agreed.",
+                }
+            ],
+        },
+    ]

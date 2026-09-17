@@ -9,10 +9,12 @@ the same one, with no calendar access and no OAuth.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.modules.connect import blocks as cb
 from src.modules.connect.hours import local_label, zone_city
+
+from tests.support import patch_modules
 
 SLOT = datetime(2026, 9, 18, 7, 0, tzinfo=timezone.utc)
 
@@ -131,7 +133,7 @@ class TestAcceptSlotHandler:
         from src.modules.connect.handlers import _accept_slot
 
         client = MagicMock()
-        with patch.dict("sys.modules", {"src.modules.connect.db": db}):
+        with patch_modules({"src.modules.connect.db": db}):
             _accept_slot(body, client)
         return client
 
