@@ -5,8 +5,49 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-09-16
+
+Morgenruf becomes four modules over one deployment and one database. Standups
+are unchanged; coffee chats, kudos and insights sit alongside them, and each
+can be switched off without touching the others.
+
 ### Added
-- Helm chart optional Gateway API `HTTPRoute` support (`httpRoute.enabled`, chart v0.5.0)
+- **Coffee chats.** Pairings from a channel on a cadence, history-aware so the
+  same two people are not matched twice running. Odd numbers form one group of
+  three so nobody sits out. The bot nudges pairs who have not met and asks
+  whether they did. Off until enabled: it needs `mpim:write`, `mpim:history`
+  and `users.profile:read`, so an existing workspace must re-authorise.
+- **Attendance**, reported four ways rather than two. "Not met" hides three
+  different situations: they said no, they never answered, or the invite never
+  reached them. Only the last is a delivery failure, and folding it into "did
+  not meet" blames people for it.
+- **Kudos allowance**, resetting at midnight in each person's own timezone,
+  with leaderboards for who is recognised and for who does the recognising.
+- **Insights**: a blocker nobody has cleared in days, someone who answers every
+  standup and is thanked by nobody. Neither is visible in one dataset alone.
+- **MCP goes from 8 tools to 17.** Modules contribute their own, and the tool
+  list runs the same activation gates as the dashboard, so a workspace is never
+  offered a tool for a feature it has not enabled.
+- Slack profile pictures and handles on the roster, and a Today overview page.
+
+### Fixed
+- **A workspace could read another workspace's coffee chat rounds.** The rounds
+  route never read the session's team, and its query had no team filter, so any
+  signed-in user could page through another workspace's history by guessing a
+  programme id. Unexploited: nothing called it yet.
+- **The bundled PostgreSQL could not start at all.** `postgresql.enabled=true`
+  pulled `bitnami/postgresql:16`, which Docker Hub now returns 404 for. It is a
+  StatefulSet running the official image now, which is what production has
+  always used. Also fixes values.yaml claiming the password was auto-generated
+  when nothing generated it.
+- **A large standup summary posted nothing at all.** Slack rejects messages
+  over 50 blocks.
+- **Light theme**: six colours left hardcoded from the dark-only era, including
+  kudos mentions at 2.98:1 and a lavender-on-lavender sidebar item.
+- **A dead Slack avatar URL showed a broken image on every row.** They 404 as
+  soon as someone changes their profile picture.
+- **Reports ran to thirty screens** at a hundred people. It paged by day, but a
+  day is a hundred rows at that size.
 
 ## [1.6.0] — 2026-09-03
 
