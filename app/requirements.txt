@@ -11,6 +11,6 @@ resend==2.34.0
 requests==2.34.2
 PyJWT==2.13.0
 mcp==1.29.1
-redis==8.0.1
+redis==8.1.0
 sentry-sdk[flask]==2.58.0
 gunicorn==26.0.0
