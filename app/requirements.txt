@@ -12,5 +12,5 @@ requests==2.34.2
 PyJWT==2.13.0
 mcp==2.2.0
 redis==8.1.0
-sentry-sdk[flask]==2.58.0
+sentry-sdk[flask]==2.69.1
 gunicorn==26.0.0
