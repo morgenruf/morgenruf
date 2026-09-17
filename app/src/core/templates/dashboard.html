@@ -3189,7 +3189,8 @@
     if (z.needs_reconnect) {
       // A separate number because it is a different problem: these people did
       // connect, and their authorisation aged out.
-      bits.push('<strong>' + z.needs_reconnect + '</strong> need to reconnect');
+      bits.push('<strong>' + z.needs_reconnect + '</strong> ' +
+        (z.needs_reconnect === 1 ? 'needs' : 'need') + ' to reconnect');
     }
     return '<p style="color:var(--text-muted);font-size:12.5px;margin:14px 2px 0">' +
       bits.join(' &middot; ') +
