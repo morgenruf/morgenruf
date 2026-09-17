@@ -284,3 +284,35 @@ class TestMCPEndpointFollowsDeployment:
         # The list is gated per workspace, so a fixed number is wrong as soon
         # as a module is enabled.
         assert "8 Tools" not in read_template()
+
+
+class TestWebhookEventPicker:
+    """Webhooks could only ever fire standup.completed.
+
+    The backend has three events, POST and PATCH both accept an events list,
+    and /webhooks/events exists to enumerate them. The UI created webhooks
+    with a URL only, never showed which events a webhook was on, and never
+    called that endpoint, so blocker.detected and participation.low were
+    unreachable from the dashboard.
+    """
+
+    def test_the_event_catalog_is_fetched(self):
+        assert "'/webhooks/events'" in read_template()
+
+    def test_create_sends_the_chosen_events(self):
+        markup = read_template()
+        assert "readEventPicker('wh-new')" in markup
+        assert "{ url, events }" in markup
+
+    def test_events_can_be_changed_on_an_existing_webhook(self):
+        markup = read_template()
+        assert "saveWebhookEvents" in markup
+        assert "apiSoft('PATCH', '/webhooks/' + id, { events })" in markup
+
+    def test_the_event_names_are_not_hardcoded_in_the_picker(self):
+        # The labels are cosmetic, but the list itself must come from the
+        # server or a new event will not appear without a frontend change.
+        markup = read_template()
+        picker = markup[markup.index("function eventCheckboxes") : markup.index("function readEventPicker")]
+        assert "webhookEventCatalog" in picker
+        assert "standup.completed" not in picker

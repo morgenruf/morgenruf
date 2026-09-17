@@ -558,7 +558,7 @@ class TestDeliveriesEndpoint:
                 "created_at": datetime(2026, 1, 2, 3, 4, tzinfo=timezone.utc),
             }
         ]
-        resp = authed_client.get("/dashboard/api/webhooks/deliveries")
+        resp = authed_client.get("/dashboard/api/webhooks/7/deliveries")
         assert resp.status_code == 200
         assert resp.get_json()[0]["created_at"].startswith("2026-01-02T03:04")
 
@@ -570,7 +570,7 @@ class TestDeliveriesEndpoint:
         assert kwargs["limit"] == 5
 
     def test_requires_login(self, app, db_mock):
-        assert app.test_client().get("/dashboard/api/webhooks/deliveries").status_code == 401
+        assert app.test_client().get("/dashboard/api/webhooks/7/deliveries").status_code == 401
 
 
 # ---------------------------------------------------------------------------

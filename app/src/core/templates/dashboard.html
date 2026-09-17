@@ -352,6 +352,20 @@
     /* Controls whose feature is not built yet. Disabled rather than hidden so
        the roadmap stays visible, and so nobody sets a value that is silently
        dropped on save. */
+    .event-picker { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .event-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; margin: 0; }
+    .event-opt input { cursor: pointer; }
+    .event-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .event-tag {
+      font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .add-webhook-events {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin-top: 10px; font-size: 12.5px;
+    }
+    .add-webhook-events-label { color: var(--text-dim); font-weight: 600; }
     .soon { opacity: .55; }
     .soon select, .soon input, .soon .toggle { pointer-events: none; }
     .soon-badge {
@@ -1604,10 +1618,10 @@
     <div class="nav-item active" data-section="standups">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> Standups
     </div>
-    <div class="nav-item" data-section="connect">
+    <div class="nav-item" data-section="connect" data-module="connect">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
     </div>
-    <div class="nav-item" data-section="kudos">
+    <div class="nav-item" data-section="kudos" data-module="kudos">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-mug"/></svg> Kudos
     </div>
     <div class="nav-item" data-section="members">
@@ -1615,7 +1629,7 @@
     </div>
 
     <div class="nav-section" style="margin-top:10px">Understand</div>
-    <div class="nav-item" data-section="insights">
+    <div class="nav-item" data-section="insights" data-module="insights">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-insights"/></svg> Insights
     </div>
     <div class="nav-item" data-section="reports">
@@ -4255,7 +4269,57 @@
   const webhookTests = {};
   const webhookDeliveries = {};
 
+  // The event names come from the server so a new one does not need a
+  // frontend change. /webhooks/events was built for this and had no caller,
+  // which is why every webhook silently subscribed to standup.completed only
+  // and the other two events were unreachable from the dashboard.
+  let webhookEventCatalog = null;
+
+  function eventLabel(name) {
+    return ({
+      'standup.completed': 'Standup completed',
+      'blocker.detected': 'Blocker detected',
+      'participation.low': 'Low participation',
+    })[name] || name;
+  }
+
+  async function loadWebhookEvents() {
+    if (webhookEventCatalog) return webhookEventCatalog;
+    try {
+      const res = await api('GET', '/webhooks/events');
+      webhookEventCatalog = {
+        events: res.events || [],
+        default: res.default || [],
+      };
+    } catch (e) {
+      webhookEventCatalog = { events: [], default: [] };
+    }
+    return webhookEventCatalog;
+  }
+
+  function eventCheckboxes(idPrefix, selected) {
+    const cat = webhookEventCatalog || { events: [], default: [] };
+    if (!cat.events.length) return '';
+    const chosen = selected && selected.length ? selected : cat.default;
+    return '<div class="event-picker">' + cat.events.map(name =>
+      '<label class="event-opt">' +
+        '<input type="checkbox" value="' + esc(name) + '" id="' + idPrefix + '-' + esc(name) + '"' +
+        (chosen.indexOf(name) !== -1 ? ' checked' : '') + '/>' +
+        '<span>' + esc(eventLabel(name)) + '</span>' +
+      '</label>'
+    ).join('') + '</div>';
+  }
+
+  function readEventPicker(idPrefix) {
+    const cat = webhookEventCatalog || { events: [] };
+    return cat.events.filter(name => {
+      const box = document.getElementById(idPrefix + '-' + name);
+      return box && box.checked;
+    });
+  }
+
   async function loadWebhooks() {
+    await loadWebhookEvents();
     const el = document.getElementById('webhooks-content');
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     newWebhookSecret = null;
@@ -4351,11 +4415,24 @@
         ? '<div class="test-result ' + (test.ok ? 'ok' : 'bad') + '">' + esc(test.text) + '</div>'
         : '';
       const open = webhookDeliveries[h.id] && webhookDeliveries[h.id].open;
+      const subscribed = (h.events && h.events.length) ? h.events : ((webhookEventCatalog || {}).default || []);
+      const editing = webhookEventEdit === h.id;
+      const eventsCell = editing
+        ? eventCheckboxes('wh-edit-' + h.id, subscribed) +
+          '<div class="row-actions" style="margin-top:6px">' +
+            '<button class="btn btn-primary btn-sm" onclick="saveWebhookEvents(' + h.id + ')">Save</button>' +
+            '<button class="btn btn-ghost btn-sm" onclick="cancelWebhookEvents()">Cancel</button>' +
+          '</div>'
+        : '<div class="event-tags">' +
+            subscribed.map(n => '<span class="event-tag">' + esc(eventLabel(n)) + '</span>').join('') +
+          '</div>';
       return '<tr>' +
         '<td class="webhook-url">' + esc(h.url) + testHtml + '</td>' +
+        '<td>' + eventsCell + '</td>' +
         '<td>' + webhookSecretCell(h) + '</td>' +
         '<td class="col-date" style="font-size:12px">' + esc(formatDate(h.created_at, EMPTY_CELL)) + '</td>' +
         '<td><div class="row-actions">' +
+        (editing ? '' : '<button class="btn btn-ghost btn-sm" onclick="editWebhookEvents(' + h.id + ')">Edit events</button>') +
         '<button class="btn btn-secondary btn-sm" onclick="testWebhook(' + h.id + ')">Send test event</button>' +
         '<button class="btn btn-secondary btn-sm" onclick="toggleDeliveries(' + h.id + ')">' + (open ? 'Hide deliveries' : 'Deliveries') + '</button>' +
         '<button class="btn btn-ghost btn-sm" onclick="rotateWebhookSecret(' + h.id + ')">Rotate secret</button>' +
@@ -4367,13 +4444,17 @@
     el.innerHTML =
       renderWebhookSecretPanel() +
       '<div class="webhooks-table-wrap">' +
-      '<table class="webhooks-table" style="min-width:720px"><thead><tr><th>URL</th><th>Signing</th><th>Added</th><th></th></tr></thead>' +
-      '<tbody>' + (rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
+      '<table class="webhooks-table" style="min-width:820px"><thead><tr><th>URL</th><th>Events</th><th>Signing</th><th>Added</th><th></th></tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
       '</table></div>' +
       '<div class="add-webhook-row">' +
       '<input type="url" id="new-webhook-url" placeholder="https://example.com/webhook" value="' + esc(draft) + '"/>' +
       '<button class="btn btn-primary" onclick="addWebhook()">&#43; Add Webhook</button>' +
-      '</div>';
+      '</div>' +
+      (webhookEventCatalog && webhookEventCatalog.events.length
+        ? '<div class="add-webhook-events"><span class="add-webhook-events-label">Send on</span>' +
+          eventCheckboxes('wh-new', null) + '</div>'
+        : '');
   }
 
   // A secret may arrive under any of these names, or not at all on the older API.
@@ -4386,7 +4467,9 @@
     const urlEl = document.getElementById('new-webhook-url');
     const url = urlEl.value.trim();
     if (!url) { toast('Please enter a URL', 'error'); return; }
-    const res = await apiSoft('POST', '/webhooks', { url });
+    const events = readEventPicker('wh-new');
+    if (!events.length) { toast('Pick at least one event', 'error'); return; }
+    const res = await apiSoft('POST', '/webhooks', { url, events });
     if (!res.ok) { toast(res.error || 'Failed to add webhook', 'error'); return; }
     const hook = res.data || { id: 0, url, created_at: '' };
     state.webhooks.push(hook);
@@ -4395,6 +4478,30 @@
     urlEl.value = '';
     renderWebhooks();
     toast('Webhook added');
+  }
+
+  let webhookEventEdit = null;
+
+  function editWebhookEvents(id) {
+    webhookEventEdit = id;
+    renderWebhooks();
+  }
+
+  function cancelWebhookEvents() {
+    webhookEventEdit = null;
+    renderWebhooks();
+  }
+
+  async function saveWebhookEvents(id) {
+    const events = readEventPicker('wh-edit-' + id);
+    if (!events.length) { toast('Pick at least one event', 'error'); return; }
+    const res = await apiSoft('PATCH', '/webhooks/' + id, { events });
+    if (!res.ok) { toast(res.error || 'Could not update events', 'error'); return; }
+    const hook = state.webhooks.find(h => h.id === id);
+    if (hook) hook.events = (res.data && res.data.events) || events;
+    webhookEventEdit = null;
+    renderWebhooks();
+    toast('Events updated');
   }
 
   async function rotateWebhookSecret(id) {
@@ -6260,10 +6367,41 @@
     toast('Copied!');
   }
 
+  // Hide the sidebar rows for modules this deployment does not ship.
+  //
+  // MORGENRUF_MODULES is the deploy allowlist, and a module left out of it can
+  // never be switched on by the workspace, so offering the row leads only to a
+  // dead page. A module that is merely switched off stays listed: its page
+  // carries the button that turns it on, and hiding the row would strand it.
+  //
+  // Matched through each module's declared nav path, which is what ModuleSpec.nav
+  // is for. It was declared by every module and read by nothing.
+  async function hideUnavailableModules() {
+    let mods;
+    try {
+      mods = await api('GET', '/modules');
+    } catch (e) {
+      return;  // leave every row in place rather than hide one wrongly
+    }
+    (mods || []).forEach(m => {
+      if (m.available !== false) return;
+      const sections = (m.nav || [])
+        .map(n => String(n.path || '').replace(/^#/, ''))
+        .filter(Boolean);
+      if (!sections.length) sections.push(m.name);
+      sections.forEach(section => {
+        document
+          .querySelectorAll('.nav-item[data-module="' + m.name + '"][data-section="' + section + '"]')
+          .forEach(el => { el.style.display = 'none'; });
+      });
+    });
+  }
+
   // ── Boot ──
   // Open whatever the URL asks for. An old #schedules link lands on Standups.
   switchSection(window.location.hash.replace(/^#/, '') || 'standups');
   loadMCPSection();
+  hideUnavailableModules();
   </script>
 </body>
 </html>

@@ -1071,7 +1071,6 @@ def api_test_webhook(hook_id: str):
         return jsonify({"error": str(exc)}), 500
 
 
-@dashboard_bp.route("/dashboard/api/webhooks/deliveries", methods=["GET"])
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/deliveries", methods=["GET"])
 @_login_required
 def api_webhook_deliveries(hook_id: str | None = None):
@@ -1169,25 +1168,6 @@ def api_analytics():
         return jsonify({"members": [], "schedules": []})
 
 
-@dashboard_bp.route("/dashboard/api/analytics/schedules", methods=["GET"])
-@_login_required
-def api_analytics_schedules():
-    """Per-schedule completion rates for the last N days, plus the workspace headline."""
-    team_id = session["team_id"]
-    days = int(request.args.get("days", 7))
-    try:
-        overview = db.get_participation_overview(team_id, days=days)
-        return jsonify(
-            {
-                "summary": _participation_summary(overview),
-                "schedules": overview.get("schedules") or [],
-            }
-        )
-    except Exception as exc:
-        logger.error("api_analytics_schedules error: %s", exc)
-        return jsonify({"summary": _participation_summary({}), "schedules": []})
-
-
 # ---------------------------------------------------------------------------
 # CSV Export API
 # ---------------------------------------------------------------------------
@@ -1245,164 +1225,6 @@ def api_templates():
     from src.modules.standup.templates_library import TEMPLATES  # noqa: PLC0415
 
     return jsonify(TEMPLATES)
-
-
-# ── Standup Schedules API ───────────────────────────────────────────────────
-
-
-@dashboard_bp.route("/dashboard/api/schedules", methods=["GET"])
-@_login_required
-def api_list_schedules():
-    team_id = session["team_id"]
-    try:
-        schedules = db.get_standup_schedules(team_id)
-        for row in schedules:
-            # #67: flag rows the scheduler will refuse, so an Active schedule
-            # that can never fire does not look healthy.
-            row["registration_error"] = schedule_config_error(row) if row.get("active", True) else None
-            row["next_run"] = _next_run(row)
-        return jsonify(schedules)
-    except Exception as exc:
-        logger.error("api_list_schedules: %s", exc)
-        return jsonify([])
-
-
-@dashboard_bp.route("/dashboard/api/schedules", methods=["POST"])
-@_login_required
-def api_create_schedule():
-    team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
-    invalid = schedule_payload_error(data)
-    if invalid:
-        return jsonify({"error": invalid}), 400
-    try:
-        days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
-        if isinstance(days, list):
-            days = ",".join(days)
-        schedule = db.create_standup_schedule(
-            team_id,
-            name=data.get("name", "Daily Standup"),
-            channel_id=data.get("channel_id", ""),
-            schedule_time=data.get("schedule_time", "09:00"),
-            schedule_tz=data.get("schedule_tz", "UTC"),
-            schedule_days=days,
-            questions=data.get(
-                "questions", ["What did you complete yesterday?", "What are you working on today?", "Any blockers?"]
-            ),
-            participants=data.get("participants", []),
-            reminder_minutes=int(data.get("reminder_minutes") or 0),
-            active=data.get("active", True),
-            post_to_thread=bool(data.get("post_to_thread", False)),
-            notify_on_report=bool(data.get("notify_on_report", True)),
-            weekend_reminder=bool(data.get("weekend_reminder", False)),
-            post_summary=_post_summary_default(data),
-        )
-        try:
-            from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-            inst = db.get_installation(team_id)
-            if inst and get_scheduler():
-                sched_with_token = dict(schedule)
-                sched_with_token["bot_token"] = inst["bot_token"]
-                register_schedule_job(get_scheduler(), sched_with_token)
-        except Exception as exc2:
-            logger.warning("Could not register schedule job live: %s", exc2)
-        return jsonify(schedule), 201
-    except Exception as exc:
-        logger.error("api_create_schedule: %s", exc)
-        return jsonify({"error": str(exc)}), 500
-
-
-@dashboard_bp.route("/dashboard/api/schedules/<int:schedule_id>", methods=["PUT"])
-@_login_required
-def api_update_schedule(schedule_id: int):
-    team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
-    invalid = schedule_payload_error(data)
-    if invalid:
-        return jsonify({"error": invalid}), 400
-    try:
-        days = data.get("schedule_days")
-        if isinstance(days, list):
-            days = ",".join(days)
-        kwargs: dict = {}
-        for field in (
-            "name",
-            "channel_id",
-            "schedule_time",
-            "schedule_tz",
-            "reminder_minutes",
-            "active",
-            "questions",
-            "participants",
-        ):
-            if field in data:
-                kwargs[field] = data[field]
-        if days is not None:
-            kwargs["schedule_days"] = days
-        if "post_to_thread" in data:
-            kwargs["post_to_thread"] = bool(data["post_to_thread"])
-        if "notify_on_report" in data:
-            kwargs["notify_on_report"] = bool(data["notify_on_report"])
-        if "weekend_reminder" in data:
-            kwargs["weekend_reminder"] = bool(data["weekend_reminder"])
-        if "post_summary" in data:
-            kwargs["post_summary"] = bool(data["post_summary"])
-        if "sync_with_channel" in data:
-            kwargs["sync_with_channel"] = bool(data["sync_with_channel"])
-        if "group_by" in data:
-            kwargs["group_by"] = data["group_by"]
-        schedule = db.update_standup_schedule(team_id, schedule_id, **kwargs)
-        if not schedule:
-            return jsonify({"error": "Not found"}), 404
-        # Refresh the running scheduler so the new time/days take effect immediately
-        try:
-            from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-            inst = db.get_installation(team_id)
-            sched_obj = get_scheduler()
-            if inst and sched_obj:
-                if schedule.get("active", True):
-                    sched_with_token = dict(schedule)
-                    sched_with_token["bot_token"] = inst["bot_token"]
-                    register_schedule_job(sched_obj, sched_with_token)
-                else:
-                    # Deactivated — remove jobs from scheduler
-                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                        try:
-                            sched_obj.remove_job(f"{prefix}{team_id}_{schedule_id}")
-                        except Exception:
-                            pass
-        except Exception as exc2:
-            logger.warning("Could not refresh schedule job in scheduler: %s", exc2)
-        return jsonify(schedule)
-    except Exception as exc:
-        logger.error("api_update_schedule: %s", exc)
-        return jsonify({"error": str(exc)}), 500
-
-
-@dashboard_bp.route("/dashboard/api/schedules/<int:schedule_id>", methods=["DELETE"])
-@_login_required
-def api_delete_schedule(schedule_id: int):
-    team_id = session["team_id"]
-    try:
-        db.delete_standup_schedule(team_id, schedule_id)
-        # Remove jobs from the running scheduler
-        try:
-            from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-            sched_obj = get_scheduler()
-            if sched_obj:
-                for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                    try:
-                        sched_obj.remove_job(f"{prefix}{team_id}_{schedule_id}")
-                    except Exception:
-                        pass
-        except Exception as exc2:
-            logger.warning("Could not remove schedule job from scheduler: %s", exc2)
-        return jsonify({"ok": True})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
 
 
 # ── Workflow Rules API ──────────────────────────────────────────────────────
@@ -1492,21 +1314,6 @@ def api_disable_feed():
     team_id = session["team_id"]
     db.upsert_workspace_config(team_id, feed_public=False)
     return jsonify({"ok": True})
-
-
-@dashboard_bp.route("/dashboard/api/mcp-config")
-@_login_required
-def api_mcp_config():
-    team_id = session["team_id"]
-    app_url = os.environ.get("APP_URL", "")
-    return jsonify(
-        {
-            "team_id": team_id,
-            "app_url": app_url,
-            "mcp_server_path": "app/src/modules/mcp/server.py",
-            "docs_url": "https://docs.morgenruf.dev/mcp.html",
-        }
-    )
 
 
 # ── MCP API Key management ───────────────────────────────────────────────────

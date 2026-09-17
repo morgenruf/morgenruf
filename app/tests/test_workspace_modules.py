@@ -184,3 +184,52 @@ class TestEveryGateIsReachableFromTheDashboard:
         scopes_at = markup.index("Connect needs more Slack access")
         toggle_at = markup.index("Coffee chats are switched off")
         assert scopes_at < toggle_at
+
+
+class TestNavIsDeclaredAndUsable:
+    """ModuleSpec.nav has to describe the page each module actually adds.
+
+    Every module declared it and nothing read it, so the declarations drifted:
+    kudos said nav=() while owning a dashboard page. The sidebar now hides
+    rows for deploy-excluded modules by matching these paths, so a wrong
+    declaration is a wrong sidebar.
+    """
+
+    def test_every_module_with_a_page_declares_it(self):
+        from src.modules import REGISTRY
+
+        by_name = {spec.name: spec for spec in REGISTRY}
+        for name in ("standup", "kudos", "connect", "insights"):
+            assert by_name[name].nav, f"{name} has a dashboard page but declares no nav"
+
+    def test_nav_paths_match_a_sidebar_section(self):
+        import os
+
+        from src.modules import REGISTRY
+
+        template = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
+        with open(template, encoding="utf-8") as fh:
+            markup = fh.read()
+
+        for spec in REGISTRY:
+            for item in spec.nav:
+                if not item.path.startswith("#"):
+                    continue  # standup's "/" is the default section
+                section = item.path.lstrip("#")
+                assert f'data-section="{section}"' in markup, f"{spec.name} nav points at a section that is not there"
+
+    def test_a_hideable_row_carries_its_module_name(self):
+        # The sidebar can only hide a row it can find, and it looks the row up
+        # by module name alongside the nav section.
+        import os
+
+        from src.modules import REGISTRY
+
+        template = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
+        with open(template, encoding="utf-8") as fh:
+            markup = fh.read()
+
+        by_name = {spec.name: spec for spec in REGISTRY}
+        for name in ("connect", "kudos", "insights"):
+            assert f'data-module="{name}"' in markup
+            assert by_name[name].nav
