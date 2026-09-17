@@ -373,7 +373,12 @@
       display: flex; align-items: center; justify-content: center;
     }
     .cc-ico svg { width: 16px; height: 16px; }
-    .cc-title { font-size: 15px; font-weight: 600; color: var(--text); min-width: 0; }
+    /* A long channel name has to give way rather than push the status pill off
+       the card, so the title truncates and the pill keeps its place. */
+    .cc-title {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
     .cc-title .cc-sub { font-weight: 400; color: var(--text-dim); margin-left: 8px; font-size: 13px; }
     .cc-state { margin-left: auto; flex-shrink: 0; }
     /* Metadata as one sentence with real separators, so it cannot wrap into
@@ -405,6 +410,9 @@
     .cc-menu-sep { height: 1px; background: var(--border); margin: 5px 2px; }
     @media (max-width: 640px) {
       .cc-meta, .cc-acts { padding-left: 0; }
+    }
+    .att-zero {
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text-dim);
     }
     .event-picker { display: flex; flex-wrap: wrap; gap: 4px 14px; }
     .event-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; margin: 0; }
@@ -3162,8 +3170,9 @@
   // The channel is what a coffee chat *is*, so it leads. Everything else is two
   // lines of plain metadata with separators that survive wrapping.
   function ccCard(p) {
-    const when = [cadenceLabel(p), String(p.hour).padStart(2, '0') + ':' +
-                  String(p.minute).padStart(2, '0') + ' ' + (p.timezone || 'UTC')];
+    // cadenceLabel already carries the time ("Every Wednesday at 10:00"), so
+    // only the zone is added; appending the time again read as "at 10:00 · 10:00".
+    const when = [cadenceLabel(p), p.timezone || 'UTC'];
     const size = [];
     if (p.pool_size !== null && p.pool_size !== undefined) size.push(p.pool_size + ' in the pool');
     if (p.meeting_minutes) size.push(p.meeting_minutes + ' min');
@@ -3245,7 +3254,11 @@
     const label = ATT_LABEL[status] || status;
     const body = text === undefined ? label : String(text);
     const titled = body === label ? label : body + ' ' + label.toLowerCase();
-    return '<span class="pill ' + (ATT_CLASS[status] || 'att-silent') + '"' +
+    // A count of zero carries no outcome, so it is not painted as one. "0 met"
+    // in green and "0 did not" in red both read as results when neither is.
+    const zero = /^0\b/.test(body);
+    const cls = zero ? 'att-zero' : (ATT_CLASS[status] || 'att-silent');
+    return '<span class="pill ' + cls + '"' +
            ' title="' + esc(titled) + '" aria-label="' + esc(titled) + '">' +
            esc(body) + '</span>';
   }
