@@ -1975,7 +1975,7 @@
       <div class="topbar">
         <div>
           <div class="page-title">MCP</div>
-          <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>https://api.morgenruf.dev/mcp</code></div>
+          <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>{{ mcp_endpoint }}</code></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><span class="ico"></span>Setup Guide</a>
@@ -2006,7 +2006,7 @@
             <div class="stat-label" style="margin-bottom:12px">Documentation</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary"><span class="ico"></span>Full MCP Setup Guide</a>
-              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico"></span>View All 8 Tools</a>
+              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico"></span>View All Tools</a>
             </div>
           </div>
         </div>
@@ -2026,7 +2026,7 @@
             <pre id="snippet-claude" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
   "mcpServers": {
     "morgenruf": {
-      "url": "https://api.morgenruf.dev/mcp",
+      "url": "{{ mcp_endpoint }}",
       "headers": {
         "Authorization": "Bearer mrn_YOUR_KEY_HERE"
       }
@@ -2041,7 +2041,7 @@
             <pre id="snippet-cursor" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
   "mcpServers": {
     "morgenruf": {
-      "url": "https://api.morgenruf.dev/mcp",
+      "url": "{{ mcp_endpoint }}",
       "headers": {
         "Authorization": "Bearer mrn_YOUR_KEY_HERE"
       }
@@ -2057,7 +2057,7 @@
   "servers": {
     "morgenruf": {
       "type": "http",
-      "url": "https://api.morgenruf.dev/mcp",
+      "url": "{{ mcp_endpoint }}",
       "headers": {
         "Authorization": "Bearer mrn_YOUR_KEY_HERE"
       }
@@ -2069,7 +2069,7 @@
 
           <div id="mcp-tab-http" style="display:none">
             <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Raw HTTP, useful for testing or custom integrations</p>
-            <pre id="snippet-http" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">curl -X POST https://api.morgenruf.dev/mcp \
+            <pre id="snippet-http" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">curl -X POST {{ mcp_endpoint }} \
   -H "Authorization: Bearer mrn_YOUR_KEY_HERE" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'</pre>
@@ -6125,7 +6125,7 @@
   // Every client gets the same remote HTTP endpoint plus a scoped bearer key.
   // There is deliberately no local/stdio variant: it would need a database
   // connection string, and an example credential is a credential.
-  const MCP_ENDPOINT = 'https://api.morgenruf.dev/mcp';
+  const MCP_ENDPOINT = '{{ mcp_endpoint }}';
   const MCP_KEY_PLACEHOLDER = 'mrn_YOUR_KEY_HERE';
 
   function renderMCPConfig() {

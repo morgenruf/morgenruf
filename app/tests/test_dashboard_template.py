@@ -261,3 +261,26 @@ class TestContrast:
         """A share of readers cannot separate those two by colour alone."""
         tokens = palette(read_template())
         assert abs(luminance(tokens["sev-good"]) - luminance(tokens["sev-bad"])) > 0.05
+
+
+class TestMCPEndpointFollowsDeployment:
+    """The MCP setup panel must point at this deployment, not the hosted one.
+
+    Every URL in the panel was the literal https://api.morgenruf.dev/mcp, so a
+    self-hosted install handed its users a config pointing at our SaaS, where
+    their key would not work and their data is not.
+    """
+
+    def test_no_hardcoded_hosted_endpoint(self):
+        assert "api.morgenruf.dev/mcp" not in read_template()
+
+    def test_the_panel_uses_the_injected_endpoint(self):
+        markup = read_template()
+        # Every place that showed a URL: the four config snippets, the curl
+        # example, the page subtitle, and the generator's constant.
+        assert markup.count("{{ mcp_endpoint }}") >= 6
+
+    def test_the_tool_count_is_not_hardcoded(self):
+        # The list is gated per workspace, so a fixed number is wrong as soon
+        # as a module is enabled.
+        assert "8 Tools" not in read_template()

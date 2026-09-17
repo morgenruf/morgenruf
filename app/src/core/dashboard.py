@@ -124,7 +124,15 @@ def dashboard():
         team_name = inst["team_name"] if inst else team_id
     except Exception:
         team_name = team_id
-    return render_template("dashboard.html", team_name=team_name, team_id=team_id)
+    # The MCP setup panel used to hardcode the hosted endpoint, so every
+    # self-hosted install told its users to point their assistant at our
+    # SaaS. APP_URL is what the deployment already sets for OAuth.
+    return render_template(
+        "dashboard.html",
+        team_name=team_name,
+        team_id=team_id,
+        mcp_endpoint=f"{_APP_URL.rstrip('/')}/mcp",
+    )
 
 
 @dashboard_bp.route("/dashboard/login")
