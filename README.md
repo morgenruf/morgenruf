@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A self-hosted, open-source Slack app for the rituals a distributed team runs on: async standups, random coffee chats, peer recognition, and the cross-signal insights none of them give you alone. Keep full ownership of the data, no SaaS subscription required.
+A self-hosted, open-source Slack app for the rituals a distributed team runs on: async standups, random coffee chats, peer recognition, and the cross-signal insights none of them give you alone. Four modules over one deployment and one database, each independently switchable. Keep full ownership of the data, no SaaS subscription required.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-operational-brightgreen)](https://status.morgenruf.dev)
@@ -83,14 +83,34 @@ A module is only live when all four gates pass, checked in order:
 ### Coffee chats
 
 Pick a channel and a cadence. Everyone in it is paired and introduced in a group
-DM; when the count is odd, one group of three forms so nobody sits out. Three
-days later the bot nudges pairs that have not met, and closes the round on day
-six by asking whether they did.
+DM; when the count is odd, one group of three forms so nobody sits out. Matching
+is history-aware, so the same two people are not put together twice running.
 
-That answer is the only metric worth having, and the dashboard splits it four
-ways rather than two: **met**, **did not meet**, **no reply**, and **not
-delivered**. The last one is a delivery failure on our side, not people failing
-to show up, and collapsing it into "did not meet" would hide that.
+**The introduction carries the meeting, not just the names.** A programme can
+hold a room everyone uses and a chat length, and where two people's working days
+overlap it proposes hours that suit both, each one a click away from their
+calendar. The wording is careful on purpose:
+
+> These fit everyone's working hours. Nobody has checked your calendars, so pick
+> whichever is actually free.
+
+Without calendar access we can say an hour suits their timezones, never that
+they are free. Implying otherwise would be worse than offering nothing.
+
+Three days later the bot nudges pairs that have not met, and closes the round on
+day six by asking whether they did. That answer is reported four ways rather
+than two: **met**, **did not meet**, **no reply**, and **not delivered**. The
+last is a delivery failure on our side, not people failing to show up, and
+folding it into "did not meet" would blame them for our bug.
+
+**Run now** starts a round without waiting for the cadence, so a programme can be
+tried the day it is set up. **Snooze** takes someone out for a fortnight from the
+Slack App Home, which is where they will think to look.
+
+**Match on working hours** is a per-programme switch, off by default and worth
+leaving off unless you know it applies. A nine-to-five in Toronto and one in
+Kolkata share no hours at all, so turning it on for a team spread that widely
+stops matching them entirely.
 
 ### Kudos
 
@@ -98,13 +118,16 @@ to show up, and collapsing it into "did not meet" would hide that.
 daily allowance that resets at midnight *in their own timezone*, and unused ones
 do not carry over — that is what makes people spend them.
 
-**Using the Morgenruf icon as your kudos token:** the dashboard always shows it,
-and Slack can too. In **Kudos → The token your team gives**, download the icon,
-then in Slack go to **Customize workspace → Add custom emoji**, upload it with
-the name `morgenruf`, and leave the token field as `:morgenruf:`.
+**Using the Morgenruf icon as your kudos token:** download it from **Kudos → The
+token your team gives**, add it in Slack under **Customize workspace → Add custom
+emoji** with the name `morgenruf`, and the bot picks it up within a day on its
+own. It falls back if the emoji is ever removed, so a workspace never ends up
+posting `:morgenruf:` as literal text.
 
-> Until that emoji exists in your workspace, Slack renders `:morgenruf:` as
-> literal text. Import it first, or set the field to a plain emoji instead.
+Setting the token by hand switches that off and keeps whatever you choose.
+Changing the daily allowance does not: the settings form submits every field, and
+treating any save as a token choice used to opt workspaces out of the emoji they
+had just imported.
 
 ---
 
@@ -340,6 +363,17 @@ Full reference: [docs.morgenruf.dev/mcp.html](https://docs.morgenruf.dev/mcp.htm
 ---
 
 ## Kubernetes Deployment
+
+> **On the bundled database.** `postgresql.enabled=true` runs a single
+> StatefulSet using the official `postgres` image, which is what this project's
+> own production deployment uses. It replaced a Bitnami subchart whose images
+> were withdrawn from Docker Hub, so any chart before **0.9.0** fails on that
+> path with `ErrImagePull`. It is there for trials; anything with real data
+> behind it should use `externalDatabase.url`.
+>
+> The password is required when the bundled database is enabled. Generate one
+> with `openssl rand -hex 16` and keep it in your values file: changing it later
+> will not change the password already initialised inside the volume.
 
 Morgenruf ships a production-ready Helm chart at `app/helm/morgenruf/`.
 
