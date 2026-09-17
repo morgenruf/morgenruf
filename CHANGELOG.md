@@ -5,6 +5,42 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.7.3] — 2026-09-17
+
+### Added
+- **Coffee chats on the Slack App Home.** When your next introduction is, and a
+  way to pause and resume yourself. The only way to pause had been a button on
+  a round message, which is no use between rounds.
+- **A welcome when you join a coffee chat channel**, naming the cadence and the
+  date of the next introduction. Slack shows nothing about a bot's schedule, so
+  people joined and waited without knowing anything was coming.
+- **A digest per standup.** The workspace-level one sends every standup to a
+  single address, so a workspace running several could not give each team's
+  lead their own team's answers. Each standup can now name its own recipient.
+- **Starter templates on the Automation page**, covering what the existing
+  triggers and actions were built for. Picking one fills the form and saves
+  nothing.
+
+### Fixed
+- **The mcp 2.x bump broke the stdio MCP server** and no test noticed, because
+  nothing imported it. Rewritten on the new API, and it now builds its tools
+  from the HTTP endpoint rather than keeping a second list that had drifted.
+- **"Next coffee chat: today"** on any day, for a programme that had never run.
+  It ignored the programme's own weekday.
+- **"No standups yet" above a list of ten standups**, for an admin who takes
+  part in none of them.
+- **Ten stacked Configure buttons** on the App Home, costing two blocks each
+  against the hundred a Slack view may contain.
+- **The Slack preview rendered `:morgenruf:` as literal text** in the one panel
+  whose job is showing what Slack shows.
+- **Coffee chats had no timezone control**, and the picker it eventually got
+  was a native datalist four hundred entries deep spilling out of the modal.
+  One picker component serves both forms now.
+- **Editing the kudos allowance switched off the branded token**, because the
+  settings form submits every field and any save counted as choosing a token.
+- **The coffee chat pool counted the whole workspace** rather than the channel.
+- Twenty-odd names on the Today page were rendered as full-size pills.
+
 ## [1.7.2] — 2026-09-16
 
 ### Fixed
