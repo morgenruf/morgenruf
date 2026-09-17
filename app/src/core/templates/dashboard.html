@@ -349,6 +349,17 @@
     .form-grid.full { grid-template-columns: 1fr; }
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
+    /* Controls whose feature is not built yet. Disabled rather than hidden so
+       the roadmap stays visible, and so nobody sets a value that is silently
+       dropped on save. */
+    .soon { opacity: .55; }
+    .soon select, .soon input, .soon .toggle { pointer-events: none; }
+    .soon-badge {
+      display: inline-block; margin-left: 6px; padding: 1px 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      border: 1px solid var(--border2); border-radius: 999px;
+      color: var(--text-dim); vertical-align: middle;
+    }
     .form-section-title {
       font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
       color: var(--text-dim);
@@ -2477,16 +2488,16 @@
                 <option value="question">Question</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Post As</label>
-              <select id="f-post-as">
+            <div class="form-group soon">
+              <label>Post As<span class="soon-badge">Coming soon</span></label>
+              <select id="f-post-as" disabled>
                 <option value="combined">Combined message</option>
                 <option value="separate">Separate messages</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Sort Order</label>
-              <select id="f-sort-order">
+            <div class="form-group soon">
+              <label>Sort Order<span class="soon-badge">Coming soon</span></label>
+              <select id="f-sort-order" disabled>
                 <option value="chronological">Chronological</option>
                 <option value="alphabetical">Alphabetical</option>
               </select>
@@ -2506,9 +2517,9 @@
               <label>Jira Base URL</label>
               <input type="url" id="f-jira" placeholder="https://yourteam.atlassian.net"/>
             </div>
-            <div class="form-group">
-              <label>Zendesk Base URL</label>
-              <input type="url" id="f-zendesk" placeholder="https://yourteam.zendesk.com"/>
+            <div class="form-group soon">
+              <label>Zendesk Base URL<span class="soon-badge">Coming soon</span></label>
+              <input type="url" id="f-zendesk" placeholder="https://yourteam.zendesk.com" disabled/>
             </div>
             <div class="form-group">
               <label>GitHub Repo (org/repo)</label>
@@ -2519,9 +2530,9 @@
               <input type="text" id="f-linear-team" placeholder="ENG"/>
             </div>
           </div>
-          <div class="form-group" style="display:flex;align-items:center;gap:10px">
-            <button class="toggle on" id="f-avatar-toggle" onclick="toggleAvatar(this)" type="button"></button>
-            <label style="margin:0;cursor:pointer" onclick="toggleAvatar(document.getElementById('f-avatar-toggle'))">Display member avatar in report</label>
+          <div class="form-group soon" style="display:flex;align-items:center;gap:10px">
+            <button class="toggle on" id="f-avatar-toggle" type="button" disabled></button>
+            <label style="margin:0">Display member avatar in report<span class="soon-badge">Coming soon</span></label>
           </div>
           <div class="form-section-title" style="margin-top:16px">AI Summary</div>
           <div class="form-group" style="display:flex;align-items:center;gap:10px">
@@ -4593,12 +4604,11 @@
       nudge_minutes_before: parseInt((document.getElementById('f-nudge-minutes') || {}).value, 10) || 20,
       report_time: document.getElementById('f-report-time').value,
       group_by: document.getElementById('f-group-by').value,
-      post_as: document.getElementById('f-post-as').value,
-      sort_order: document.getElementById('f-sort-order').value,
+      // post_as, sort_order and display_avatar are not sent: nothing stores
+      // them. Their controls are marked "Coming soon" rather than accepting a
+      // value that the save would drop.
       edit_window: document.getElementById('f-edit-window').value,
-      display_avatar: document.getElementById('f-avatar-toggle').classList.contains('on'),
       jira_base_url: document.getElementById('f-jira').value.trim(),
-      zendesk_base_url: document.getElementById('f-zendesk').value.trim(),
       github_repo: document.getElementById('f-github-repo').value.trim(),
       linear_team: document.getElementById('f-linear-team').value.trim(),
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,

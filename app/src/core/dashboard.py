@@ -176,7 +176,7 @@ def _post_summary_default(data: dict) -> bool:
     return bool(data.get("post_summary", True))
 
 
-def _schedule_to_standup(row: dict) -> dict:
+def _schedule_to_standup(row: dict, workspace: dict | None = None) -> dict:
     """Normalise a standup_schedules row into a standup API object."""
     questions = row.get("questions") or []
     if isinstance(questions, str):
@@ -202,6 +202,14 @@ def _schedule_to_standup(row: dict) -> dict:
     else:
         schedule_days = raw_days
 
+    ws = workspace if workspace is not None else {}
+
+    def _ws(key, default=""):
+        """Workspace value, falling back to the row for older callers."""
+        if key in ws:
+            return ws[key]
+        return row.get(key, default)
+
     return {
         "id": row["id"],
         "name": row.get("name") or "Morning Standup",
@@ -223,18 +231,22 @@ def _schedule_to_standup(row: dict) -> dict:
         "group_by": row.get("group_by") or "member",
         "post_as": row.get("post_as") or "combined",
         "sort_order": row.get("sort_order") or "chronological",
-        "edit_window": row.get("edit_window") or "report",
+        "edit_window": _HOURS_TO_EDIT_WINDOW.get(_ws("edit_window_hours", 4), "none"),
         "display_avatar": bool(row.get("display_avatar", True)),
-        "jira_base_url": row.get("jira_base_url") or "",
-        "zendesk_base_url": row.get("zendesk_base_url") or "",
-        "github_repo": row.get("github_repo") or "",
-        "linear_team": row.get("linear_team") or "",
-        "ai_summary_enabled": bool(row.get("ai_summary_enabled", False)),
-        "ai_provider": row.get("ai_provider") or "openai",
-        "feed_token": row.get("feed_token") or "",
-        "feed_public": bool(row.get("feed_public", False)),
-        "manager_email": row.get("manager_email") or "",
-        "manager_digest_enabled": bool(row.get("manager_digest_enabled", False)),
+        "jira_base_url": _ws("jira_base_url") or "",
+        # Not stored: Zendesk autolinking is not implemented. linkify_issues
+        # can render it but is never given a URL, and there is no column. The
+        # form shows the field as unavailable rather than accepting a value it
+        # would throw away.
+        "zendesk_base_url": "",
+        "github_repo": _ws("github_repo") or "",
+        "linear_team": _ws("linear_team") or "",
+        "ai_summary_enabled": bool(_ws("ai_summary_enabled", False)),
+        "ai_provider": _ws("ai_provider") or "openai",
+        "feed_token": _ws("feed_token") or "",
+        "feed_public": bool(_ws("feed_public", False)),
+        "manager_email": _ws("manager_email") or "",
+        "manager_digest_enabled": bool(_ws("manager_digest_enabled", False)),
         "post_to_thread": bool(row.get("post_to_thread", False)),
         "notify_on_report": bool(row.get("notify_on_report", True)),
         "post_summary": bool(row.get("post_summary", False)),
@@ -248,13 +260,61 @@ def _schedule_to_standup(row: dict) -> dict:
     }
 
 
+# Settings the schedule form shows but that belong to the workspace, not to one
+# schedule. Every one of these was accepted by the PUT below, passed to
+# update_standup_schedule, and dropped on the floor by its allowlist: the
+# dashboard reported success and stored nothing. They are written to
+# workspace_config now, which is where their consumers already read them.
+_WORKSPACE_SETTING_FIELDS = (
+    "ai_summary_enabled",
+    "ai_provider",
+    "jira_base_url",
+    "github_repo",
+    "linear_team",
+    "manager_email",
+    "manager_digest_enabled",
+    "feed_token",
+    "feed_public",
+)
+
+_BOOL_WORKSPACE_FIELDS = ("ai_summary_enabled", "manager_digest_enabled", "feed_public")
+
+# "Until report time", "4 hours", "No limit" in the form, against the integer
+# hours that can_edit_response reads.
+_EDIT_WINDOW_TO_HOURS = {"report": 0, "4h": 4, "none": None}
+_HOURS_TO_EDIT_WINDOW = {0: "report", 4: "4h"}
+
+
+def _workspace_settings(team_id: str) -> dict:
+    """Workspace-level settings, for merging into a schedule response."""
+    try:
+        return db.get_workspace_config(team_id) or {}
+    except Exception:
+        return {}
+
+
+def _split_workspace_fields(data: dict) -> dict:
+    """Pull the workspace-level settings out of a schedule payload."""
+    ws: dict = {}
+    for field in _WORKSPACE_SETTING_FIELDS:
+        if field in data:
+            ws[field] = bool(data[field]) if field in _BOOL_WORKSPACE_FIELDS else data[field]
+    if "edit_window" in data:
+        ws["edit_window_hours"] = _EDIT_WINDOW_TO_HOURS.get(str(data["edit_window"]), 4)
+    return ws
+
+
 @dashboard_bp.route("/dashboard/api/standups", methods=["GET"])
 @_login_required
 def api_list_standups():
     team_id = session["team_id"]
     try:
         rows = db.get_standup_schedules(team_id)
-        return jsonify([_schedule_to_standup(r) for r in rows])
+        # Merged so the form reads back what was saved. Without this the
+        # workspace settings always came back as their defaults, which is why
+        # choosing Anthropic and reloading snapped the dropdown to OpenAI.
+        ws = _workspace_settings(team_id)
+        return jsonify([_schedule_to_standup(r, ws) for r in rows])
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
         return jsonify([])
@@ -320,18 +380,6 @@ def api_update_standup(standup_id: str):
             "nudge_missing",
             "nudge_minutes_before",
             "group_by",
-            "post_as",
-            "sort_order",
-            "edit_window",
-            "display_avatar",
-            "jira_base_url",
-            "zendesk_base_url",
-            "github_repo",
-            "linear_team",
-            "ai_provider",
-            "feed_token",
-            "feed_public",
-            "manager_email",
         ):
             if field in data:
                 kwargs[field] = data[field]
@@ -340,10 +388,6 @@ def api_update_standup(standup_id: str):
             kwargs["schedule_days"] = ",".join(days) if isinstance(days, list) else days
         if "reminder_minutes" in data:
             kwargs["reminder_minutes"] = int(data.get("reminder_minutes") or 0)
-        if "ai_summary_enabled" in data:
-            kwargs["ai_summary_enabled"] = bool(data["ai_summary_enabled"])
-        if "manager_digest_enabled" in data:
-            kwargs["manager_digest_enabled"] = bool(data["manager_digest_enabled"])
         if "post_to_thread" in data:
             kwargs["post_to_thread"] = bool(data["post_to_thread"])
         if "notify_on_report" in data:
@@ -351,7 +395,13 @@ def api_update_standup(standup_id: str):
         if "post_summary" in data:
             kwargs["post_summary"] = bool(data["post_summary"])
         row = db.update_standup_schedule(team_id, int(standup_id), **kwargs)
-        return jsonify(_schedule_to_standup(row))
+
+        # The workspace-level half of the same form.
+        ws_fields = _split_workspace_fields(data)
+        if ws_fields:
+            db.upsert_workspace_config(team_id, **ws_fields)
+
+        return jsonify(_schedule_to_standup(row, _workspace_settings(team_id)))
     except Exception as exc:
         logger.error("api_update_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
