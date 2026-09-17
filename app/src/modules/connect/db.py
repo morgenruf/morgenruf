@@ -23,8 +23,16 @@ def get_programs(team_id: str) -> list[dict]:
             return [dict(r) for r in cur.fetchall()]
 
 
-def create_program(team_id: str, channel_id: str, name: str, interval_weeks: int,
-                   day_of_week: int, hour: int, minute: int, timezone: str) -> dict:
+def create_program(
+    team_id: str,
+    channel_id: str,
+    name: str,
+    interval_weeks: int,
+    day_of_week: int,
+    hour: int,
+    minute: int,
+    timezone: str,
+) -> dict:
     sql = """
         INSERT INTO connect_programs
             (team_id, channel_id, name, interval_weeks, day_of_week, hour, minute, timezone)
@@ -67,10 +75,7 @@ def pair_history(program_id: int) -> dict[tuple[str, str], PairStat]:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (program_id,))
-            return {
-                (a, b): PairStat(times_paired=n, last_round_id=r)
-                for a, b, n, r in cur.fetchall()
-            }
+            return {(a, b): PairStat(times_paired=n, last_round_id=r) for a, b, n, r in cur.fetchall()}
 
 
 def record_pairs(program_id: int, round_id: int, groups: list[list[str]]) -> None:
@@ -86,7 +91,7 @@ def record_pairs(program_id: int, round_id: int, groups: list[list[str]]) -> Non
         with conn.cursor() as cur:
             for group in groups:
                 for i, a in enumerate(group):
-                    for b in group[i + 1:]:
+                    for b in group[i + 1 :]:
                         lo, hi = (a, b) if a < b else (b, a)
                         cur.execute(sql, (program_id, lo, hi, round_id))
 

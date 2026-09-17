@@ -14,11 +14,13 @@ from src.modules.connect.rounds import match_status
 
 def _programs(args: dict, team_id: str) -> Any:
     import src.modules.connect.db as cdb  # noqa: PLC0415
+
     return cdb.get_programs(team_id)
 
 
 def _rounds(args: dict, team_id: str) -> Any:
     import src.modules.connect.db as cdb  # noqa: PLC0415
+
     program_id = args.get("program_id")
     if not program_id:
         return {"error": "program_id is required. Call list_coffee_chat_programs first."}
@@ -28,6 +30,7 @@ def _rounds(args: dict, team_id: str) -> Any:
 
 def _attendance(args: dict, team_id: str) -> Any:
     import src.modules.connect.db as cdb  # noqa: PLC0415
+
     program_id = args.get("program_id")
     if not program_id:
         return {"error": "program_id is required. Call list_coffee_chat_programs first."}
@@ -40,6 +43,7 @@ def _attendance(args: dict, team_id: str) -> Any:
 
 def _round_pairs(args: dict, team_id: str) -> Any:
     import src.modules.connect.db as cdb  # noqa: PLC0415
+
     round_id = args.get("round_id")
     if not round_id:
         return {"error": "round_id is required. Call get_coffee_chat_rounds first."}
@@ -71,7 +75,10 @@ def tools() -> list[dict[str, Any]]:
             ),
             "inputSchema": {
                 "type": "object",
-                "properties": {"program_id": program, "limit": {"type": "integer", "description": "How many rounds (default: 10)"}},
+                "properties": {
+                    "program_id": program,
+                    "limit": {"type": "integer", "description": "How many rounds (default: 10)"},
+                },
                 "required": ["program_id"],
             },
             "handler": _rounds,
@@ -85,7 +92,10 @@ def tools() -> list[dict[str, Any]]:
             ),
             "inputSchema": {
                 "type": "object",
-                "properties": {"program_id": program, "rounds": {"type": "integer", "description": "How many recent rounds to consider (default: 6)"}},
+                "properties": {
+                    "program_id": program,
+                    "rounds": {"type": "integer", "description": "How many recent rounds to consider (default: 6)"},
+                },
                 "required": ["program_id"],
             },
             "handler": _attendance,

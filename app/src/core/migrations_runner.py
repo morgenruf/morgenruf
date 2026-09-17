@@ -15,7 +15,6 @@ def get_migrations_dir():
     return os.environ.get("MIGRATIONS_DIR", default)
 
 
-
 def module_migration_dirs() -> list:
     """Migration directories declared by registered modules.
 

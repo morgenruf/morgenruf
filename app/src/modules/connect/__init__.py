@@ -30,6 +30,7 @@ def purge(team_id: str) -> None:
 
     cdb.purge(team_id)
 
+
 MODULE = ModuleSpec(
     name="connect",
     # Opening a group DM and reading it to know whether to nudge. Existing

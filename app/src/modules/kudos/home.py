@@ -36,9 +36,7 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
     import src.modules.kudos.db as kdb  # noqa: PLC0415
 
     try:
-        state = kdb.allowance_state(
-            team_id, user_id, _member_timezone(team_id, user_id), datetime.now(timezone.utc)
-        )
+        state = kdb.allowance_state(team_id, user_id, _member_timezone(team_id, user_id), datetime.now(timezone.utc))
         emoji = state["emoji"]
         received = kdb.get_kudos_leaderboard(team_id, days=30)
         given = kdb.get_giver_leaderboard(team_id, days=30)
@@ -55,36 +53,58 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
     ]
 
     if state["allowance"] == 0:
-        blocks.append({"type": "context", "elements": [
-            {"type": "mrkdwn", "text": "Giving is switched off for this workspace."}]})
+        blocks.append(
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": "Giving is switched off for this workspace."}]}
+        )
     else:
         left = state["remaining"]
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": (
-            f"*You have {left} {emoji} left to give today.*"
-            if left else f"*You have given all {state['allowance']} of your {emoji} today.*"
-        )}})
-        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text":
-            f"Given this month: *{mine_given}*  ·  Received: *{mine_received}*  ·  "
-            f"Resets at midnight your time"}]})
-        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text":
-            "Send `kudos @teammate` and a reason to give one."}]})
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"*You have {left} {emoji} left to give today.*"
+                        if left
+                        else f"*You have given all {state['allowance']} of your {emoji} today.*"
+                    ),
+                },
+            }
+        )
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"Given this month: *{mine_given}*  ·  Received: *{mine_received}*  ·  "
+                        f"Resets at midnight your time",
+                    }
+                ],
+            }
+        )
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "Send `kudos @teammate` and a reason to give one."}],
+            }
+        )
 
     if received:
         lines = "\n".join(
-            f"{i}. <@{r['to_user']}>  `{r['received']}`"
-            for i, r in enumerate(received[:_TOP_N], start=1)
+            f"{i}. <@{r['to_user']}>  `{r['received']}`" for i, r in enumerate(received[:_TOP_N], start=1)
         )
-        blocks.append({"type": "section", "text": {"type": "mrkdwn",
-                       "text": f"*Most recognised, last 30 days*\n{lines}"}})
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Most recognised, last 30 days*\n{lines}"}}
+        )
     if given:
-        lines = "\n".join(
-            f"{i}. <@{r['user_id']}>  `{r['given']}`"
-            for i, r in enumerate(given[:5], start=1)
+        lines = "\n".join(f"{i}. <@{r['user_id']}>  `{r['given']}`" for i, r in enumerate(given[:5], start=1))
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Most generous, last 30 days*\n{lines}"}}
         )
-        blocks.append({"type": "section", "text": {"type": "mrkdwn",
-                       "text": f"*Most generous, last 30 days*\n{lines}"}})
     if not received and not given:
-        blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text":
-            "Nobody has given any yet. Be the first."}]})
+        blocks.append(
+            {"type": "context", "elements": [{"type": "mrkdwn", "text": "Nobody has given any yet. Be the first."}]}
+        )
 
     return blocks

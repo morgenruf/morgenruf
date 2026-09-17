@@ -98,7 +98,6 @@ def _resolve_secret_key() -> bytes | str:
     )
 
 
-
 def register_modules(flask_app, bolt_app, registry) -> list[str]:
     """Wire each module's routes and Slack listeners. Returns registered names.
 

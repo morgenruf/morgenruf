@@ -88,8 +88,7 @@ def match(
         # arbitrary one.
         target = min(
             groups,
-            key=lambda g: _cost(leftover, g[0], history, current_round)
-            + _cost(leftover, g[1], history, current_round),
+            key=lambda g: _cost(leftover, g[0], history, current_round) + _cost(leftover, g[1], history, current_round),
         )
         target.append(leftover)
         target.sort()

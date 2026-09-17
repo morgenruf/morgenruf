@@ -27,9 +27,17 @@ _MAX_RETRIES = 3
 
 # Errors that will never succeed on retry, so the caller should move on.
 _PERMANENT = {
-    "channel_not_found", "user_not_found", "users_not_found", "invalid_arguments",
-    "method_not_supported_for_channel_type", "cannot_dm_bot", "user_disabled",
-    "account_inactive", "token_revoked", "invalid_auth", "not_authed",
+    "channel_not_found",
+    "user_not_found",
+    "users_not_found",
+    "invalid_arguments",
+    "method_not_supported_for_channel_type",
+    "cannot_dm_bot",
+    "user_disabled",
+    "account_inactive",
+    "token_revoked",
+    "invalid_auth",
+    "not_authed",
     "missing_scope",
 }
 

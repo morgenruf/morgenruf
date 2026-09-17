@@ -42,21 +42,25 @@ def register_routes(flask_app) -> None:
         stuck = []
         for user_id, rows in idb.blocker_rows(team_id, days=min(days, 21)).items():
             for run in find_blocker_runs(rows, min_days=min_days):
-                stuck.append({
-                    "user_id": user_id,
-                    "real_name": rows[0].get("real_name"),
-                    "days": run["days"],
-                    "first_seen": run["first_seen"].isoformat(),
-                    "last_seen": run["last_seen"].isoformat(),
-                    "text": run["text"],
-                })
+                stuck.append(
+                    {
+                        "user_id": user_id,
+                        "real_name": rows[0].get("real_name"),
+                        "days": run["days"],
+                        "first_seen": run["first_seen"].isoformat(),
+                        "last_seen": run["last_seen"].isoformat(),
+                        "text": run["text"],
+                    }
+                )
         stuck.sort(key=lambda r: (-r["days"], r["user_id"]))
 
-        return jsonify({
-            "window_days": days,
-            "unrecognised": unrecognised,
-            "stuck": stuck,
-        })
+        return jsonify(
+            {
+                "window_days": days,
+                "unrecognised": unrecognised,
+                "stuck": stuck,
+            }
+        )
 
     @bp.route("/dashboard/api/today", methods=["GET"])
     @_login_required
@@ -89,8 +93,7 @@ def register_routes(flask_app) -> None:
         expected = expected_today(idb.active_schedules(team_id), names.keys(), now)
         answered = {row.get("user_id") for row in responses}
         waiting = [
-            {"user_id": user_id, "real_name": names.get(user_id) or None}
-            for user_id in awaiting(expected, answered)
+            {"user_id": user_id, "real_name": names.get(user_id) or None} for user_id in awaiting(expected, answered)
         ]
 
         try:
@@ -111,21 +114,23 @@ def register_routes(flask_app) -> None:
                 "date": chat_date.isoformat(),
             }
 
-        return jsonify({
-            "date": now.date().isoformat(),
-            "counts": {
-                # Answered counts people, not rows, so it stays comparable with
-                # expected when someone files two standups in one day.
-                "expected": len(expected),
-                "answered": len([u for u in answered if u]),
-                "awaiting": len(waiting),
-                "blocked": len(blocked),
-            },
-            "responses": responses,
-            "awaiting": waiting,
-            "blocked": blocked,
-            "kudos": kudos,
-            "next_chat": next_chat,
-        })
+        return jsonify(
+            {
+                "date": now.date().isoformat(),
+                "counts": {
+                    # Answered counts people, not rows, so it stays comparable with
+                    # expected when someone files two standups in one day.
+                    "expected": len(expected),
+                    "answered": len([u for u in answered if u]),
+                    "awaiting": len(waiting),
+                    "blocked": len(blocked),
+                },
+                "responses": responses,
+                "awaiting": waiting,
+                "blocked": blocked,
+                "kudos": kudos,
+                "next_chat": next_chat,
+            }
+        )
 
     flask_app.register_blueprint(bp)

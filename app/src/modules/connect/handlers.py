@@ -22,7 +22,8 @@ def register_handlers(app) -> None:
         user_id = body["user"]["id"]
         try:
             client.chat_postEphemeral(
-                channel=body["channel"]["id"], user=user_id,
+                channel=body["channel"]["id"],
+                user=user_id,
                 text="No problem, you are out for this round. You will be matched again next time.",
             )
         except Exception:
@@ -40,7 +41,8 @@ def register_handlers(app) -> None:
 
             cdb.opt_out(team_id, program_id, user_id, mode="off")
             client.chat_postEphemeral(
-                channel=body["channel"]["id"], user=user_id,
+                channel=body["channel"]["id"],
+                user=user_id,
                 text="You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
             )
         except Exception:

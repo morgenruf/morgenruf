@@ -44,17 +44,19 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
         return []
 
     for p in programs:
-        jobs.append(JobSpec(
-            key=f"round:{p['id']}",
-            trigger=CronTrigger(
-                day_of_week=int(p["day_of_week"]),
-                hour=int(p["hour"]),
-                minute=int(p["minute"]),
-                timezone=p["timezone"] or "UTC",
-            ),
-            func=run_round,
-            args=(p["id"], ctx.get("bot_token", "")),
-        ))
+        jobs.append(
+            JobSpec(
+                key=f"round:{p['id']}",
+                trigger=CronTrigger(
+                    day_of_week=int(p["day_of_week"]),
+                    hour=int(p["hour"]),
+                    minute=int(p["minute"]),
+                    timezone=p["timezone"] or "UTC",
+                ),
+                func=run_round,
+                args=(p["id"], ctx.get("bot_token", "")),
+            )
+        )
     return jobs
 
 
@@ -169,7 +171,7 @@ def nudge_round(round_id: int, bot_token: str, team_id: str) -> None:
     for m in cdb.matches_for_nudge(round_id):
         try:
             if api.has_replies(client, m["mpim_channel_id"]):
-                cdb.mark_nudged(m["id"])   # they are talking; nothing to do
+                cdb.mark_nudged(m["id"])  # they are talking; nothing to do
                 continue
             text, blocks = cblocks.nudge_message(cblocks.random_seed_for(round_id, m["id"]))
             api.post(client, m["mpim_channel_id"], text, blocks)
@@ -207,12 +209,16 @@ def _schedule_followups(round_id: int, bot_token: str, team_id: str) -> None:
         return
     now = datetime.now(timezone.utc)
     scheduler.add_job(
-        nudge_round, trigger=DateTrigger(run_date=now + timedelta(days=NUDGE_AFTER_DAYS)),
+        nudge_round,
+        trigger=DateTrigger(run_date=now + timedelta(days=NUDGE_AFTER_DAYS)),
         args=(round_id, bot_token, team_id),
-        id=f"connect:{team_id}:nudge:{round_id}", replace_existing=True,
+        id=f"connect:{team_id}:nudge:{round_id}",
+        replace_existing=True,
     )
     scheduler.add_job(
-        close_round, trigger=DateTrigger(run_date=now + timedelta(days=CLOSE_AFTER_DAYS)),
+        close_round,
+        trigger=DateTrigger(run_date=now + timedelta(days=CLOSE_AFTER_DAYS)),
         args=(round_id, bot_token, team_id),
-        id=f"connect:{team_id}:close:{round_id}", replace_existing=True,
+        id=f"connect:{team_id}:close:{round_id}",
+        replace_existing=True,
     )

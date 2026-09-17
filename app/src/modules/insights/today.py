@@ -93,12 +93,14 @@ def blocked_from(responses: Iterable[dict]) -> list[dict]:
     for row in responses:
         if not row.get("has_blockers"):
             continue
-        out.append({
-            "user_id": row.get("user_id"),
-            "real_name": row.get("real_name"),
-            "blockers": row.get("blockers"),
-            "submitted_at": row.get("submitted_at"),
-        })
+        out.append(
+            {
+                "user_id": row.get("user_id"),
+                "real_name": row.get("real_name"),
+                "blockers": row.get("blockers"),
+                "submitted_at": row.get("submitted_at"),
+            }
+        )
     return out
 
 

@@ -14,12 +14,12 @@ from src.modules.insights.mcp import tools as mcp_tools
 MODULE = ModuleSpec(
     name="insights",
     required_scopes=(),
-    migrations_dir=None,   # reads existing tables; owns none of its own
+    migrations_dir=None,  # reads existing tables; owns none of its own
     register_slack=None,
     register_routes=register_routes,
     plan_jobs=None,
     claim_dm=None,
-    purge=None,            # stores nothing, so there is nothing to purge
+    purge=None,  # stores nothing, so there is nothing to purge
     nav=(NavItem(label="Insights", path="#insights"),),
     default_enabled=True,
     mcp_tools=mcp_tools,

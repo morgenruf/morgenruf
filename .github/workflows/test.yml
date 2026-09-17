@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # test_kudos_module walks the history of core/db.py to prove the
+          # extraction was mechanical. A shallow checkout has no history to
+          # walk, so the guard cannot run.
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'

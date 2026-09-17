@@ -61,10 +61,7 @@ def module_tools(team_id: str) -> dict[str, dict[str, Any]]:
 
 def public_tools(team_id: str) -> list[dict[str, Any]]:
     """The same list with handlers stripped, which is what MCP advertises."""
-    return [
-        {k: v for k, v in tool.items() if k != "handler"}
-        for tool in module_tools(team_id).values()
-    ]
+    return [{k: v for k, v in tool.items() if k != "handler"} for tool in module_tools(team_id).values()]
 
 
 def handler_for(team_id: str, name: str) -> Callable | None:

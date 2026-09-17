@@ -37,9 +37,7 @@ def _check_allowance(team_id: str, from_user: str):
     import src.modules.kudos.db as kdb  # noqa: PLC0415
 
     try:
-        state = kdb.allowance_state(
-            team_id, from_user, _giver_timezone(team_id, from_user), datetime.now(timezone.utc)
-        )
+        state = kdb.allowance_state(team_id, from_user, _giver_timezone(team_id, from_user), datetime.now(timezone.utc))
     except Exception as exc:
         logger.warning("allowance lookup failed for %s: %s", from_user, exc)
         return {"emoji": kdb.DEFAULT_EMOJI, "remaining": 1, "allowance": 0}, None
@@ -104,6 +102,7 @@ def kudos_card(from_user: str, to_user: str, message: str, emoji: str | None = N
 
 def register_handlers(app) -> None:
     """Register the kudos command and message listeners."""
+
     @app.command("/kudos")
     def handle_kudos_command(ack, body, client):  # noqa: ANN001
         """Slash command to give kudos to a teammate."""
@@ -144,11 +143,15 @@ def register_handlers(app) -> None:
                 client.chat_postMessage(
                     channel=user_id,
                     text=card_text,
-                    blocks=[*card_blocks, *_context("Pick a channel in the dashboard to post these where the team can see them.")],
+                    blocks=[
+                        *card_blocks,
+                        *_context("Pick a channel in the dashboard to post these where the team can see them."),
+                    ],
                 )
         except Exception as exc:
             logger.warning("kudos command error: %s", exc)
             client.chat_postMessage(channel=user_id, text="That kudos did not go through. Try it once more.")
+
     @app.message(re.compile(r"^kudos\s+<@([A-Z0-9]+)>\s+(.+)$", re.IGNORECASE))
     def handle_kudos(message, say, client, context, logger):
         """Handle kudos messages: kudos <@USER> Great work!"""

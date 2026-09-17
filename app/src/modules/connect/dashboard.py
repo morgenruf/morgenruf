@@ -111,13 +111,15 @@ def register_routes(flask_app) -> None:
         out = []
         for m in matches:
             delivered = m.get("delivered_at")
-            out.append({
-                "id": m["id"],
-                "members": list(m["member_ids"] or []),
-                "status": match_status(m["met"], delivered),
-                "delivered_at": delivered.isoformat() if delivered else None,
-                "nudged_at": m["nudged_at"].isoformat() if m.get("nudged_at") else None,
-            })
+            out.append(
+                {
+                    "id": m["id"],
+                    "members": list(m["member_ids"] or []),
+                    "status": match_status(m["met"], delivered),
+                    "delivered_at": delivered.isoformat() if delivered else None,
+                    "nudged_at": m["nudged_at"].isoformat() if m.get("nudged_at") else None,
+                }
+            )
         return jsonify(out)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/participation", methods=["GET"])

@@ -13,7 +13,9 @@ from src.core.db import db_conn
 from src.modules.kudos.allowance import day_bounds_utc, remaining
 
 
-def save_kudos(team_id: str, from_user: str, to_user: str, message: str, channel_id: str = "", emoji: str | None = None) -> dict:
+def save_kudos(
+    team_id: str, from_user: str, to_user: str, message: str, channel_id: str = "", emoji: str | None = None
+) -> dict:
     """Save a kudos entry and return it."""
     sql = """
         INSERT INTO kudos (team_id, from_user, to_user, message, channel_id, emoji)
@@ -41,6 +43,7 @@ def get_kudos(team_id: str, limit: int = 50) -> list[dict]:
             rows = cur.fetchall()
     return [dict(r) for r in rows]
 
+
 def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
     """Return top kudos receivers for the last N days."""
     sql = """
@@ -62,7 +65,7 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-DEFAULT_EMOJI = ":morgenruf:"   # the workspace imports the icon under this name
+DEFAULT_EMOJI = ":morgenruf:"  # the workspace imports the icon under this name
 DEFAULT_ALLOWANCE = 5
 
 
