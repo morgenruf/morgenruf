@@ -629,3 +629,65 @@ def set_match_meeting(match_id: int, join_url: str, meeting_id: str) -> bool:
                 (join_url, meeting_id, match_id),
             )
             return cur.rowcount == 1
+
+
+# ── Re-match requests ───────────────────────────────────────────────────────
+#
+# A round has no spare people: everyone eligible is already matched. So a
+# request to be re-matched waits for a second one, and the two people who both
+# asked are introduced to each other.
+
+
+def request_rematch(round_id: int, match_id: int, team_id: str, user_id: str) -> None:
+    """Record an open request. Asking twice in a round changes nothing."""
+    sql = """
+        INSERT INTO connect_rematch_requests (round_id, match_id, team_id, user_id)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (round_id, user_id) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (round_id, match_id, team_id, user_id))
+
+
+def claim_rematch_partner(round_id: int, user_id: str) -> str | None:
+    """Resolve this person against another open request, if there is one.
+
+    Both rows are closed in one statement so two people asking at the same
+    moment cannot both be handed the other and then each wait for a third.
+    Returns the partner's user_id, or None if nobody else is waiting.
+    """
+    sql = """
+        WITH partner AS (
+            SELECT id, user_id FROM connect_rematch_requests
+            WHERE round_id = %s AND user_id <> %s AND resolved_at IS NULL
+            ORDER BY created_at
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+        ), closed AS (
+            UPDATE connect_rematch_requests r
+            SET resolved_at = NOW(),
+                paired_with = CASE WHEN r.user_id = %s THEN (SELECT user_id FROM partner) ELSE %s END
+            WHERE r.round_id = %s
+              AND r.resolved_at IS NULL
+              AND (r.user_id = %s OR r.id = (SELECT id FROM partner))
+              AND EXISTS (SELECT 1 FROM partner)
+            RETURNING r.user_id
+        )
+        SELECT user_id FROM closed WHERE user_id <> %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (round_id, user_id, user_id, user_id, round_id, user_id, user_id))
+            row = cur.fetchone()
+    return row[0] if row else None
+
+
+def open_rematch_count(round_id: int) -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM connect_rematch_requests WHERE round_id = %s AND resolved_at IS NULL",
+                (round_id,),
+            )
+            return int(cur.fetchone()[0])

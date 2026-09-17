@@ -65,15 +65,19 @@ class TestIntroMessageSlots:
         times[0].update(kw.pop("first", {}))
         return cb.intro_message(["U1", "U2"], seed=1, program_id=1, suggested_times=times, match_id=77, **kw)
 
+    def _accept_buttons(self, blocks):
+        # The intro section also carries an overflow, so select on type.
+        return [b["accessory"] for b in blocks if b.get("accessory") and b["accessory"]["type"] == "button"]
+
     def test_each_time_gets_its_own_button(self):
         _, blocks = self._msg()
-        buttons = [b["accessory"] for b in blocks if b.get("accessory")]
+        buttons = self._accept_buttons(blocks)
         assert len(buttons) == 2
         assert all(b["text"]["text"] == "Works for me" for b in buttons)
 
     def test_the_button_carries_the_match_and_the_slot(self):
         _, blocks = self._msg()
-        acc = next(b["accessory"] for b in blocks if b.get("accessory"))
+        acc = self._accept_buttons(blocks)[0]
         assert acc["action_id"].startswith("connect:accept_slot:77:")
         assert acc["value"] == SLOT.isoformat()
 

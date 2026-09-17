@@ -174,6 +174,14 @@ def register_handlers(app) -> None:
 
     # The action id carries the match and the slot, so one regex handler serves
     # every proposed time without the message having to hold state.
+    # One overflow carries every secondary action, so the message keeps a single
+    # control instead of a row of buttons. The action id holds the programme and
+    # the match; the chosen option holds what to do.
+    @app.action(re.compile(r"^connect:more:"))
+    def handle_more(ack, body, client):  # noqa: ANN001
+        ack()
+        _handle_more(body, client)
+
     @app.action(re.compile(r"^connect:accept_slot:"))
     def handle_accept_slot(ack, body, client):  # noqa: ANN001
         ack()
@@ -389,3 +397,122 @@ def _zoom_room(match: dict, members: list, slot) -> str:
     except Exception:
         logger.exception("connect: could not schedule a Zoom meeting for match %s", match.get("id"))
         return ""
+
+
+def _handle_more(body, client) -> None:
+    """Dispatch the overflow choice."""
+    action = body["actions"][0]
+    try:
+        _, _, program_raw, match_raw = action["action_id"].split(":", 3)
+        program_id, match_id = int(program_raw), int(match_raw)
+    except (KeyError, ValueError):
+        logger.warning("connect: unparseable more action %s", action.get("action_id"))
+        return
+
+    choice = (action.get("selected_option") or {}).get("value") or ""
+    user_id = body["user"]["id"]
+    channel_id = body["channel"]["id"]
+    team_id = (body.get("team") or {}).get("id", "")
+
+    if choice == "starter":
+        _another_starter(client, channel_id, match_id)
+    elif choice == "rematch":
+        _want_new_match(client, channel_id, user_id, match_id)
+    elif choice == "skip":
+        _quiet(
+            client,
+            channel_id,
+            user_id,
+            "No problem, you are out for this round. You will be matched again next time.",
+        )
+    elif choice == "pause":
+        _pause_for(client, channel_id, user_id, team_id, program_id)
+
+
+def _another_starter(client, channel_id: str, match_id: int) -> None:
+    """Post a different prompt, to the DM rather than ephemerally.
+
+    A conversation starter only works if both people can see it; sending it to
+    the person who asked would leave the other one reading a reply to a
+    question they were never shown.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+
+    try:
+        match = cdb.match_by_id(match_id) or {}
+        current = cblocks.icebreaker(cblocks.random_seed_for(match.get("round_id") or 0, match_id))
+        seed = int(datetime.now(timezone.utc).timestamp()) + match_id
+        prompt = cblocks.next_icebreaker(seed, exclude=current)
+        client.chat_postMessage(
+            channel=channel_id,
+            text=prompt,
+            blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": f"*Try this one*\n> {prompt}"}}],
+        )
+    except Exception:
+        logger.exception("connect: could not post another starter for match %s", match_id)
+
+
+def _want_new_match(client, channel_id: str, user_id: str, match_id: int) -> None:
+    """Record the request, and introduce two people who both asked.
+
+    A round has no spare people, so there is nobody to hand over on the spot.
+    Waiting for a second request and pairing the two is the honest version, and
+    it is also the one that produces a real introduction.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+    from src.modules.connect import slack_api as api  # noqa: PLC0415
+
+    try:
+        match = cdb.match_by_id(match_id)
+        if not match:
+            return
+        round_id, team_id = match["round_id"], match["team_id"]
+        if user_id not in list(match.get("member_ids") or []):
+            return
+
+        cdb.request_rematch(round_id, match_id, team_id, user_id)
+        partner = cdb.claim_rematch_partner(round_id, user_id)
+
+        if not partner:
+            _quiet(
+                client,
+                channel_id,
+                user_id,
+                "Noted, and nothing has been said to the other person. As soon as somebody else "
+                "asks for a new match this round, the two of you will be introduced. Otherwise you "
+                "will be matched with someone new next round.",
+            )
+            return
+
+        members = sorted([user_id, partner])
+        new_channel = api.open_group_dm(client, members)
+        text, blocks = cblocks.intro_message(
+            members,
+            cblocks.random_seed_for(round_id, match_id + 1),
+            match.get("program_id") or 0,
+            match_id=0,
+        )
+        api.post(client, new_channel, text, blocks)
+        _quiet(client, channel_id, user_id, f"Introduced you to <@{partner}>, who also wanted a new match.")
+    except Exception:
+        logger.exception("connect: could not handle a re-match request on %s", match_id)
+
+
+def _pause_for(client, channel_id: str, user_id: str, team_id: str, program_id: int) -> None:
+    """Same effect as the old Pause button, reached from the overflow."""
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+
+    try:
+        cdb.opt_out(team_id, program_id, user_id, mode="off")
+    except Exception:
+        logger.exception("connect: could not pause %s", user_id)
+        _quiet(client, channel_id, user_id, "That did not save. Please try again.")
+        return
+    _quiet(
+        client,
+        channel_id,
+        user_id,
+        "You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
+    )

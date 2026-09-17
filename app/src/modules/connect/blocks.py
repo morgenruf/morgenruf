@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import random
 
+# Deliberately answerable by a stranger on a Tuesday. Nothing that needs a
+# confession, nothing that assumes an office, a family, a country or a budget,
+# and nothing that only a senior person can answer without sounding junior.
+# Long enough that asking for another one twice still gives something new.
 ICEBREAKERS = [
     "What are you working on this week?",
     "What is something you have changed your mind about recently?",
@@ -18,12 +22,45 @@ ICEBREAKERS = [
     "What is a small thing that made your week better?",
     "Which team do you wish you worked with more often?",
     "What is something you are proud of that nobody noticed?",
+    "What is the most useful thing you learned in your first month here?",
+    "Which part of your job would surprise someone outside the company?",
+    "What is a tool or trick you would recommend to anyone?",
+    "What does a good day at work look like for you?",
+    "What is something you used to find hard that is now easy?",
+    "Which question do you get asked most often, and what is the answer?",
+    "What is a decision you are glad someone talked you out of?",
+    "What is the smallest change that made the biggest difference to your work?",
+    "What do you wish more people asked you about?",
+    "What is something you are curious about at the moment?",
+    "Which piece of feedback has stuck with you?",
+    "What would you spend a free afternoon on?",
+    "What is a problem you would happily work on for a year?",
+    "Which habit has actually stuck?",
+    "What is something you are looking forward to?",
+    "What is a thing you have made that you still like?",
 ]
 
 
 def icebreaker(seed: int) -> str:
     """Pick a prompt deterministically, so a retried delivery repeats it."""
     return ICEBREAKERS[seed % len(ICEBREAKERS)]
+
+
+def next_icebreaker(seed: int, exclude: str = "") -> str:
+    """A different prompt from the one already on screen.
+
+    Asking for another starter and being handed the same sentence back is
+    worse than no button, so the current one is skipped rather than trusted to
+    differ by luck.
+    """
+    if not ICEBREAKERS:
+        return ""
+    start = seed % len(ICEBREAKERS)
+    for step in range(len(ICEBREAKERS)):
+        candidate = ICEBREAKERS[(start + step) % len(ICEBREAKERS)]
+        if candidate != exclude:
+            return candidate
+    return ICEBREAKERS[start]
 
 
 def _mentions(member_ids: list[str]) -> str:
@@ -74,6 +111,32 @@ def intro_message(
                     "It is hard to meet people outside your own team when everyone is remote, "
                     "so this introduces two of you every so often."
                 ),
+            },
+            # Top right, where Donut's "More options" sits. An overflow rather
+            # than a row of buttons: none of these is the thing you came to do,
+            # and four equal-weight buttons under an introduction read as a
+            # form to fill in.
+            "accessory": {
+                "type": "overflow",
+                "action_id": f"connect:more:{program_id}:{match_id}",
+                "options": [
+                    {
+                        "text": {"type": "plain_text", "text": "\u2728 Another conversation starter"},
+                        "value": "starter",
+                    },
+                    {
+                        "text": {"type": "plain_text", "text": "\U0001f30d I need a new match"},
+                        "value": "rematch",
+                    },
+                    {
+                        "text": {"type": "plain_text", "text": "\U0001f6ab I am unavailable this round"},
+                        "value": "skip",
+                    },
+                    {
+                        "text": {"type": "plain_text", "text": "\u23f8 Pause coffee chats"},
+                        "value": "pause",
+                    },
+                ],
             },
         },
         {
@@ -143,27 +206,6 @@ def intro_message(
             }
         )
 
-    blocks.extend(
-        [
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "Skip this round"},
-                        "action_id": "connect:skip_round",
-                        "value": str(program_id),
-                    },
-                    {
-                        "type": "button",
-                        "text": {"type": "plain_text", "text": "Pause coffee chats"},
-                        "action_id": "connect:pause",
-                        "value": str(program_id),
-                    },
-                ],
-            },
-        ]
-    )
     return text, blocks
 
 
