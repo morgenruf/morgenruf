@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.7.1] — 2026-09-16
+
+### Fixed
+- **Coffee chats could never be enabled.** The scopes the module requires were
+  never requested: `mpim:write`, `mpim:history` and `users.profile:read`
+  appeared nowhere except its own declaration, so the dashboard reported them
+  missing, the re-authorise button asked Slack for the same scopes as before,
+  and the workspace landed back on the same screen. Adds them to the install
+  URL and both manifests, and a guard asserting that every module's required
+  scopes are actually requested.
+- **Insights showed names without faces.** The avatar component was written for
+  the coffee chat attendance rows and named for them, so no other page could
+  use it.
+
+> Updating the Slack app's own manifest at api.slack.com is a separate step:
+> the file in this repository is not live configuration, and Slack refuses an
+> install that requests scopes the app does not declare.
+
 ## [1.7.0] — 2026-09-16
 
 Morgenruf becomes four modules over one deployment and one database. Standups
