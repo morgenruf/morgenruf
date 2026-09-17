@@ -12,7 +12,7 @@ import re
 import sys
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+from tests.support import patch_modules
 
 sys.modules.setdefault("slack_bolt", MagicMock())
 sys.modules.setdefault("requests", MagicMock())
@@ -21,23 +21,32 @@ if isinstance(sys.modules.get("pytz"), MagicMock):
     del sys.modules["pytz"]
 import pytz as _real_pytz  # noqa: E402
 
-_prior_session_store = sys.modules.get("session_store")
+_prior_session_store = sys.modules.get("src.core.session_store")
 _ss_mock = MagicMock()
 _ss_mock.get_session.return_value = None
 _ss_mock.has_session.return_value = False
-sys.modules["session_store"] = _ss_mock
+sys.modules["src.core.session_store"] = _ss_mock
 
-import blocks as blocks_mod  # noqa: E402
-import handlers  # noqa: E402
-import schedule_validation  # noqa: E402
+import src.core.schedule_validation as schedule_validation  # noqa: E402
+import src.modules.standup.blocks as blocks_mod  # noqa: E402
+import src.modules.standup.handlers as handlers  # noqa: E402
 
 if _prior_session_store is not None:
-    sys.modules["session_store"] = _prior_session_store
+    sys.modules["src.core.session_store"] = _prior_session_store
 else:
-    sys.modules.pop("session_store", None)
+    sys.modules.pop("src.core.session_store", None)
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/templates/dashboard.html")
-MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "../migrations")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
+# Migrations live in core and in each module, so scan every shipped directory
+# rather than one path. Using the real discovery function keeps this test
+# honest if migrations move between modules again.
+_SRC = os.path.join(os.path.dirname(__file__), "..", "src")
+
+
+def _migration_files():
+    import glob
+
+    return sorted(glob.glob(os.path.join(_SRC, "**", "migrations", "*.sql"), recursive=True))
 
 
 def _find_block(blocks, block_id):
@@ -110,7 +119,7 @@ class TestModalSubmissionPersistsTheToggle:
             },
         }
         with (
-            patch.dict(sys.modules, {"db": self.db}),
+            patch_modules({"src.core.db": self.db}),
             patch.object(schedule_validation, "pytz", _real_pytz),
         ):
             self.handler(MagicMock(), body, self.client)
@@ -132,11 +141,11 @@ class TestDashboardExposesTheToggle:
 
 class TestNewSchedulesDefaultToPosting:
     def test_api_create_defaults_to_true(self):
-        import dashboard
+        import src.core.dashboard as dashboard
 
         db = MagicMock()
         db.create_standup_schedule.return_value = {"id": 1}
-        with patch.dict(sys.modules, {"db": db}):
+        with patch_modules({"src.core.db": db}):
             dashboard.db = db
         # The payload a client sends without the key must still post its summary.
         assert dashboard._post_summary_default({}) is True
@@ -144,10 +153,8 @@ class TestNewSchedulesDefaultToPosting:
 
     def test_a_migration_sets_the_column_default_back_to_true(self):
         pattern = re.compile(r"post_summary\s+SET\s+DEFAULT\s+TRUE", re.IGNORECASE)
-        for name in os.listdir(MIGRATIONS_DIR):
-            if not name.endswith(".sql"):
-                continue
-            with open(os.path.join(MIGRATIONS_DIR, name), encoding="utf-8") as fh:
+        for path in _migration_files():
+            with open(path, encoding="utf-8") as fh:
                 if pattern.search(fh.read()):
                     return
         raise AssertionError("no migration restores the post_summary column default to TRUE")
@@ -155,8 +162,6 @@ class TestNewSchedulesDefaultToPosting:
     def test_the_migration_leaves_existing_rows_alone(self):
         """Flipping 19 live schedules on would post to their channels unannounced."""
         bad = re.compile(r"UPDATE\s+standup_schedules\s+SET\s+post_summary\s*=\s*TRUE", re.IGNORECASE)
-        for name in os.listdir(MIGRATIONS_DIR):
-            if not name.endswith(".sql"):
-                continue
-            with open(os.path.join(MIGRATIONS_DIR, name), encoding="utf-8") as fh:
-                assert not bad.search(fh.read()), f"{name} backfills post_summary on existing rows"
+        for path in _migration_files():
+            with open(path, encoding="utf-8") as fh:
+                assert not bad.search(fh.read()), f"{path} backfills post_summary on existing rows"

@@ -12,16 +12,13 @@ points agree on identical input.
 from __future__ import annotations
 
 import datetime as dt
-import os
 import sys
 from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 for _name in ("psycopg2", "psycopg2.extras"):
     sys.modules.setdefault(_name, MagicMock())
 
-import db  # noqa: E402
+import src.core.db as db  # noqa: E402
 
 
 def _workspace():

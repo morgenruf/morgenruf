@@ -1,10 +1,6 @@
 """Tests for autolink.py — issue reference → Slack hyperlink conversion."""
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-from autolink import autolink
+from src.modules.standup.autolink import autolink
 
 # ---------------------------------------------------------------------------
 # Jira autolink

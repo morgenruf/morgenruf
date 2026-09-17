@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # test_handlers stubs pytz with a MagicMock, which would accept every timezone.
 # Drop a leaked stub so this module validates against the real tz database.
 if isinstance(sys.modules.get("pytz"), MagicMock):
     del sys.modules["pytz"]
 
-from schedule_validation import (  # noqa: E402
+from src.core.schedule_validation import (  # noqa: E402
     schedule_config_error,
     schedule_payload_error,
     schedule_time_error,

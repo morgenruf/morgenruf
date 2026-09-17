@@ -17,11 +17,8 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock, patch
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub psycopg2 before importing the real db module, and discard any MagicMock
 # another test module left under "db", so we import the real thing.
@@ -30,9 +27,9 @@ _pool_mod_mock.ThreadedConnectionPool.return_value = None  # skip pool init at i
 sys.modules["psycopg2"] = MagicMock()
 sys.modules["psycopg2.extras"] = MagicMock()
 sys.modules["psycopg2.pool"] = _pool_mod_mock
-sys.modules.pop("db", None)
+sys.modules.pop("src.core.db", None)
 
-import db as _db_real  # noqa: E402
+import src.core.db as _db_real  # noqa: E402
 
 importlib.reload(_db_real)  # re-run the module body now the psycopg2 stubs are in place
 db = _db_real

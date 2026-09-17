@@ -12,7 +12,7 @@ import os
 import re
 from collections import Counter
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/templates/dashboard.html")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
 
 # An id built at runtime ("sc-' + s.id + '") is not a literal id, so only plain
 # HTML id values count.
@@ -225,7 +225,11 @@ class TestContrast:
         ("text", "surface2", 4.5),
         ("text-muted", "bg", 4.5),
         ("text-muted", "surface", 4.5),
-        ("text-dim", "surface", 3.0),
+        # 4.5, not 3.0. This token is used for stat-sub and page-subtitle,
+        # which are sentences someone reads, not hints. At 3.0 the guard passed
+        # while the dark theme rendered them at 3.71 and they were hard to read.
+        ("text-dim", "surface", 4.5),
+        ("text-dim", "bg", 4.5),
         ("panel-text", "panel", 4.5),
         ("panel-weak", "panel", 3.0),
         ("accent", "surface", 3.0),

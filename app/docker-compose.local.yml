@@ -1,0 +1,17 @@
+# Local testing override: build from this working tree instead of pulling the
+# published image, and move off port 3000 which is commonly already in use.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+services:
+  migrate:
+    image: morgenruf/morgenruf:local
+    build:
+      context: .
+  app:
+    image: morgenruf/morgenruf:local
+    build:
+      context: .
+    # Compose merges list values, so without !override this would bind both
+    # 3000 (from the base file) and 3006.
+    ports: !override
+      - "3006:3000"

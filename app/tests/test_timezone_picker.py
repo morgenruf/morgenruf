@@ -12,15 +12,13 @@ import os
 import sys
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
 sys.modules.setdefault("slack_bolt", MagicMock())
 sys.modules.setdefault("requests", MagicMock())
 
 if isinstance(sys.modules.get("pytz"), MagicMock):
     del sys.modules["pytz"]
-import blocks as blocks_mod  # noqa: E402
 import pytz  # noqa: E402
+import src.modules.standup.blocks as blocks_mod  # noqa: E402
 
 # Real zones absent from the curated list, spread across regions.
 UNCURATED = [
@@ -92,7 +90,7 @@ class TestNoSilentUtcDefault:
         assert _tz_block().get("optional") is not True
 
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/templates/dashboard.html")
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
 
 
 class TestDashboardPickerOffersEveryZone:

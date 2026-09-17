@@ -7,11 +7,10 @@ with the scheduler test file added by the #51 reconciliation work.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+from tests.support import patch_modules
 
 # Earlier test modules leave MagicMock stubs in sys.modules (test_handlers stubs
 # pytz, test_dashboard stubs slack_sdk). The scheduler needs the real pytz for
@@ -21,7 +20,7 @@ for _name in ("pytz", "slack_sdk"):
         del sys.modules[_name]
 
 _had_scheduler = "scheduler" in sys.modules
-import scheduler as sched_mod  # noqa: E402
+import src.core.scheduler as sched_mod  # noqa: E402
 
 if _had_scheduler:
     sched_mod = importlib.reload(sched_mod)
@@ -79,7 +78,7 @@ class TestChannelSyncFiltersBots:
 
     def _run(self):
         with (
-            patch.dict(sys.modules, {"db": self.db}),
+            patch_modules({"src.core.db": self.db}),
             patch.object(sched_mod, "WebClient", return_value=self.client),
             patch.object(sched_mod.state_store, "is_active", return_value=False),
         ):
@@ -128,7 +127,7 @@ class TestChannelSyncStoresProfiles:
 
     def _run(self):
         with (
-            patch.dict(sys.modules, {"db": self.db}),
+            patch_modules({"src.core.db": self.db}),
             patch.object(sched_mod, "WebClient", return_value=self.client),
             patch.object(sched_mod.state_store, "is_active", return_value=False),
         ):
@@ -153,4 +152,10 @@ class TestChannelSyncStoresProfiles:
         self.client.users_list.return_value = {"members": [_slack_user("U1")], "response_metadata": {}}
         self._run()
         _, kwargs = self.db.upsert_member.call_args
-        assert kwargs == {"real_name": None, "email": None, "tz": None}
+        assert kwargs == {
+            "real_name": None,
+            "email": None,
+            "tz": None,
+            "avatar_url": None,
+            "display_name": None,
+        }

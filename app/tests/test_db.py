@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # Stub psycopg2 before importing the real db module.
 # Other test modules may have put a MagicMock under "db" in sys.modules, so
@@ -20,11 +17,11 @@ _pool_mod_mock.ThreadedConnectionPool.return_value = None  # skip pool init at i
 sys.modules["psycopg2"] = _psycopg2_mock
 sys.modules["psycopg2.extras"] = _psycopg2_extras_mock
 sys.modules["psycopg2.pool"] = _pool_mod_mock
-sys.modules.pop("db", None)  # discard any mock from other test files
+sys.modules.pop("src.core.db", None)  # discard any mock from other test files
 
 import importlib  # noqa: E402
 
-import db as _db_real  # noqa: E402  — this is the real db module
+import src.core.db as _db_real  # noqa: E402  — this is the real db module
 
 importlib.reload(_db_real)  # re-run module body now that psycopg2 stubs are in place
 db = _db_real

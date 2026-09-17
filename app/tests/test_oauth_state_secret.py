@@ -10,11 +10,8 @@ so a self-hoster following it would land in exactly that state.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 # slack_sdk is a real dependency and oauth.py imports a submodule from it, so a
 # MagicMock stub breaks the import. Drop any stub an earlier test module left.
@@ -28,8 +25,8 @@ def _fresh_oauth(monkeypatch, key):
         monkeypatch.delenv("FLASK_SECRET_KEY", raising=False)
     else:
         monkeypatch.setenv("FLASK_SECRET_KEY", key)
-    sys.modules.pop("oauth", None)
-    return importlib.import_module("oauth")
+    sys.modules.pop("src.core.oauth", None)
+    return importlib.import_module("src.core.oauth")
 
 
 class TestStateSecret:
@@ -48,7 +45,7 @@ class TestStateSecret:
     def test_two_processes_do_not_share_the_fallback(self, monkeypatch):
         """Distinct processes must not converge on the same signing key."""
         a = _fresh_oauth(monkeypatch, None)._state_secret()
-        sys.modules.pop("oauth", None)
+        sys.modules.pop("src.core.oauth", None)
         b = _fresh_oauth(monkeypatch, None)._state_secret()
         assert a != b
 

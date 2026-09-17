@@ -1,4 +1,3 @@
-version: "3.9"
 
 # Morgenruf — Mac / Linux self-hosted quickstart
 # Usage:
@@ -22,6 +21,19 @@ services:
       timeout: 5s
       retries: 5
 
+  # One-shot: applies any pending SQL migrations, then exits. The app image
+  # does not migrate on start, so without this the schema is never created.
+  # Mirrors the migrate initContainer in the Helm chart.
+  migrate:
+    image: morgenruf/morgenruf:latest
+    command: ["python", "src/migrate.py"]
+    environment:
+      DATABASE_URL: postgresql://morgenruf:${DB_PASSWORD:-morgenruf}@db:5432/morgenruf
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   app:
     image: morgenruf/morgenruf:latest
     restart: unless-stopped
@@ -39,6 +51,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:

@@ -1,18 +1,16 @@
 """Tests for session_store.py — Redis-backed session management with in-memory fallback."""
 
-import os
-import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+from tests.support import patch_modules
 
 
 @pytest.fixture(autouse=True)
 def reset_session_store():
     """Reset module-level state before each test."""
-    import session_store
+    import src.core.session_store as session_store
 
     session_store._redis = None
     session_store._memory.clear()
@@ -26,7 +24,7 @@ class TestInMemoryFallback:
 
     def test_set_and_get(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import get_session, set_session
+        from src.core.session_store import get_session, set_session
 
         set_session("U1", {"step": 1, "answers": []})
         result = get_session("U1")
@@ -34,13 +32,13 @@ class TestInMemoryFallback:
 
     def test_get_missing_returns_none(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import get_session
+        from src.core.session_store import get_session
 
         assert get_session("U_NONEXISTENT") is None
 
     def test_delete_session(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import delete_session, get_session, set_session
+        from src.core.session_store import delete_session, get_session, set_session
 
         set_session("U1", {"step": 2})
         delete_session("U1")
@@ -48,26 +46,26 @@ class TestInMemoryFallback:
 
     def test_delete_nonexistent_no_error(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import delete_session
+        from src.core.session_store import delete_session
 
         delete_session("GHOST")  # should not raise
 
     def test_has_session_true(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import has_session, set_session
+        from src.core.session_store import has_session, set_session
 
         set_session("U1", {"step": 0})
         assert has_session("U1") is True
 
     def test_has_session_false(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import has_session
+        from src.core.session_store import has_session
 
         assert has_session("U_MISSING") is False
 
     def test_overwrite_session(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import get_session, set_session
+        from src.core.session_store import get_session, set_session
 
         set_session("U1", {"step": 0})
         set_session("U1", {"step": 3, "answers": ["a", "b", "c"]})
@@ -77,7 +75,7 @@ class TestInMemoryFallback:
 
     def test_multiple_users_isolated(self, monkeypatch):
         monkeypatch.delenv("REDIS_URL", raising=False)
-        from session_store import get_session, set_session
+        from src.core.session_store import get_session, set_session
 
         set_session("U1", {"step": 1})
         set_session("U2", {"step": 2})
@@ -113,8 +111,8 @@ class TestRedisBackend:
         redis_mod = MagicMock()
         redis_mod.from_url.return_value = mock_redis
 
-        with patch.dict(sys.modules, {"redis": redis_mod}):
-            import session_store
+        with patch_modules({"redis": redis_mod}):
+            import src.core.session_store as session_store
 
             session_store._redis = None
             session_store.set_session("U1", {"step": 1})
@@ -128,8 +126,8 @@ class TestRedisBackend:
         redis_mod = MagicMock()
         redis_mod.from_url.return_value = mock_redis
 
-        with patch.dict(sys.modules, {"redis": redis_mod}):
-            import session_store
+        with patch_modules({"redis": redis_mod}):
+            import src.core.session_store as session_store
 
             session_store._redis = None
             result = session_store.get_session("U_MISSING")
@@ -143,8 +141,8 @@ class TestRedisBackend:
         redis_mod = MagicMock()
         redis_mod.from_url.return_value = bad_redis
 
-        with patch.dict(sys.modules, {"redis": redis_mod}):
-            import session_store
+        with patch_modules({"redis": redis_mod}):
+            import src.core.session_store as session_store
 
             session_store._redis = None
             session_store.set_session("U1", {"step": 5})

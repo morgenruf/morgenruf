@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import os
-import sys
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
-from slack_users import fetch_human_users, filter_human_ids, is_human, member_profile  # noqa: E402
+from src.core.slack_users import fetch_human_users, filter_human_ids, is_human, member_profile  # noqa: E402
 
 
 def _user(uid, **overrides):
@@ -146,13 +142,52 @@ class TestFetchHumanUsers:
 class TestMemberProfile:
     def test_reads_name_email_and_timezone(self):
         user = _user("U1", tz="Asia/Kolkata", profile={"real_name": "Alice", "email": "alice@example.com"})
-        assert member_profile(user) == {"real_name": "Alice", "email": "alice@example.com", "tz": "Asia/Kolkata"}
+        assert member_profile(user) == {
+            "real_name": "Alice",
+            "email": "alice@example.com",
+            "tz": "Asia/Kolkata",
+            "avatar_url": None,
+            "display_name": None,
+        }
 
     def test_falls_back_to_display_name_then_top_level_name(self):
         assert member_profile({"profile": {"display_name": "ally"}})["real_name"] == "ally"
         assert member_profile({"real_name": "Alice"})["real_name"] == "Alice"
 
     def test_missing_values_are_none_so_an_upsert_does_not_blank_them(self):
-        assert member_profile({}) == {"real_name": None, "email": None, "tz": None}
-        assert member_profile(None) == {"real_name": None, "email": None, "tz": None}
+        assert member_profile({}) == {
+            "real_name": None,
+            "email": None,
+            "tz": None,
+            "avatar_url": None,
+            "display_name": None,
+        }
+        assert member_profile(None) == {
+            "real_name": None,
+            "email": None,
+            "tz": None,
+            "avatar_url": None,
+            "display_name": None,
+        }
         assert member_profile({"profile": {"real_name": ""}, "tz": ""})["real_name"] is None
+
+
+class TestMemberProfileAvatar:
+    """The picture and handle the dashboard draws people with."""
+
+    def test_the_72px_image_is_preferred(self):
+        p = member_profile({"profile": {"image_72": "https://a/72.png", "image_48": "https://a/48.png"}})
+        assert p["avatar_url"] == "https://a/72.png"
+
+    def test_it_falls_back_to_48px(self):
+        """Some accounts return only the smaller key."""
+        p = member_profile({"profile": {"image_48": "https://a/48.png"}})
+        assert p["avatar_url"] == "https://a/48.png"
+
+    def test_no_picture_is_none_so_the_upsert_leaves_the_stored_one_alone(self):
+        assert member_profile({"profile": {"real_name": "Alice"}})["avatar_url"] is None
+
+    def test_the_handle_is_kept_separately_from_the_name(self):
+        p = member_profile({"profile": {"real_name": "Alice Kim", "display_name": "ally"}})
+        assert p["real_name"] == "Alice Kim"
+        assert p["display_name"] == "ally"

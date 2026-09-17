@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
-
-sys.path.insert(0, os.path.dirname(__file__))
 
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -25,16 +22,19 @@ if _sentry_dsn:
     )
     logging.getLogger(__name__).info("Sentry error monitoring enabled")
 
-from dashboard import dashboard_bp
 from flask import Flask, jsonify, request
-from handlers import register_handlers
-from installation_store import PostgresInstallationStore
-from oauth import oauth_bp
-from scheduler import build_scheduler
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+from src.core.dashboard import dashboard_bp
+from src.core.dm_router import DMContext, route_dm
+from src.core.installation_store import PostgresInstallationStore
+from src.core.modules import active_modules, deploy_allowlist
+from src.core.oauth import oauth_bp
+from src.core.scheduler import build_scheduler
+from src.modules import REGISTRY
 
 log_level = logging.DEBUG if os.environ.get("LOG_LEVEL", "").upper() == "DEBUG" else logging.INFO
 logging.basicConfig(
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
     """Load all active installations and their configs from DB."""
     try:
-        import db  # noqa: PLC0415
+        import src.core.db as db  # noqa: PLC0415
 
         installations = db.get_all_installations()
         jobs = []
@@ -98,6 +98,64 @@ def _resolve_secret_key() -> bytes | str:
     )
 
 
+def register_modules(flask_app, bolt_app, registry) -> list[str]:
+    """Wire each module's routes and Slack listeners. Returns registered names.
+
+    A module that raises during registration is logged and skipped, so one bad
+    module cannot stop the process from starting.
+    """
+    registered: list[str] = []
+    for spec in registry:
+        try:
+            if spec.register_routes is not None:
+                spec.register_routes(flask_app)
+            if spec.register_slack is not None:
+                spec.register_slack(bolt_app)
+        except Exception:
+            logger.exception("failed to register module %s", spec.name)
+            continue
+        registered.append(spec.name)
+    return registered
+
+
+def _enabled_modules():
+    """Registry members this deployment permits, before per-workspace gating."""
+    allowlist = deploy_allowlist()
+    return [s for s in REGISTRY if allowlist is None or s.name in allowlist]
+
+
+def register_dm_listener(bolt_app) -> None:
+    """Own the single catch-all message.im listener for every module.
+
+    Bolt fires every matching listener, so two modules registering their own
+    catch-all would both process the same DM. Modules expose claim_dm instead
+    and this offers each message to them in registry order.
+    """
+
+    @bolt_app.event("message")
+    def handle_dm(event, client, logger):  # noqa: ANN001
+        if event.get("channel_type") != "im" or event.get("bot_id"):
+            return
+        team_id = event.get("team") or ""
+        ctx = DMContext(
+            team_id=team_id,
+            user_id=event.get("user", ""),
+            channel_id=event.get("channel", ""),
+            text=(event.get("text") or "").strip(),
+            event=event,
+            client=client,
+        )
+        import src.core.db as db  # noqa: PLC0415
+
+        modules = active_modules(
+            _enabled_modules(),
+            granted_scopes=db.granted_scopes(team_id),
+            settings=db.module_settings(team_id),
+            allowlist=None,
+        )
+        route_dm(modules, ctx, fallback=None)
+
+
 def create_app() -> tuple[App, Flask]:
     signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
     client_id = os.environ.get("SLACK_CLIENT_ID", "")
@@ -118,7 +176,7 @@ def create_app() -> tuple[App, Flask]:
         oauth_settings=oauth_settings,
     )
 
-    register_handlers(slack_app)
+    register_dm_listener(slack_app)
 
     workspace_jobs = _load_workspace_jobs()
     scheduler = build_scheduler(workspace_jobs)
@@ -134,19 +192,8 @@ def create_app() -> tuple[App, Flask]:
     flask_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     flask_app.register_blueprint(oauth_bp)
     flask_app.register_blueprint(dashboard_bp)
-    from mcp_http import mcp_bp  # noqa: PLC0415
-
-    flask_app.register_blueprint(mcp_bp)
-    logger.info("MCP HTTP endpoint enabled at /mcp")
-
-    if os.environ.get("GOOGLE_CREDENTIALS"):
-        try:
-            from google_chat_handler import google_chat_bp  # noqa: PLC0415
-
-            flask_app.register_blueprint(google_chat_bp)
-            logger.info("Google Chat integration enabled")
-        except Exception as exc:
-            logger.warning("Could not register Google Chat blueprint: %s", exc)
+    registered = register_modules(flask_app, slack_app, _enabled_modules())
+    logger.info("Modules registered: %s", ", ".join(registered) or "none")
 
     handler = SlackRequestHandler(slack_app)
 

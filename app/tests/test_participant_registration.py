@@ -8,15 +8,12 @@ a Friday schedule discovered on a Sunday was five days away.
 
 from __future__ import annotations
 
-import os
+import importlib
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
-
-import scheduler  # noqa: E402
+import src.core.scheduler as scheduler  # noqa: E402
 
 
 def _user(uid, name):
@@ -31,7 +28,8 @@ def db(monkeypatch):
     fake.get_all_members.return_value = []
     fake.set_members_active.return_value = 0
     fake.remove_participants_everywhere.return_value = 0
-    monkeypatch.setitem(sys.modules, "db", fake)
+    monkeypatch.setitem(sys.modules, "src.core.db", fake)
+    monkeypatch.setattr(importlib.import_module("src.core"), "db", fake)
     return fake
 
 

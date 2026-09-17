@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+from tests.support import patch_modules
 
 # Earlier modules leave MagicMocks behind under these names. schedule_validation
 # needs the real pytz to tell a valid timezone from a typo, and importing the
@@ -31,9 +31,9 @@ for _name in ("db", "dashboard", "handlers", "state"):
     if isinstance(sys.modules.get(_name), MagicMock):
         del sys.modules[_name]
 
-import dashboard  # noqa: E402
-import db  # noqa: E402
-import handlers  # noqa: E402
+import src.core.dashboard as dashboard  # noqa: E402
+import src.core.db as db  # noqa: E402
+import src.modules.standup.handlers as handlers  # noqa: E402
 from flask import Flask  # noqa: E402
 
 CANONICAL = ("standup.completed", "blocker.detected", "participation.low")
@@ -98,7 +98,7 @@ def _dashboard_db_mock():
 
 @pytest.fixture()
 def app():
-    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/templates"))
+    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
     flask_app.config["TESTING"] = True
     flask_app.config["SECRET_KEY"] = "test-secret"
     flask_app.register_blueprint(dashboard.dashboard_bp)
@@ -249,7 +249,7 @@ class TestSigning:
     def _fire(self, hook, event="standup.completed", payload=None, db_double=None):
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
-        with patch.dict(sys.modules, {"db": db_double or MagicMock()}):
+        with patch_modules({"src.core.db": db_double or MagicMock()}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.deliver_webhook(hook, event, payload or {"user": "U1"}, team_id="T123")
         return requests_mock
@@ -301,7 +301,7 @@ class TestSigning:
         db_double.get_webhooks.return_value = [_stored_row(secret="s", events=["standup_complete"])]
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T123", "standup.completed", {"user": "U1"})
         requests_mock.post.assert_called_once()
@@ -317,7 +317,7 @@ class TestDeliveryLog:
         db_double = MagicMock()
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=202)
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 result = handlers.deliver_webhook(_stored_row(secret="s"), "standup.completed", {}, team_id="T123")
 
@@ -335,7 +335,7 @@ class TestDeliveryLog:
         db_double = MagicMock()
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=500)
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 result = handlers.deliver_webhook(_stored_row(), "standup.completed", {}, team_id="T123")
 
@@ -349,7 +349,7 @@ class TestDeliveryLog:
         db_double = MagicMock()
         requests_mock = MagicMock()
         requests_mock.post.side_effect = OSError("Connection refused")
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 result = handlers.deliver_webhook(_stored_row(), "standup.completed", {}, team_id="T123")
 
@@ -364,7 +364,7 @@ class TestDeliveryLog:
         db_double.record_webhook_delivery.side_effect = RuntimeError("log table gone")
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 result = handlers.deliver_webhook(_stored_row(), "standup.completed", {}, team_id="T123")
         requests_mock.post.assert_called_once()
@@ -375,7 +375,7 @@ class TestDeliveryLog:
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
         hook = {"webhook_url": "https://hooks.example.com/x", "events": ["standup.completed"], "secret": None}
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.deliver_webhook(hook, "standup.completed", {}, team_id="T123")
         db_double.record_webhook_delivery.assert_not_called()
@@ -505,7 +505,7 @@ class TestTestSend:
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=204)
 
-        with patch.dict(sys.modules, {"db": MagicMock()}):
+        with patch_modules({"src.core.db": MagicMock()}):
             with patch.object(handlers, "requests", requests_mock):
                 resp = authed_client.post("/dashboard/api/webhooks/7/test")
 
@@ -525,7 +525,7 @@ class TestTestSend:
         requests_mock = MagicMock()
         requests_mock.post.side_effect = OSError("nope")
 
-        with patch.dict(sys.modules, {"db": MagicMock()}):
+        with patch_modules({"src.core.db": MagicMock()}):
             with patch.object(handlers, "requests", requests_mock):
                 resp = authed_client.post("/dashboard/api/webhooks/7/test")
 
@@ -602,7 +602,7 @@ class TestCreatedWebhookDeliversSigned:
         db_double.get_webhooks.return_value = [stored]
         requests_mock = MagicMock()
         requests_mock.post.return_value = MagicMock(status_code=200)
-        with patch.dict(sys.modules, {"db": db_double}):
+        with patch_modules({"src.core.db": db_double}):
             with patch.object(handlers, "requests", requests_mock):
                 handlers.fire_webhooks("T123", "standup.completed", {"user": "U1"})
 

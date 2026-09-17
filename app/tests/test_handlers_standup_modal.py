@@ -6,11 +6,10 @@ which would accept every timezone.
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
+from tests.support import patch_modules
 
 # Stub heavy third-party deps before any import of handlers
 sys.modules.setdefault("slack_bolt", MagicMock())
@@ -22,19 +21,19 @@ if isinstance(sys.modules.get("pytz"), MagicMock):
 import pytz as _real_pytz  # noqa: E402
 
 # Stub session_store before importing state (state.py imports it at module level).
-_prior_session_store = sys.modules.get("session_store")
+_prior_session_store = sys.modules.get("src.core.session_store")
 _ss_mock = MagicMock()
 _ss_mock.get_session.return_value = None
 _ss_mock.has_session.return_value = False
-sys.modules["session_store"] = _ss_mock
+sys.modules["src.core.session_store"] = _ss_mock
 
-import handlers  # noqa: E402
-import schedule_validation  # noqa: E402
+import src.core.schedule_validation as schedule_validation  # noqa: E402
+import src.modules.standup.handlers as handlers  # noqa: E402
 
 if _prior_session_store is not None:
-    sys.modules["session_store"] = _prior_session_store
+    sys.modules["src.core.session_store"] = _prior_session_store
 else:
-    sys.modules.pop("session_store", None)
+    sys.modules.pop("src.core.session_store", None)
 
 
 def _view_handler(callback_id: str):
@@ -89,7 +88,7 @@ class TestCreateStandupModalTimingGuard:
 
     def _submit(self, **body_kwargs):
         with (
-            patch.dict(sys.modules, {"db": self.db}),
+            patch_modules({"src.core.db": self.db}),
             patch.object(schedule_validation, "pytz", _real_pytz),
         ):
             self.handler(MagicMock(), _modal_body(**body_kwargs), self.client)
@@ -127,7 +126,7 @@ class TestStandupTimeFieldIsNamedForWhatItDoes:
     users set it believing it controlled when the channel summary posts."""
 
     def _modal(self, cfg=None):
-        import blocks as blocks_mod
+        import src.modules.standup.blocks as blocks_mod
 
         return blocks_mod.create_standup_modal(cfg, bot_channels=[{"id": "C1", "name": "general"}])["blocks"]
 
@@ -167,7 +166,7 @@ class TestModalSubmissionReadsBothTimes:
         body = _modal_body()
         body["view"]["state"]["values"].update(values)
         with (
-            patch.dict(sys.modules, {"db": self.db}),
+            patch_modules({"src.core.db": self.db}),
             patch.object(schedule_validation, "pytz", _real_pytz),
         ):
             self.handler(MagicMock(), body, self.client)
