@@ -327,7 +327,11 @@ def _accept_slot(body, client) -> None:
         # linked Zoom. Donut hands you a room to join now; this schedules it
         # for the slot both people accepted, which is what they will actually
         # turn up to.
-        room = _zoom_room(match, members, slot) or _room(match)
+        # Honour what the programme chose rather than trying everything: a
+        # workspace that picked one shared room does not want a Zoom meeting
+        # made on somebody's account, and one that picked Zoom does not want
+        # a stale room link offered instead.
+        room = _room_for(match, members, slot)
         text, blocks = cblocks.agreed_message(members, label, add_url, room)
         client.chat_postMessage(channel=channel_id, text=text, blocks=blocks)
     except Exception:
@@ -352,14 +356,22 @@ def _quiet(client, channel_id: str, user_id: str, text: str) -> None:
         logger.info("connect: could not send ephemeral to %s", user_id)
 
 
-def _room(match: dict) -> str:
+def _room_for(match: dict, members: list, slot) -> str:
+    """The room for this match, according to how the programme says they meet."""
     try:
         import src.modules.connect.db as cdb  # noqa: PLC0415
 
         program = cdb.program_for_round(match["round_id"]) or {}
-        return program.get("meeting_link") or ""
     except Exception:
         return ""
+    mode = str(program.get("video_mode") or "link")
+    if mode == "none":
+        return ""
+    if mode == "zoom":
+        # No fallback to the shared link: the admin chose a real meeting, and a
+        # silent substitution would hide that the Zoom side is not working.
+        return _zoom_room(match, members, slot)
+    return program.get("meeting_link") or ""
 
 
 def _slot_label_and_link(match: dict, members: list, slot) -> tuple:
@@ -371,7 +383,9 @@ def _slot_label_and_link(match: dict, members: list, slot) -> tuple:
 
         zones = {m.user_id: (getattr(m, "tz", "") or "") for m in eligible_members(match["team_id"])}
         label = local_label(slot, [zones.get(m, "") for m in members])
-        return label, google_link(slot, 30, "Coffee chat", "Your Morgenruf coffee chat.", _room(match))
+        return label, google_link(
+            slot, 30, "Coffee chat", "Your Morgenruf coffee chat.", _room_for(match, members, slot)
+        )
     except Exception:
         return slot.strftime("%A %H:%M UTC"), ""
 
@@ -392,10 +406,14 @@ def _zoom_room(match: dict, members: list, slot) -> str:
         import src.modules.connect.db as cdb  # noqa: PLC0415
         from src.modules.connect import zoom  # noqa: PLC0415
 
-        if not zoom.configured():
-            return ""
+        # An existing meeting is returned before anything else. It was already
+        # created, so whether this deployment still has Zoom credentials is
+        # irrelevant, and checking configuration first threw away a live
+        # meeting url the pair may already have in a calendar.
         if match.get("zoom_join_url"):
             return match["zoom_join_url"]  # already made; never make a second
+        if not zoom.configured():
+            return ""
 
         hosts = cdb.zoom_linked_user_ids(match["team_id"], members)
         if not hosts:

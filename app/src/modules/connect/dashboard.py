@@ -41,6 +41,7 @@ def register_routes(flask_app) -> None:
         for p in programs:
             p["created_at"] = p["created_at"].isoformat() if p.get("created_at") else None
             p["last_round"] = p["last_round"].isoformat() if p.get("last_round") else None
+            p["next_round_date"] = p["next_round_date"].isoformat() if p.get("next_round_date") else None
             try:
                 # The same intersection the round itself does: people in the
                 # channel who are also eligible and have not opted out.

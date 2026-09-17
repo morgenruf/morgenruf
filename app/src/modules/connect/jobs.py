@@ -90,7 +90,9 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         return
 
     today = date.today()
-    if not force and not is_round_due(program["interval_weeks"], program.get("last_round"), today):
+    if not force and not is_round_due(
+        program["interval_weeks"], program.get("last_round"), today, program.get("next_round_date")
+    ):
         logger.info("connect: programme %s not due today", program_id)
         return
 
@@ -143,6 +145,11 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
     cdb.create_matches(round_row["id"], team_id, groups)
     cdb.record_pairs(program_id, round_row["id"], groups)
     cdb.set_round_state(round_row["id"], "matched", len(pool))
+    if program.get("next_round_date"):
+        try:
+            cdb.update_program(team_id, program_id, next_round_date=None)
+        except Exception:
+            logger.warning("connect: could not clear the pinned date on programme %s", program_id)
 
     deliver_round(round_row["id"], bot_token, team_id, program_id)
     _schedule_followups(round_row["id"], bot_token, team_id)
@@ -210,7 +217,11 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
         return
 
     program = cdb.get_program(program_id) or {}
-    meeting_link = program.get("meeting_link") or ""
+    # "How they meet" decides whether the shared room appears at all. It saved
+    # and did nothing until now: a programme set to Zoom or to "they sort it
+    # out" still had its meeting_link pasted into every introduction.
+    video_mode = str(program.get("video_mode") or "link")
+    meeting_link = (program.get("meeting_link") or "") if video_mode == "link" else ""
     meeting_minutes = int(program.get("meeting_minutes") or 30)
     # Both default on, so a programme predating these columns behaves as before.
     want_times = program.get("suggest_times", True) is not False
@@ -239,7 +250,8 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 tone=str(program.get("intro_tone") or "hybrid"),
             )
             api.post(client, channel, text, blocks)
-            _offer_zoom(client, channel, team_id, members)
+            if video_mode == "zoom":
+                _offer_zoom(client, channel, team_id, members)
             cdb.mark_delivered(m["id"], channel)
         except api.PermanentSlackError as exc:
             # A deactivated member or a lost scope will not fix itself on

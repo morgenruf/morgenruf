@@ -2470,6 +2470,20 @@
 
               
 <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-clock"/></svg></div>
+                <div>
+                  <div class="set-label">Next introduction</div>
+                  <div class="set-help">
+                    Leave this empty and the cadence decides. Setting a date moves the next
+                    round only, and the rhythm carries on from there.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <input type="date" id="cs-next-date" style="max-width:190px"/>
+                </div>
+              </div>
+
+              <div class="set-row">
                 <div class="set-ico"><svg aria-hidden="true"><use href="#i-users"/></svg></div>
                 <div>
                   <div class="set-label">How many people in each group</div>
@@ -3948,6 +3962,7 @@
     ccGroupSize(p.group_size || 2);
     ccPick('tone', p.intro_tone || 'hybrid');
     ccPick('video', p.video_mode || 'link');
+    set('cs-next-date', (p.next_round_date || '').slice(0, 10));
     ccTab('basics');
     renderCcPreview();
     document.getElementById('cc-settings-modal').classList.add('open');
@@ -4198,7 +4213,9 @@
         group_size: parseInt(document.getElementById('cs-group-size').value, 10) || 2,
         strict_group_size: document.getElementById('cs-strict').checked,
         intro_tone: ccPickValue('tone', 'hybrid'),
-        video_mode: ccPickValue('video', 'link')
+        video_mode: ccPickValue('video', 'link'),
+        // Empty means "let the cadence decide", which is null rather than "".
+        next_round_date: document.getElementById('cs-next-date').value || null
       });
       closeConnectSettings();
       toast('Settings saved');
