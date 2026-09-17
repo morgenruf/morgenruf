@@ -1489,6 +1489,28 @@
     .token-preview img { width: 22px; height: 22px; display: block; }
     .token-preview .unknown { font-size: 11px; color: var(--text-dim); font-weight: 600; }
 
+    .rule-templates { display: grid; gap: 10px; margin-bottom: 18px;
+                      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .rule-template {
+      appearance: none; text-align: left; cursor: pointer; font: inherit;
+      background: var(--surface2); color: inherit;
+      border: 1px solid var(--border2); border-radius: 10px; padding: 12px 14px;
+    }
+    .rule-template:hover { border-color: var(--accent-line); background: var(--accent-dim); }
+    .rule-template b { display: block; font-size: 0.92rem; margin-bottom: 3px; }
+    .rule-template span { color: var(--text-muted); font-size: 0.82rem; line-height: 1.45; }
+
+    /* Twenty-odd names as full-size pills wrapped into ragged rows. These
+       are sized for a list rather than for a single status. */
+    .name-row { display: flex; flex-wrap: wrap; gap: 5px; }
+    .name-chip {
+      font-size: 12.5px; line-height: 1.35;
+      padding: 3px 9px; border-radius: 6px;
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text-muted); white-space: nowrap;
+    }
+    .name-chip.more { background: none; border-style: dashed; color: var(--text-dim); }
+
     .tok { width: 19px; height: 19px; vertical-align: -4px; }
     .count-pill {
       background: var(--indigo-soft); color: var(--indigo-ink);
@@ -1887,7 +1909,11 @@
 
         <!-- Add Rule form (hidden by default) -->
         <div id="add-rule-form" class="stat-card" style="display:none;margin-top:20px">
-          <div class="stat-label" style="margin-bottom:16px">New Automation Rule</div>
+          <div class="stat-label" style="margin-bottom:6px">New Automation Rule</div>
+          <div style="color:var(--text-muted);font-size:0.86rem;margin-bottom:10px">
+            Start from one of these, or fill the form in yourself. Everything stays editable.
+          </div>
+          <div id="rule-templates" class="rule-templates"></div>
           <form onsubmit="saveRule(event)" style="display:grid;gap:12px">
             <div>
               <label style="font-size:0.85rem;color:var(--text-muted)">Rule Name</label>
@@ -2168,7 +2194,11 @@
           </div>
           <div style="flex:1;min-width:190px">
             <label>Timezone</label>
-            <input type="text" id="cc-tz" list="tz-options" placeholder="America/Toronto"/>
+            <div class="tz-search-wrap" id="cc-tz-wrap">
+              <input type="text" id="cc-tz" class="tz-search-input" placeholder="Search timezone..."
+                     autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="cc-tz-dropdown"/>
+              <div class="tz-dropdown" id="cc-tz-dropdown"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -2284,6 +2314,20 @@
           <div class="form-group">
             <label>Report Time</label>
             <input type="time" id="f-report-time"/>
+          </div>
+          <div class="form-group">
+            <label>Daily email to</label>
+            <input type="email" id="f-digest-email" placeholder="lead@company.com"/>
+            <div class="set-help" style="margin-top:5px">
+              This standup's answers only, sent after the reporting window. A
+              workspace running several standups can give each lead their own.
+            </div>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="f-digest-enabled" style="width:auto"/>
+              Send that email daily
+            </label>
           </div>
         </div>
 
@@ -2721,14 +2765,15 @@
     }
     if (awaiting.length) {
       html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">' +
-        '<div class="stat-label" style="margin-bottom:8px">Still to answer</div>' +
-        awaiting.slice(0, 18).map(function (a) {
-          return '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">' +
-            esc(a.real_name || ('@' + a.user_id)) + '</span>';
+        '<div class="stat-label" style="margin-bottom:8px">Still to answer ' +
+          '<span style="color:var(--text-dim);font-weight:400">' + awaiting.length + '</span></div>' +
+        '<div class="name-row">' +
+        awaiting.slice(0, 24).map(function (a) {
+          return '<span class="name-chip">' + esc(a.real_name || ('@' + a.user_id)) + '</span>';
         }).join('') +
-        (awaiting.length > 18
-          ? '<span class="pill-quiet" style="margin:0 6px 6px 0;display:inline-block">and ' +
-            (awaiting.length - 18) + ' more</span>' : '') + '</div>';
+        (awaiting.length > 24
+          ? '<span class="name-chip more">and ' + (awaiting.length - 24) + ' more</span>' : '') +
+        '</div></div>';
     }
     return html + '</div>';
   }
@@ -3218,20 +3263,14 @@
       '<option value="' + i + '"' + (i === 0 ? ' selected' : '') + '>' + d + '</option>').join('');
     document.getElementById('cc-name').value = 'Coffee chats';
     document.getElementById('cc-time').value = '10:00';
-    const tzField = document.getElementById('cc-tz');
-    if (tzField && !tzField.value) {
-      tzField.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    }
+    if (connectTz) connectTz.set(workspaceTz());
     document.getElementById('connect-modal').classList.add('open');
   }
 
   // The field is prefilled with the browser's zone, but a programme often
   // belongs to a team in another one, so it has to be changeable.
   function connectTimezone() {
-    const typed = (document.getElementById('cc-tz') || {}).value || '';
-    const tz = typed.trim();
-    if (tz && isValidIanaTz(tz)) return tz;
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return connectTz ? connectTz.get() : workspaceTz();
   }
 
   function closeConnectModal() {
@@ -4262,6 +4301,10 @@
     document.getElementById('f-time').value = s.schedule_time || '09:00';
     selectTz(s.schedule_tz || workspaceTz());
     document.getElementById('f-report-channel').value = s.report_channel || '';
+    const dEmail = document.getElementById('f-digest-email');
+    if (dEmail) dEmail.value = s.digest_email || '';
+    const dOn = document.getElementById('f-digest-enabled');
+    if (dOn) dOn.checked = !!s.digest_enabled;
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
     document.getElementById('f-post-as').value = s.post_as || 'combined';
@@ -4325,6 +4368,8 @@
       questions: questions.length ? questions : ['What did you complete yesterday?','What are you working on today?','Any blockers?'],
       participants: state.participants,
       report_channel: document.getElementById('f-report-channel').value,
+      digest_email: (document.getElementById('f-digest-email') || {}).value || '',
+      digest_enabled: !!(document.getElementById('f-digest-enabled') || {}).checked,
       report_time: document.getElementById('f-report-time').value,
       group_by: document.getElementById('f-group-by').value,
       post_as: document.getElementById('f-post-as').value,
@@ -5081,43 +5126,10 @@
     });
   })();
 
-  const tzInput = document.getElementById('f-tz');
-  const tzDropdown = document.getElementById('tz-dropdown');
-  let tzHighlightIdx = -1;
-
-  function renderTzOptions(filter) {
-    const q = (filter || '').toLowerCase();
-    let matches;
-    if (!q) {
-      matches = ALL_TIMEZONES;
-    } else {
-      // Check aliases first
-      const aliasMatch = TZ_ALIASES[q];
-      matches = ALL_TIMEZONES.filter(tz => tz.label.toLowerCase().includes(q) || tz.value.toLowerCase().includes(q));
-      if (aliasMatch) {
-        const already = matches.some(tz => tz.value === aliasMatch);
-        if (!already) {
-          const found = ALL_TIMEZONES.find(tz => tz.value === aliasMatch);
-          if (found) matches.unshift(found);
-        }
-      }
-      // Also match partial alias keys
-      if (!matches.length) {
-        const partialAliasValues = [...new Set(Object.entries(TZ_ALIASES).filter(([k]) => k.includes(q)).map(([,v]) => v))];
-        matches = ALL_TIMEZONES.filter(tz => partialAliasValues.includes(tz.value));
-      }
-    }
-    tzHighlightIdx = -1;
-    if (!matches.length) {
-      tzDropdown.innerHTML = '<div class="tz-option" style="color:var(--text-dim)">No match</div>';
-    } else {
-      tzDropdown.innerHTML = matches.slice(0, 50).map((tz, i) =>
-        '<div class="tz-option" data-tz="' + esc(tz.value) + '" onmousedown="selectTz(\'' + esc(tz.value) + '\')">' + esc(tz.label) + '</div>'
-      ).join('');
-    }
-    tzDropdown.classList.add('open');
-  }
-
+  // One timezone picker, instantiated per field. It was written against a
+  // single pair of element ids, so the coffee chat form had to fall back to a
+  // native datalist: unstyled, 400-odd entries deep, and spilling out of the
+  // modal. Both fields use this now, so they behave and look the same.
   function tzLabel(value) {
     const found = ALL_TIMEZONES.find(tz => tz.value === value);
     return found ? found.label : value;
@@ -5167,45 +5179,99 @@
     return 'UTC';
   }
 
-  function selectTz(tz) {
-    const value = rememberTz(tz) ? tz : workspaceTz();
-    tzInput.dataset.tzValue = value;
-    tzInput.value = tzLabel(value);
-    tzDropdown.classList.remove('open');
+  function makeTzPicker(inputId, dropdownId, wrapId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    if (!input || !dropdown) return null;
+    let highlight = -1;
+
+    function render(filter) {
+      const q = (filter || '').toLowerCase();
+      let matches;
+      if (!q) {
+        matches = ALL_TIMEZONES;
+      } else {
+        const aliasMatch = TZ_ALIASES[q];
+        matches = ALL_TIMEZONES.filter(tz =>
+          tz.label.toLowerCase().includes(q) || tz.value.toLowerCase().includes(q));
+        if (aliasMatch && !matches.some(tz => tz.value === aliasMatch)) {
+          const found = ALL_TIMEZONES.find(tz => tz.value === aliasMatch);
+          if (found) matches.unshift(found);
+        }
+        if (!matches.length) {
+          const partial = [...new Set(Object.entries(TZ_ALIASES)
+            .filter(([k]) => k.includes(q)).map(([, v]) => v))];
+          matches = ALL_TIMEZONES.filter(tz => partial.includes(tz.value));
+        }
+      }
+      highlight = -1;
+      dropdown.innerHTML = matches.length
+        ? matches.slice(0, 50).map(tz =>
+            '<div class="tz-option" data-tz="' + esc(tz.value) + '">' + esc(tz.label) + '</div>').join('')
+        : '<div class="tz-option" style="color:var(--text-dim)">No match</div>';
+      dropdown.querySelectorAll('.tz-option[data-tz]').forEach(el => {
+        el.addEventListener('mousedown', () => api.set(el.dataset.tz));
+      });
+      dropdown.classList.add('open');
+    }
+
+    const api = {
+      set(tz) {
+        const value = rememberTz(tz) ? tz : workspaceTz();
+        input.dataset.tzValue = value;
+        input.value = tzLabel(value);
+        dropdown.classList.remove('open');
+      },
+      // Only ever hand the API a name the picker knows, so a half-typed entry
+      // can never be saved as a schedule the scheduler will silently reject.
+      get() {
+        if (isKnownTz(input.dataset.tzValue)) return input.dataset.tzValue;
+        const typed = (input.value || '').trim().toLowerCase();
+        const exact = ALL_TIMEZONES.find(tz =>
+          tz.value.toLowerCase() === typed || tz.label.toLowerCase() === typed);
+        if (exact) return exact.value;
+        if (TZ_ALIASES[typed]) return TZ_ALIASES[typed];
+        const raw = (input.value || '').trim();
+        if (isValidIanaTz(raw)) return raw;
+        return workspaceTz();
+      }
+    };
+
+    input.addEventListener('focus', () => { input.value = ''; render(''); });
+    input.addEventListener('input', () => { input.dataset.tzValue = ''; render(input.value); });
+    // On blur the field snaps back to whatever will actually be saved, so what
+    // you see is what the scheduler gets.
+    input.addEventListener('blur', () => setTimeout(() => {
+      dropdown.classList.remove('open');
+      api.set(api.get());
+    }, 150));
+    input.addEventListener('keydown', (e) => {
+      const opts = dropdown.querySelectorAll('.tz-option[data-tz]');
+      const move = (d) => {
+        highlight = Math.max(0, Math.min(highlight + d, opts.length - 1));
+        opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlight));
+        if (opts[highlight]) opts[highlight].scrollIntoView({ block: 'nearest' });
+      };
+      if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (highlight >= 0 && opts[highlight]) api.set(opts[highlight].dataset.tz);
+      } else if (e.key === 'Escape') { dropdown.classList.remove('open'); }
+    });
+    document.addEventListener('click', e => {
+      const wrap = document.getElementById(wrapId);
+      if (wrap && !wrap.contains(e.target)) dropdown.classList.remove('open');
+    });
+    return api;
   }
 
-  // Only ever hand the API a name the picker knows about, so a half-typed
-  // entry can never be saved as a schedule the scheduler will silently reject.
-  function getTzValue() {
-    if (isKnownTz(tzInput.dataset.tzValue)) return tzInput.dataset.tzValue;
-    const typed = (tzInput.value || '').trim().toLowerCase();
-    const exact = ALL_TIMEZONES.find(tz => tz.value.toLowerCase() === typed || tz.label.toLowerCase() === typed);
-    if (exact) return exact.value;
-    if (TZ_ALIASES[typed]) return TZ_ALIASES[typed];
-    const raw = (tzInput.value || '').trim();
-    if (isValidIanaTz(raw)) return raw;
-    return workspaceTz();
-  }
+  const standupTz = makeTzPicker('f-tz', 'tz-dropdown', 'tz-search-wrap');
+  const connectTz = makeTzPicker('cc-tz', 'cc-tz-dropdown', 'cc-tz-wrap');
 
-  tzInput.addEventListener('focus', () => { tzInput.value = ''; renderTzOptions(''); });
-  tzInput.addEventListener('input', () => { tzInput.dataset.tzValue = ''; renderTzOptions(tzInput.value); });
-  // On blur the field snaps back to whatever will actually be saved, so what
-  // you see is what the scheduler gets.
-  tzInput.addEventListener('blur', () => setTimeout(() => {
-    tzDropdown.classList.remove('open');
-    selectTz(getTzValue());
-  }, 150));
-  tzInput.addEventListener('keydown', (e) => {
-    const opts = tzDropdown.querySelectorAll('.tz-option[data-tz]');
-    if (e.key === 'ArrowDown') { e.preventDefault(); tzHighlightIdx = Math.min(tzHighlightIdx + 1, opts.length - 1); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); tzHighlightIdx = Math.max(tzHighlightIdx - 1, 0); opts.forEach((o, i) => o.classList.toggle('highlighted', i === tzHighlightIdx)); opts[tzHighlightIdx]?.scrollIntoView({block:'nearest'}); }
-    else if (e.key === 'Enter') { e.preventDefault(); if (tzHighlightIdx >= 0 && opts[tzHighlightIdx]) selectTz(opts[tzHighlightIdx].dataset.tz); }
-    else if (e.key === 'Escape') { tzDropdown.classList.remove('open'); }
-  });
-
-  document.addEventListener('click', e => {
-    if (!document.getElementById('tz-search-wrap').contains(e.target)) tzDropdown.classList.remove('open');
-  });
+  // The standup form's existing call sites keep working unchanged.
+  function selectTz(tz) { if (standupTz) standupTz.set(tz); }
+  function getTzValue() { return standupTz ? standupTz.get() : workspaceTz(); }
 
   // ── Utilities ──
   function esc(s) {
@@ -5506,6 +5572,17 @@
   // :morgenruf: is our own icon, so we can show it. Any other shortcode is a
   // custom emoji we have no image for, and pretending otherwise would be worse
   // than saying so.
+  // Slack renders :morgenruf: as the imported image, so the preview has to as
+  // well. Any other shortcode belongs to an emoji we have no picture for, and
+  // showing the text is then the honest preview rather than a wrong picture.
+  function tokenAsHtml(value) {
+    const v = (value || '').trim();
+    if (v === ':morgenruf:') {
+      return '<img class="tok" src="/static/kudos-token-128.png" alt="the Morgenruf icon"/>';
+    }
+    return esc(v);
+  }
+
   function renderTokenPreview(value) {
     const el = document.getElementById('kudos-token-shows');
     if (!el) return;
@@ -5529,12 +5606,13 @@
     if (!el) return;
     var allowance = parseInt((document.getElementById('kudos-allowance') || {}).value, 10);
     var left = isNaN(allowance) ? 0 : Math.max(0, allowance - 1);
+    const shown = tokenAsHtml(emoji);
     el.innerHTML =
-      esc(emoji) + ' <b>@priya</b> gave a ' + esc(emoji) + ' to <b>@marcus</b>' +
+      shown + ' <b>@priya</b> gave a ' + shown + ' to <b>@marcus</b>' +
       '<div style="margin-top:6px;padding-left:10px;border-left:2px solid var(--border2);color:var(--text-muted)">' +
       'caught a DST bug that would have hit every European user</div>' +
       '<div style="margin-top:7px;color:var(--text-dim);font-size:12.5px">' +
-      (allowance === 0 ? 'Giving is switched off' : left + ' ' + esc(emoji) + ' left today') + '</div>';
+      (allowance === 0 ? 'Giving is switched off' : left + ' ' + shown + ' left today') + '</div>';
   }
 
   async function loadKudos() {
@@ -5702,6 +5780,62 @@
     ).join('') + '</div>';
   }
 
+  // The three rules these triggers and actions were built for. Picking one
+  // fills the form rather than saving anything, so it is a starting point and
+  // not a decision.
+  const RULE_TEMPLATES = [
+    {
+      key: 'blockers',
+      title: 'Tell the channel about blockers',
+      blurb: 'When someone reports a blocker, post it where the team will see it.',
+      name: 'Alert on blockers',
+      trigger: 'blocker_detected',
+      action: 'post_to_channel',
+      template: ':rotating_light: {team} has blockers today:\n{blockers}'
+    },
+    {
+      key: 'quiet',
+      title: 'Notice a quiet standup',
+      blurb: 'When participation drops, say so instead of letting it slide.',
+      name: 'Low participation warning',
+      trigger: 'low_participation',
+      action: 'post_to_channel',
+      template: 'Only {participation} answered standup in {team} today.'
+    },
+    {
+      key: 'webhook',
+      title: 'Send it somewhere else',
+      blurb: 'Fire a webhook when a standup finishes, for a dashboard or another tool.',
+      name: 'Standup complete webhook',
+      trigger: 'standup_complete',
+      action: 'fire_webhook',
+      template: ''
+    }
+  ];
+
+  function renderRuleTemplates() {
+    const el = document.getElementById('rule-templates');
+    if (!el) return;
+    el.innerHTML = RULE_TEMPLATES.map(t =>
+      '<button type="button" class="rule-template" onclick="applyRuleTemplate(\'' + t.key + '\')">' +
+        '<b>' + esc(t.title) + '</b><span>' + esc(t.blurb) + '</span>' +
+      '</button>').join('');
+  }
+
+  function applyRuleTemplate(key) {
+    const t = RULE_TEMPLATES.find(x => x.key === key);
+    if (!t) return;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    set('rule-name', t.name);
+    set('rule-trigger', t.trigger);
+    set('rule-action', t.action);
+    set('rule-message', t.template);
+    if (typeof toggleConditionValue === 'function') toggleConditionValue();
+    const target = document.getElementById('rule-target');
+    if (target) target.focus();
+    toast('Filled in. Pick a target and save.');
+  }
+
   async function deleteRule(id) {
     if (!confirm('Delete this automation rule?')) return;
     try {
@@ -5714,6 +5848,7 @@
 
   function openAddRuleForm() {
     document.getElementById('add-rule-form').style.display = '';
+    renderRuleTemplates();
     toggleConditionValue();
   }
 

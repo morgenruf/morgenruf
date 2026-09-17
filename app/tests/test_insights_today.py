@@ -157,3 +157,50 @@ def test_a_programme_that_never_ran_is_due_now():
 def test_a_missing_cadence_is_treated_as_weekly():
     program = {"last_round": dt.date(2026, 9, 7), "interval_weeks": None}
     assert next_chat_date(program, TODAY) == dt.date(2026, 9, 14)
+
+
+# ── next_chat_date and the programme's own weekday ───────────────────────────
+# A programme that had never run reported its next round as "today", whatever
+# day it was. The Today page told a Thursday that a Monday coffee chat was
+# about to happen.
+
+
+def test_a_programme_that_has_never_run_lands_on_its_own_weekday():
+    thursday = dt.date(2026, 9, 17)
+    monday_programme = {"day_of_week": 0, "interval_weeks": 1}
+    assert next_chat_date(monday_programme, thursday) == dt.date(2026, 9, 21)
+
+
+def test_today_counts_when_it_is_the_programme_day():
+    thursday = dt.date(2026, 9, 17)
+    assert next_chat_date({"day_of_week": 3, "interval_weeks": 1}, thursday) == thursday
+
+
+def test_tomorrow_when_the_programme_runs_tomorrow():
+    thursday = dt.date(2026, 9, 17)
+    assert next_chat_date({"day_of_week": 4, "interval_weeks": 1}, thursday) == dt.date(2026, 9, 18)
+
+
+def test_a_missing_weekday_falls_back_to_today_rather_than_guessing():
+    thursday = dt.date(2026, 9, 17)
+    assert next_chat_date({"interval_weeks": 1}, thursday) == thursday
+    assert next_chat_date({"day_of_week": None}, thursday) == thursday
+
+
+def test_a_nonsense_weekday_is_ignored():
+    thursday = dt.date(2026, 9, 17)
+    assert next_chat_date({"day_of_week": 99}, thursday) == thursday
+    assert next_chat_date({"day_of_week": "monday"}, thursday) == thursday
+
+
+def test_a_programme_with_history_still_counts_from_the_last_round():
+    """Unchanged: the cadence from the last round, so it cannot disagree with
+    connect's own scheduler."""
+    thursday = dt.date(2026, 9, 17)
+    prog = {"day_of_week": 0, "interval_weeks": 1, "last_round": dt.date(2026, 9, 14)}
+    assert next_chat_date(prog, thursday) == dt.date(2026, 9, 21)
+
+
+def test_a_biweekly_programme_with_history_waits_two_weeks():
+    prog = {"day_of_week": 0, "interval_weeks": 2, "last_round": dt.date(2026, 9, 14)}
+    assert next_chat_date(prog, dt.date(2026, 9, 17)) == dt.date(2026, 9, 28)

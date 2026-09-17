@@ -772,3 +772,46 @@ class TestScheduleDaysParsing:
 
     def test_empty_entries_are_dropped(self):
         assert self.parse("mon,,tue") == ["mon", "tue"]
+
+
+class TestDigestScope:
+    """Which standups a digest email covers.
+
+    The workspace-level digest sends every standup in the workspace to one
+    address. A workspace running ten standups across six teams cannot use it:
+    each lead would receive the other five teams' answers. The per-schedule
+    digest exists so a lead gets their own team and nothing else.
+    """
+
+    def test_the_per_schedule_query_filters_on_schedule_id(self):
+        import inspect
+
+        from src.core import db
+
+        src = inspect.getsource(db.get_standups_for_schedule)
+        assert "s.schedule_id = %s" in src, "the digest would leak other teams' answers"
+        assert "s.team_id = %s" in src, "must stay scoped to the workspace too"
+
+    def test_the_workspace_query_is_not_scoped_to_a_schedule(self):
+        """Kept as-is so anyone already using the workspace digest is unaffected."""
+        import inspect
+
+        from src.core import db
+
+        assert "schedule_id" not in inspect.getsource(db.get_standups)
+
+    def test_a_schedule_digest_needs_both_an_address_and_the_toggle(self):
+        import inspect
+
+        from src.core import scheduler
+
+        src = inspect.getsource(scheduler._send_manager_digest)
+        assert 'schedule.get("digest_enabled")' in src
+        assert 'schedule.get("digest_email")' in src
+
+    def test_the_subject_names_the_standup_when_scoped(self):
+        import inspect
+
+        from src.modules.standup import mailer
+
+        assert "scope_label or workspace_name" in inspect.getsource(mailer.send_manager_digest)

@@ -260,6 +260,26 @@ def get_workspace_by_feed_token(token: str) -> dict | None:
     return dict(row) if row else None
 
 
+def get_standups_for_schedule(team_id: str, schedule_id: int, days: int = 1) -> list[dict]:
+    """Today's answers for one standup only.
+
+    The workspace-wide query is wrong for a per-team digest: a workspace with
+    ten standups would mail every team's answers to every lead.
+    """
+    sql = """
+        SELECT s.*, m.real_name AS user_name
+        FROM standups s
+        LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
+        WHERE s.team_id = %s AND s.schedule_id = %s
+          AND s.standup_date >= CURRENT_DATE - (%s - 1)
+        ORDER BY s.submitted_at
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, schedule_id, days))
+            return [dict(r) for r in cur.fetchall()]
+
+
 def get_standups(
     team_id: str,
     days: int = 1,
@@ -1332,6 +1352,8 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
         "prepopulate_answers",
         "allow_edit_after_report",
         "post_summary",
+        "digest_email",
+        "digest_enabled",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
@@ -1511,6 +1533,8 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         "prepopulate_answers",
         "allow_edit_after_report",
         "post_summary",
+        "digest_email",
+        "digest_enabled",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:

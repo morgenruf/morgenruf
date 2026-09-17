@@ -626,32 +626,53 @@ def _send_weekly_digest(team_id: str, bot_token: str) -> None:
         logger.warning("Weekly digest failed for %s: %s", team_id, exc)
 
 
-def _send_manager_digest(team_id: str) -> None:
-    """Send today's standup digest to the configured manager email (if enabled)."""
+def _send_manager_digest(team_id: str, schedule_id: int | None = None) -> None:
+    """Email today's standup answers.
+
+    With a schedule_id this covers that standup only and goes to that
+    standup's own recipient. Without one it is the workspace-wide digest,
+    which sends every standup to a single address: unusable for a workspace
+    running several, since each lead would receive the other teams' answers.
+    """
     try:
         import src.core.db as db  # noqa: PLC0415
         from src.modules.standup.mailer import send_manager_digest  # noqa: PLC0415
 
-        config = db.get_workspace_config(team_id)
-        if not config:
-            return
-        if not config.get("manager_digest_enabled"):
-            return
-        manager_email = config.get("manager_email") or ""
-        if not manager_email:
-            return
         inst = db.get_installation(team_id)
         workspace_name = inst.get("team_name", team_id) if inst else team_id
-        standups = db.get_standups(team_id, days=1)
         date_str = datetime.now().strftime("%Y-%m-%d")
+
+        if schedule_id:
+            schedule = db.get_standup_schedule(team_id, schedule_id)
+            if not schedule or not schedule.get("digest_enabled"):
+                return
+            to = (schedule.get("digest_email") or "").strip()
+            if not to:
+                return
+            standups = db.get_standups_for_schedule(team_id, schedule_id, days=1)
+            if not standups:
+                logger.info("schedule digest %s: nothing answered today", schedule_id)
+                return
+            scope_label = schedule.get("name") or workspace_name
+        else:
+            config = db.get_workspace_config(team_id)
+            if not config or not config.get("manager_digest_enabled"):
+                return
+            to = (config.get("manager_email") or "").strip()
+            if not to:
+                return
+            standups = db.get_standups(team_id, days=1)
+            scope_label = ""
+
         send_manager_digest(
-            manager_email=manager_email,
+            manager_email=to,
             workspace_name=workspace_name,
             standups=standups,
             date_str=date_str,
+            scope_label=scope_label,
         )
     except Exception as exc:
-        logger.warning("Manager digest failed for %s: %s", team_id, exc)
+        logger.warning("Digest failed for %s/%s: %s", team_id, schedule_id or "workspace", exc)
 
 
 def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
@@ -880,6 +901,24 @@ def register_workspace_job(
         replace_existing=True,
     )
 
+    # And one per standup, for teams that want their own lead on their own
+    # answers rather than everyone's in a single workspace-wide email.
+    schedule_id = config.get("id")
+    if schedule_id:
+        scheduler.add_job(
+            _send_manager_digest,
+            trigger=CronTrigger(
+                hour=standup_plus_30.hour,
+                minute=standup_plus_30.minute,
+                day_of_week=schedule_days,
+                timezone=tz,
+            ),
+            args=[team_id, schedule_id],
+            id=f"schedule_digest_{team_id}_{schedule_id}",
+            name=f"Standup Digest — {team_id}/{schedule_id}",
+            replace_existing=True,
+        )
+
     # Scheduled report job — posts summary at report_time regardless of completion
     report_time = config.get("report_time") or schedule_time
     try:
@@ -947,6 +986,24 @@ def register_workspace_digests_only(
         name=f"Manager Digest — {team_id}",
         replace_existing=True,
     )
+
+    # And one per standup, for teams that want their own lead on their own
+    # answers rather than everyone's in a single workspace-wide email.
+    schedule_id = config.get("id")
+    if schedule_id:
+        scheduler.add_job(
+            _send_manager_digest,
+            trigger=CronTrigger(
+                hour=standup_plus_30.hour,
+                minute=standup_plus_30.minute,
+                day_of_week=schedule_days,
+                timezone=tz,
+            ),
+            args=[team_id, schedule_id],
+            id=f"schedule_digest_{team_id}_{schedule_id}",
+            name=f"Standup Digest — {team_id}/{schedule_id}",
+            replace_existing=True,
+        )
     logger.info("Registered digest-only jobs for %s (schedule-level standups active)", team_id)
 
 

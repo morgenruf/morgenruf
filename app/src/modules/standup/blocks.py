@@ -1152,7 +1152,9 @@ def app_home_view(
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        "*No standups yet.*\n"
+                        "*You are not in a standup.*\nAdd yourself to one below, or create a new one."
+                        if (is_admin and other_standups)
+                        else "*No standups yet.*\n"
                         "Create your first standup to get started, or ask your team admin to add you."
                     ),
                 },
@@ -1305,8 +1307,13 @@ def app_home_view(
                     "value": str(standup_id),
                 },
             ]
-            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": line}})
-            blocks.append({"type": "actions", "elements": admin_actions})
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": line},
+                    "accessory": admin_actions[0],
+                }
+            )
 
         blocks.append({"type": "divider"})
 

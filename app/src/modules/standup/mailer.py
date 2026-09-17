@@ -569,8 +569,18 @@ def release_announcement_email_html(
 # ---------------------------------------------------------------------------
 
 
-def send_manager_digest(manager_email: str, workspace_name: str, standups: list, date_str: str) -> None:
-    """Send daily standup digest email to manager."""
+def send_manager_digest(
+    manager_email: str,
+    workspace_name: str,
+    standups: list,
+    date_str: str,
+    scope_label: str = "",
+) -> None:
+    """Send a daily standup digest by email.
+
+    scope_label names the standup when the digest covers one rather than the
+    whole workspace, so a lead subscribed to several can tell them apart.
+    """
     if not manager_email:
         logger.warning("No manager_email — skipping manager digest")
         return
@@ -611,6 +621,6 @@ def send_manager_digest(manager_email: str, workspace_name: str, standups: list,
 
     _send(
         to_email=manager_email,
-        subject=f"[{workspace_name}] Standup Digest — {date_str}",
+        subject=f"[{scope_label or workspace_name}] Standup Digest — {date_str}",
         html=html,
     )

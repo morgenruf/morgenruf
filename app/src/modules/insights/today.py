@@ -104,6 +104,21 @@ def blocked_from(responses: Iterable[dict]) -> list[dict]:
     return out
 
 
+def _next_weekday(today: date, day_of_week: object) -> date:
+    """The next occurrence of the programme's weekday, today included.
+
+    connect stores 0 = Monday, which is what date.weekday() uses, so the two
+    need no translation.
+    """
+    try:
+        wanted = int(day_of_week)
+    except (TypeError, ValueError):
+        return today
+    if not 0 <= wanted <= 6:
+        return today
+    return today + timedelta(days=(wanted - today.weekday()) % 7)
+
+
 def next_chat_date(program: dict | None, today: date) -> date | None:
     """When the next coffee chat round falls, or None without a programme.
 
@@ -119,7 +134,10 @@ def next_chat_date(program: dict | None, today: date) -> date | None:
         return scheduled
     last = as_date(program.get("last_round"))
     if last is None:
-        return today
+        # Never run, so the next round is the programme's own weekday, not
+        # today. Returning today told a Thursday that its Monday coffee chat
+        # was about to happen.
+        return _next_weekday(today, program.get("day_of_week"))
     try:
         weeks = max(1, int(program.get("interval_weeks") or 1))
     except (TypeError, ValueError):
