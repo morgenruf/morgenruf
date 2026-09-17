@@ -68,11 +68,20 @@ def intro_message(
     ]
 
     if suggested_times:
-        lines = "\n".join(f"\u2022 {t}" for t in suggested_times[:3])
+        # Each proposal carries a link that opens the reader's own calendar with
+        # the event filled in. They still press save, which is also the honest
+        # arrangement: we never claimed to know whether they were free.
+        lines = []
+        for slot in suggested_times[:3]:
+            if isinstance(slot, dict):
+                label, link = slot.get("label", ""), slot.get("add_url", "")
+                lines.append(f"\u2022 {label} \u00b7 <{link}|add to calendar>" if link else f"\u2022 {label}")
+            else:
+                lines.append(f"\u2022 {slot}")
         blocks.append(
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Times that suit everyone's hours*\n{lines}"},
+                "text": {"type": "mrkdwn", "text": "*Times that suit everyone's hours*\n" + "\n".join(lines)},
             }
         )
         blocks.append(

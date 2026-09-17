@@ -156,8 +156,8 @@ def _member_timezones(team_id: str) -> dict[str, str]:
         return {}
 
 
-def _suggest_times(members: list[str], zones: dict[str, str], minutes: int) -> list[str]:
-    """Hours inside everyone's working day, phrased for the message.
+def _suggest_times(members: list[str], zones: dict[str, str], minutes: int, meeting_link: str = "") -> list[dict]:
+    """Hours inside everyone's working day, each with a calendar link.
 
     Only offered for a pair: with three people the overlap is usually empty and
     a wrong suggestion is worse than none.
@@ -165,10 +165,23 @@ def _suggest_times(members: list[str], zones: dict[str, str], minutes: int) -> l
     if len(members) != 2:
         return []
     try:
+        from src.modules.connect.calendar import google_link  # noqa: PLC0415
         from src.modules.connect.hours import next_slots  # noqa: PLC0415
 
         slots = next_slots(zones.get(members[0], ""), zones.get(members[1], ""), 3, minutes)
-        return [s.strftime("%A %H:%M UTC") for s in slots]
+        return [
+            {
+                "label": slot.strftime("%A %H:%M UTC"),
+                "add_url": google_link(
+                    slot,
+                    minutes,
+                    "Coffee chat",
+                    "Your Morgenruf coffee chat.",
+                    meeting_link,
+                ),
+            }
+            for slot in slots
+        ]
     except Exception:
         logger.info("connect: could not suggest times")
         return []
@@ -203,7 +216,7 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 program_id,
                 meeting_link=meeting_link,
                 meeting_minutes=meeting_minutes,
-                suggested_times=_suggest_times(members, zones, meeting_minutes),
+                suggested_times=_suggest_times(members, zones, meeting_minutes, meeting_link),
             )
             api.post(client, channel, text, blocks)
             cdb.mark_delivered(m["id"], channel)
