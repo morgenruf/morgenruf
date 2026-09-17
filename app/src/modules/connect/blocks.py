@@ -41,6 +41,7 @@ def intro_message(
     meeting_link: str = "",
     meeting_minutes: int = 30,
     suggested_times: list | None = None,
+    times_are_outside_hours: bool = False,
 ) -> tuple[str, list]:
     """The group DM a match receives.
 
@@ -57,7 +58,14 @@ def intro_message(
         {"type": "header", "text": {"type": "plain_text", "text": "☕ Coffee chat", "emoji": True}},
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"{mentions}, you have been matched. Say hello right here."},
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"{mentions}, you have been matched. Say hello right here.\n"
+                    "It is hard to meet people outside your own team when everyone is remote, "
+                    "so this introduces two of you every so often."
+                ),
+            },
         },
         {
             "type": "context",
@@ -78,19 +86,25 @@ def intro_message(
                 lines.append(f"\u2022 {label} \u00b7 <{link}|add to calendar>" if link else f"\u2022 {label}")
             else:
                 lines.append(f"\u2022 {slot}")
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "*Times that suit everyone's hours*\n" + "\n".join(lines)},
-            }
+        heading = (
+            "*Times you could both just about make*"
+            if times_are_outside_hours
+            else "*Times that suit everyone's hours*"
         )
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": heading + "\n" + "\n".join(lines)}})
         blocks.append(
             {
                 "type": "context",
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": "These fit everyone's working hours. Nobody has checked your calendars, so pick whichever is actually free.",
+                        "text": (
+                            "Your working days do not overlap, so these sit at the edges of them. "
+                            "Nobody has checked your calendars, so pick whichever is actually free."
+                            if times_are_outside_hours
+                            else "These fit everyone's working hours. Nobody has checked your "
+                            "calendars, so pick whichever is actually free."
+                        ),
                     }
                 ],
             }

@@ -166,11 +166,13 @@ def _suggest_times(members: list[str], zones: dict[str, str], minutes: int, meet
         return []
     try:
         from src.modules.connect.calendar import google_link  # noqa: PLC0415
-        from src.modules.connect.hours import next_slots  # noqa: PLC0415
+        from src.modules.connect.hours import next_slots, within_working_hours  # noqa: PLC0415
 
         slots = next_slots(zones.get(members[0], ""), zones.get(members[1], ""), 3, minutes)
+        outside = not within_working_hours(zones.get(members[0], ""), zones.get(members[1], ""))
         return [
             {
+                "outside_hours": outside,
                 "label": slot.strftime("%A %H:%M UTC"),
                 "add_url": google_link(
                     slot,
@@ -216,7 +218,8 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 program_id,
                 meeting_link=meeting_link,
                 meeting_minutes=meeting_minutes,
-                suggested_times=_suggest_times(members, zones, meeting_minutes, meeting_link),
+                suggested_times=(times := _suggest_times(members, zones, meeting_minutes, meeting_link)),
+                times_are_outside_hours=bool(times and times[0].get("outside_hours")),
             )
             api.post(client, channel, text, blocks)
             cdb.mark_delivered(m["id"], channel)

@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_START_HOUR = 9
 DEFAULT_END_HOUR = 17
 
+# Used only when the working days do not meet at all. Early and late rather than
+# round the clock: a call at 07:00 or 20:00 is an ask, one at 03:00 is not.
+EARLY_START_HOUR = 7
+LATE_END_HOUR = 21
+
 
 def _offset_hours(tz_name: str, when: datetime) -> float | None:
     """A zone's offset from UTC in hours, or None if the zone is unknown."""
@@ -64,6 +69,11 @@ def can_meet(tz_a: str, tz_b: str, minimum_hours: float = 1.0, when: datetime | 
     return overlap_hours(tz_a, tz_b, when) >= minimum_hours
 
 
+def within_working_hours(tz_a: str, tz_b: str, when: datetime | None = None) -> bool:
+    """Whether the two share an ordinary working day at all."""
+    return overlap_hours(tz_a, tz_b, when) > 0
+
+
 def next_slots(
     tz_a: str,
     tz_b: str,
@@ -85,7 +95,14 @@ def next_slots(
     start = max(DEFAULT_START_HOUR - a, DEFAULT_START_HOUR - b)
     end = min(DEFAULT_END_HOUR - a, DEFAULT_END_HOUR - b)
     if end - start < duration_minutes / 60:
-        return []
+        # No shared working day. Saying nothing is the worst answer: the pair
+        # who most need help finding a time get none, and the message looks
+        # exactly as it would if the feature did not exist. Widen to the edges
+        # of both days and let the caller say these are outside normal hours.
+        start = max(EARLY_START_HOUR - a, EARLY_START_HOUR - b)
+        end = min(LATE_END_HOUR - a, LATE_END_HOUR - b)
+        if end - start < duration_minutes / 60:
+            return []
 
     base = (when + timedelta(days=1)).replace(minute=0, second=0, microsecond=0)
     slots: list[datetime] = []

@@ -139,14 +139,33 @@ def register_handlers(app) -> None:
             if not program:
                 return
             nxt = upcoming_round_date(program, date.today())
-            client.chat_postEphemeral(
-                channel=channel_id,
-                user=user_id,
-                text=(
-                    f"Welcome to <#{channel_id}>. "
-                    f"I introduce you to someone else from this channel {cadence_phrase(program.get('interval_weeks'))}. "
-                    f"Your next introduction is on *{nxt.strftime('%A, %d %B')}*."
-                ),
+            message = (
+                f"Thanks for joining <#{channel_id}>. "
+                f"I introduce you to someone else from this channel {cadence_phrase(program.get('interval_weeks'))}.\n"
+                f"Your next introduction is on *{nxt.strftime('%A, %d %B')}*."
+            )
+            # Both, and for different reasons. The channel message is the one
+            # that reaches someone in the moment they joined; the DM is the one
+            # still there next week when they wonder what they signed up for.
+            try:
+                client.chat_postEphemeral(channel=channel_id, user=user_id, text=message)
+            except Exception:
+                logger.info("connect: no channel welcome for %s", user_id)
+            client.chat_postMessage(
+                channel=user_id,
+                text=message,
+                blocks=[
+                    {"type": "section", "text": {"type": "mrkdwn", "text": message}},
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": "Snooze yourself or check the date any time on the *Home* tab of this app.",
+                            }
+                        ],
+                    },
+                ],
             )
         except Exception:
             logger.info("connect: no welcome sent for %s in %s", user_id, channel_id)
