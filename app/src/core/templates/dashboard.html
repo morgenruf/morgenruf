@@ -1479,6 +1479,16 @@
     /* The mascot is the kudos token. It is a drawing, not an emoji, so it
        looks the same on every platform and matches the one people import
        into Slack. */
+    /* What the field's value will actually look like in Slack. */
+    .token-preview {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; flex-shrink: 0;
+      border: 1px solid var(--border2); border-radius: 8px;
+      background: var(--surface2); font-size: 19px; line-height: 1;
+    }
+    .token-preview img { width: 22px; height: 22px; display: block; }
+    .token-preview .unknown { font-size: 11px; color: var(--text-dim); font-weight: 600; }
+
     .tok { width: 19px; height: 19px; vertical-align: -4px; }
     .count-pill {
       background: var(--indigo-soft); color: var(--indigo-ink);
@@ -1810,8 +1820,11 @@
                 <div class="set-label">The token your team gives</div>
                 <div class="set-help">What the bot posts in Slack. This dashboard always shows the Morgenruf icon. To use it in Slack too, <a href="/static/kudos-token-128.png" download>download the icon</a> and import it under <em>Customize workspace &rsaquo; Add custom emoji</em> with the name <code>morgenruf</code> &mdash; the bot picks it up on its own within a day, and falls back if it is ever removed. Setting this field yourself turns that off and keeps whatever you choose.</div>
               </div>
-              <div class="set-control">
-                <input type="text" id="kudos-emoji" maxlength="16" style="font-size:1.25rem;width:92px;text-align:center" oninput="renderKudosPreview()"/>
+              <div class="set-control" style="display:flex;align-items:center;gap:10px">
+                <span id="kudos-token-shows" class="token-preview" aria-live="polite"></span>
+                <input type="text" id="kudos-emoji" maxlength="32"
+                       style="font-size:1.05rem;width:170px;text-align:center"
+                       aria-describedby="kudos-token-shows" oninput="renderKudosPreview()"/>
               </div>
             </div>
             <div class="set-row">
@@ -2152,6 +2165,10 @@
           <div class="form-group">
             <label>At</label>
             <input type="time" id="cc-time" value="10:00"/>
+          </div>
+          <div style="flex:1;min-width:190px">
+            <label>Timezone</label>
+            <input type="text" id="cc-tz" list="tz-options" placeholder="America/Toronto"/>
           </div>
         </div>
       </div>
@@ -3201,7 +3218,20 @@
       '<option value="' + i + '"' + (i === 0 ? ' selected' : '') + '>' + d + '</option>').join('');
     document.getElementById('cc-name').value = 'Coffee chats';
     document.getElementById('cc-time').value = '10:00';
+    const tzField = document.getElementById('cc-tz');
+    if (tzField && !tzField.value) {
+      tzField.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    }
     document.getElementById('connect-modal').classList.add('open');
+  }
+
+  // The field is prefilled with the browser's zone, but a programme often
+  // belongs to a team in another one, so it has to be changeable.
+  function connectTimezone() {
+    const typed = (document.getElementById('cc-tz') || {}).value || '';
+    const tz = typed.trim();
+    if (tz && isValidIanaTz(tz)) return tz;
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   }
 
   function closeConnectModal() {
@@ -3218,7 +3248,7 @@
         day_of_week: parseInt(document.getElementById('cc-day').value, 10),
         hour: parseInt(time[0], 10),
         minute: parseInt(time[1], 10),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+        timezone: connectTimezone()
       });
       closeConnectModal();
       toast('Coffee chat created');
@@ -5473,10 +5503,30 @@
 
   // ── Kudos ──
 
+  // :morgenruf: is our own icon, so we can show it. Any other shortcode is a
+  // custom emoji we have no image for, and pretending otherwise would be worse
+  // than saying so.
+  function renderTokenPreview(value) {
+    const el = document.getElementById('kudos-token-shows');
+    if (!el) return;
+    const v = (value || '').trim();
+    if (v === ':morgenruf:') {
+      el.innerHTML = '<img src="/static/kudos-token-128.png" alt="the Morgenruf icon"/>';
+      el.title = 'Slack shows the Morgenruf icon';
+    } else if (/^:[a-z0-9_+-]+:$/i.test(v)) {
+      el.innerHTML = '<span class="unknown">:?:</span>';
+      el.title = 'A custom emoji. Slack shows it if this workspace has one by that name, otherwise it shows this text.';
+    } else {
+      el.textContent = v || '\u2014';
+      el.title = v ? 'Slack shows this' : 'No token set';
+    }
+  }
+
   function renderKudosPreview() {
     var el = document.getElementById('kudos-preview-body');
-    if (!el) return;
     var emoji = (document.getElementById('kudos-emoji') || {}).value || '';
+    renderTokenPreview(emoji);
+    if (!el) return;
     var allowance = parseInt((document.getElementById('kudos-allowance') || {}).value, 10);
     var left = isNaN(allowance) ? 0 : Math.max(0, allowance - 1);
     el.innerHTML =

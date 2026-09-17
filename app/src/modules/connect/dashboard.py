@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 def register_routes(flask_app) -> None:
     from flask import Blueprint, jsonify, request, session
 
+    import src.core.db as db
     import src.modules.connect.db as cdb
     from src.core.dashboard import _admin_required, _login_required
     from src.core.roster import eligible_members
@@ -34,10 +35,25 @@ def register_routes(flask_app) -> None:
             p["created_at"] = p["created_at"].isoformat() if p.get("created_at") else None
             p["last_round"] = p["last_round"].isoformat() if p.get("last_round") else None
             try:
-                pool = eligible_members(team_id)
+                # The same intersection the round itself does: people in the
+                # channel who are also eligible and have not opted out.
+                # Counting the whole workspace claimed a pool nobody would be
+                # matched from.
+                from slack_sdk import WebClient  # noqa: PLC0415
+
+                import src.modules.connect.slack_api as api  # noqa: PLC0415
+
+                inst = db.get_installation(team_id) or {}
+                token = inst.get("bot_token") or ""
+                in_channel = set(api.channel_member_ids(WebClient(token=token), p["channel_id"])) if token else None
+                eligible = {m.user_id for m in eligible_members(team_id)}
                 opted_out = cdb.optout_user_ids(team_id, p["id"])
-                p["pool_size"] = len([m for m in pool if m.user_id not in opted_out])
-            except Exception:
+                pool = eligible if in_channel is None else (eligible & in_channel)
+                p["pool_size"] = len(pool - opted_out)
+            except Exception as exc:
+                # Slack being unreachable is not a reason to fail the page; the
+                # number is simply unknown rather than wrong.
+                logger.info("connect: could not size the pool for %s: %s", p["id"], exc)
                 p["pool_size"] = None
         return jsonify(programs)
 

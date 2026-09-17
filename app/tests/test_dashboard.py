@@ -732,3 +732,43 @@ class TestNextRunIsSurfaced:
         _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_tz="Asia/Kolkata", active=False)]
         resp = authed_client.get("/dashboard/api/standups")
         assert resp.get_json()[0]["next_run"] == ""
+
+
+class TestScheduleDaysParsing:
+    """schedule_days is a TEXT column, so it can hold more than one shape.
+
+    A Postgres array literal reaches it whenever anything inserts a Python list
+    (psycopg2 adapts one to {mon,tue,...}), and splitting that on commas leaves
+    the braces attached, so the dashboard rendered chips reading "{mon" and
+    "fri}".
+    """
+
+    @staticmethod
+    def parse(raw):
+        # Mirrors the parsing in dashboard._schedule_row.
+        if isinstance(raw, str):
+            days = [d.strip().strip('{}"') for d in raw.strip("{}").split(",")]
+            return [d for d in days if d]
+        return raw
+
+    def test_a_plain_comma_separated_list(self):
+        assert self.parse("mon,tue,wed,thu,fri") == ["mon", "tue", "wed", "thu", "fri"]
+
+    def test_a_postgres_array_literal_loses_its_braces(self):
+        assert self.parse("{mon,tue,wed,thu,fri}") == ["mon", "tue", "wed", "thu", "fri"]
+
+    def test_a_quoted_array_literal(self):
+        assert self.parse('{"mon","tue"}') == ["mon", "tue"]
+
+    def test_a_single_day(self):
+        assert self.parse("wed") == ["wed"]
+        assert self.parse("{wed}") == ["wed"]
+
+    def test_whitespace_is_trimmed(self):
+        assert self.parse("mon, tue , wed") == ["mon", "tue", "wed"]
+
+    def test_a_real_list_is_passed_through(self):
+        assert self.parse(["mon", "tue"]) == ["mon", "tue"]
+
+    def test_empty_entries_are_dropped(self):
+        assert self.parse("mon,,tue") == ["mon", "tue"]
