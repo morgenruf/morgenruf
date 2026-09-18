@@ -48,7 +48,10 @@ morgenruf/
 - 🔗 **Auto-linking** — Jira/GitHub issue references become clickable links
 - 🪝 **Webhooks** — HMAC-signed HTTP webhooks on `standup.completed`
 - ✏️ **Edit window** — members can edit responses within a configurable time window
+- 🔔 **Nudge** — whoever has not filed by report time gets a private reminder
 - 📊 **Web dashboard** — Analytics tab, participation stats, CSV export
+- 🩺 **Standup health** — fourteen days of completion on the card, with a badge when it slips
+- 👥 **Per-feature admins** — hand one person the standups and another the coffee chats, without giving either the workspace
 - 📧 **Welcome email + weekly digest** — via Resend
 - 🏠 **App Home tab** — shows workspace status in Slack Home
 - 🐳 **Kubernetes-ready** — production Helm chart at `charts.morgenruf.dev`
@@ -97,6 +100,17 @@ calendar. The wording is careful on purpose:
 Without calendar access we can say an hour suits their timezones, never that
 they are free. Implying otherwise would be worse than offering nothing.
 
+**Agreeing a time.** The pair is offered hours that suit both of them and votes
+with a button. When both pick the same one, that is the meeting. With Zoom
+connected, the meeting is created at that hour and the link goes back into the
+conversation; without it, the programme's own room is used, or none at all.
+Linking Zoom is per person, from the message itself, and revoking it affects
+nobody else.
+
+Group size runs from 2 to 8. A remainder of two or more forms its own group
+rather than being folded into a larger one, so ten people in fours are 4, 4 and
+2, not 5 and 5. Anyone can ask for a different match, once per round.
+
 Three days later the bot nudges pairs that have not met, and closes the round on
 day six by asking whether they did. That answer is reported four ways rather
 than two: **met**, **did not meet**, **no reply**, and **not delivered**. The
@@ -128,6 +142,29 @@ Setting the token by hand switches that off and keeps whatever you choose.
 Changing the daily allowance does not: the settings form submits every field, and
 treating any save as a token choice used to opt workspaces out of the emoji they
 had just imported.
+
+---
+
+## Who can change what
+
+Two roles, plus a grant per feature.
+
+| | Workspace admin | Feature admin | Member |
+|---|---|---|---|
+| Standups: create, edit, delete, automation rules | yes | with the standups grant | no |
+| Coffee chats: programmes, members, run a round now | yes | with the coffee chats grant | no |
+| Kudos: allowance and token | yes | with the kudos grant | no |
+| Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
+| Reading any page | yes | yes | yes |
+
+A workspace admin hands a feature over from **Members**: each card carries a chip
+per feature, pressed to give it and pressed again to take it back. The team lead
+runs the standups, someone in HR runs coffee chats and kudos, and neither of them
+can mint an API key or publish the workspace's standups at a public URL.
+
+The person who installed the app always counts as an admin, whatever the members
+table says, so a workspace cannot lock itself out. Demoting the last admin is
+refused for the same reason.
 
 ---
 
@@ -392,10 +429,11 @@ refresh tokens also expire after 90 days unused, and the tab says "reconnect"
 rather than showing an unlinked state, so a link that aged out is
 distinguishable from one that was never made.
 
-Morgenruf does not ship Zoom's logo. Zoom's app review guidelines keep their
-marks off an integration's own icon and their Partner Brand Guide governs use
-of the mark, so the prompt shows an emoji unless you place an approved
-`zoom-logo.png` in `app/src/static/`.
+The dashboard shows Zoom's own mark next to the setting, from
+[Simple Icons](https://simpleicons.org) (CC0), as it does for Slack, Google Meet
+and Microsoft Teams. It marks the integration, never Morgenruf itself: Zoom's
+Partner Brand Guide governs use of the mark, and their app review keeps another
+company's logo off your app icon.
 
 ---
 
