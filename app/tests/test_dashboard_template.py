@@ -738,3 +738,51 @@ class TestNoBlockSwallowsAnother:
         markup = read_template()
         _, leftover = self._top_level_blocks(markup)
         assert leftover == 0, f"{leftover} unclosed <div> in the page body"
+
+
+class TestEveryControlHasSomethingBehindIt:
+    """A button whose handler does not exist is indistinguishable from a dead
+    page: no error is raised until it is pressed, and then only in a console
+    nobody has open.
+
+    Written after a release where several controls did nothing. Those had a
+    different cause, but the audit that found it had no way to run twice.
+    """
+
+    # Called on an object, not a bare function: document.getElementById(...),
+    # classList.toggle(...), event.stopPropagation(), el.remove().
+    METHODS = {"getElementById", "querySelector", "remove", "stopPropagation", "toggle", "preventDefault", "focus"}
+    BUILTINS = {
+        "esc", "alert", "confirm", "parseInt", "parseFloat", "String", "Number",
+        "Boolean", "Array", "Object", "JSON", "Math", "Date", "setTimeout",
+        "encodeURIComponent", "decodeURIComponent",
+    }
+    KEYWORDS = {"if", "for", "while", "return", "function", "new", "typeof", "catch", "switch"}
+
+    def _handlers(self, markup: str) -> set:
+        out = set()
+        for attr in re.finditer(r'on(?:click|change|input|submit|keyup)\s*=\s*(["\'])(.*?)\1', markup, re.S):
+            for call in re.finditer(r"([A-Za-z_$][\w$]*)\s*\(", attr.group(2)):
+                name = call.group(1)
+                if name not in self.KEYWORDS:
+                    out.add(name)
+        return out
+
+    def _defined(self, markup: str) -> set:
+        out = set(re.findall(r"function\s+([A-Za-z_$][\w$]*)\s*\(", markup))
+        out |= set(re.findall(r"(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function|\()", markup))
+        out |= set(re.findall(r"window\.([A-Za-z_$][\w$]*)\s*=", markup))
+        return out
+
+    def test_every_handler_resolves(self):
+        markup = read_template()
+        missing = sorted(
+            h
+            for h in self._handlers(markup)
+            if h not in self._defined(markup) and h not in self.BUILTINS and h not in self.METHODS
+        )
+        assert not missing, f"controls calling functions that do not exist: {missing}"
+
+    def test_the_scan_sees_the_controls(self):
+        # Guard against a regex change making the check pass vacuously.
+        assert len(self._handlers(read_template())) > 60
