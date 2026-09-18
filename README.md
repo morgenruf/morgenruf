@@ -1,62 +1,48 @@
-# Morgenruf 🌅
+<div align="center">
 
-> **German:** *Morgenruf* — "morning call" · Built over a weekend at a Tim Hortons in Kitchener 🇨🇦☕
+<img src="brand/wordmark.png" alt="Morgenruf" width="320">
 
-[![Release](https://img.shields.io/github/v/release/morgenruf/morgenruf?label=latest&color=brightgreen)](https://github.com/morgenruf/morgenruf/releases)
-[![Tests](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml)
-[![Lint](https://github.com/morgenruf/morgenruf/actions/workflows/lint.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/lint.yml)
-[![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+**The team rituals you host yourself.**
+Async standups, coffee chats, kudos, and the insights they add up to.
 
-A self-hosted, open-source Slack app for the rituals a distributed team runs on: async standups, random coffee chats, peer recognition, and the cross-signal insights none of them give you alone. Four modules over one deployment and one database, each independently switchable. Keep full ownership of the data, no SaaS subscription required.
+[![Release](https://img.shields.io/github/v/release/morgenruf/morgenruf?label=release&color=2ea043)](https://github.com/morgenruf/morgenruf/releases) [![Tests](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf) [![Status](https://img.shields.io/badge/status-live-2ea043)](https://status.morgenruf.dev) [![License: MIT](https://img.shields.io/github/license/morgenruf/morgenruf?color=blue)](LICENSE)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Status](https://img.shields.io/badge/status-operational-brightgreen)](https://status.morgenruf.dev)
-[![Helm](https://img.shields.io/badge/Helm-3.x-blue)](https://helm.sh)
-[![Docker](https://img.shields.io/badge/Docker-DockerHub-blue)](https://hub.docker.com/r/morgenruf/morgenruf)
+[morgenruf.dev](https://morgenruf.dev) · [Documentation](https://docs.morgenruf.dev) · [Helm charts](https://charts.morgenruf.dev) · [Status](https://status.morgenruf.dev)
+
+<sub>*Morgenruf* (German), *morning call*. Built over a weekend at a Tim Hortons in Kitchener 🇨🇦☕</sub>
+
+</div>
 
 ---
 
-## Repository Structure
+Standup tools charge per person per month to send a message and collect a reply.
+Pairing tools charge again for the introductions. Recognition tools charge a third
+time. Morgenruf does all three on your own infrastructure, for nothing, and the
+data never leaves it.
 
-```
-morgenruf/
-├── app/
-│   ├── src/            ← Python bot (Flask + slack-bolt)
-│   ├── migrations/     ← SQL migration files (auto-applied on start)
-│   ├── helm/morgenruf/ ← Production Helm chart
-│   └── Dockerfile
-├── brand/              ← Logo & brand assets
-├── slack-manifest.yaml ← Slack app manifest
-├── CHANGELOG.md
-└── README.md
-```
+<img src="docs/screenshots/today.jpg" alt="The Today page: who has answered, who is blocked, recent recognition and the next coffee chat" width="100%">
 
 ---
 
-## Features
+## What you get
 
-- 📅 **Configurable schedule** — per-team times, timezones, and days
-- 💬 **DM-based collection** — bot DMs each member individually
-- ❓ **Custom questions** — fully editable from the dashboard (not hardcoded)
-- ⏭️ **Skip today** — DM `skip` to opt out for the day
-- ⏰ **Pre-standup reminder** — configurable minutes before standup time
-- 🌍 **Per-user timezone** — DM `timezone America/New_York` to set personal timezone
-- 🚧 **Blocker detection** — highlights blockers in summaries
-- 🤖 **Manual trigger** — type `standup` in DM anytime
-- 🎭 **Mood tracking** — 4th question captures team sentiment (😊/😐/😔)
-- 🔗 **Auto-linking** — Jira/GitHub issue references become clickable links
-- 🪝 **Webhooks** — HMAC-signed HTTP webhooks on `standup.completed`
-- ✏️ **Edit window** — members can edit responses within a configurable time window
-- 🔔 **Nudge** — whoever has not filed by report time gets a private reminder
-- 📊 **Web dashboard** — Analytics tab, participation stats, CSV export
-- 🩺 **Standup health** — fourteen days of completion on the card, with a badge when it slips
-- 👥 **Per-feature admins** — hand one person the standups and another the coffee chats, without giving either the workspace
-- 📧 **Welcome email + weekly digest** — via Resend
-- 🏠 **App Home tab** — shows workspace status in Slack Home
-- 🐳 **Kubernetes-ready** — production Helm chart at `charts.morgenruf.dev`
-- ☁️ **Cloudflare Zero Trust** — works behind CF tunnel (no ingress controller needed)
-- 🗃️ **PostgreSQL** — full standup history, migrations auto-applied on startup
+### Standups, and whether they are working
+
+Each standup carries fourteen days of completion on its own card, so a schedule that is quietly slipping says so before anyone goes looking for it.
+
+<img src="docs/screenshots/standups.jpg" alt="Two standups, each with a sparkline and a health badge" width="100%">
+
+### Coffee chats that end in a meeting
+
+Settings on the left, the Slack message they produce on the right, updating as you type. The pair votes on an hour that suits both of them, and Zoom books it at that hour.
+
+<img src="docs/screenshots/coffee-chat-settings.jpg" alt="Coffee chat settings beside a live preview of the Slack introduction" width="100%">
+
+### One person per feature, not one admin for everything
+
+Press a chip to put the team lead in charge of standups and someone in HR in charge of coffee chats and kudos. Neither of them can mint an API key or publish the workspace's standups.
+
+<img src="docs/screenshots/members.jpg" alt="Member cards showing which features each person runs" width="100%">
 
 ---
 
@@ -143,6 +129,88 @@ Changing the daily allowance does not: the settings form submits every field, an
 treating any save as a token choice used to opt workspaces out of the emoji they
 had just imported.
 
+### The smaller things
+
+| | |
+|---|---|
+| **Edit window** | Answers stay editable for a configurable period after filing |
+| **Per-user timezone** | `timezone Europe/London` in a DM; schedules follow each person |
+| **Mood** | An optional fourth question, tracked over time |
+| **Auto-linking** | Jira and GitHub references in an answer become links |
+| **Webhooks** | HMAC-signed, on `standup.completed` |
+| **Automation rules** | "If nobody answers by 10, post in #leads" |
+| **CSV export** | Every page that shows numbers can hand them over |
+| **App Home** | Workspace status, pause and snooze, inside Slack |
+| **Public feed** | An optional read-only URL for today's standups |
+| **Postgres** | Full history, migrations applied on start |
+
+---
+
+## Quick Start
+
+**1. Create the Slack app.** [api.slack.com/apps](https://api.slack.com/apps) →
+**Create New App** → *From manifest*, and paste
+[`slack-manifest.yaml`](./slack-manifest.yaml). Add `https://<your-domain>/oauth/callback`
+under **OAuth & Permissions**, then copy the client id, client secret and signing
+secret.
+
+**2. Run it.** Pick whichever of these you already have.
+
+<details open>
+<summary><b>Kubernetes (Helm)</b></summary>
+
+```bash
+helm repo add morgenruf https://charts.morgenruf.dev
+helm repo update
+
+helm upgrade --install morgenruf morgenruf/morgenruf \
+  --namespace morgenruf --create-namespace \
+  --set slack.clientId="YOUR_CLIENT_ID" \
+  --set slack.clientSecret="YOUR_CLIENT_SECRET" \
+  --set slack.signingSecret="YOUR_SIGNING_SECRET" \
+  --set externalDatabase.url="postgresql://user:pass@host:5432/morgenruf" \
+  --set flaskSecretKey="$(openssl rand -hex 32)" \
+  --set app.url="https://api.your-domain.com"
+```
+
+`flaskSecretKey` signs dashboard sessions, so generate a real one rather than
+leaving it blank. Details and every value in [**Kubernetes Deployment**](#kubernetes-deployment).
+
+</details>
+
+<details>
+<summary><b>Docker Compose</b></summary>
+
+```bash
+git clone https://github.com/morgenruf/morgenruf.git
+cd morgenruf/app
+cp .env.example .env     # Slack credentials and APP_URL go in here
+docker compose up -d
+```
+
+Slack has to reach you over HTTPS, so expose it with a tunnel while you try it:
+`cloudflared tunnel --url http://localhost:3000`, then set that URL as `APP_URL`.
+Full walkthrough in [**Docker and Mac quickstart**](#docker-and-mac-quickstart).
+
+</details>
+
+<details>
+<summary><b>From source</b></summary>
+
+```bash
+cd app
+cp .env.example .env
+pip install -r src/requirements.txt
+python src/main.py
+```
+
+Migrations run on start, so an empty Postgres is enough.
+
+</details>
+
+**3. Install it into Slack.** Open `https://<your-domain>/` and authorise. The
+person who installs it is the first admin.
+
 ---
 
 ## Who can change what
@@ -165,150 +233,6 @@ can mint an API key or publish the workspace's standups at a public URL.
 The person who installed the app always counts as an admin, whatever the members
 table says, so a workspace cannot lock itself out. Demoting the last admin is
 refused for the same reason.
-
----
-
-## Quick Start
-
-### 1. Create a Slack App
-
-1. Go to [https://api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → From manifest
-2. Paste the manifest from [`slack-manifest.yaml`](./slack-manifest.yaml)
-3. Under **OAuth & Permissions**, add your redirect URL: `https://<your-domain>/oauth/callback`
-4. Copy **Client ID**, **Client Secret**, and **Signing Secret**
-
-### 2. Run locally
-
-```bash
-cd app
-cp .env.example .env
-# Fill in SLACK_CLIENT_ID, SLACK_CLIENT_SECRET, SLACK_SIGNING_SECRET, DATABASE_URL
-pip install -r src/requirements.txt
-python src/main.py
-```
-
-### 3. Deploy to Kubernetes
-
-See [**Kubernetes Deployment**](#kubernetes-deployment) below.
-
----
-
-## Docker Image
-
-Available on DockerHub: [`morgenruf/morgenruf`](https://hub.docker.com/r/morgenruf/morgenruf)
-
-```bash
-docker pull morgenruf/morgenruf:latest
-```
-
-Also mirrored at `ghcr.io/morgenruf/morgenruf:latest`
-
-### GitHub Actions / CI
-
-The image is automatically built and pushed on every push to `main` and on version tags (`v*`) via `.github/workflows/docker-publish.yml`.
-
-If you fork this repo, add the following secrets under **Settings → Secrets and variables → Actions**:
-
-| Secret | Value |
-|---|---|
-| `DOCKERHUB_USERNAME` | `morgenruf` |
-| `DOCKERHUB_TOKEN` | Your DockerHub access token |
-
-## Docker / Mac Quickstart
-
-The fastest way to run Morgenruf locally or on a Mac server.
-
-### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Mac/Linux/Windows)
-- A Slack app — [create one](https://api.slack.com/apps) using the manifest at `slack-manifest.yaml`
-
-### 1. Clone and configure
-
-```bash
-git clone https://github.com/morgenruf/morgenruf
-cd morgenruf/app
-cp .env.example .env
-# Edit .env with your Slack credentials
-```
-
-### 2. Start
-
-```bash
-docker compose up -d
-```
-
-That's it. The bot is now running at `http://localhost:3000`.
-
-### 3. Expose to the internet (required for Slack webhooks)
-
-Slack needs to reach your bot. Options:
-
-**Cloudflare Tunnel (recommended — free, no port forwarding):**
-```bash
-brew install cloudflare/cloudflare/cloudflared
-cloudflared tunnel --url http://localhost:3000
-# Copy the https://xxxx.trycloudflare.com URL
-# Set APP_URL=https://xxxx.trycloudflare.com in .env
-# docker compose restart app
-```
-
-**ngrok:**
-```bash
-ngrok http 3000
-# Copy the https URL and set APP_URL in .env
-```
-
-### 4. Configure your Slack app
-
-Set these URLs in your Slack app settings:
-- **Event Subscriptions Request URL:** `https://your-tunnel-url/slack/events`
-- **OAuth Redirect URL:** `https://your-tunnel-url/oauth/callback`
-- **Interactivity Request URL:** `https://your-tunnel-url/slack/interactions`
-
-Then click **"Add to Slack"** from `https://your-tunnel-url/install`.
-
-### Mac as a permanent server
-
-To run on a Mac Mini or Mac server permanently:
-
-```bash
-# Start on boot
-brew services start docker  # or use Docker Desktop login items
-
-# Keep containers running
-docker compose up -d --restart-policy always
-```
-
----
-
-## Google Chat (Beta)
-
-Morgenruf supports Google Chat via the Chat REST API and a service account.
-
-> **Note:** Google Chat bot integration requires **Google Workspace** (not free Gmail accounts).
-
-### Setup
-
-1. **Create a GCP project** at [console.cloud.google.com](https://console.cloud.google.com)
-2. **Enable the Chat API** — _APIs & Services → Library → Google Chat API → Enable_
-3. **Create a service account** — _IAM & Admin → Service Accounts → Create_
-4. **Download the JSON key** for the service account
-5. **Set the env var** — paste the entire JSON as a single line:
-   ```bash
-   GOOGLE_CREDENTIALS='{"type":"service_account","project_id":"...","private_key":"...","client_email":"...",...}'
-   ```
-6. **Configure the bot in Google Chat Admin** — _admin.google.com → Apps → Google Chat → Manage bots_
-   - Set the **Webhook URL** to: `https://your-domain.com/google/events`
-   - Enable _Direct messages_ and _Space messages_
-7. **Restart Morgenruf** — the Google Chat blueprint is registered automatically when `GOOGLE_CREDENTIALS` is set.
-
-### Commands (in Google Chat DM or Space)
-
-| Command | Description |
-|---------|-------------|
-| `/standup` | Start your daily standup |
-| `/skip` | Skip today's standup |
-| `/help` | Show available commands |
 
 ---
 
@@ -384,56 +308,91 @@ Full reference: [docs.morgenruf.dev/mcp.html](https://docs.morgenruf.dev/mcp.htm
 
 ---
 
-## Environment Variables
+## Docker Image
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SLACK_CLIENT_ID` | ✅ | Slack app client ID |
-| `SLACK_CLIENT_SECRET` | ✅ | Slack app client secret |
-| `SLACK_SIGNING_SECRET` | ✅ | Request signing secret |
-| `DATABASE_URL` | ✅ | PostgreSQL connection URL |
-| `APP_URL` | ✅ | Public base URL (e.g. `https://api.morgenruf.dev`) |
-| `FLASK_SECRET_KEY` | ✅ | Random secret for session cookies |
-| `PORT` | | HTTP port (default: `3000`) |
-| `RESEND_API_KEY` | | For welcome emails (optional) |
-| `ZOOM_CLIENT_ID` | | Zoom account linking (optional, see below) |
-| `ZOOM_CLIENT_SECRET` | | Zoom account linking (optional, see below) |
+Available on DockerHub: [`morgenruf/morgenruf`](https://hub.docker.com/r/morgenruf/morgenruf)
 
----
+```bash
+docker pull morgenruf/morgenruf:latest
+```
 
-## Zoom meetings (optional)
+Also mirrored at `ghcr.io/morgenruf/morgenruf:latest`
 
-Each person connects their own Zoom account from the Morgenruf tab in Slack.
-After that, a coffee chat gets a real meeting **scheduled for the time the pair
-agree**, hosted on the account of whoever in the pairing has connected.
+### GitHub Actions / CI
 
-Leave the two variables unset and the feature is absent rather than broken: no
-button appears and nothing fails.
+The image is automatically built and pushed on every push to `main` and on version tags (`v*`) via `.github/workflows/docker-publish.yml`.
 
-1. Create a **user-managed** OAuth app at
-   <https://marketplace.zoom.us/develop/create>.
-2. Set its redirect URL to `<APP_URL>/connect/zoom/callback`.
-3. Give it the scopes `meeting:write:meeting` and `user:read:user`.
-4. Set `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`, or `zoom.clientId` and
-   `zoom.clientSecret` in the Helm chart.
+If you fork this repo, add the following secrets under **Settings → Secrets and variables → Actions**:
 
-Both must be set. With only one, the feature stays off rather than half on.
+| Secret | Value |
+|---|---|
+| `DOCKERHUB_USERNAME` | `morgenruf` |
+| `DOCKERHUB_TOKEN` | Your DockerHub access token |
 
-**Distribution.** An unpublished Zoom app can only be installed by users inside
-your own Zoom account, which is enough to try it. Letting other workspaces
-connect requires publishing the app on the Zoom Marketplace, which goes through
-their review.
+## Docker and Mac quickstart
 
-Anyone can disconnect their own account from the same Morgenruf tab. Zoom
-refresh tokens also expire after 90 days unused, and the tab says "reconnect"
-rather than showing an unlinked state, so a link that aged out is
-distinguishable from one that was never made.
+The fastest way to run Morgenruf locally or on a Mac server.
 
-The dashboard shows Zoom's own mark next to the setting, from
-[Simple Icons](https://simpleicons.org) (CC0), as it does for Slack, Google Meet
-and Microsoft Teams. It marks the integration, never Morgenruf itself: Zoom's
-Partner Brand Guide governs use of the mark, and their app review keeps another
-company's logo off your app icon.
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Mac/Linux/Windows)
+- A Slack app — [create one](https://api.slack.com/apps) using the manifest at `slack-manifest.yaml`
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/morgenruf/morgenruf
+cd morgenruf/app
+cp .env.example .env
+# Edit .env with your Slack credentials
+```
+
+### 2. Start
+
+```bash
+docker compose up -d
+```
+
+That's it. The bot is now running at `http://localhost:3000`.
+
+### 3. Expose to the internet (required for Slack webhooks)
+
+Slack needs to reach your bot. Options:
+
+**Cloudflare Tunnel (recommended — free, no port forwarding):**
+```bash
+brew install cloudflare/cloudflare/cloudflared
+cloudflared tunnel --url http://localhost:3000
+# Copy the https://xxxx.trycloudflare.com URL
+# Set APP_URL=https://xxxx.trycloudflare.com in .env
+# docker compose restart app
+```
+
+**ngrok:**
+```bash
+ngrok http 3000
+# Copy the https URL and set APP_URL in .env
+```
+
+### 4. Configure your Slack app
+
+Set these URLs in your Slack app settings:
+- **Event Subscriptions Request URL:** `https://your-tunnel-url/slack/events`
+- **OAuth Redirect URL:** `https://your-tunnel-url/oauth/callback`
+- **Interactivity Request URL:** `https://your-tunnel-url/slack/interactions`
+
+Then click **"Add to Slack"** from `https://your-tunnel-url/install`.
+
+### Mac as a permanent server
+
+To run on a Mac Mini or Mac server permanently:
+
+```bash
+# Start on boot
+brew services start docker  # or use Docker Desktop login items
+
+# Keep containers running
+docker compose up -d --restart-policy always
+```
 
 ---
 
@@ -586,6 +545,107 @@ app/helm/morgenruf/
 
 ---
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SLACK_CLIENT_ID` | ✅ | Slack app client ID |
+| `SLACK_CLIENT_SECRET` | ✅ | Slack app client secret |
+| `SLACK_SIGNING_SECRET` | ✅ | Request signing secret |
+| `DATABASE_URL` | ✅ | PostgreSQL connection URL |
+| `APP_URL` | ✅ | Public base URL (e.g. `https://api.morgenruf.dev`) |
+| `FLASK_SECRET_KEY` | ✅ | Random secret for session cookies |
+| `PORT` | | HTTP port (default: `3000`) |
+| `RESEND_API_KEY` | | For welcome emails (optional) |
+| `ZOOM_CLIENT_ID` | | Zoom account linking (optional, see below) |
+| `ZOOM_CLIENT_SECRET` | | Zoom account linking (optional, see below) |
+
+---
+
+## Zoom meetings (optional)
+
+Each person connects their own Zoom account from the Morgenruf tab in Slack.
+After that, a coffee chat gets a real meeting **scheduled for the time the pair
+agree**, hosted on the account of whoever in the pairing has connected.
+
+Leave the two variables unset and the feature is absent rather than broken: no
+button appears and nothing fails.
+
+1. Create a **user-managed** OAuth app at
+   <https://marketplace.zoom.us/develop/create>.
+2. Set its redirect URL to `<APP_URL>/connect/zoom/callback`.
+3. Give it the scopes `meeting:write:meeting` and `user:read:user`.
+4. Set `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`, or `zoom.clientId` and
+   `zoom.clientSecret` in the Helm chart.
+
+Both must be set. With only one, the feature stays off rather than half on.
+
+**Distribution.** An unpublished Zoom app can only be installed by users inside
+your own Zoom account, which is enough to try it. Letting other workspaces
+connect requires publishing the app on the Zoom Marketplace, which goes through
+their review.
+
+Anyone can disconnect their own account from the same Morgenruf tab. Zoom
+refresh tokens also expire after 90 days unused, and the tab says "reconnect"
+rather than showing an unlinked state, so a link that aged out is
+distinguishable from one that was never made.
+
+The dashboard shows Zoom's own mark next to the setting, from
+[Simple Icons](https://simpleicons.org) (CC0), as it does for Slack, Google Meet
+and Microsoft Teams. It marks the integration, never Morgenruf itself: Zoom's
+Partner Brand Guide governs use of the mark, and their app review keeps another
+company's logo off your app icon.
+
+---
+
+## Google Chat (Beta)
+
+Morgenruf supports Google Chat via the Chat REST API and a service account.
+
+> **Note:** Google Chat bot integration requires **Google Workspace** (not free Gmail accounts).
+
+### Setup
+
+1. **Create a GCP project** at [console.cloud.google.com](https://console.cloud.google.com)
+2. **Enable the Chat API** — _APIs & Services → Library → Google Chat API → Enable_
+3. **Create a service account** — _IAM & Admin → Service Accounts → Create_
+4. **Download the JSON key** for the service account
+5. **Set the env var** — paste the entire JSON as a single line:
+   ```bash
+   GOOGLE_CREDENTIALS='{"type":"service_account","project_id":"...","private_key":"...","client_email":"...",...}'
+   ```
+6. **Configure the bot in Google Chat Admin** — _admin.google.com → Apps → Google Chat → Manage bots_
+   - Set the **Webhook URL** to: `https://your-domain.com/google/events`
+   - Enable _Direct messages_ and _Space messages_
+7. **Restart Morgenruf** — the Google Chat blueprint is registered automatically when `GOOGLE_CREDENTIALS` is set.
+
+### Commands (in Google Chat DM or Space)
+
+| Command | Description |
+|---------|-------------|
+| `/standup` | Start your daily standup |
+| `/skip` | Skip today's standup |
+| `/help` | Show available commands |
+
+---
+
+## Repository Structure
+
+```
+morgenruf/
+├── app/
+│   ├── src/            ← Python bot (Flask + slack-bolt)
+│   ├── migrations/     ← SQL migration files (auto-applied on start)
+│   ├── helm/morgenruf/ ← Production Helm chart
+│   └── Dockerfile
+├── brand/              ← Logo & brand assets
+├── slack-manifest.yaml ← Slack app manifest
+├── CHANGELOG.md
+└── README.md
+```
+
+---
+
 ## Roadmap
 
 - [x] Multi-workspace Slack OAuth
@@ -608,16 +668,14 @@ app/helm/morgenruf/
 
 ---
 
-## License
-
-[MIT](./LICENSE)
-
----
-
 ## Contributing
 
 PRs welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ---
 
+---
 
+## License
+
+[MIT](./LICENSE)
