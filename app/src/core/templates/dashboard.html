@@ -824,8 +824,11 @@
     .count-chip.none { color: var(--text-dim); }
     .btn-role { font-size: 11px; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text-muted); cursor: pointer; transition: background 0.12s; }
     .btn-role:hover { background: var(--border); color: var(--text); }
-    .member-grants { display: flex; align-items: center; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-    .member-grants .grants-label { font-size: 11px; color: var(--text-dim); }
+    /* Label on its own line: a card is about 230px wide, so a label plus
+       three chips broke mid-row and left every card a different height. */
+    .member-grants { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); }
+    .member-grants .grants-label { display: block; font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }
+    .member-grants .grants-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .grant-chip {
       display: inline-flex; align-items: center; gap: 5px;
       font-size: 11px; font-weight: 500;
@@ -834,14 +837,17 @@
       color: var(--text-muted); cursor: pointer;
       transition: background .12s, border-color .12s, color .12s;
     }
-    .grant-chip:hover { border-color: var(--brand-cyan); color: var(--text); }
+    .grant-chip:not(.readonly):hover { border-color: var(--accent-line); color: var(--text); }
+    .grant-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .grant-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); }
-    /* Tinted rather than filled: --mint is a light wash, so filling it left
-       the label unreadable on the dark theme. */
-    .grant-chip.on { background: rgba(34,197,94,0.14); border-color: rgba(34,197,94,0.38); color: var(--accent); }
-    .grant-chip.on .dot { background: var(--accent); }
-    .grant-chip[disabled] { cursor: default; opacity: .9; }
-    .grant-chip[disabled]:hover { border-color: var(--border2); color: var(--text-muted); }
+    /* Tinted, not filled: --mint is a light wash, so filling it left the label
+       unreadable on the dark theme. --good carries the same "this is on"
+       meaning as the Admin badge and is lifted for dark. */
+    .grant-chip.on { background: rgba(34,197,94,0.13); border-color: rgba(34,197,94,0.34); color: var(--good); }
+    .grant-chip.on .dot { background: var(--good); }
+    /* Shown to someone who cannot change it: still a chip, not a button. */
+    .grant-chip.readonly { cursor: default; }
+    .grant-chip[aria-busy="true"] { opacity: .55; cursor: progress; }
 
     /* Webhooks */
     .webhooks-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -3186,13 +3192,21 @@
         .filter(m => m.available !== false && m.active)
         .map(m => m.name);
     } catch (e) {
-      window._grantable = [];
+      // Left unset rather than empty, so the next visit asks again instead of
+      // remembering a network blip as "this workspace runs nothing".
+      return [];
     }
     return window._grantable;
   }
 
-  async function toggleModuleAdmin(userId, module, on) {
+  async function toggleModuleAdmin(userId, module, on, chip) {
     const label = (MODULE_COPY[module] || [module])[0];
+    // Two clicks on a slow link would send two opposite requests and leave the
+    // card showing whichever answered last.
+    if (chip) {
+      if (chip.getAttribute('aria-busy') === 'true') return;
+      chip.setAttribute('aria-busy', 'true');
+    }
     try {
       await api(on ? 'PUT' : 'DELETE', '/members/' + userId + '/modules/' + module);
       const m = state.members.find(x => x.id === userId);
@@ -3203,7 +3217,10 @@
       }
       renderMembers();
       toast(on ? 'Now runs ' + label : 'No longer runs ' + label);
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) {
+      if (chip) chip.removeAttribute('aria-busy');
+      toast(e.message, 'error');
+    }
   }
 
   loadMe();
@@ -4727,19 +4744,27 @@
     if (!iAmAdmin && !held.size) return '';
     const chips = grantable
       .filter(name => iAmAdmin || held.has(name))
+      // What they run first, so the label reads onto the chips under it.
+      .slice()
+      .sort((a, b) => (held.has(b) ? 1 : 0) - (held.has(a) ? 1 : 0))
       .map(name => {
         const label = (MODULE_COPY[name] || [name])[0];
         const on = held.has(name);
         const body = '<span class="dot"></span>' + esc(label);
         if (!iAmAdmin) {
-          return '<span class="grant-chip on" title="Runs ' + esc(label) + '">' + body + '</span>';
+          return '<span class="grant-chip on readonly" title="Runs ' + esc(label) + '">' + body + '</span>';
         }
-        return '<button class="grant-chip' + (on ? ' on' : '') +
-          '" title="' + (on ? 'Stop this person running ' : 'Put this person in charge of ') + esc(label) + '"' +
-          ' onclick="toggleModuleAdmin(\'' + esc(m.id) + '\',\'' + esc(name) + '\',' + (on ? 'false' : 'true') + ')">' +
+        return '<button type="button" class="grant-chip' + (on ? ' on' : '') +
+          '" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+          ' title="' + (on ? 'Stop this person running ' : 'Put this person in charge of ') + esc(label) + '"' +
+          ' onclick="toggleModuleAdmin(\'' + esc(m.id) + '\',\'' + esc(name) + '\',' + (on ? 'false' : 'true') + ', this)">' +
           body + '</button>';
       }).join('');
-    return '<div class="member-grants"><span class="grants-label">Runs</span>' + chips + '</div>';
+    // "Runs Standups" when something is on. "Put in charge of" when nothing
+    // is, because "Runs" above three switched-off chips reads as a claim.
+    const label = held.size ? 'Runs' : 'Put in charge of';
+    return '<div class="member-grants"><span class="grants-label">' + label + '</span>' +
+      '<div class="grants-chips">' + chips + '</div></div>';
   }
 
   function renderMembers() {

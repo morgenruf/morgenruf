@@ -62,6 +62,21 @@ def _login_required(f):
     return wrapper
 
 
+def _no_grant_message(module: str) -> str:
+    """Why the request was refused, naming the feature as the sidebar does.
+
+    The registry holds the label, so core still knows no feature by name.
+    """
+    try:
+        from src.modules import REGISTRY  # noqa: PLC0415
+
+        spec = next((s for s in REGISTRY if s.name == module), None)
+        label = spec.nav[0].label if spec and spec.nav else module
+    except Exception:
+        label = module
+    return f"Ask an admin to put you in charge of {label}"
+
+
 def _admin_required(arg=None):
     """Require workspace admin, or admin of one named feature.
 
@@ -84,13 +99,7 @@ def _admin_required(arg=None):
                 return jsonify({"error": "Unauthorized"}), 401
             try:
                 if not db.can_administer(team_id, user_id or "", module):
-                    return jsonify(
-                        {
-                            "error": "Admin required"
-                            if module is None
-                            else f"You need to administer {module} to do that"
-                        }
-                    ), 403
+                    return jsonify({"error": "Admin required" if module is None else _no_grant_message(module)}), 403
             except Exception as exc:
                 logger.warning("_admin_required DB error: %s", exc)
                 return jsonify({"error": "Service unavailable"}), 503
@@ -658,6 +667,7 @@ def api_members():
                         "email": r.get("email", ""),
                         "tz": r.get("tz", "UTC"),
                         "role": r.get("role", "member"),
+                        "module_admin": sorted(grants.get(r["user_id"], ())),
                         "tracked": True,
                     }
                     for r in rows

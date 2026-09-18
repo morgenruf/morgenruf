@@ -111,13 +111,22 @@ class TestAStandupAdminRunsStandups:
         resp = client.open(path, method=method, json={"role": "admin"})
         assert resp.status_code == 403, f"a standup admin could {what} ({method} {path})"
 
-    def test_the_refusal_says_which_grant_is_missing(self, monkeypatch):
+    def test_a_workspace_route_says_admin(self, monkeypatch):
         client, _ = _client(monkeypatch, grants={"standup"})
-        resp = client.post("/dashboard/api/connect/programs", json={})
-        # The connect blueprint is not registered here, so check the message on
-        # a core route the grant does not cover.
         resp = client.post("/dashboard/api/modules/connect", json={})
         assert "Admin required" in resp.get_json()["error"]
+
+    def test_a_feature_route_says_what_to_ask_for(self, monkeypatch):
+        """"You need to administer connect" is the column name, not a feature."""
+        client, _ = _client(monkeypatch, grants={"connect"})
+        resp = client.post("/dashboard/api/standups", json={})
+        assert resp.get_json()["error"] == "Ask an admin to put you in charge of Standups"
+
+    def test_the_label_comes_from_the_registry(self):
+        # So core keeps no list of feature names of its own.
+        src = (APP / "src/core/dashboard.py").read_text()
+        fn = src[src.index("def _no_grant_message") :][:600]
+        assert "REGISTRY" in fn and "nav[0].label" in fn
 
 
 class TestAGrantIsNotAWayUp:
@@ -186,9 +195,22 @@ class TestThePageKnowsWhoCanDoWhat:
         src = (APP / "src/core/dashboard.py").read_text()
         assert '"module_admin": sorted(grants.get(uid, ()))' in src
 
+    def test_the_grants_survive_slack_being_down(self):
+        """The members list falls back to the database, and the page renders
+        the same cards from it."""
+        src = (APP / "src/core/dashboard.py").read_text()
+        fallback = src[src.index("# Fall back to DB members") :][:900]
+        assert '"module_admin": sorted(grants.get(r["user_id"], ()))' in fallback
+
     def test_the_members_page_offers_them(self):
         markup = (APP / "src/core/templates/dashboard.html").read_text()
         assert "toggleModuleAdmin" in markup
+        # A toggle, so it says what it is: pressed state, and one request at a
+        # time rather than two opposite ones racing on a slow link.
+        assert "aria-pressed" in markup
+        assert "aria-busy" in markup
+        # "Runs" over three switched-off chips would read as a claim.
+        assert "Put in charge of" in markup
         assert "'/members/' + userId + '/modules/' + module" in markup
         # And an admin's card says why it has no switches.
         assert "Runs every feature" in markup
