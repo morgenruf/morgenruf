@@ -432,15 +432,23 @@ class TestCoffeeChatNavGroup:
 
 class TestMemberStatusRespectsRole:
     def test_a_non_admin_gets_a_label_not_a_control(self):
-        """The endpoint is admin-only, so offering everyone a dropdown means a
-        403 that looks like a broken page."""
+        """The endpoint refuses anyone who does not run coffee chats, so
+        offering everyone a dropdown means a 403 that looks like a broken
+        page."""
         markup = read_template()
         fn = markup[markup.index("function memberStateControl") :][:900]
-        assert "window._myRole !== 'admin'" in fn
+        assert "!canAdminister('connect')" in fn
         assert "att-zero" in fn
 
     def test_and_the_page_says_why_it_is_read_only(self):
-        assert "Only an admin can change these." in read_template()
+        assert "Only someone who runs coffee chats can change these." in read_template()
+
+    def test_the_check_matches_what_the_api_allows(self):
+        """A workspace admin or whoever holds the feature, and nobody else."""
+        markup = read_template()
+        fn = markup[markup.index("function canAdminister") :][:400]
+        assert "window._myRole === 'admin'" in fn
+        assert "_myModuleAdmin" in fn
 
 
 class TestIconsAreOfficialAndMeaningful:
@@ -617,8 +625,9 @@ class TestAdminOnlyControlsAreNotOfferedToEveryone:
     def test_member_status_control_is_read_only_for_a_member(self):
         markup = read_template()
         fn = markup[markup.index("function memberStateControl") :][:900]
-        assert "window._myRole !== 'admin'" in fn
+        assert "!canAdminister('connect')" in fn
 
     def test_both_say_why_rather_than_silently_hiding_it(self):
         markup = read_template()
-        assert markup.count("Only an admin can change these.") >= 2
+        assert "Only an admin can change these." in markup  # the feature switches
+        assert "Only someone who runs coffee chats can change these." in markup

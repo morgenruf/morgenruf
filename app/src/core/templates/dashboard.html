@@ -836,7 +836,9 @@
     }
     .grant-chip:hover { border-color: var(--brand-cyan); color: var(--text); }
     .grant-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); }
-    .grant-chip.on { background: var(--mint); border-color: rgba(34,197,94,0.35); color: var(--text); }
+    /* Tinted rather than filled: --mint is a light wash, so filling it left
+       the label unreadable on the dark theme. */
+    .grant-chip.on { background: rgba(34,197,94,0.14); border-color: rgba(34,197,94,0.38); color: var(--accent); }
     .grant-chip.on .dot { background: var(--accent); }
     .grant-chip[disabled] { cursor: default; opacity: .9; }
     .grant-chip[disabled]:hover { border-color: var(--border2); color: var(--text-muted); }
@@ -4257,7 +4259,7 @@
         (counts.snoozed ? ' &middot; ' + counts.snoozed + ' snoozed' : '') +
         (counts.out ? ' &middot; ' + counts.out + ' excluded' : '') +
         '. Everyone in the channel is matched unless they are out.' +
-        (window._myRole === 'admin' ? '' : ' Only an admin can change these.') + '</p>' +
+        (canAdminister('connect') ? '' : ' Only someone who runs coffee chats can change these.') + '</p>' +
       '<table class="data-table"><thead><tr><th>Member</th>' +
         '<th style="text-align:right">Paired</th><th>Status</th></tr></thead><tbody>' +
       rows.map(r =>
@@ -4275,9 +4277,10 @@
 
   function memberStateControl(r) {
     const until = r.until ? ' until ' + esc(formatDate(r.until, '')) : '';
-    // Only an admin may change this, so anyone else reads it. Offering a
-    // control that answers 403 looks like the page is broken.
-    if (window._myRole !== 'admin') {
+    // Changing this needs charge of coffee chats: a workspace admin, or
+    // whoever was put in charge of the feature. Anyone else reads it, because
+    // a control that answers 403 looks like the page is broken.
+    if (!canAdminister('connect')) {
       const label = r.state === 'in' ? 'In the pool'
         : r.state === 'snoozed' ? 'Snoozed' + until
         : 'Excluded';
