@@ -5,6 +5,54 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-09-18
+
+### Added
+- **Per-feature admins.** Roles were workspace-wide and binary, so putting a
+  team lead in charge of the standups meant handing them webhooks, API keys
+  and the public feed as well. A grant is now one row per person per feature:
+  the lead runs standups, someone else runs coffee chats and kudos, and
+  neither can mint a key or publish the workspace's standups. A workspace
+  admin still implies every feature, so no existing permission changed.
+- **Coffee chats settle on a time.** A pairing proposes slots in both people's
+  working hours, they vote, and the winning slot becomes the meeting. With
+  Zoom linked, the meeting is created at the agreed time.
+- **Zoom account linking**, group sizes from 2 to 8, re-match requests,
+  opt-out and snooze, and a coffee chat settings page with a live preview of
+  the Slack message.
+- **Standup nudge.** Whoever has not filed by report time gets a private
+  reminder.
+- **Per-standup digest email**, replacing the single workspace-wide address.
+- **A standup's health on its card**: fourteen days of completion as a
+  sparkline, with a badge when it starts slipping.
+- **Feature switches in Settings**, and an icon per page.
+
+### Fixed
+- **A plain member could publish the workspace's standups and mint an API
+  key.** Fourteen mutating routes had no role check, including deleting a
+  standup and rotating a webhook secret.
+- **A workspace could lock itself out of its own settings permanently.**
+  Demoting the last admin left nobody who could promote anyone. Thirteen of
+  twenty workspaces had exactly one admin.
+- **No workspace-level setting could ever be saved.** The upsert named a
+  conflict target with no matching constraint, so every write raised since
+  the feature shipped.
+- **Settings that saved and did nothing**: report channel, AI provider,
+  video mode, nudge-on-skip, and ten fields the schedule form discarded on
+  the way to the server.
+- **Turning the standup nudge on did nothing until a restart.** The job
+  reconciler compared triggers without the nudge fields, so it never noticed
+  the change.
+- **A coffee chat round that did not run was advertised as still coming**, and
+  a programme that had never run was reported as due today whatever day it
+  was.
+- **Zoom could not be switched on by any Helm install**: the credentials were
+  read by the code and never passed by the chart.
+
+### Removed
+- Twenty automation rules that had no effect, ten orphaned settings columns,
+  and a column added and never read in the same week.
+
 ## [1.7.5] — 2026-09-17
 
 ### Fixed
