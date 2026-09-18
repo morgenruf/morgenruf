@@ -3267,7 +3267,7 @@
     try {
       const mods = await api('GET', '/modules');
       window._grantable = (mods || [])
-        .filter(m => m.available !== false && m.active)
+        .filter(m => m.available !== false && m.active && m.delegable)
         .map(m => m.name);
     } catch (e) {
       // Left unset rather than empty, so the next visit asks again instead of

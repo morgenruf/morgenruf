@@ -22,4 +22,5 @@ MODULE = ModuleSpec(
     purge=None,
     nav=(NavItem(label="Standups", path="/"),),
     default_enabled=True,
+    delegable=True,
 )

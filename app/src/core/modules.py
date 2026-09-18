@@ -38,6 +38,11 @@ class ModuleSpec:
     # MCP endpoint should not have to import every module to know what it can
     # answer, and a module shipped dark must not advertise tools.
     mcp_tools: Optional[Callable] = None
+    # Whether one person can be put in charge of this module without being a
+    # workspace admin. False for a module with nothing to administer: Insights
+    # only reads, and MCP's keys are workspace-wide. Offering those as grants
+    # would be two switches that change nothing.
+    delegable: bool = False
 
 
 def deploy_allowlist() -> Optional[set[str]]:
