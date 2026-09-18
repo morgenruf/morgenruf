@@ -10,6 +10,8 @@ An open-source alternative to Donut, Geekbot, Standuply and HeyTaco, in one app 
 
 [**Website**](https://morgenruf.dev) · [**Documentation**](https://docs.morgenruf.dev) · [**Helm charts**](https://charts.morgenruf.dev) · [**Status**](https://status.morgenruf.dev) · [**Changelog**](CHANGELOG.md) · [**Roadmap**](ROADMAP.md)
 
+[![Backed by CloudDrove](https://img.shields.io/badge/backed%20by-CloudDrove-1f6feb?labelColor=0d1117)](https://clouddrove.com) [![Commercial support](https://img.shields.io/badge/commercial%20support-available-2ea043?labelColor=0d1117)](#commercial-support)
+
 <sub>*Morgenruf* (German), *morning call*. Built over a weekend at a Tim Hortons in Kitchener, Ontario 🇨🇦☕</sub>
 
 </div>
@@ -712,10 +714,13 @@ which is also where the name comes from: *Morgenruf* is German for *morning
 call*, and Kitchener was Berlin, Ontario until 1916. The rooster in the logo is
 holding a double-double.
 
-Canadian open source, MIT licensed, and independent: no venture funding, no
-per-seat pricing, no hosted tier waiting to charge you once your team grows. If
-you are also building open-source developer tools in Waterloo Region or anywhere
-else in Canada, [say hello](https://github.com/morgenruf/morgenruf/discussions).
+Canadian open source, MIT licensed, no venture funding, no per-seat pricing and
+no hosted tier waiting to charge you once your team grows. Built and maintained
+by [Anmol Nagpal](https://github.com/anmolnagpal) at
+[CloudDrove](https://clouddrove.com) in Waterloo Region, with
+[commercial support](#commercial-support) for teams who would rather not run it
+themselves. If you are also building open-source developer tools in Canada,
+[say hello](https://github.com/morgenruf/morgenruf/discussions).
 
 ---
 
@@ -756,6 +761,34 @@ moves it.
 
 Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking:
 [ROADMAP.md](ROADMAP.md).
+
+---
+
+## Commercial support
+
+Morgenruf is MIT licensed and free to self-host, with no paid tier and nothing
+held back from this repository. That does not change.
+
+It is built and maintained by [Anmol Nagpal](https://github.com/anmolnagpal) at
+[CloudDrove](https://clouddrove.com), a DevOps consultancy that runs Kubernetes
+for other people for a living, which is why the Helm chart and the migration
+story are the parts that get the most care.
+
+If you would rather not run it yourself, CloudDrove can: installation, a managed
+cluster, upgrades, and someone to call. Write to
+[hello@clouddrove.com](mailto:hello@clouddrove.com).
+
+| | Self-hosted | With CloudDrove |
+|---|---|---|
+| Licence | MIT, every feature | MIT, every feature |
+| Price | free, any team size | quoted for the work |
+| Who runs it | you | CloudDrove |
+| Upgrades and migrations | you, `helm upgrade` | handled |
+| Support | GitHub issues and discussions, best effort | contracted response |
+| Your data | your database | your cloud account, your database |
+
+Paid support funds the work but never gates it: a bug is a bug, and it gets
+fixed for everybody.
 
 ---
 
