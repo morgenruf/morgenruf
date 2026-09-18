@@ -45,6 +45,7 @@ MODULE = ModuleSpec(
     purge=purge,
     nav=(NavItem(label="Coffee chats", path="#connect"),),
     default_enabled=False,
+    delegable=True,
     mcp_tools=mcp_tools,
     home_blocks=home_blocks,
 )

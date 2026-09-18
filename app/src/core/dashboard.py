@@ -551,8 +551,10 @@ def api_set_module_admin(user_id: str, module: str):
     from src.modules import REGISTRY  # noqa: PLC0415
 
     team_id = session["team_id"]
-    if module not in {spec.name for spec in REGISTRY}:
-        return jsonify({"error": "unknown feature"}), 404
+    # A feature with nothing to administer cannot be handed to anybody: the
+    # grant would sit in the table and change nothing.
+    if module not in {spec.name for spec in REGISTRY if getattr(spec, "delegable", False)}:
+        return jsonify({"error": "that feature cannot be delegated"}), 404
     try:
         if request.method == "DELETE":
             db.revoke_module_admin(team_id, user_id, module)
@@ -1479,6 +1481,8 @@ def api_list_modules():
                 "required_scopes": list(spec.required_scopes),
                 "missing_scopes": sorted(set(spec.required_scopes) - set(granted)),
                 "available": allowlist is None or spec.name in allowlist,
+                # Whether the Members page may offer this as a grant.
+                "delegable": bool(getattr(spec, "delegable", False)),
                 "nav": [{"label": n.label, "path": n.path} for n in spec.nav],
             }
             for spec in REGISTRY

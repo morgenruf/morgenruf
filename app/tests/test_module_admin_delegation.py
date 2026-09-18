@@ -178,6 +178,42 @@ class TestOnlyAWorkspaceAdminHandsOutGrants:
         assert client.put("/dashboard/api/members/U_HR/modules/billing").status_code == 404
         db.grant_module_admin.assert_not_called()
 
+    def test_a_feature_with_nothing_to_administer_is_refused(self, monkeypatch):
+        """Insights only reads, and MCP keys are workspace-wide.
+
+        A grant for either would sit in the table and change nothing, and the
+        Members page would show two switches that do nothing.
+        """
+        client, db = _client(monkeypatch, role="admin")
+        for module in ("insights", "mcp"):
+            assert client.put(f"/dashboard/api/members/U_HR/modules/{module}").status_code == 404
+        db.grant_module_admin.assert_not_called()
+
+
+class TestOnlyDelegableFeaturesAreOffered:
+    def test_the_registry_marks_them(self):
+        from src.modules import REGISTRY
+
+        delegable = {s.name for s in REGISTRY if getattr(s, "delegable", False)}
+        assert delegable == {"standup", "connect", "kudos"}, delegable
+
+    def test_every_delegable_module_has_a_route_that_names_it(self):
+        """The flag and the decorators have to agree, or the page offers a
+        grant that gates nothing."""
+        from src.modules import REGISTRY
+
+        gated = set()
+        for path in sorted((APP / "src").rglob("dashboard.py")):
+            for name in re.findall(r'_admin_required\("([a-z_]+)"\)', path.read_text()):
+                gated.add(name)
+        delegable = {s.name for s in REGISTRY if getattr(s, "delegable", False)}
+        assert delegable == gated, f"flagged {sorted(delegable)}, gated {sorted(gated)}"
+
+    def test_the_page_filters_on_it(self):
+        markup = (APP / "src/core/templates/dashboard.html").read_text()
+        fn = markup[markup.index("async function loadGrantable") :][:600]
+        assert "m.delegable" in fn
+
 
 class TestThePageKnowsWhoCanDoWhat:
     def test_me_reports_the_grants(self, monkeypatch):

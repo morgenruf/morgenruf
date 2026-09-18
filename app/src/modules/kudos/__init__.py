@@ -26,6 +26,7 @@ MODULE = ModuleSpec(
     purge=None,
     nav=(NavItem(label="Kudos", path="#kudos"),),
     default_enabled=True,
+    delegable=True,
     home_blocks=home_blocks,
     mcp_tools=mcp_tools,
 )
