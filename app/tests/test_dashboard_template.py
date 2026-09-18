@@ -753,9 +753,22 @@ class TestEveryControlHasSomethingBehindIt:
     # classList.toggle(...), event.stopPropagation(), el.remove().
     METHODS = {"getElementById", "querySelector", "remove", "stopPropagation", "toggle", "preventDefault", "focus"}
     BUILTINS = {
-        "esc", "alert", "confirm", "parseInt", "parseFloat", "String", "Number",
-        "Boolean", "Array", "Object", "JSON", "Math", "Date", "setTimeout",
-        "encodeURIComponent", "decodeURIComponent",
+        "esc",
+        "alert",
+        "confirm",
+        "parseInt",
+        "parseFloat",
+        "String",
+        "Number",
+        "Boolean",
+        "Array",
+        "Object",
+        "JSON",
+        "Math",
+        "Date",
+        "setTimeout",
+        "encodeURIComponent",
+        "decodeURIComponent",
     }
     KEYWORDS = {"if", "for", "while", "return", "function", "new", "typeof", "catch", "switch"}
 

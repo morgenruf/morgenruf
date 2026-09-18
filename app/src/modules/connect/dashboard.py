@@ -264,8 +264,8 @@ def register_routes(flask_app) -> None:
             out.append(
                 {
                     "user_id": user_id,
-                    "name": (getattr(member, "real_name", "") or user_id) if member else user_id,
-                    "avatar": getattr(member, "avatar", "") if member else "",
+                    "name": (member.name or user_id) if member else user_id,
+                    "avatar": member.avatar if member else "",
                     # Somebody in the channel who is not on the roster is a
                     # deactivated account or a guest: shown, not silently
                     # dropped, because "why is this person never matched" is
