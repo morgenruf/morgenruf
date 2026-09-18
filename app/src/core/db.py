@@ -1354,6 +1354,8 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
         "post_summary",
         "digest_email",
         "digest_enabled",
+        "nudge_missing",
+        "nudge_minutes_before",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
@@ -1535,6 +1537,8 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         "post_summary",
         "digest_email",
         "digest_enabled",
+        "nudge_missing",
+        "nudge_minutes_before",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
@@ -1595,13 +1599,30 @@ def get_all_active_schedules() -> list[dict]:
 
 
 def get_member_role(team_id: str, user_id: str) -> str:
-    """Return 'admin' or 'member' for a user. Defaults to 'member' if not found."""
+    """Return 'admin' or 'member' for a user. Defaults to 'member' if not found.
+
+    Whoever installed the app is always an admin, whatever the members row
+    says. Without that a workspace can become permanently unmanageable: role
+    changes require admin, so the moment the last admin is deactivated nobody
+    can ever grant it again, and every admin-only route is closed for good.
+    It is not hypothetical, most workspaces have exactly one admin.
+
+    The installer is the safe choice for this: they hold the Slack side of the
+    relationship already, and it grants nothing to anyone else.
+    """
     sql = "SELECT role FROM members WHERE team_id = %s AND user_id = %s"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id))
             row = cur.fetchone()
-    return (row[0] if row else None) or "member"
+            role = (row[0] if row else None) or "member"
+            if role == "admin":
+                return role
+            cur.execute("SELECT installed_by_user_id FROM installations WHERE team_id = %s", (team_id,))
+            inst = cur.fetchone()
+    if inst and inst[0] and user_id and inst[0] == user_id:
+        return "admin"
+    return role
 
 
 def set_member_role(team_id: str, user_id: str, role: str) -> None:
@@ -1821,3 +1842,71 @@ def set_module_enabled(team_id: str, module: str, enabled: bool) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, module, enabled))
+
+
+def count_admins(team_id: str) -> int:
+    """Active admins in a workspace, for refusing to demote the last one."""
+    sql = "SELECT COUNT(*) FROM members WHERE team_id = %s AND role = 'admin' AND active"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            return int(cur.fetchone()[0])
+
+
+# ── Per-feature administrators ──────────────────────────────────────────────
+
+
+def module_admin_grants(team_id: str, user_id: str) -> set[str]:
+    """Which features this person administers, ignoring their workspace role."""
+    sql = "SELECT module FROM module_admins WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            return {r[0] for r in cur.fetchall()}
+
+
+def team_module_admins(team_id: str) -> dict:
+    """`{user_id: {module, ...}}` for everyone with a grant in this workspace."""
+    out: dict = {}
+    sql = "SELECT user_id, module FROM module_admins WHERE team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            for user_id, module in cur.fetchall():
+                out.setdefault(user_id, set()).add(module)
+    return out
+
+
+def grant_module_admin(team_id: str, user_id: str, module: str, granted_by: str = "") -> None:
+    sql = """
+        INSERT INTO module_admins (team_id, user_id, module, granted_by)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (team_id, user_id, module) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id, module, granted_by or None))
+
+
+def revoke_module_admin(team_id: str, user_id: str, module: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM module_admins WHERE team_id = %s AND user_id = %s AND module = %s",
+                (team_id, user_id, module),
+            )
+
+
+def can_administer(team_id: str, user_id: str, module: str | None = None) -> bool:
+    """Whether this person may change `module`, or anything when it is None.
+
+    A workspace admin always may. Otherwise they need a grant for that exact
+    feature, and a route that names no feature stays workspace-admin only,
+    because the things that name none are the workspace-wide ones: roles,
+    invitations, API keys, the public feed.
+    """
+    if get_member_role(team_id, user_id) == "admin":
+        return True
+    if not module:
+        return False
+    return module in module_admin_grants(team_id, user_id)

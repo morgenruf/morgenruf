@@ -108,10 +108,16 @@ def register_routes(flask_app) -> None:
         chat_date = next_chat_date(program, now.date())
         next_chat = None
         if program and chat_date:
+            # A due date in the past is not a forecast: the round was due and
+            # has not run. Showing it as "next" told a Thursday its coffee
+            # chat was on Wednesday.
+            days_away = (chat_date - now.date()).days
             next_chat = {
                 "program_id": program.get("program_id"),
                 "name": program.get("name"),
                 "date": chat_date.isoformat(),
+                "days_away": days_away,
+                "overdue": days_away < 0,
             }
 
         return jsonify(

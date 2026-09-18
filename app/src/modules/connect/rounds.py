@@ -14,13 +14,30 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 
-def is_round_due(interval_weeks: int, last_round: date | None, today: date) -> bool:
+def is_round_due(
+    interval_weeks: int,
+    last_round: date | None,
+    today: date,
+    pinned: date | None = None,
+) -> bool:
     """Whether a round should start today.
 
     A programme that has never run is due immediately. Otherwise a round is
     due once at least `interval_weeks` have passed, using >= rather than == so
     an overdue programme catches up instead of waiting for an exact multiple.
+
+    `pinned` is an explicit date for the next round, which overrides the
+    cadence once. It is how an admin moves one round without changing the
+    rhythm: a date in the future holds the round back even if the cadence says
+    it is due, and a date reached or passed releases it. It is cleared once the
+    round runs, so the cadence takes over again from there.
     """
+    if pinned is not None:
+        if last_round is not None and last_round >= pinned:
+            # The pinned round already happened; fall through to the cadence.
+            pass
+        else:
+            return today >= pinned
     if last_round is None:
         return True
     if last_round >= today:

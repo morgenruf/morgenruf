@@ -129,3 +129,54 @@ class TestGenerateSummary:
         call_url = mock_post.call_args[0][0]
         assert "openai.com" in call_url
         assert result == "OpenAI response"
+
+
+class TestProviderChoiceIsHonoured:
+    """The dashboard's AI provider dropdown used to have no effect.
+
+    generate_summary took no provider argument and picked by whichever key
+    was set, OpenAI first, so a workspace that chose Anthropic got OpenAI.
+    """
+
+    def _both_keys(self):
+        return patch.dict(
+            "os.environ",
+            {"OPENAI_API_KEY": "sk-openai", "ANTHROPIC_API_KEY": "sk-anthropic"},
+        )
+
+    STANDUPS = [{"user_id": "U1", "yesterday": "a", "today": "b", "blockers": ""}]
+
+    def test_anthropic_choice_calls_anthropic(self):
+        with (
+            self._both_keys(),
+            patch("src.modules.standup.ai_summary._anthropic_summary") as anthropic,
+            patch("src.modules.standup.ai_summary._openai_summary") as openai,
+        ):
+            anthropic.return_value = "from anthropic"
+            assert generate_summary(self.STANDUPS, "Acme", "anthropic") == "from anthropic"
+            openai.assert_not_called()
+
+    def test_openai_choice_calls_openai(self):
+        with (
+            self._both_keys(),
+            patch("src.modules.standup.ai_summary._anthropic_summary") as anthropic,
+            patch("src.modules.standup.ai_summary._openai_summary") as openai,
+        ):
+            openai.return_value = "from openai"
+            assert generate_summary(self.STANDUPS, "Acme", "openai") == "from openai"
+            anthropic.assert_not_called()
+
+    def test_unset_provider_keeps_the_old_order(self):
+        with self._both_keys(), patch("src.modules.standup.ai_summary._openai_summary") as openai:
+            openai.return_value = "from openai"
+            assert generate_summary(self.STANDUPS, "Acme") == "from openai"
+
+    def test_chosen_provider_without_a_key_falls_back(self):
+        # The deployment owns the keys, so a workspace choosing a provider the
+        # deployment cannot reach should still get a summary.
+        with (
+            patch.dict("os.environ", {"OPENAI_API_KEY": "sk-openai", "ANTHROPIC_API_KEY": ""}),
+            patch("src.modules.standup.ai_summary._openai_summary") as openai,
+        ):
+            openai.return_value = "from openai"
+            assert generate_summary(self.STANDUPS, "Acme", "anthropic") == "from openai"

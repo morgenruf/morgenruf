@@ -30,6 +30,9 @@ _prior_db = sys.modules.get("src.core.db")
 _prior_oauth = sys.modules.get("src.core.oauth")
 
 _db_mock = MagicMock()
+# Most dashboard mutations are admin-only, so the default session is an admin.
+# The role-specific tests set this themselves.
+_db_mock.get_member_role.return_value = "admin"
 _oauth_mock = MagicMock()
 sys.modules["src.core.db"] = _db_mock
 sys.modules["src.core.oauth"] = _oauth_mock
@@ -471,12 +474,15 @@ class TestApiAnalytics:
             completed=9,
             completion_rate=60,
         )
-        data = authed_client.get("/dashboard/api/analytics/schedules?days=7").get_json()
+        # /analytics/schedules was a second endpoint over the same overview
+        # with no caller; /analytics already carries the breakdown the page
+        # draws, so the assertions moved here when it was removed.
+        data = authed_client.get("/dashboard/api/analytics?days=7").get_json()
         assert data["schedules"][0]["completion_rate"] == 60
-        assert data["summary"]["expected"] == 15
+        assert data["expected"] == 15
 
     def test_schedule_breakdown_requires_login(self, client):
-        assert client.get("/dashboard/api/analytics/schedules").status_code == 401
+        assert client.get("/dashboard/api/analytics").status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -612,13 +618,13 @@ class TestScheduleTimingValidation:
 
     def test_create_schedule_with_bad_timezone_returns_400(self, authed_client):
         _db_mock.create_standup_schedule.reset_mock()
-        resp = authed_client.post("/dashboard/api/schedules", json={"name": "Daily", "schedule_tz": "IST"})
+        resp = authed_client.post("/dashboard/api/standups", json={"name": "Daily", "schedule_tz": "IST"})
         assert resp.status_code == 400
         _db_mock.create_standup_schedule.assert_not_called()
 
     def test_update_schedule_with_bad_timezone_returns_400(self, authed_client):
         _db_mock.update_standup_schedule.reset_mock()
-        resp = authed_client.put("/dashboard/api/schedules/1", json={"schedule_tz": "Mars/Olympus"})
+        resp = authed_client.put("/dashboard/api/standups/1", json={"schedule_tz": "Mars/Olympus"})
         assert resp.status_code == 400
         _db_mock.update_standup_schedule.assert_not_called()
 
@@ -642,9 +648,9 @@ class TestRegistrationErrorSurfacing:
         resp = authed_client.get("/dashboard/api/standups")
         assert resp.get_json()[0]["registration_error"] is None
 
-    def test_schedules_list_flags_it_too(self, authed_client):
+    def test_an_unparseable_time_is_flagged_too(self, authed_client):
         _db_mock.get_standup_schedules.return_value = [_schedule_row(schedule_time="25:00")]
-        resp = authed_client.get("/dashboard/api/schedules")
+        resp = authed_client.get("/dashboard/api/standups")
         assert resp.status_code == 200
         assert resp.get_json()[0]["registration_error"] is not None
 

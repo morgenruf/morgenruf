@@ -22,8 +22,17 @@ _SYSTEM_PROMPT = """You are a team standup summariser. Given a list of standup u
 Be concise, professional, and use "the team" language. Do not list every person individually."""
 
 
-def generate_summary(standups: list[dict], team_name: str = "") -> str:
+def generate_summary(standups: list[dict], team_name: str = "", provider: str = "") -> str:
     """Generate an AI summary paragraph from standup data.
+
+    `provider` is the workspace's choice of "openai" or "anthropic". It was
+    being ignored: whichever key happened to be set won, OpenAI first, so a
+    workspace that picked Anthropic in the dashboard silently got OpenAI.
+
+    An unset or unrecognised provider keeps the old behaviour, and so does a
+    choice whose key is missing: a summary from the other provider is better
+    than no summary at all, and the deployment, not the workspace, decides
+    which keys exist.
 
     Falls back to plain list summary if no API key configured.
     """
@@ -45,6 +54,10 @@ def generate_summary(standups: list[dict], team_name: str = "") -> str:
         )
     standup_text = "\n\n".join(lines)
 
+    if provider.strip().lower() == "anthropic" and anthropic_key:
+        return _anthropic_summary(standup_text, team_name, anthropic_key)
+    if provider.strip().lower() == "openai" and openai_key:
+        return _openai_summary(standup_text, team_name, openai_key)
     if openai_key:
         return _openai_summary(standup_text, team_name, openai_key)
     if anthropic_key:

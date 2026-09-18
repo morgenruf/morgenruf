@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_START_HOUR = 9
 DEFAULT_END_HOUR = 17
 
+# Used only when the working days do not meet at all. Early and late rather than
+# round the clock: a call at 07:00 or 20:00 is an ask, one at 03:00 is not.
+EARLY_START_HOUR = 7
+LATE_END_HOUR = 21
+
 
 def _offset_hours(tz_name: str, when: datetime) -> float | None:
     """A zone's offset from UTC in hours, or None if the zone is unknown."""
@@ -64,6 +69,11 @@ def can_meet(tz_a: str, tz_b: str, minimum_hours: float = 1.0, when: datetime | 
     return overlap_hours(tz_a, tz_b, when) >= minimum_hours
 
 
+def within_working_hours(tz_a: str, tz_b: str, when: datetime | None = None) -> bool:
+    """Whether the two share an ordinary working day at all."""
+    return overlap_hours(tz_a, tz_b, when) > 0
+
+
 def next_slots(
     tz_a: str,
     tz_b: str,
@@ -85,7 +95,14 @@ def next_slots(
     start = max(DEFAULT_START_HOUR - a, DEFAULT_START_HOUR - b)
     end = min(DEFAULT_END_HOUR - a, DEFAULT_END_HOUR - b)
     if end - start < duration_minutes / 60:
-        return []
+        # No shared working day. Saying nothing is the worst answer: the pair
+        # who most need help finding a time get none, and the message looks
+        # exactly as it would if the feature did not exist. Widen to the edges
+        # of both days and let the caller say these are outside normal hours.
+        start = max(EARLY_START_HOUR - a, EARLY_START_HOUR - b)
+        end = min(LATE_END_HOUR - a, LATE_END_HOUR - b)
+        if end - start < duration_minutes / 60:
+            return []
 
     base = (when + timedelta(days=1)).replace(minute=0, second=0, microsecond=0)
     slots: list[datetime] = []
@@ -99,3 +116,55 @@ def next_slots(
                 hour += 2  # spread them out rather than three in a row
         day += 1
     return slots
+
+
+def zone_city(tz_name: str) -> str:
+    """ "Asia/Kolkata" -> "Kolkata". The region prefix is noise to a reader."""
+    if not tz_name:
+        return "UTC"
+    return tz_name.rsplit("/", 1)[-1].replace("_", " ")
+
+
+def local_label(when: datetime, tz_names: list[str]) -> str:
+    """A slot written in the readers' own clocks rather than in UTC.
+
+    The message is a group DM both people see, so it cannot be personalised to
+    one reader; it shows every zone in the match instead. "Friday 07:00 UTC" is
+    a time neither person thinks in, and a pair eight hours apart cannot even
+    tell from it whether the slot is the morning or the evening for them.
+
+    Zones are listed earliest-clock first, so the person for whom it is early
+    reads their own time first and can see the ask being made of them.
+    """
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+
+    seen: dict[str, str] = {}
+    for name in tz_names:
+        try:
+            tz = ZoneInfo(name) if name else timezone.utc
+        except (ZoneInfoNotFoundError, ValueError, KeyError):
+            continue
+        local = when.astimezone(tz)
+        # One entry per distinct wall-clock reading: two people in the same
+        # zone, or in different zones that agree today, are one line.
+        seen.setdefault(local.strftime("%H:%M"), zone_city(name))
+
+    if not seen:
+        return when.strftime("%A %H:%M UTC")
+
+    day = when.astimezone(ZoneInfo(tz_names[0])) if _usable(tz_names[0]) else when
+    parts = [f"{city} {clock}" for clock, city in sorted(seen.items())]
+    if len(parts) == 1:
+        return f"{day.strftime('%A')} {parts[0]}"
+    return f"{day.strftime('%A')} · " + " · ".join(parts)
+
+
+def _usable(tz_name: str) -> bool:
+    if not tz_name:
+        return False
+    try:
+        ZoneInfo(tz_name)
+        return True
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        return False

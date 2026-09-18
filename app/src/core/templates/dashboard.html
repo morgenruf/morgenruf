@@ -9,7 +9,7 @@
   <link rel="apple-touch-icon" href="/static/icon-512.png"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -21,11 +21,11 @@
          --panel at 4.97:1 against a 3.0 requirement. Green and red are also
          separated by luminance (0.060 against a 0.05 floor), because a share
          of readers cannot tell them apart by hue. */
-      --bg: #F7F8FC;
+      --bg: #FAF9F6;
       --surface: #FFFFFF;
-      --surface2: #F1F3F9;
-      --border: #E5E8F0;
-      --border2: #D3D8E6;
+      --surface2: #F3F1EC;
+      --border: #E8E6E1;
+      --border2: #D8D5CE;
       --accent: #4B54E0;
       --accent-dim: rgba(75, 84, 224, 0.10);
       --accent-line: rgba(75, 84, 224, 0.26);
@@ -33,9 +33,9 @@
       --on-accent: #FFFFFF;       /* on --accent: 5.76:1 */
       --brand-grad: linear-gradient(120deg, #4B54E0 0%, #2F5BFF 48%, #2FA8FF 100%);
       --sky: #2358C9;
-      --text: #14161B;
-      --text-muted: #4A4F5A;
-      --text-dim: #666C7A;
+      --text: #292C42;
+      --text-muted: #55596B;
+      --text-dim: #6A6E7F;
       --danger: #C62B3D;
       --warning: #9A5B00;
       --good: #127145;
@@ -43,7 +43,29 @@
       --indigo-ink: #3A34B0;
       --amber-soft: rgba(245,158,11,0.16);
       --amber-ink: #8A4B08;
+      --mint: #D8F0E6;
+      --mint-ink: #12634B;   /* on --mint: 6.1:1 */
       --sidebar-w: 248px;
+      --ease: cubic-bezier(.2, .7, .2, 1);
+      --motion-fast: .16s;
+
+      /* Chart colours, sampled from the mascot rather than invented: the
+         wordmark cyan, the comb red, the mug purple and the sun disc yellow.
+         A categorical palette has to be told apart by people who cannot
+         separate red from green, so these are four different hues at four
+         different lightnesses rather than a single hue ramp.
+
+         Severity keeps its own colours (--good/--warning/--danger). These are
+         for "which series is this", never for "is this bad". */
+      --brand-cyan: #00A3DE;
+      --brand-red: #E03131;
+      --brand-purple: #5030D0;
+      --brand-yellow: #E8A317;
+      --chart-1: var(--brand-purple);
+      --chart-2: var(--brand-cyan);
+      --chart-3: var(--brand-yellow);
+      --chart-4: var(--brand-red);
+      --chart-5: #12907A;
 
       /* Observability console. Panels sit on a darker ground, carry a titled
          header, and use colour to mean severity rather than decoration, the
@@ -54,7 +76,10 @@
       --fs-sm: 14px;
       --fs-xs: 11px;
       --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-      --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      /* Manrope is what the page actually loads. It previously asked for Inter,
+         which was never fetched, so everything fell through to the system font
+         while a different webfont downloaded unused. */
+      --sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
       --panel: #FFFFFF;
       --panel-head: #F7F8FC;
@@ -95,6 +120,19 @@
       width: 100%;
       transition: border-color 0.15s;
       outline: none;
+    }
+    /* Checkboxes and radios are not text fields. The rule above gave them
+       width:100% and 8px of padding, so a checkbox rendered ~190px wide and
+       shoved its own label out of the row. Every checkbox in the settings
+       rows was affected. */
+    input[type="checkbox"], input[type="radio"] {
+      width: auto;
+      padding: 0;
+      background: none;
+      border: 0;
+      border-radius: 0;
+      accent-color: var(--accent);
+      flex: 0 0 auto;
     }
     input:focus, select:focus, textarea:focus { border-color: var(--accent); }
     textarea { resize: vertical; min-height: 80px; }
@@ -207,6 +245,22 @@
       z-index: 40;
     }
     .page-title { font-size: 18px; font-weight: 600; }
+    /* The sidebar has carried a mark per page since the redesign and the page
+       itself had none, so every screen opened as a wall of words. Same mark,
+       in the accent, at heading size. */
+    .page-head { display: flex; align-items: center; gap: 10px; }
+    /* An empty panel is the one place with room for a mark, and the one that
+       most needs saying what the panel is for. */
+    .empty-ico {
+      width: 26px; height: 26px; margin-bottom: 10px; color: var(--text-dim);
+      fill: none; stroke: currentColor; stroke-width: 1.5;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .title-ico {
+      width: 22px; height: 22px; flex-shrink: 0; color: var(--accent);
+      fill: none; stroke: currentColor; stroke-width: 1.6;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
     .page-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
     .btn {
       display: inline-flex; align-items: center; gap: 7px;
@@ -224,8 +278,6 @@
     .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border2); }
     .btn-ghost:hover { color: var(--text); background: var(--surface2); }
     .btn-sm { padding: 5px 11px; font-size: 12px; }
-    .btn-icon { padding: 6px 8px; border-radius: 7px; background: transparent; border: 1px solid var(--border2); color: var(--text-muted); font-size: 14px; }
-    .btn-icon:hover { color: var(--text); background: var(--surface2); }
 
     /* ── Sections ── */
     .section { display: none; padding: 24px 28px; }
@@ -300,12 +352,33 @@
     .badge-active { background: rgba(34,197,94,0.1); color: var(--accent); border: 1px solid rgba(34,197,94,0.2); border-radius: 100px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
     .badge-paused { background: rgba(107,114,128,0.1); color: var(--text-dim); border: 1px solid rgba(107,114,128,0.2); border-radius: 100px; padding: 2px 10px; font-size: 11px; font-weight: 500; }
     .empty-state {
-      text-align: center; padding: 60px 20px;
+      text-align: center; padding: 56px 24px;
       color: var(--text-dim);
     }
     .empty-state .empty-icon { font-size: 40px; margin-bottom: 16px; }
     .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
     .empty-state p { font-size: 13px; margin-bottom: 20px; }
+
+    /* The mascot, on the screens a new workspace sees first.
+       A grey outline icon on an otherwise blank page says "this product is
+       unfinished"; the rooster says a person made it. He is ours, so there is
+       no licence question, and he was already sitting in /static being used at
+       32px in the sidebar and nowhere else.
+       Behind prefers-reduced-motion he simply does not bob. */
+    .mascot {
+      width: 108px; height: 108px;
+      margin: 0 auto 18px;
+      display: block;
+      filter: drop-shadow(0 6px 14px rgba(80, 48, 208, 0.18));
+      animation: mascot-bob 4.5s ease-in-out infinite;
+    }
+    @keyframes mascot-bob {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-5px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mascot { animation: none; }
+    }
 
     /* ── Modal ── */
     .modal-overlay {
@@ -349,6 +422,207 @@
     .form-grid.full { grid-template-columns: 1fr; }
     .form-group { margin-bottom: 16px; }
     .form-group:last-child { margin-bottom: 0; }
+    /* Controls whose feature is not built yet. Disabled rather than hidden so
+       the roadmap stays visible, and so nobody sets a value that is silently
+       dropped on save. */
+    /* Coffee chat programme card.
+       The channel is the programme's identity, the way Donut presents it, so it
+       is the title rather than one of six equal-weight metadata spans. The old
+       card was a single flex row of eleven items with no separators: it read as
+       a run-on and wrapped mid-phrase ("15" / "min Active"), and five
+       equal-weight buttons put Delete beside Settings. */
+    .cc-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      transition: border-color .15s;
+    }
+    .cc-card:hover { border-color: var(--border2); }
+    .cc-top { display: flex; align-items: center; gap: 10px; }
+    .cc-ico {
+      width: 32px; height: 32px; flex-shrink: 0;
+      background: var(--accent-dim); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cc-ico svg { width: 16px; height: 16px; }
+    /* A long channel name has to give way rather than push the status pill off
+       the card, so the title truncates and the pill keeps its place. */
+    .cc-title {
+      font-size: 15px; font-weight: 600; color: var(--text);
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cc-title .cc-sub { font-weight: 400; color: var(--text-dim); margin-left: 8px; font-size: 13px; }
+    .cc-state { margin-left: auto; flex-shrink: 0; }
+    /* Metadata as one sentence with real separators, so it cannot wrap into
+       nonsense. Each line answers one question: when, and how much. */
+    .cc-meta { font-size: 12.5px; color: var(--text-muted); margin-top: 8px; padding-left: 42px; }
+    .cc-meta + .cc-meta { margin-top: 3px; }
+    .cc-acts { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-left: 42px; }
+    .cc-acts .cc-spacer { margin-left: auto; }
+    /* Run now, Attendance, pause and Delete behind one control: they are not
+       things you reach for on every visit, and Delete should not sit at the
+       same weight as Settings. */
+    .cc-menu-wrap { position: relative; }
+    .cc-menu {
+      position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+      min-width: 190px; padding: 5px;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      display: none;
+    }
+    .cc-menu.open { display: block; }
+    .cc-menu button {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      padding: 8px 10px; border: 0; border-radius: 7px;
+      background: none; color: var(--text); font: inherit; font-size: 13px;
+      text-align: left; cursor: pointer;
+    }
+    .cc-menu button:hover { background: var(--surface2); }
+    .cc-menu button.danger { color: var(--sev-bad); }
+    .cc-menu-sep { height: 1px; background: var(--border); margin: 5px 2px; }
+    @media (max-width: 640px) {
+      .cc-meta, .cc-acts { padding-left: 0; }
+    }
+    /* Coffee chat settings: controls beside a live preview of the message the
+       pair will receive. The settings are abstract on their own - "suggest
+       times" means nothing until you see the three lines it produces. */
+    .cc-set-body { padding-top: 0; }
+    .cc-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 0 4px; overflow-x: auto; }
+    .cc-tab {
+      appearance: none; border: 0; background: none; cursor: pointer;
+      padding: 11px 15px; font: inherit; font-size: 14px; font-weight: 500;
+      color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+      white-space: nowrap;
+    }
+    .cc-tab:hover { color: var(--text); }
+    .cc-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+    .cc-set-cols { display: grid; grid-template-columns: minmax(0,1fr) 370px; gap: 28px; align-items: start; }
+    .cc-set-controls { min-width: 0; }
+    .cc-pane { display: block; }
+    .cc-pane[hidden] { display: none; }
+    .cc-side { position: sticky; top: 4px; display: grid; gap: 10px; }
+    .cc-side-note { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; }
+
+    /* Group size: every option visible and one tap away. A dropdown for eight
+       numbers hides seven of them behind a click and tells you nothing about
+       which is normal. */
+    /* Sized so all seven fit one line inside the settings column. Wrapping
+       them split the scale across two rows, which reads as two controls. */
+    .seg { display: flex; flex-wrap: wrap; gap: 3px; }
+    .seg button {
+      appearance: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
+      min-width: 34px; padding: 8px 0;
+      border: 1px solid var(--border2); border-radius: 8px;
+      background: var(--surface); color: var(--text-muted);
+    }
+    .seg button:hover { border-color: var(--accent-line); color: var(--text); }
+    .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    .member-state {
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px;
+      color: var(--text); font: inherit; font-size: 12.5px; padding: 4px 6px;
+    }
+    .cc-pane { display: block; }
+    .cc-pane[hidden] { display: none; }
+    /* Slack's own shapes, roughly: a bar down the left, mentions tinted, the
+       secondary controls as outlined pills. */
+    /* Sized explicitly: .nav-icon is sized by the sidebar rules, and without a
+       size here the sprite filled the whole preview pane. */
+    .cc-pv-m { color: var(--accent-strong, var(--accent)); }
+    .cc-pv-quote { border-left: 2px solid var(--border2); padding-left: 8px; color: var(--text-muted); margin: 6px 0; }
+    .cc-pv-dim { color: var(--text-dim); font-size: 12px; }
+    .cc-pv-slot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; }
+    .cc-pv-btn {
+      border: 1px solid var(--border2); border-radius: 5px; padding: 2px 8px;
+      font-size: 11.5px; color: var(--text-muted); white-space: nowrap;
+    }
+    .cc-pv-sep { height: 1px; background: var(--border); margin: 10px 0; }
+    @media (max-width: 900px) {
+      .cc-set-cols { grid-template-columns: 1fr; }
+    }
+    /* A standup's health, on the card rather than a page away. Colour carries
+       state and the word is always beside it, so the colour is never the only
+       thing saying what is wrong. */
+    .standup-health {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin-top: 8px; font-size: 12.5px;
+    }
+    .spark-wrap { display: inline-flex; align-items: center; }
+    .spark { display: block; }
+    .health-word { font-weight: 600; }
+    .health-rate { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .health-note { color: var(--text-dim); }
+    .health-good  { color: var(--good); }
+    .health-mid   { color: var(--warning); }
+    .health-bad   { color: var(--danger); }
+    .health-unknown { color: var(--text-dim); }
+    /* A schedule the scheduler refused. It reads as Active in the list and
+       fires for nobody, which is the worst kind of broken: silent. */
+    .card-broken { border-color: var(--danger); }
+    .card-alert {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin-top: 8px; font-size: 12.5px; line-height: 1.5;
+      color: var(--danger);
+    }
+    .card-alert svg { width: 15px; height: 15px; flex: 0 0 auto; margin-top: 1px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .rule-card { display: flex; align-items: flex-start; gap: 16px; }
+    .rule-body { flex: 1; min-width: 0; }
+    .rule-name { font-weight: 600; font-size: 14.5px; }
+    .rule-sentence { font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.55; }
+    .rule-sentence strong { color: var(--text); font-weight: 600; }
+    .rule-preview { margin-top: 12px; }
+    .rule-template-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 4px; }
+    .insight-when { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+    .settings-next { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+    .settings-next strong { color: var(--text); }
+    /* Vendor marks carry their own fill, unlike the Lucide set which is
+       stroked. Without this the sidebar's svg rules would blank them. */
+    .brand-ico { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+    /* .set-ico svg sets fill:none for the stroked Lucide set and outranks
+       .brand-ico on specificity, which blanked every vendor mark. These carry
+       their colour in the symbol, so the fill has to be given back here. */
+    .set-ico .brand-ico,
+    .pick-name .brand-ico,
+    .sp-caption .brand-ico {
+      width: 17px; height: 17px;
+      fill: currentColor; stroke: none;
+    }
+    .brand-ico use { fill: inherit; }
+    .brand-row { display: inline-flex; align-items: center; gap: 5px; margin-left: 7px; vertical-align: -3px; }
+    .att-agreed { background: rgba(94,129,244,.14); border: 1px solid rgba(94,129,244,.34); color: #9db2f7; }
+    .att-zoom { background: rgba(45,140,255,.12); border: 1px solid rgba(45,140,255,.3); color: #7fb4ff; }
+    .att-zero {
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text-dim);
+    }
+    .event-picker { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    /* nowrap because "Standup completed" broke across two lines beside its
+       checkbox, which read as two separate options. */
+    .event-opt {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12.5px; color: var(--text-muted); cursor: pointer; margin: 0;
+      white-space: nowrap;
+    }
+    .event-opt input { cursor: pointer; }
+    .event-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .event-tag {
+      font-size: 11.5px; padding: 2px 8px; border-radius: 999px;
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .add-webhook-events {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin-top: 10px; font-size: 12.5px;
+    }
+    .add-webhook-events-label { color: var(--text-dim); font-weight: 600; }
+    .soon { opacity: .55; }
+    .soon select, .soon input, .soon .toggle { pointer-events: none; }
+    .soon-badge {
+      display: inline-block; margin-left: 6px; padding: 1px 6px;
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      border: 1px solid var(--border2); border-radius: 999px;
+      color: var(--text-dim); vertical-align: middle;
+    }
     .form-section-title {
       font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
       color: var(--text-dim);
@@ -566,6 +840,39 @@
     .count-chip.none { color: var(--text-dim); }
     .btn-role { font-size: 11px; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text-muted); cursor: pointer; transition: background 0.12s; }
     .btn-role:hover { background: var(--border); color: var(--text); }
+    /* Label on its own line: a card is about 230px wide, so a label plus
+       three chips broke mid-row and left every card a different height. */
+    .member-grants { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); }
+    .member-grants .grants-label { display: block; font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }
+    .member-grants .grants-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* The card was a stack of words. These are the same marks as the sidebar,
+       so a glance tells you which line is about what. */
+    .pill-ico { width: 12px; height: 12px; flex-shrink: 0; vertical-align: -2px; margin-right: 4px;
+                fill: none; stroke: currentColor; stroke-width: 1.7;
+                stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+    .member-tz .pill-ico { width: 11px; height: 11px; }
+    .count-chip, .role-badge { display: inline-flex; align-items: center; }
+    .grant-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500;
+      padding: 3px 9px; border-radius: 20px;
+      border: 1px solid var(--border2); background: var(--surface2);
+      color: var(--text-muted); cursor: pointer;
+      transition: background .12s, border-color .12s, color .12s;
+    }
+    .grant-chip:not(.readonly):hover { border-color: var(--accent-line); color: var(--text); }
+    .grant-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .grant-chip .grant-ico { width: 13px; height: 13px; flex-shrink: 0; opacity: .75;
+                             fill: none; stroke: currentColor; stroke-width: 1.7;
+                             stroke-linecap: round; stroke-linejoin: round; }
+    .grant-chip.on .grant-ico { opacity: 1; }
+    /* Tinted, not filled: --mint is a light wash, so filling it left the label
+       unreadable on the dark theme. --good carries the same "this is on"
+       meaning as the Admin badge and is lifted for dark. */
+    .grant-chip.on { background: rgba(34,197,94,0.13); border-color: rgba(34,197,94,0.34); color: var(--good); }
+    /* Shown to someone who cannot change it: still a chip, not a button. */
+    .grant-chip.readonly { cursor: default; }
+    .grant-chip[aria-busy="true"] { opacity: .55; cursor: progress; }
 
     /* Webhooks */
     .webhooks-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -622,21 +929,9 @@
     .status-code.bad { color: var(--danger); }
 
     /* Analytics */
-    .headline-rate { font-size: 34px; font-weight: 700; line-height: 1; }
-    .headline-denom { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
     .row-unenrolled td { color: var(--text-dim); background: rgba(255,255,255,0.015); }
-    .unenrolled-note { font-style: italic; color: var(--text-dim); }
 
     /* Reports */
-    .chart-placeholder {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 32px;
-      text-align: center;
-      color: var(--text-dim);
-      font-size: 13px;
-    }
 
     /* Toast */
     #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
@@ -760,41 +1055,9 @@
 
     /* Participation meter. Replaces a fixed strip of five emoji that could not
        represent a denominator: 4/10 and 4/5 drew the same picture. */
-    .meter {
-      display: inline-block;
-      width: 96px;
-      height: 6px;
-      border-radius: 3px;
-      background: var(--surface2);
-      overflow: hidden;
-      vertical-align: middle;
-    }
-    .meter-fill { display: block; height: 100%; border-radius: 3px; }
-    .meter-good { background: #2ea043; }
-    .meter-warn { background: #d29922; }
-    .meter-poor { background: #6e7681; }
-    .col-meter { white-space: nowrap; }
-    .meter-value {
-      margin-left: 10px;
-      font-variant-numeric: tabular-nums;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
 
     /* A count of days blocked, not a construction sign. The emoji rendered as
        a tofu box in the dashboard's font stack. */
-    .blocker-count {
-      display: inline-block;
-      min-width: 20px;
-      padding: 1px 7px;
-      border-radius: 10px;
-      background: rgba(248, 81, 73, 0.15);
-      color: var(--danger);
-      font-size: 12px;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-      text-align: center;
-    }
 
     .report-blockers {
       color: var(--danger);
@@ -1074,17 +1337,6 @@
     }
     .rank-top { background: rgba(115,191,105,0.16); color: var(--sev-good); }
 
-    .empty-icon-svg {
-      width: 34px;
-      height: 34px;
-      fill: none;
-      stroke: var(--text-dim);
-      stroke-width: 1.4;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      margin-bottom: 10px;
-    }
-
     /* ===================================================================
        Console refinement. Structure follows the Xplorr console; colour is
        CloudDrove's brand. Loaded last so it wins on equal specificity.
@@ -1130,8 +1382,11 @@
 
     /* ── Topbar ── */
     .topbar { padding: 18px 28px; background: var(--bg); }
-    .page-title { font-size: 20px; font-weight: 600; }
-    .page-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 3px; }
+    .page-title {
+      font-size: 26px; font-weight: 650; letter-spacing: -0.02em;
+      color: var(--text); line-height: 1.2;
+    }
+    .page-subtitle { font-size: 13.5px; color: var(--text-dim); margin-top: 4px; }
 
     /* ── Buttons. The CloudDrove gradient appears once per screen, on the
        primary action, and nowhere else. ── */
@@ -1391,8 +1646,10 @@
       border: 2px solid var(--border2); background: var(--surface);
     }
     .pick-opt.on .pick-dot { border-color: var(--accent); border-width: 5px; }
-    .pick-name { font-size: 14px; font-weight: 600; color: var(--text); }
-    .pick-desc { font-size: 12.8px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
+    /* Block, so the name sits above its sentence. As inline spans they ran
+       together on one line and the card read as a run-on. */
+    .pick-name { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
+    .pick-desc { display: block; font-size: 12.8px; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
 
     /* A preview of the Slack message a setting produces. Donut does this on
        their recognition settings and it is the clearest way to answer "what
@@ -1424,12 +1681,6 @@
     .empty-body { font-size: 14px; color: var(--text-muted); max-width: 46ch; margin: 0 auto 18px; line-height: 1.6; }
 
     /* Section heading inside a long configuration form. */
-    .set-group-title {
-      font-size: 12px; font-weight: 700; letter-spacing: .07em;
-      text-transform: uppercase; color: var(--text-dim);
-      margin: 26px 0 2px;
-    }
-    .set-group-title:first-child { margin-top: 0; }
 
     /* Sidebar: grouped with a heading per group, and the active item marked
        with a filled pill rather than only a colour change. Eleven flat rows
@@ -1448,6 +1699,15 @@
     }
     .nav-sub .nav-item.active { background: transparent; color: var(--accent); font-weight: 600; }
     .nav-sub .nav-item.active::before { display: none; }
+    .nav-sub .nav-item:hover { color: var(--text); }
+    /* The caret only collapses the group; the row itself still opens the page,
+       so clicking the label never has two meanings. */
+    .nav-caret {
+      width: 13px; height: 13px; margin-left: auto; opacity: .5;
+      transition: transform .15s;
+    }
+    .nav-caret:hover { opacity: 1; }
+    .nav-group:not(.open) .nav-caret { transform: rotate(-90deg); }
 
     /* Modal tabs. Nineteen fields in one scrolling column made the important
        ones (name, channel, who) compete with the rare ones (Jira base URL).
@@ -1567,6 +1827,19 @@
   <symbol id="i-mcp" viewBox="0 0 24 24"><polyline points="5 17 10 12 5 7"/><line x1="12" y1="18" x2="20" y2="18"/></symbol>
   <symbol id="i-mood-good" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
   <symbol id="i-mood-okay" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" /> <rect x="2" y="6" width="14" height="12" rx="2" /></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /> <path d="M16 3.128a4 4 0 0 1 0 7.744" /> <path d="M22 21v-2a4 4 0 0 0-3-3.87" /> <circle cx="9" cy="7" r="4" /></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M12 6v6l4 2" /></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M14 14a2 2 0 0 0 2-2V8h-2" /> <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" /> <path d="M8 14a2 2 0 0 0 2-2V8H8" /></symbol>
+  <!-- Vendor marks, from Simple Icons (CC0), each in its own brand colour.
+       They are filled rather than stroked, so they need fill:none removed
+       at the use site: see .brand-ico. -->
+  <symbol id="i-b-zoom" viewBox="0 0 24 24" fill="#0B5CFF" stroke="none"><path d="M5.033 14.649H.743a.74.74 0 0 1-.686-.458.74.74 0 0 1 .16-.808L3.19 10.41H1.06A1.06 1.06 0 0 1 0 9.35h3.957c.301 0 .57.18.686.458a.74.74 0 0 1-.161.808L1.51 13.59h2.464c.585 0 1.06.475 1.06 1.06zM24 11.338c0-1.14-.927-2.066-2.066-2.066-.61 0-1.158.265-1.537.686a2.061 2.061 0 0 0-1.536-.686c-1.14 0-2.066.926-2.066 2.066v3.311a1.06 1.06 0 0 0 1.06-1.06v-2.251a1.004 1.004 0 0 1 2.013 0v2.251c0 .586.474 1.06 1.06 1.06v-3.311a1.004 1.004 0 0 1 2.012 0v2.251c0 .586.475 1.06 1.06 1.06zM16.265 12a2.728 2.728 0 1 1-5.457 0 2.728 2.728 0 0 1 5.457 0zm-1.06 0a1.669 1.669 0 1 0-3.338 0 1.669 1.669 0 0 0 3.338 0zm-4.82 0a2.728 2.728 0 1 1-5.458 0 2.728 2.728 0 0 1 5.457 0zm-1.06 0a1.669 1.669 0 1 0-3.338 0 1.669 1.669 0 0 0 3.338 0z"/></symbol>
+  <symbol id="i-b-gchat" viewBox="0 0 24 24" fill="#00AC47" stroke="none"><path d="M1.637 0C.733 0 0 .733 0 1.637v16.5c0 .904.733 1.636 1.637 1.636h3.955v3.323c0 .804.97 1.207 1.539.638l3.963-3.96h11.27c.903 0 1.636-.733 1.636-1.637V5.592L18.408 0Zm3.955 5.592h12.816v8.59H8.455l-2.863 2.863Z"/></symbol>
+  <symbol id="i-b-gmeet" viewBox="0 0 24 24" fill="#00832D" stroke="none"><path d="M5.53 2.13 0 7.75h5.53zm.398 0v5.62h7.608v3.65l5.47-4.45c-.014-1.22.031-2.25-.025-3.46-.148-1.09-1.287-1.47-2.236-1.36zM23.1 4.32c-.802.295-1.358.995-2.047 1.49-2.506 2.05-4.982 4.12-7.468 6.19 3.025 2.59 6.04 5.18 9.065 7.76 1.218.671 1.428-.814 1.328-1.64v-13a.828.828 0 0 0-.877-.825zM.038 8.15v7.7h5.53v-7.7zm13.577 8.1H6.008v5.62c3.864-.006 7.737.011 11.58-.009 1.02-.07 1.618-1.12 1.468-2.07v-2.51l-5.47-4.68v3.65zm-13.577 0c.02 1.44-.041 2.88.033 4.31.162.948 1.158 1.43 2.047 1.31h3.464v-5.62z"/></symbol>
+  <symbol id="i-b-teams" viewBox="0 0 24 24" fill="#6264A7" stroke="none"><path d="M20.625 8.127q-.55 0-1.025-.205-.475-.205-.832-.563-.358-.357-.563-.832Q18 6.053 18 5.502q0-.54.205-1.02t.563-.837q.357-.358.832-.563.474-.205 1.025-.205.54 0 1.02.205t.837.563q.358.357.563.837.205.48.205 1.02 0 .55-.205 1.025-.205.475-.563.832-.357.358-.837.563-.48.205-1.02.205zm0-3.75q-.469 0-.797.328-.328.328-.328.797 0 .469.328.797.328.328.797.328.469 0 .797-.328.328-.328.328-.797 0-.469-.328-.797-.328-.328-.797-.328zM24 10.002v5.578q0 .774-.293 1.46-.293.685-.803 1.194-.51.51-1.195.803-.686.293-1.459.293-.445 0-.908-.105-.463-.106-.85-.329-.293.95-.855 1.729-.563.78-1.319 1.336-.756.557-1.67.861-.914.305-1.898.305-1.148 0-2.162-.398-1.014-.399-1.805-1.102-.79-.703-1.312-1.664t-.674-2.086h-5.8q-.411 0-.704-.293T0 16.881V6.873q0-.41.293-.703t.703-.293h8.59q-.34-.715-.34-1.5 0-.727.275-1.365.276-.639.75-1.114.475-.474 1.114-.75.638-.275 1.365-.275t1.365.275q.639.276 1.114.75.474.475.75 1.114.275.638.275 1.365t-.275 1.365q-.276.639-.75 1.113-.475.475-1.114.75-.638.276-1.365.276-.188 0-.375-.024-.188-.023-.375-.058v1.078h10.875q.469 0 .797.328.328.328.328.797zM12.75 2.373q-.41 0-.78.158-.368.158-.638.434-.27.275-.428.639-.158.363-.158.773 0 .41.158.78.159.368.428.638.27.27.639.428.369.158.779.158.41 0 .773-.158.364-.159.64-.428.274-.27.433-.639.158-.369.158-.779 0-.41-.158-.773-.159-.364-.434-.64-.275-.275-.639-.433-.363-.158-.773-.158zM6.937 9.814h2.25V7.94H2.814v1.875h2.25v6h1.875zm10.313 7.313v-6.75H12v6.504q0 .41-.293.703t-.703.293H8.309q.152.809.556 1.5.405.691.985 1.19.58.497 1.318.779.738.281 1.582.281.926 0 1.746-.352.82-.351 1.436-.966.615-.616.966-1.43.352-.815.352-1.752zm5.25-1.547v-5.203h-3.75v6.855q.305.305.691.452.387.146.809.146.469 0 .879-.176.41-.175.715-.48.304-.305.48-.715t.176-.879Z"/></symbol>
+  <symbol id="i-b-slack" viewBox="0 0 24 24" fill="#4A154B" stroke="none"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
   <symbol id="i-mood-rough" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></symbol>
 </defs></svg>
   <!-- ── Sidebar drawer trigger (visible below 900px) ── -->
@@ -1593,10 +1866,26 @@
     <div class="nav-item active" data-section="standups">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-standups"/></svg> Standups
     </div>
-    <div class="nav-item" data-section="connect">
-      <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
+    <!-- Coffee chats is a group rather than a row: it is three places, not
+         one, and Donut splits the same product the same way. The .nav-sub
+         styles have existed unused since the sidebar was grouped. -->
+    <div class="nav-group open" id="nav-group-connect">
+      <div class="nav-item" data-section="connect" data-module="connect">
+        <svg class="nav-icon" aria-hidden="true"><use href="#i-connect"/></svg> Coffee chats
+        <svg class="nav-caret" aria-hidden="true" onclick="toggleNavGroup(event, 'nav-group-connect')">
+          <use href="#i-chevron"/>
+        </svg>
+      </div>
+      <div class="nav-sub">
+        <!-- No data-section on the children: switchSection marks every element
+             carrying the section as active, which lit all three at once. They
+             track their own active state instead. -->
+        <div class="nav-item active" data-connect-sub="list" onclick="goConnect('list')">All coffee chats</div>
+        <div class="nav-item" data-connect-sub="new" onclick="goConnect('new')">New coffee chat</div>
+        <div class="nav-item" data-connect-sub="attendance" onclick="goConnect('attendance')">Attendance</div>
+      </div>
     </div>
-    <div class="nav-item" data-section="kudos">
+    <div class="nav-item" data-section="kudos" data-module="kudos">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-mug"/></svg> Kudos
     </div>
     <div class="nav-item" data-section="members">
@@ -1604,7 +1893,7 @@
     </div>
 
     <div class="nav-section" style="margin-top:10px">Understand</div>
-    <div class="nav-item" data-section="insights">
+    <div class="nav-item" data-section="insights" data-module="insights">
       <svg class="nav-icon" aria-hidden="true"><use href="#i-insights"/></svg> Insights
     </div>
     <div class="nav-item" data-section="reports">
@@ -1648,7 +1937,10 @@
     <div id="section-today" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title" id="today-greeting">Today</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-sunrise"/></svg>
+            <div class="page-title" id="today-greeting">Today</div>
+          </div>
           <div class="page-subtitle" id="today-date"></div>
         </div>
       </div>
@@ -1659,7 +1951,10 @@
     <div id="section-standups" class="section active">
       <div class="topbar">
         <div>
-          <div class="page-title">Standups</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-standups"/></svg>
+            <div class="page-title">Standups</div>
+          </div>
           <div class="page-subtitle">Manage your team's standup schedules</div>
         </div>
         <button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button>
@@ -1673,7 +1968,10 @@
     <div id="section-insights" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Insights</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-insights"/></svg>
+            <div class="page-title">Insights</div>
+          </div>
           <div class="page-subtitle">What the standup and kudos data says when you read it together</div>
         </div>
       </div>
@@ -1705,7 +2003,10 @@
     <div id="section-connect" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Coffee chats</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-connect"/></svg>
+            <div class="page-title">Coffee chats</div>
+          </div>
           <div class="page-subtitle">Introduce people from a channel on a regular cadence</div>
         </div>
         <button class="btn btn-primary" onclick="openConnectModal()">&#43; New coffee chat</button>
@@ -1721,7 +2022,10 @@
     <div id="section-members" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Members</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-members"/></svg>
+            <div class="page-title">Members</div>
+          </div>
           <div class="page-subtitle">Team members synced from Slack</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -1756,7 +2060,10 @@
     <div id="section-reports" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Reports</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-reports"/></svg>
+            <div class="page-title">Reports</div>
+          </div>
           <div class="page-subtitle">Standup history, filtered by date or member</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -1772,7 +2079,10 @@
     <div id="section-analytics" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Analytics</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-analytics"/></svg>
+            <div class="page-title">Analytics</div>
+          </div>
           <div class="page-subtitle">Per-member participation breakdown</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -1798,7 +2108,10 @@
     <div id="section-settings" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Settings</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-settings"/></svg>
+            <div class="page-title">Settings</div>
+          </div>
           <div class="page-subtitle">Workspace-level configuration</div>
         </div>
       </div>
@@ -1809,8 +2122,11 @@
     <div id="section-webhooks" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Webhooks</div>
-          <div class="page-subtitle">Receive POST notifications when standups complete</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-webhooks"/></svg>
+            <div class="page-title">Webhooks</div>
+          </div>
+          <div class="page-subtitle">Receive POST notifications when a standup completes, a blocker is flagged or participation drops</div>
         </div>
       </div>
       <div id="webhooks-content"></div>
@@ -1820,7 +2136,10 @@
     <div id="section-kudos" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Kudos</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-kudos"/></svg>
+            <div class="page-title">Kudos</div>
+          </div>
           <div class="page-subtitle">Celebrate your teammates' great work</div>
         </div>
       </div>
@@ -1899,8 +2218,11 @@
     <div id="section-automation" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Automation</div>
-          <div class="page-subtitle">Configure trigger→action workflow rules</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-automation"/></svg>
+            <div class="page-title">Automation</div>
+          </div>
+          <div class="page-subtitle">Have Morgenruf react on its own when something happens in a standup</div>
         </div>
         <button class="btn btn-primary" onclick="openAddRuleForm()">+ Add Rule</button>
       </div>
@@ -1963,8 +2285,11 @@
     <div id="section-mcp" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">MCP</div>
-          <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>https://api.morgenruf.dev/mcp</code></div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-mcp"/></svg>
+            <div class="page-title">MCP</div>
+          </div>
+          <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>{{ mcp_endpoint }}</code></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary btn-sm"><span class="ico"></span>Setup Guide</a>
@@ -1995,7 +2320,7 @@
             <div class="stat-label" style="margin-bottom:12px">Documentation</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <a href="https://docs.morgenruf.dev/mcp.html" target="_blank" rel="noopener" class="btn btn-secondary"><span class="ico"></span>Full MCP Setup Guide</a>
-              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico"></span>View All 8 Tools</a>
+              <a href="https://docs.morgenruf.dev/mcp.html#available-tools" target="_blank" rel="noopener" class="btn btn-ghost"><span class="ico"></span>View All Tools</a>
             </div>
           </div>
         </div>
@@ -2015,7 +2340,7 @@
             <pre id="snippet-claude" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
   "mcpServers": {
     "morgenruf": {
-      "url": "https://api.morgenruf.dev/mcp",
+      "url": "{{ mcp_endpoint }}",
       "headers": {
         "Authorization": "Bearer mrn_YOUR_KEY_HERE"
       }
@@ -2030,7 +2355,7 @@
             <pre id="snippet-cursor" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">{
   "mcpServers": {
     "morgenruf": {
-      "url": "https://api.morgenruf.dev/mcp",
+      "url": "{{ mcp_endpoint }}",
       "headers": {
         "Authorization": "Bearer mrn_YOUR_KEY_HERE"
       }
@@ -2046,7 +2371,7 @@
   "servers": {
     "morgenruf": {
       "type": "http",
-      "url": "https://api.morgenruf.dev/mcp",
+      "url": "{{ mcp_endpoint }}",
       "headers": {
         "Authorization": "Bearer mrn_YOUR_KEY_HERE"
       }
@@ -2058,7 +2383,7 @@
 
           <div id="mcp-tab-http" style="display:none">
             <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px">Raw HTTP, useful for testing or custom integrations</p>
-            <pre id="snippet-http" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">curl -X POST https://api.morgenruf.dev/mcp \
+            <pre id="snippet-http" style="background:var(--surface2);border-radius:8px;padding:14px;font-size:0.82rem;overflow-x:auto">curl -X POST {{ mcp_endpoint }} \
   -H "Authorization: Bearer mrn_YOUR_KEY_HERE" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'</pre>
@@ -2160,12 +2485,22 @@
     </div>
   </div>
   <div class="modal-overlay" id="cc-settings-modal">
-    <div class="modal" style="max-width:640px">
+    <div class="modal" style="max-width:1040px">
       <div class="modal-header">
         <div class="modal-title">Coffee chat settings</div>
         <button class="modal-close" onclick="closeConnectSettings()">&times;</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body cc-set-body">
+        <div class="cc-tabs" role="tablist">
+          <button class="cc-tab on" role="tab" data-cs-tab="basics" onclick="ccTab('basics')">Basics</button>
+          <button class="cc-tab" role="tab" data-cs-tab="message" onclick="ccTab('message')">Message</button>
+          <button class="cc-tab" role="tab" data-cs-tab="meeting" onclick="ccTab('meeting')">Meeting</button>
+          <button class="cc-tab" role="tab" data-cs-tab="members" onclick="ccTab('members')">Members</button>
+        </div>
+
+        <div class="cc-set-cols">
+          <div class="cc-set-controls">
+            <div class="cc-pane" data-cs-pane="basics">
         <div class="form-group">
           <label>Name</label>
           <input type="text" id="cs-name" maxlength="80"/>
@@ -2244,7 +2579,211 @@
             </label>
           </div>
         </div>
-      </div>
+            
+
+              
+<div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-clock"/></svg></div>
+                <div>
+                  <div class="set-label">Next introduction</div>
+                  <div class="set-help">
+                    Leave this empty and the cadence decides. Setting a date moves the next
+                    round only, and the rhythm carries on from there.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <input type="date" id="cs-next-date" style="max-width:190px"/>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-users"/></svg></div>
+                <div>
+                  <div class="set-label">How many people in each group</div>
+                  <div class="set-help">
+                    Two is the usual answer and the easiest to schedule. Larger groups
+                    take the pressure off any one person to carry the conversation, and
+                    are harder to find a time for.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <input type="hidden" id="cs-group-size" value="2"/>
+                  <div class="seg" role="group" aria-label="Group size">
+                    <button type="button" data-size="2" class="on" onclick="ccGroupSize(2)">2</button>
+                    <button type="button" data-size="3" onclick="ccGroupSize(3)">3</button>
+                    <button type="button" data-size="4" onclick="ccGroupSize(4)">4</button>
+                    <button type="button" data-size="5" onclick="ccGroupSize(5)">5</button>
+                    <button type="button" data-size="6" onclick="ccGroupSize(6)">6</button>
+                    <button type="button" data-size="7" onclick="ccGroupSize(7)">7</button>
+                    <button type="button" data-size="8" onclick="ccGroupSize(8)">8</button>
+                  </div>
+                  <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px;cursor:pointer">
+                    <input type="checkbox" id="cs-strict" style="margin-top:2px;flex:0 0 auto"/>
+                    <span style="font-size:13px;color:var(--text-muted);line-height:1.5">
+                      Keep groups exactly this size, even if that leaves someone out
+                    </span>
+                  </label>
+                </div>
+              </div>
+            
+
+            
+            </div>
+
+            <div class="cc-pane" data-cs-pane="message" hidden>
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div>
+                <div>
+                  <div class="set-label">How your team works</div>
+                  <div class="set-help">
+                    Changes one sentence in the introduction. The same wording reads
+                    wrongly to a team that shares an office and to one that has never met.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <div class="pick" role="radiogroup" aria-label="How your team works">
+                    <label class="pick-opt on" data-pick="tone" data-value="hybrid" onclick="ccPick('tone','hybrid')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">Some of us are remote</span>
+                        <span class="pick-desc">A mix of office and home. A call or a coffee, whichever suits.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="tone" data-value="remote" onclick="ccPick('tone','remote')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">Fully remote</span>
+                        <span class="pick-desc">Nobody bumps into anyone. The message suggests a call.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="tone" data-value="in_person" onclick="ccPick('tone','in_person')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">Mostly in one place</span>
+                        <span class="pick-desc">The message suggests a coffee or a walk rather than a call.</span></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-quote"/></svg></div>
+                <div>
+                  <div class="set-label">Open with a question</div>
+                  <div class="set-help">
+                    An icebreaker in every introduction, and a menu entry to ask for a
+                    different one. Twenty-four of them, so asking twice still gives
+                    something new.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-icebreaker" checked onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">Include one</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-analytics"/></svg></div>
+                <div>
+                  <div class="set-label">Post the results in the channel</div>
+                  <div class="set-help">
+                    After each round, how many pairs met, in the channel rather than only
+                    on this page. Teams that see it tend to answer the check-in.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-post-stats" onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">Post a summary</span>
+                  </label>
+                </div>
+              </div>
+            
+
+            
+            </div>
+
+            <div class="cc-pane" data-cs-pane="meeting" hidden>
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-clock"/></svg></div>
+                <div>
+                  <div class="set-label">Suggest times they could both make</div>
+                  <div class="set-help">
+                    Three slots inside everyone's working day, each shown in both people's
+                    own clocks, with one tap to accept. When everyone accepts the same slot
+                    the bot settles it. No calendar is read, so these are proposals.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <label style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="cs-suggest" checked onchange="renderCcPreview()"/>
+                    <span style="font-size:13px;color:var(--text-muted)">Suggest times</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="set-row">
+                <div class="set-ico"><svg aria-hidden="true"><use href="#i-video"/></svg></div>
+                <div>
+                  <div class="set-label">How they meet</div>
+                  <div class="set-help">
+                    Where the call happens, if it is a call. Zoom needs each person to
+                    connect their own account once, from the Morgenruf tab in Slack.
+                  </div>
+                </div>
+                <div class="set-control">
+                  <div class="pick" role="radiogroup" aria-label="How they meet">
+                    <label class="pick-opt on" data-pick="video" data-value="link" onclick="ccPick('video','link')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">One shared room
+                          <span class="brand-row">
+                            <svg class="brand-ico" aria-label="Google Meet"><use href="#i-b-gmeet"/></svg>
+                            <svg class="brand-ico" aria-label="Microsoft Teams"><use href="#i-b-teams"/></svg>
+                            <svg class="brand-ico" aria-label="Zoom"><use href="#i-b-zoom"/></svg>
+                          </span>
+                        </span>
+                        <span class="pick-desc">A Meet, Teams or Zoom link you paste once. No setup for anyone.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="video" data-value="zoom" onclick="ccPick('video','zoom')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">A Zoom meeting each time
+                          <span class="brand-row">
+                            <svg class="brand-ico" aria-label="Zoom"><use href="#i-b-zoom"/></svg>
+                          </span>
+                        </span>
+                        <span class="pick-desc">Created on a linked account, scheduled for the time they agree.
+                          Google Meet and Teams work the same way and are coming.</span></span>
+                    </label>
+                    <label class="pick-opt" data-pick="video" data-value="none" onclick="ccPick('video','none')">
+                      <span class="pick-dot"></span>
+                      <span><span class="pick-name">They sort it out</span>
+                        <span class="pick-desc">No room and no link. Fine for a team that shares an office.</span></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            
+
+            
+            </div>
+
+            <div class="cc-pane" data-cs-pane="members" hidden>
+              <div id="cs-members">
+                <div class="loading-center"><div class="spinner"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- What the pair will actually receive. The settings on the left are
+               abstract until you can see the message they produce. -->
+          <aside class="cc-side" aria-label="Preview of the Slack message">
+            <div class="sp-caption">
+              <svg class="brand-ico" aria-hidden="true" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-b-slack"/></svg>
+              What your team will see in Slack
+            </div>
+            <div id="cs-preview"></div>
+            <div class="cc-side-note">
+              Updates as you change things. Nothing is sent until you save.
+            </div>
+          </aside>
+        </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeConnectSettings()">Cancel</button>
         <button class="btn btn-primary" onclick="saveConnectSettings()">Save changes</button>
@@ -2422,6 +2961,22 @@
               Send that email daily
             </label>
           </div>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="f-nudge-missing" style="width:auto"/>
+              Remind people who have not answered
+            </label>
+            <div class="set-help" style="margin-top:5px">
+              A private DM shortly before the report posts, to anyone on this standup
+              who has not filed. Never a channel post: naming people publicly gets you
+              shorter answers, not better ones. People on leave and anyone who has
+              skipped today are left alone.
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Send it this many minutes before the report</label>
+            <input type="number" id="f-nudge-minutes" min="5" max="120" step="5" style="width:110px"/>
+          </div>
         </div>
 
         </div>
@@ -2461,16 +3016,16 @@
                 <option value="question">Question</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Post As</label>
-              <select id="f-post-as">
+            <div class="form-group soon">
+              <label>Post As<span class="soon-badge">Coming soon</span></label>
+              <select id="f-post-as" disabled>
                 <option value="combined">Combined message</option>
                 <option value="separate">Separate messages</option>
               </select>
             </div>
-            <div class="form-group">
-              <label>Sort Order</label>
-              <select id="f-sort-order">
+            <div class="form-group soon">
+              <label>Sort Order<span class="soon-badge">Coming soon</span></label>
+              <select id="f-sort-order" disabled>
                 <option value="chronological">Chronological</option>
                 <option value="alphabetical">Alphabetical</option>
               </select>
@@ -2490,9 +3045,9 @@
               <label>Jira Base URL</label>
               <input type="url" id="f-jira" placeholder="https://yourteam.atlassian.net"/>
             </div>
-            <div class="form-group">
-              <label>Zendesk Base URL</label>
-              <input type="url" id="f-zendesk" placeholder="https://yourteam.zendesk.com"/>
+            <div class="form-group soon">
+              <label>Zendesk Base URL<span class="soon-badge">Coming soon</span></label>
+              <input type="url" id="f-zendesk" placeholder="https://yourteam.zendesk.com" disabled/>
             </div>
             <div class="form-group">
               <label>GitHub Repo (org/repo)</label>
@@ -2503,9 +3058,9 @@
               <input type="text" id="f-linear-team" placeholder="ENG"/>
             </div>
           </div>
-          <div class="form-group" style="display:flex;align-items:center;gap:10px">
-            <button class="toggle on" id="f-avatar-toggle" onclick="toggleAvatar(this)" type="button"></button>
-            <label style="margin:0;cursor:pointer" onclick="toggleAvatar(document.getElementById('f-avatar-toggle'))">Display member avatar in report</label>
+          <div class="form-group soon" style="display:flex;align-items:center;gap:10px">
+            <button class="toggle on" id="f-avatar-toggle" type="button" disabled></button>
+            <label style="margin:0">Display member avatar in report<span class="soon-badge">Coming soon</span></label>
           </div>
           <div class="form-section-title" style="margin-top:16px">AI Summary</div>
           <div class="form-group" style="display:flex;align-items:center;gap:10px">
@@ -2602,6 +3157,11 @@
     sec = resolveSection(sec);
     document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.section === sec));
     document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'section-' + sec));
+    // The line above clears every nav item, sub-items included, so the group's
+    // current place has to be re-marked. Landing on the section directly, by
+    // hash or by clicking the parent, means the list.
+    document.querySelectorAll('[data-connect-sub]').forEach(el =>
+      el.classList.toggle('active', sec === 'connect' && el.dataset.connectSub === 'list'));
     state.section = sec;
     if (window.location.hash.replace(/^#/, '') !== sec) {
       try { history.replaceState(null, '', '#' + sec); } catch (e) { /* older browsers keep the old hash */ }
@@ -2653,13 +3213,23 @@
   // ── Current user / RBAC ──
   window._myRole = 'member';
   window._myUserId = '';
+  // Features this person runs without being a workspace admin. An admin runs
+  // all of them, so the page checks the role first and never this list.
+  window._myModuleAdmin = [];
 
   async function loadMe() {
     try {
       const me = await api('GET', '/me');
       window._myRole = me.role || 'member';
       window._myUserId = me.user_id || '';
+      window._myModuleAdmin = me.module_admin || [];
     } catch (e) { /* keep defaults */ }
+  }
+
+  // True for a workspace admin, and for someone who was put in charge of this
+  // one feature. Controls the page shows are the ones the API will accept.
+  function canAdminister(module) {
+    return window._myRole === 'admin' || (window._myModuleAdmin || []).includes(module);
   }
 
   async function setRole(userId, role) {
@@ -2670,6 +3240,48 @@
       renderMembers();
       toast('Role updated to ' + role);
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  // Which features can be handed to someone. A feature the deployment does
+  // not ship, or the workspace has switched off, is not one of them.
+  window._grantable = null;
+  async function loadGrantable() {
+    if (window._grantable) return window._grantable;
+    try {
+      const mods = await api('GET', '/modules');
+      window._grantable = (mods || [])
+        .filter(m => m.available !== false && m.active)
+        .map(m => m.name);
+    } catch (e) {
+      // Left unset rather than empty, so the next visit asks again instead of
+      // remembering a network blip as "this workspace runs nothing".
+      return [];
+    }
+    return window._grantable;
+  }
+
+  async function toggleModuleAdmin(userId, module, on, chip) {
+    const label = (MODULE_COPY[module] || [module])[0];
+    // Two clicks on a slow link would send two opposite requests and leave the
+    // card showing whichever answered last.
+    if (chip) {
+      if (chip.getAttribute('aria-busy') === 'true') return;
+      chip.setAttribute('aria-busy', 'true');
+    }
+    try {
+      await api(on ? 'PUT' : 'DELETE', '/members/' + userId + '/modules/' + module);
+      const m = state.members.find(x => x.id === userId);
+      if (m) {
+        const held = new Set(m.module_admin || []);
+        on ? held.add(module) : held.delete(module);
+        m.module_admin = Array.from(held).sort();
+      }
+      renderMembers();
+      toast(on ? 'Now runs ' + label : 'No longer runs ' + label);
+    } catch (e) {
+      if (chip) chip.removeAttribute('aria-busy');
+      toast(e.message, 'error');
+    }
   }
 
   loadMe();
@@ -2842,7 +3454,7 @@
     const rows = cap.rows;
     let html = '<div class="stat-card" id="today-morning"><div class="stat-label" style="margin-bottom:14px">This morning</div>';
     if (!rows.length) {
-      html += '<div class="empty" style="padding:34px 20px"><div class="empty-title">No answers yet</div>' +
+      html += '<div class="empty" style="padding:34px 20px"><svg class="empty-ico" aria-hidden="true"><use href="#i-sunrise"/></svg><div class="empty-title">No answers yet</div>' +
         '<div class="empty-body">When your team replies to the bot, their answers appear here.</div></div>';
     } else {
       html += rows.map(function (r) {
@@ -2874,7 +3486,7 @@
   function todayKudos(rows) {
     if (!rows.length) {
       return '<div class="stat-card"><div class="stat-label" style="margin-bottom:12px">Recent recognition</div>' +
-        '<div class="empty" style="padding:28px 18px"><div class="empty-title">Nothing yet this week</div>' +
+        '<div class="empty" style="padding:28px 18px"><svg class="empty-ico" aria-hidden="true"><use href="#i-kudos"/></svg><div class="empty-title">Nothing yet this week</div>' +
         '<div class="empty-body">Kudos given in Slack show up here.</div></div></div>';
     }
     return '<div class="stat-card"><div class="stat-label" style="margin-bottom:12px">Recent recognition</div>' +
@@ -2889,12 +3501,22 @@
 
   function todayNextChat(next) {
     if (!next) return '';
-    return '<div class="stat-card" style="margin-top:20px">' +
-      '<div class="stat-head"><div class="stat-label">Next coffee chat</div>' +
+    const when = new Date(next.date + 'T00:00:00').toLocaleDateString(undefined,
+      { weekday: 'long', day: 'numeric', month: 'long' });
+    const away = typeof next.days_away === 'number' ? next.days_away : null;
+    // A date on its own reads as a forecast. "Wednesday, 16 September" on a
+    // Thursday is a round that did not run, which is worth saying plainly.
+    const line = next.overdue
+      ? '<div class="stat-sub" style="color:var(--warning)">Was due ' + when + ' and has not run</div>'
+      : '<div class="stat-sub">' +
+          (away === 0 ? 'Today &middot; ' : away === 1 ? 'Tomorrow &middot; ' :
+           away > 1 ? 'In ' + away + ' days &middot; ' : '') + when + '</div>';
+    return '<div class="stat-card' + (next.overdue ? ' card-broken' : '') + '" style="margin-top:20px">' +
+      '<div class="stat-head"><div class="stat-label">' +
+        (next.overdue ? 'Coffee chat overdue' : 'Next coffee chat') + '</div>' +
       '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div></div>' +
       '<div style="font-weight:600;color:var(--text);margin-top:10px">' + esc(next.name) + '</div>' +
-      '<div class="stat-sub">' + new Date(next.date + 'T00:00:00').toLocaleDateString(undefined,
-        { weekday: 'long', day: 'numeric', month: 'long' }) + '</div></div>';
+      line + '</div>';
   }
 
   // ── Insights ──────────────────────────────────────────────────────────────
@@ -2933,7 +3555,11 @@
       '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)">' +
         '<span style="flex:1;font-weight:500">' + personLabel(r) + '</span>' +
         '<span class="pill-quiet" style="padding:2px 10px">' + r.standups + ' standups</span>' +
-        '<span class="pill-quiet" style="padding:2px 10px;color:var(--warning);border-color:rgba(255,152,48,0.3)">0 kudos</span>' +
+        (r.last_standup
+          ? '<span class="insight-when">last filed ' + esc(formatRelative(r.last_standup, '')) + '</span>'
+          : '') +
+        '<span class="pill-quiet" style="padding:2px 10px;color:var(--warning);border-color:rgba(255,152,48,0.3)">' +
+          ((r.kudos || 0) === 0 ? 'no kudos' : esc(String(r.kudos)) + ' kudos') + '</span>' +
       '</div>').join('');
   }
 
@@ -2950,7 +3576,14 @@
           '<span class="pill-quiet" style="padding:2px 10px;color:var(--danger);border-color:rgba(242,73,92,0.3)">' +
             r.days + ' days</span>' +
         '</div>' +
-        '<div style="font-size:0.88rem;color:var(--text-muted);line-height:1.5">' + esc(r.text) + '</div>' +
+        '<div style="font-size:13px;color:var(--text-muted);line-height:1.5">' + esc(r.text) + '</div>' +
+        (r.first_seen || r.last_seen
+          ? '<div class="insight-when" style="margin-top:5px">' +
+              (r.first_seen ? 'since ' + esc(shortDate(r.first_seen)) : '') +
+              (r.first_seen && r.last_seen ? ' \u00b7 ' : '') +
+              (r.last_seen ? 'last mentioned ' + esc(formatRelative(r.last_seen, '')) : '') +
+            '</div>'
+          : '') +
       '</div>').join('');
   }
 
@@ -3023,6 +3656,9 @@
     locked.style.display = 'none';
     body.style.display = 'block';
     await loadChannels();
+    // Whether Zoom exists on this deployment at all, and how many people have
+    // connected. Fetched once per page load rather than per card.
+    state.connectZoom = await api('GET', '/connect/zoom').catch(() => null);
     try {
       state.connect = await api('GET', '/connect/programs');
     } catch (e) {
@@ -3030,6 +3666,12 @@
       return;
     }
     renderConnect();
+    // Open the first programme's attendance straight away. Everything worth
+    // looking at on this page, the round chart, the per-person table and the
+    // outcome pills, sat behind an Attendance click, so the page loaded as a
+    // single card on an empty screen and looked like the feature was unbuilt.
+    const first = (state.connect || [])[0];
+    if (first) openAttendance(first.id);
   }
 
   // The module toggle had no control anywhere, so a module that defaults to
@@ -3061,34 +3703,108 @@
       return;
     }
 
-    list.innerHTML = '<div class="standups-grid">' + programs.map(p =>
-      '<div class="standup-card">' +
-        '<div class="standup-icon"><svg aria-hidden="true" class="nav-icon"><use href="#i-connect"/></svg></div>' +
-        '<div class="standup-info">' +
-          '<div class="standup-name">' + esc(p.name) + '</div>' +
-          '<div class="standup-meta">' +
-            '<span>#' + esc(connectChannelName(p.channel_id)) + '</span>' +
-            '<span>' + esc(cadenceLabel(p)) + '</span>' +
-            '<span>' + esc(p.timezone) + '</span>' +
-            (p.pool_size === null || p.pool_size === undefined
-              ? '' : '<span>' + p.pool_size + ' in the pool</span>') +
-            '<span>' + (p.round_count || 0) + ' rounds run</span>' +
-            (p.meeting_minutes ? '<span>' + p.meeting_minutes + ' min</span>' : '') +
-            (p.match_working_hours ? '<span title="Only people with an hour of shared working day are matched">overlapping hours only</span>' : '') +
-            (p.meeting_link ? '<span>has a room</span>' : '') +
-            '<span class="pill-quiet">' + (p.enabled ? 'Active' : 'Paused') + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="standup-actions">' +
-          '<button class="btn btn-secondary btn-sm" onclick="openConnectSettings(' + p.id + ')">Settings</button>' +
-          '<button class="btn btn-secondary btn-sm" onclick="runConnectRound(' + p.id + ')">Run now</button>' +
-          '<button class="btn btn-secondary btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
-          '<button class="toggle ' + (p.enabled ? 'on' : '') + '" title="Toggle active"' +
-            ' onclick="toggleConnect(' + p.id + ', this)"></button>' +
-          '<button class="btn btn-danger btn-sm" onclick="deleteConnect(' + p.id + ')">Delete</button>' +
-        '</div>' +
-      '</div>').join('') + '</div>';
+    list.innerHTML = '<div class="standups-grid">' + programs.map(ccCard).join('') + '</div>'
+      + zoomStatusRow();
   }
+
+  // Zoom is a workspace-wide setting, so it reads once under the list rather
+  // than on every card. Silent when the deployment has no Zoom credentials:
+  // offering a status for something that cannot exist here is noise.
+  function zoomStatusRow() {
+    const z = state.connectZoom;
+    if (!z || !z.configured) return '';
+    const bits = [];
+    if (z.linked) {
+      bits.push('<strong>' + z.linked + '</strong> ' +
+        (z.linked === 1 ? 'person has' : 'people have') + ' connected Zoom');
+    } else {
+      bits.push('Nobody has connected Zoom yet');
+    }
+    if (z.needs_reconnect) {
+      // A separate number because it is a different problem: these people did
+      // connect, and their authorisation aged out.
+      bits.push('<strong>' + z.needs_reconnect + '</strong> ' +
+        (z.needs_reconnect === 1 ? 'needs' : 'need') + ' to reconnect');
+    }
+    return '<p style="color:var(--text-muted);font-size:12.5px;margin:14px 2px 0">' +
+      bits.join(' &middot; ') +
+      '. Meetings are scheduled on the account of whoever in a pairing has connected. ' +
+      'Everyone connects their own from the Morgenruf tab in Slack.</p>';
+  }
+
+  // The channel is what a coffee chat *is*, so it leads. Everything else is two
+  // lines of plain metadata with separators that survive wrapping.
+  function ccCard(p) {
+    // cadenceLabel already carries the time ("Every Wednesday at 10:00"), so
+    // only the zone is added; appending the time again read as "at 10:00 · 10:00".
+    const when = [cadenceLabel(p), p.timezone || 'UTC'];
+    const size = [];
+    if (p.pool_size !== null && p.pool_size !== undefined) size.push(p.pool_size + ' in the pool');
+    if (p.meeting_minutes) size.push(p.meeting_minutes + ' min');
+    size.push((p.round_count || 0) + ' round' + (+p.round_count === 1 ? '' : 's') + ' run');
+    if (p.match_working_hours) size.push('overlapping hours only');
+    if (p.meeting_link) size.push('has a room');
+
+    const named = p.name && p.name !== connectChannelName(p.channel_id);
+    return '<div class="cc-card">' +
+      '<div class="cc-top">' +
+        '<span class="cc-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></span>' +
+        '<span class="cc-title">#' + esc(connectChannelName(p.channel_id)) +
+          (named ? '<span class="cc-sub">' + esc(p.name) + '</span>' : '') + '</span>' +
+        '<span class="cc-state">' +
+          '<span class="pill ' + (p.enabled ? 'att-met' : 'att-silent') + '">' +
+          (p.enabled ? 'Active' : 'Paused') + '</span></span>' +
+      '</div>' +
+      '<div class="cc-meta">' + esc(when.join(' \u00b7 ')) + '</div>' +
+      '<div class="cc-meta">' + esc(size.join(' \u00b7 ')) + '</div>' +
+      '<div class="cc-acts">' +
+        '<button class="btn btn-secondary btn-sm" onclick="openConnectSettings(' + p.id + ')">Settings</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="openAttendance(' + p.id + ')">Attendance</button>' +
+        '<span class="cc-spacer"></span>' +
+        '<span class="cc-menu-wrap">' +
+          '<button class="btn btn-ghost btn-sm" aria-haspopup="true" aria-expanded="false"' +
+            ' aria-label="More actions" onclick="ccMenu(' + p.id + ', event)">\u22ef</button>' +
+          '<div class="cc-menu" id="cc-menu-' + p.id + '" role="menu">' +
+            '<button role="menuitem" onclick="ccMenuDo(' + p.id + ', \'run\')">Run a round now</button>' +
+            '<button role="menuitem" onclick="ccMenuDo(' + p.id + ', \'toggle\')">' +
+              (p.enabled ? 'Pause introductions' : 'Resume introductions') + '</button>' +
+            '<div class="cc-menu-sep"></div>' +
+            '<button role="menuitem" class="danger" onclick="ccMenuDo(' + p.id + ', \'delete\')">Delete</button>' +
+          '</div>' +
+        '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function ccCloseMenus() {
+    document.querySelectorAll('.cc-menu.open').forEach(m => {
+      m.classList.remove('open');
+      const btn = m.parentElement && m.parentElement.querySelector('button[aria-haspopup]');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function ccMenu(id, ev) {
+    if (ev) ev.stopPropagation();
+    const m = document.getElementById('cc-menu-' + id);
+    const wasOpen = m && m.classList.contains('open');
+    ccCloseMenus();
+    if (m && !wasOpen) {
+      m.classList.add('open');
+      const btn = m.parentElement.querySelector('button[aria-haspopup]');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function ccMenuDo(id, what) {
+    ccCloseMenus();
+    if (what === 'run') return runConnectRound(id);
+    if (what === 'delete') return deleteConnect(id);
+    if (what === 'toggle') return toggleConnect(id, null);
+  }
+
+  document.addEventListener('click', ccCloseMenus);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') ccCloseMenus(); });
 
   // ── Coffee chat attendance ─────────────────────────────────────────────────
   // The programme list answers "is this running". This answers "is it working":
@@ -3103,7 +3819,11 @@
     const label = ATT_LABEL[status] || status;
     const body = text === undefined ? label : String(text);
     const titled = body === label ? label : body + ' ' + label.toLowerCase();
-    return '<span class="pill ' + (ATT_CLASS[status] || 'att-silent') + '"' +
+    // A count of zero carries no outcome, so it is not painted as one. "0 met"
+    // in green and "0 did not" in red both read as results when neither is.
+    const zero = /^0\b/.test(body);
+    const cls = zero ? 'att-zero' : (ATT_CLASS[status] || 'att-silent');
+    return '<span class="pill ' + cls + '"' +
            ' title="' + esc(titled) + '" aria-label="' + esc(titled) + '">' +
            esc(body) + '</span>';
   }
@@ -3142,8 +3862,8 @@
       el.innerHTML =
         '<div class="stat-card"><div class="stat-head"><div class="stat-label">' + title +
         ' &middot; attendance</div></div>' +
-        '<div class="empty" style="padding:28px 4px">No rounds have run yet. ' +
-        'Attendance appears here once the first pairs go out.</div></div>';
+        '<div class="empty" style="padding:28px 4px"><svg class="empty-ico" aria-hidden="true"><use href="#i-connect"/></svg><div>No rounds have run yet. ' +
+        'Attendance appears here once the first pairs go out.</div></div></div>';
       return;
     }
 
@@ -3151,27 +3871,44 @@
       acc.matches += +r.matches; acc.met += +r.met;
       acc.missed += +r.missed; acc.no_reply += +r.no_reply;
       acc.undelivered += +r.undelivered;
+      acc.agreed += +(r.agreed || 0);
+      acc.rematch += +(r.rematch_requests || 0);
       return acc;
-    }, { matches: 0, met: 0, missed: 0, no_reply: 0, undelivered: 0 });
+    }, { matches: 0, met: 0, missed: 0, no_reply: 0, undelivered: 0, agreed: 0, rematch: 0 });
     const answered = tot.met + tot.missed;
     const rate = answered ? Math.round(tot.met / answered * 100) : null;
+
+    // "Worth charting" means the chart could show a difference. With no answered
+    // outcomes every column is one flat grey block and the four-colour legend
+    // describes nothing, which is what the page was doing: two identical grey
+    // bars, both labelled the same date.
+    const chartWorthIt = a.rounds.length > 1 && answered > 0;
+
+    const headline = rate === null
+      ? '<div style="margin:10px 0 2px">' +
+          '<div style="font-size:15px;font-weight:600">' +
+            'No outcomes yet, ' + tot.matches + ' pairing' + (tot.matches === 1 ? '' : 's') + ' sent' +
+          '</div>' +
+        '</div>'
+      : '<div style="display:flex;align-items:baseline;gap:10px;margin:10px 0 4px">' +
+          '<div class="stat-value">' + rate + '%</div>' +
+          '<div style="color:var(--text-muted);font-size:13px">of answered pairings actually met</div>' +
+        '</div>';
 
     el.innerHTML =
       '<div class="stat-card" style="margin-bottom:18px">' +
         '<div class="stat-head"><div class="stat-label">' + title + ' &middot; attendance</div>' +
           '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div></div>' +
-        '<div style="display:flex;align-items:baseline;gap:10px;margin:10px 0 4px">' +
-          '<div class="stat-value">' + (rate === null ? '—' : rate + '%') + '</div>' +
-          '<div style="color:var(--text-muted);font-size:13px">' +
-            (rate === null
-              ? 'nobody has answered yet'
-              : 'of answered pairings actually met') + '</div>' +
-        '</div>' +
+        headline +
         '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">' +
           attChip('met', tot.met + ' met') +
           attChip('missed', tot.missed + ' did not') +
           attChip('no_reply', tot.no_reply + ' no reply') +
           (tot.undelivered ? attChip('undelivered', tot.undelivered + ' not delivered') : '') +
+          (tot.agreed
+            ? '<span class="pill att-agreed" title="Pairings where both accepted a time">' +
+                tot.agreed + ' agreed a time</span>'
+            : '') +
         '</div>' +
         '<p style="color:var(--text-dim);font-size:12.5px;margin-top:12px;max-width:62ch">' +
           'Across the last ' + a.rounds.length + ' round' + (a.rounds.length === 1 ? '' : 's') +
@@ -3182,22 +3919,27 @@
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px">' +
         '<div class="stat-card">' +
           '<div class="stat-head"><div class="stat-label">By round</div></div>' +
-          '<div style="margin-top:14px">' + attColumns(a.rounds) + '</div>' +
-          '<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:4px">' +
+          (chartWorthIt ? '<div style="margin-top:14px">' + attColumns(a.rounds) + '</div>' : '') +
+          '<div style="' + (chartWorthIt
+              ? 'margin-top:18px;border-top:1px solid var(--border);padding-top:4px'
+              : 'margin-top:8px') + '">' +
             a.rounds.map(roundRow).join('') + '</div>' +
         '</div>' +
         '<div class="stat-card">' +
           '<div class="stat-head"><div class="stat-label">By person, last 6 rounds</div></div>' +
-          peopleTable(a.people) +
+          peopleTable(a.people, answered > 0) +
         '</div>' +
       '</div>';
   }
 
   // Outcome colours live in one place: the chips, the columns and the per-person
   // bars all read from here, so they can never drift apart.
+  // Outcome colours. Met and did-not-meet keep severity colours because they
+  // are a judgement; the other two are states, not failures, so they take
+  // neutral and brand tones rather than shouting.
   const ATT_COLOR = {
     met: 'var(--sev-good)', missed: 'var(--sev-bad)',
-    no_reply: 'var(--text-dim)', undelivered: 'var(--sev-mid)'
+    no_reply: 'var(--text-dim)', undelivered: 'var(--brand-yellow)'
   };
   const ATT_ORDER = ['met', 'missed', 'no_reply', 'undelivered'];
 
@@ -3233,7 +3975,11 @@
   // "9 Sep" — the year is noise on an axis covering a few weeks.
   function shortDate(value) {
     const d = toDate(value);
-    return d ? d.getDate() + ' ' + MONTH_ABBR[d.getMonth()] : '—';
+    if (d) return d.getDate() + ' ' + MONTH_ABBR[d.getMonth()];
+    // Two definitions of this existed with different answers here: one gave a
+    // dash, the other the raw value, and which ran depended on source order.
+    // Showing the value is the more useful of the two when there is one.
+    return value ? String(value) : EMPTY_CELL;
   }
 
   // The same four outcomes as a single row, so a person's pattern is scannable
@@ -3251,12 +3997,26 @@
 
   function roundRow(r) {
     const open = state.attendance && state.attendance.open === r.id;
-    const when = formatDate(r.scheduled_for, 'unscheduled');
+    // A forced round and a scheduled one can land on the same day, and two rows
+    // both reading "17 Sep 2026" cannot be told apart. The time only appears
+    // when the date alone is ambiguous.
+    const rounds = (state.attendance && state.attendance.rounds) || [];
+    const sameDay = rounds.filter(x =>
+      formatDate(x.scheduled_for, '') === formatDate(r.scheduled_for, '')).length > 1;
+    const when = sameDay
+      ? formatDateTime(r.scheduled_for, 'unscheduled')
+      : formatDate(r.scheduled_for, 'unscheduled');
     return '<button class="att-round" aria-expanded="' + (open ? 'true' : 'false') + '"' +
         ' onclick="toggleRound(' + r.id + ')">' +
         '<span><span style="font-weight:600">' + esc(when) + '</span>' +
           '<span style="color:var(--text-dim);font-size:12.5px;margin-left:8px">' +
-          r.matches + ' pairing' + (+r.matches === 1 ? '' : 's') + '</span></span>' +
+          r.matches + ' pairing' + (+r.matches === 1 ? '' : 's') +
+          // Somebody asking for a different partner is a signal about the
+          // matching, not about them, so it belongs next to the round.
+          (+r.rematch_requests
+            ? ' &middot; ' + r.rematch_requests + ' asked for a new match'
+            : '') +
+          '</span></span>' +
         '<span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">' +
           (+r.met ? attChip('met', r.met) : '') +
           (+r.missed ? attChip('missed', r.missed) : '') +
@@ -3324,7 +4084,18 @@
           '<div class="att-pair">' +
             '<span style="display:flex;align-items:center;gap:2px;min-width:0;flex-wrap:wrap">' +
               m.members.map(personChip).join('<span class="att-vs">&middot;</span>') + '</span>' +
-            attChip(m.status) +
+            '<span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
+              // Agreeing a time happens before anyone answers whether they
+              // met, so it tells a different story: a pairing that settled on
+              // a time and then said nothing is not the same as one that never
+              // engaged at all.
+              (m.agreed_at
+                ? '<span class="pill att-agreed" title="Both accepted this time">' +
+                    esc(formatDateTime(m.agreed_at, '')) + '</span>'
+                : '') +
+              (m.has_zoom ? '<span class="pill att-zoom" title="A Zoom meeting was created">Zoom</span>' : '') +
+              attChip(m.status) +
+            '</span>' +
           '</div>').join('')
       : '<div style="color:var(--text-dim);font-size:12.5px;padding:6px 8px">No pairings in this round.</div>';
   }
@@ -3335,9 +4106,13 @@
     renderAttendance((state.connect || []).find(p => p.id === state.attendance.programId));
   }
 
-  function peopleTable(people) {
+  // `hasOutcomes` is false until somebody answers. Until then the Pattern
+  // column is the same flat grey bar for every single person, and a Met of 0
+  // painted green reads as a good number. Both are dropped rather than shown
+  // as decoration.
+  function peopleTable(people, hasOutcomes) {
     if (!people || !people.length) {
-      return '<div class="empty" style="padding:24px 4px">Nobody has been paired yet.</div>';
+      return '<div class="empty" style="padding:24px 4px"><svg class="empty-ico" aria-hidden="true"><use href="#i-connect"/></svg><div>Nobody has been paired yet.</div></div>';
     }
     // Ordered by fewest met, so the people worth a nudge are the ones on screen.
     const showAll = state.attendance && state.attendance.showAllPeople;
@@ -3345,17 +4120,27 @@
     const more = shown.length < people.length
       ? '<button class="more-btn" onclick="revealPeople()">Show all ' + people.length + ' people</button>'
       : '';
+    const num = (v, good) => {
+      const n = +v || 0;
+      const style = n === 0
+        ? 'text-align:right;color:var(--text-dim)'
+        : 'text-align:right;font-weight:600' + (good ? ';color:' + good : '');
+      return '<td style="' + style + '">' + n + '</td>';
+    };
     return '<table class="data-table" style="margin-top:6px"><thead><tr>' +
-        '<th>Person</th><th>Pattern</th><th style="text-align:right">Paired</th>' +
+        '<th>Person</th>' +
+        (hasOutcomes ? '<th>Pattern</th>' : '') +
+        '<th style="text-align:right">Paired</th>' +
         '<th style="text-align:right">Met</th><th style="text-align:right">Missed</th>' +
         '<th style="text-align:right">No reply</th></tr></thead><tbody>' +
       shown.map(r =>
         '<tr><td>' + personChip(r.user_id) + '</td>' +
-        '<td>' + attMiniBar(r) + '</td>' +
-        '<td style="text-align:right">' + r.paired + '</td>' +
-        '<td style="text-align:right;color:var(--sev-good);font-weight:600">' + r.met + '</td>' +
-        '<td style="text-align:right' + (+r.missed ? ';color:var(--sev-bad);font-weight:600' : ';color:var(--text-dim)') + '">' + r.missed + '</td>' +
-        '<td style="text-align:right;color:var(--text-dim)">' + r.no_reply + '</td></tr>').join('') +
+        (hasOutcomes ? '<td>' + attMiniBar(r) + '</td>' : '') +
+        num(r.paired) +
+        num(r.met, 'var(--sev-good)') +
+        num(r.missed, 'var(--sev-bad)') +
+        num(r.no_reply) +
+        '</tr>').join('') +
       '</tbody></table>' + more;
   }
 
@@ -3380,7 +4165,234 @@
     set('cs-link', p.meeting_link || '');
     const hours = document.getElementById('cs-hours');
     if (hours) hours.checked = !!p.match_working_hours;
+    // Both default on, so a programme saved before these columns existed opens
+    // showing what it actually does rather than switched off.
+    const check = (id, v) => { const e = document.getElementById(id); if (e) e.checked = v; };
+    check('cs-suggest', p.suggest_times !== false);
+    check('cs-icebreaker', p.use_icebreaker !== false);
+    check('cs-post-stats', !!p.post_stats);
+    check('cs-strict', !!p.strict_group_size);
+    ccGroupSize(p.group_size || 2);
+    ccPick('tone', p.intro_tone || 'hybrid');
+    ccPick('video', p.video_mode || 'link');
+    set('cs-next-date', (p.next_round_date || '').slice(0, 10));
+    ccTab('basics');
+    renderCcPreview();
     document.getElementById('cc-settings-modal').classList.add('open');
+  }
+
+  // Collapsing a nav group is a separate gesture from opening its page, so the
+  // caret stops the click rather than letting the row act twice.
+  function toggleNavGroup(ev, id) {
+    if (ev) ev.stopPropagation();
+    const g = document.getElementById(id);
+    if (g) g.classList.toggle('open');
+  }
+
+  // The three sub-items are three places within one section rather than three
+  // sections: Slack's own settings pages work the same way, and splitting them
+  // into separate sections would break the back button and the deep links.
+  function goConnect(where) {
+    switchSection('connect');
+    // "New" opens a modal over the list, so the list stays the current place.
+    const current = where === 'new' ? 'list' : where;
+    document.querySelectorAll('[data-connect-sub]').forEach(el =>
+      el.classList.toggle('active', el.dataset.connectSub === current));
+    if (where === 'new') {
+      openConnectModal();
+      return;
+    }
+    if (where === 'attendance') {
+      const first = (state.connect || [])[0];
+      if (!first) {
+        toast('Create a coffee chat first');
+        return;
+      }
+      openAttendance(first.id);
+      return;
+    }
+    // "All coffee chats" is the section itself; close anything open over it.
+    const panel = document.getElementById('connect-attendance');
+    if (panel) panel.innerHTML = '';
+  }
+
+  // ── Coffee chat settings: tabs, live preview, members ────────────────────
+
+  function ccTab(name) {
+    document.querySelectorAll('[data-cs-tab]').forEach(b =>
+      b.classList.toggle('on', b.dataset.csTab === name));
+    document.querySelectorAll('[data-cs-pane]').forEach(el =>
+      el.hidden = el.dataset.csPane !== name);
+    if (name === 'members') loadProgramMembers();
+  }
+
+  // A rough Slack rendering of what the current settings produce. Deliberately
+  // built from the form rather than from the saved programme, so the preview
+  // answers "what will this do" while you are still deciding.
+  function renderCcPreview() {
+    const el = document.getElementById('cs-preview');
+    if (!el) return;
+    const val = id => (document.getElementById(id) || {}).value || '';
+    const on = id => !!(document.getElementById(id) || {}).checked;
+    const picked = name => {
+      const sel = document.querySelector('[data-pick="' + name + '"].on');
+      return sel ? sel.dataset.value : '';
+    };
+    const minutes = parseInt(val('cs-minutes'), 10) || 30;
+    const size = parseInt(val('cs-group-size'), 10) || 2;
+    const tone = picked('tone') || 'hybrid';
+    const video = picked('video') || 'link';
+
+    const others = size <= 2 ? '<span class="cc-pv-m">@sam</span>'
+      : size === 3 ? '<span class="cc-pv-m">@sam</span> and <span class="cc-pv-m">@priya</span>'
+      : '<span class="cc-pv-m">@sam</span>, <span class="cc-pv-m">@priya</span> and ' + (size - 2) + ' more';
+    const toneLine = {
+      hybrid: 'It is hard to meet people outside your own team when everyone is remote, so this introduces a few of you every so often.',
+      remote: 'Nobody bumps into anyone in a distributed team, so this introduces a few of you every so often. A call is the usual way; a long message works too.',
+      in_person: 'Plenty of people here have still never spoken, so this introduces a few of you every so often. A coffee or a walk is enough.'
+    }[tone];
+    const groupLine = size > 3 ? size + ' of you this round.'
+      : size === 3 ? 'Three of you this round, so nobody sits out.'
+      : 'Just the two of you.';
+
+    const b = [];
+    b.push('<div><span class="cc-pv-m">@you</span> and ' + others +
+      ' have been matched. Say hello right here.<br/>' + esc(toneLine) + '</div>');
+    b.push('<div class="cc-pv-dim" style="margin-top:6px">' + groupLine +
+      ' ' + minutes + ' minutes is plenty.</div>');
+
+    if (on('cs-icebreaker')) {
+      b.push('<div class="cc-pv-sep"></div><div><strong>Something to open with</strong></div>');
+      b.push('<div class="cc-pv-quote">What is something you are proud of that nobody noticed?</div>');
+    }
+    if (on('cs-suggest')) {
+      b.push('<div style="margin-top:9px"><strong>Times that suit everyone&rsquo;s hours</strong></div>');
+      ['Amsterdam 09:00 &middot; Kolkata 12:30', 'Amsterdam 11:00 &middot; Kolkata 14:30'].forEach(t =>
+        b.push('<div class="cc-pv-slot"><span>Friday &middot; ' + t + '</span>' +
+          '<span class="cc-pv-btn">Works for me</span></div>'));
+      b.push('<div class="cc-pv-dim">Nobody has checked your calendars.</div>');
+    }
+    if (video === 'link' && val('cs-link').trim()) {
+      b.push('<div style="margin-top:9px"><strong>Where</strong><br/><span class="cc-pv-m">Join the room</span></div>');
+    } else if (video === 'zoom') {
+      b.push('<div class="cc-pv-dim" style="margin-top:9px">A Zoom meeting is created once you agree a time.</div>');
+    }
+    b.push('<div class="cc-pv-sep"></div>');
+    b.push('<div class="cc-pv-dim">&#8943; More options &mdash; another starter, a new match, ' +
+      'unavailable this round, pause</div>');
+
+    let html =
+      '<div class="slack-preview">' +
+        '<div class="sp-avatar">M</div>' +
+        '<div style="min-width:0">' +
+          '<div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>' +
+          '<div class="sp-body">' + b.join('') + '</div>' +
+        '</div>' +
+      '</div>';
+
+    if (on('cs-post-stats')) {
+      html += '<div class="slack-preview" style="margin-top:10px">' +
+        '<div class="sp-avatar">M</div>' +
+        '<div style="min-width:0">' +
+          '<div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>' +
+          '<div class="sp-body"><strong>How the last round went</strong><br/>' +
+            '<span class="cc-pv-dim">5 pairs were introduced. 3 of the 4 who answered met up.</span></div>' +
+        '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  // A pick group behaves as a radio set: one on at a time, and the preview
+  // follows. Cards rather than a dropdown, because each option needs a
+  // sentence to explain it.
+  function ccPick(name, value) {
+    document.querySelectorAll('[data-pick="' + name + '"]').forEach(el =>
+      el.classList.toggle('on', el.dataset.value === value));
+    renderCcPreview();
+  }
+
+  function ccPickValue(name, fallback) {
+    const sel = document.querySelector('[data-pick="' + name + '"].on');
+    return sel ? sel.dataset.value : fallback;
+  }
+
+  function ccGroupSize(n) {
+    const hidden = document.getElementById('cs-group-size');
+    if (hidden) hidden.value = String(n);
+    document.querySelectorAll('[data-size]').forEach(b =>
+      b.classList.toggle('on', Number(b.dataset.size) === Number(n)));
+    renderCcPreview();
+  }
+
+  async function loadProgramMembers() {
+    const box = document.getElementById('cs-members');
+    if (!box || editingProgramId === null) return;
+    box.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+    let rows = [];
+    try {
+      rows = await api('GET', '/connect/programs/' + editingProgramId + '/members');
+    } catch (e) {
+      box.innerHTML = '<div class="empty" style="padding:22px 4px">Could not load members.</div>';
+      return;
+    }
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty" style="padding:22px 4px">' +
+        'Nobody is in the channel yet. Invite people to it and they appear here.</div>';
+      return;
+    }
+    const counts = rows.reduce((a, r) => (a[r.state] = (a[r.state] || 0) + 1, a), {});
+    box.innerHTML =
+      '<p style="color:var(--text-muted);font-size:12.5px;margin:0 0 12px">' +
+        '<strong>' + (counts.in || 0) + '</strong> in the pool' +
+        (counts.snoozed ? ' &middot; ' + counts.snoozed + ' snoozed' : '') +
+        (counts.out ? ' &middot; ' + counts.out + ' excluded' : '') +
+        '. Everyone in the channel is matched unless they are out.' +
+        (canAdminister('connect') ? '' : ' Only someone who runs coffee chats can change these.') + '</p>' +
+      '<table class="data-table"><thead><tr><th>Member</th>' +
+        '<th style="text-align:right">Paired</th><th>Status</th></tr></thead><tbody>' +
+      rows.map(r =>
+        '<tr><td>' +
+          '<span class="att-person">' + avatarFor(r.user_id, r.name) +
+            '<span class="att-who">' + esc(r.name) +
+            (r.eligible ? '' : ' <span class="att-handle">not on the roster</span>') +
+            '</span></span>' +
+        '</td>' +
+        '<td style="text-align:right' + (r.paired ? ';font-weight:600' : ';color:var(--text-dim)') + '">' +
+          r.paired + '</td>' +
+        '<td>' + memberStateControl(r) + '</td></tr>').join('') +
+      '</tbody></table>';
+  }
+
+  function memberStateControl(r) {
+    const until = r.until ? ' until ' + esc(formatDate(r.until, '')) : '';
+    // Changing this needs charge of coffee chats: a workspace admin, or
+    // whoever was put in charge of the feature. Anyone else reads it, because
+    // a control that answers 403 looks like the page is broken.
+    if (!canAdminister('connect')) {
+      const label = r.state === 'in' ? 'In the pool'
+        : r.state === 'snoozed' ? 'Snoozed' + until
+        : 'Excluded';
+      return '<span class="pill ' + (r.state === 'in' ? 'att-met' : 'att-zero') + '">' + esc(label) + '</span>';
+    }
+    return '<select class="member-state" onchange="setMemberState(\'' + esc(r.user_id) + '\', this.value)">' +
+        '<option value="in"' + (r.state === 'in' ? ' selected' : '') + '>In the pool</option>' +
+        '<option value="snoozed"' + (r.state === 'snoozed' ? ' selected' : '') + '>Snoozed 2 weeks' + until + '</option>' +
+        '<option value="out"' + (r.state === 'out' ? ' selected' : '') + '>Excluded</option>' +
+      '</select>';
+  }
+
+  async function setMemberState(userId, nextState) {
+    try {
+      await api('POST', '/connect/programs/' + editingProgramId + '/members/' + userId,
+        { state: nextState, weeks: 2 });
+      toast(nextState === 'in' ? 'Back in the pool'
+          : nextState === 'out' ? 'Excluded from this coffee chat'
+          : 'Snoozed for two weeks');
+      loadProgramMembers();
+    } catch (e) {
+      toast((e && e.message) || 'Could not change that', 'error');
+      loadProgramMembers();
+    }
   }
 
   function closeConnectSettings() {
@@ -3408,7 +4420,16 @@
         timezone: settingsTz ? settingsTz.get() : workspaceTz(),
         meeting_minutes: parseInt(document.getElementById('cs-minutes').value, 10),
         meeting_link: document.getElementById('cs-link').value,
-        match_working_hours: document.getElementById('cs-hours').checked
+        match_working_hours: document.getElementById('cs-hours').checked,
+        suggest_times: document.getElementById('cs-suggest').checked,
+        use_icebreaker: document.getElementById('cs-icebreaker').checked,
+        post_stats: document.getElementById('cs-post-stats').checked,
+        group_size: parseInt(document.getElementById('cs-group-size').value, 10) || 2,
+        strict_group_size: document.getElementById('cs-strict').checked,
+        intro_tone: ccPickValue('tone', 'hybrid'),
+        video_mode: ccPickValue('video', 'link'),
+        // Empty means "let the cadence decide", which is null rather than "".
+        next_round_date: document.getElementById('cs-next-date').value || null
       });
       closeConnectSettings();
       toast('Settings saved');
@@ -3437,7 +4458,9 @@
     try {
       await api('POST', '/connect/programs/' + id, { enabled: next });
       p.enabled = next;
-      btn.classList.toggle('on', next);
+      // The card is rebuilt below, so the caller no longer has to own a toggle
+      // element; the overflow menu passes none.
+      if (btn) btn.classList.toggle('on', next);
       renderConnect();
       toast(next ? 'Coffee chats resumed' : 'Coffee chats paused');
     } catch (e) { toast('Could not update this coffee chat'); }
@@ -3499,7 +4522,9 @@
   // ── Standups ──
   async function loadStandups() {
     document.getElementById('standups-list').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
-    await Promise.all([loadStats(), loadChannels()]);
+    // Health is fetched alongside the rest: the cards are not worth much
+    // without it, and a second round trip after render makes them jump.
+    await Promise.all([loadStats(), loadChannels(), loadStandupHealth()]);
     try {
       state.standups = await api('GET', '/standups');
       state.standupsFetched = true;
@@ -3565,12 +4590,37 @@
     return '<span title="Next run">Next: ' + esc(label) + '</span>';
   }
 
+  // sparkline() already exists further down: it draws the same per-day series
+  // as a polyline in --sev-info and handles a single point. A second copy of
+  // it here silently shadowed one of the two depending on source order, which
+  // is how a chart ends up in the wrong colour with nobody able to say why.
+
+  // Colour means state here, not decoration: three bands, and the word is
+  // always present so the colour is never the only carrier.
+  function healthOf(rate) {
+    if (rate === null || rate === undefined) return { cls: 'health-unknown', word: 'No data yet' };
+    if (rate >= 75) return { cls: 'health-good', word: 'Healthy' };
+    if (rate >= 40) return { cls: 'health-mid', word: 'Slipping' };
+    return { cls: 'health-bad', word: 'Needs a look' };
+  }
+
+  // Per-schedule participation, fetched once and reused by every card.
+  async function loadStandupHealth() {
+    try {
+      const a = await api('GET', '/analytics?days=14');
+      state.standupHealth = {};
+      (a.schedules || []).forEach(r => { state.standupHealth[r.schedule_id] = r; });
+    } catch (e) {
+      state.standupHealth = {};
+    }
+  }
+
   function renderStandups() {
     const el = document.getElementById('standups-list');
     const caption = document.getElementById('standups-caption');
     if (!state.standups.length) {
       if (caption) caption.textContent = '';
-      el.innerHTML = '<div class="empty-state"><svg class="empty-icon-svg"><use href="#i-standups"/></svg><h3>No standups yet</h3><p>Create your first standup to get your team going.</p><button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button></div>';
+      el.innerHTML = '<div class="empty-state"><img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/><h3>No standups yet</h3><p>Create your first standup to get your team going.</p><button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button></div>';
       return;
     }
     const sorted = standupsByTimeOfDay(state.standups);
@@ -3585,7 +4635,8 @@
       const peopleLabel = people === null
         ? 'Everyone in the channel'
         : people + (people === 1 ? ' participant' : ' participants');
-      return '<div class="standup-card" id="sc-' + s.id + '">' +
+      const broken = s.registration_error;
+      return '<div class="standup-card' + (broken ? ' card-broken' : '') + '" id="sc-' + s.id + '">' +
         '<div class="standup-icon">&#9201;</div>' +
         '<div class="standup-info">' +
         '<div class="standup-name">' + esc(s.name || 'Morning Standup') + '</div>' +
@@ -3596,13 +4647,35 @@
         nextRunChip(s) +
         dayChips +
         badge +
-        '</div></div>' +
+        '</div>' +
+        (broken
+          ? '<div class="card-alert"><svg aria-hidden="true"><use href="#i-alarm-clock"/></svg>' +
+              '<span><strong>This standup never runs.</strong> ' + esc(broken) +
+              ' Until that is fixed nobody is asked and no report is posted.</span></div>'
+          : standupHealthStrip(s)) +
+        '</div>' +
         '<div class="standup-actions">' +
         '<button class="toggle ' + (s.active ? 'on' : '') + '" onclick="toggleStandup(' + s.id + ', this)" title="Toggle active"></button>' +
         '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + ')">Edit</button>' +
         '<button class="btn btn-danger btn-sm" onclick="deleteStandup(' + s.id + ')">Delete</button>' +
         '</div></div>';
     }).join('');
+  }
+
+  function standupHealthStrip(s) {
+    const row = (state.standupHealth || {})[s.id];
+    if (!row) return '';
+    const rate = typeof row.completion_rate === 'number' ? row.completion_rate : null;
+    const h = healthOf(rate);
+    const spark = sparkline(row.series);
+    if (!spark && rate === null) return '';
+    return '<div class="standup-health ' + h.cls + '">' +
+      (spark ? '<span class="spark-wrap">' + spark + '</span>' : '') +
+      '<span class="health-word">' + h.word + '</span>' +
+      (rate === null ? '' : '<span class="health-rate">' + rate + '%</span>') +
+      '<span class="health-note">' + (row.completed || 0) + ' of ' + (row.expected || 0) +
+        ' filed, last 14 days</span>' +
+    '</div>';
   }
 
   async function toggleStandup(id, btn) {
@@ -3662,7 +4735,8 @@
     await ensureStandups();
     try {
       const url = channelId ? '/members?channel_id=' + encodeURIComponent(channelId) : '/members';
-      state.members = await api('GET', url);
+      const [members] = await Promise.all([api('GET', url), loadGrantable()]);
+      state.members = members;
       renderMembers();
       populateParticipantsDropdown();
     } catch (e) {
@@ -3725,6 +4799,51 @@
     return list;
   }
 
+  // Who runs what. A workspace admin runs everything, so their card says so
+  // rather than showing switches that would change nothing. For everyone else
+  // an admin can put them in charge of one feature: the team lead runs the
+  // standups, someone in HR runs coffee chats and kudos, and neither of them
+  // gets webhooks, API keys or the public feed.
+  function grantsHtml(m) {
+    const grantable = window._grantable || [];
+    if (!grantable.length) return '';
+    const held = new Set(m.module_admin || []);
+    if ((m.role || 'member') === 'admin') {
+      return '<div class="member-grants"><span class="grants-label">Runs every feature</span>' +
+        '<div class="grants-chips">' + grantable.map(name =>
+          '<span class="grant-chip on readonly" title="' + esc((MODULE_COPY[name] || [name])[0]) + '">' +
+            '<svg class="grant-ico" aria-hidden="true"><use href="#i-' + (MODULE_ICON[name] || 'settings') + '"/></svg>' +
+            esc((MODULE_COPY[name] || [name])[0]) +
+          '</span>').join('') + '</div></div>';
+    }
+    const iAmAdmin = window._myRole === 'admin';
+    if (!iAmAdmin && !held.size) return '';
+    const chips = grantable
+      .filter(name => iAmAdmin || held.has(name))
+      // What they run first, so the label reads onto the chips under it.
+      .slice()
+      .sort((a, b) => (held.has(b) ? 1 : 0) - (held.has(a) ? 1 : 0))
+      .map(name => {
+        const label = (MODULE_COPY[name] || [name])[0];
+        const on = held.has(name);
+        const ico = MODULE_ICON[name] || 'settings';
+        const body = '<svg class="grant-ico" aria-hidden="true"><use href="#i-' + ico + '"/></svg>' + esc(label);
+        if (!iAmAdmin) {
+          return '<span class="grant-chip on readonly" title="Runs ' + esc(label) + '">' + body + '</span>';
+        }
+        return '<button type="button" class="grant-chip' + (on ? ' on' : '') +
+          '" aria-pressed="' + (on ? 'true' : 'false') + '"' +
+          ' title="' + (on ? 'Stop this person running ' : 'Put this person in charge of ') + esc(label) + '"' +
+          ' onclick="toggleModuleAdmin(\'' + esc(m.id) + '\',\'' + esc(name) + '\',' + (on ? 'false' : 'true') + ', this)">' +
+          body + '</button>';
+      }).join('');
+    // "Runs Standups" when something is on. "Put in charge of" when nothing
+    // is, because "Runs" above three switched-off chips reads as a claim.
+    const label = held.size ? 'Runs' : 'Put in charge of';
+    return '<div class="member-grants"><span class="grants-label">' + label + '</span>' +
+      '<div class="grants-chips">' + chips + '</div></div>';
+  }
+
   function renderMembers() {
     const el = document.getElementById('members-grid');
     const countEl = document.getElementById('members-count');
@@ -3761,14 +4880,15 @@
         '</div>';
       const role = m.role || 'member';
       const badgeHtml = role === 'admin'
-        ? '<span class="role-badge">Admin</span>'
-        : '<span class="role-badge member">Member</span>';
+        ? '<span class="role-badge"><svg class="pill-ico" aria-hidden="true"><use href="#i-members"/></svg>Admin</span>'
+        : '<span class="role-badge member"><svg class="pill-ico" aria-hidden="true"><use href="#i-members"/></svg>Member</span>';
       const inCount = standupsForMember(m.id).length;
+      const standupIco = '<svg class="pill-ico" aria-hidden="true"><use href="#i-standups"/></svg>';
       const chip = inCount
-        ? '<span class="count-chip" title="Standups this person is in">' + inCount + (inCount === 1 ? ' standup' : ' standups') + '</span>'
+        ? '<span class="count-chip" title="Standups this person is in">' + standupIco + inCount + (inCount === 1 ? ' standup' : ' standups') + '</span>'
         : m.tracked === false
-          ? '<span class="count-chip none" title="In your Slack workspace, but not tracked by Morgenruf and not counted in Analytics">Not in Morgenruf</span>'
-          : '<span class="count-chip none" title="Tracked by Morgenruf, but not a participant in any standup">No standups</span>';
+          ? '<span class="count-chip none" title="In your Slack workspace, but not tracked by Morgenruf and not counted in Analytics">' + standupIco + 'Not in Morgenruf</span>'
+          : '<span class="count-chip none" title="Tracked by Morgenruf, but not a participant in any standup">' + standupIco + 'No standups</span>';
       let roleBtn = '';
       if (window._myRole === 'admin' && m.id !== window._myUserId) {
         roleBtn = role === 'admin'
@@ -3781,6 +4901,7 @@
         '<div class="member-handle">@' + esc(memberHandle(m)) + '</div>' +
         '<div class="member-tz">' + esc(m.tz || 'UTC') + '</div>' +
         '<div class="member-meta">' + badgeHtml + chip + roleBtn + '</div>' +
+        grantsHtml(m) +
         '</div></div>';
     }).join('');
   }
@@ -4088,20 +5209,133 @@
       if (standups.length) {
         const s = standups[0];
         el.className = 'settings-grid';
-        el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px">' +
-          '<div class="card-title">Primary Standup Config</div>' +
-          '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
-          '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit Configuration</button>' +
+        // next_run and registration_error are computed on every list call and
+        // were both discarded. Between them they answer the only question this
+        // card exists for: is this thing going to run, and when.
+        const broken = s.registration_error;
+        const when = s.next_run ? formatDateTime(s.next_run, '') : '';
+        el.innerHTML = '<div class="stat-card' + (broken ? ' card-broken' : '') + '">' +
+          '<div class="card-title">' + esc(s.name || 'Standup') + '</div>' +
+          '<div class="standup-meta" style="margin-top:6px">' +
+            '<span>#' + esc(channelName(s.channel_id)) + '</span>' +
+            '<span>' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span>' +
+            '<span>' + (s.participants || []).length + ' taking part</span>' +
           '</div>' +
+          (broken
+            ? '<div class="card-alert"><svg aria-hidden="true"><use href="#i-alarm-clock"/></svg>' +
+                '<span><strong>This standup never runs.</strong> ' + esc(broken) + '</span></div>'
+            : when
+              ? '<div class="settings-next">Next run <strong>' + esc(when) + '</strong></div>'
+              : '') +
+          '<div class="row-actions" style="margin-top:14px">' +
+            '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit this standup</button>' +
+            (standups.length > 1
+              ? '<span class="set-help">and ' + (standups.length - 1) +
+                ' other' + (standups.length === 2 ? '' : 's') + ' on the Standups page</span>'
+              : '') +
+          '</div>' +
+          '</div>' +
+          '<div id="modules-section"></div>' +
           '<div id="feed-section"></div>' +
           '<div id="digest-section"></div>';
         loadFeedSettings(s);
         loadDigestSettings(s);
+        loadModuleSettings();
       } else {
-        el.innerHTML = '<div class="empty-state"><svg class="empty-icon-svg"><use href="#i-settings"/></svg><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
+        el.innerHTML = '<div class="empty-state"><img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
       }
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-dim)">Failed to load settings.</p>';
+    }
+  }
+
+  // ── Modules ──
+  // Turning a feature on or off was reachable from exactly one button, buried
+  // on the Coffee chats page, even though the API has supported every module
+  // since the module contract landed. This is where someone looks for it.
+  // A vendor gets its own mark; ours get the Lucide set.
+  const MODULE_ICON = {
+    standup: 'standups', connect: 'connect', kudos: 'kudos',
+    insights: 'insights', mcp: 'mcp', google_chat: 'b-gchat',
+  };
+
+  const MODULE_COPY = {
+    standup: ['Standups', 'Asks your team the questions and posts the summary.'],
+    connect: ['Coffee chats', 'Introduces people from a channel on a cadence.'],
+    kudos: ['Kudos', 'Peer recognition, with a daily allowance per person.'],
+    insights: ['Insights', 'Who is going unthanked and who is stuck on the same blocker.'],
+    mcp: ['MCP', 'Lets an assistant query your standup data over HTTP.'],
+    google_chat: ['Google Chat', 'Mirrors standups into Google Chat.'],
+  };
+
+  async function loadModuleSettings() {
+    const el = document.getElementById('modules-section');
+    if (!el) return;
+    let mods = [];
+    try {
+      mods = await api('GET', '/modules');
+    } catch (e) {
+      el.innerHTML = '';
+      return;
+    }
+    // A module the deployment does not ship cannot be switched on by anybody,
+    // so listing it would only offer a dead control.
+    const usable = mods.filter(m => m.available !== false);
+    if (!usable.length) { el.innerHTML = ''; return; }
+
+    el.innerHTML = '<div class="stat-card">' +
+      '<div class="card-title">Features</div>' +
+      '<p class="set-help" style="margin:4px 0 14px">' +
+        'Switch a part of Morgenruf off and it stops running and disappears from the sidebar. ' +
+        'Nothing is deleted.' +
+        (window._myRole === 'admin' ? '' : ' Only an admin can change these.') + '</p>' +
+      usable.map(m => {
+        const copy = MODULE_COPY[m.name] || [m.name, ''];
+        const missing = (m.missing_scopes || []);
+        return '<div class="set-row">' +
+          '<div class="set-ico"><svg aria-hidden="true" class="' +
+            (MODULE_ICON[m.name].startsWith('b-') ? 'brand-ico' : '') + '"><use href="#i-' +
+            MODULE_ICON[m.name] + '"/></svg></div>' +
+          '<div>' +
+            '<div class="set-label">' + esc(copy[0]) + '</div>' +
+            '<div class="set-help">' + esc(copy[1]) +
+              (missing.length
+                ? '<br/><span style="color:var(--warning)">Needs more Slack access: ' +
+                  esc(missing.join(', ')) + '. <a href="/install">Re-authorise</a>.</span>'
+                : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="set-control">' +
+            (missing.length
+              ? '<span class="pill att-zero">Unavailable</span>'
+              // Only an admin may switch a feature. Showing everyone a toggle
+              // that answers 403 reads as a broken page, which is exactly what
+              // the members table did before it was given the same treatment.
+              : window._myRole !== 'admin'
+                ? '<span class="pill ' + (m.active ? 'att-met' : 'att-zero') + '">' +
+                  (m.active ? 'On' : 'Off') + '</span>'
+                : '<button class="toggle ' + (m.active ? 'on' : '') + '" role="switch" ' +
+                  'aria-checked="' + (m.active ? 'true' : 'false') + '" ' +
+                  'aria-label="' + esc(copy[0]) + '" ' +
+                  'onclick="toggleModule(\'' + esc(m.name) + '\', this)"></button>') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  async function toggleModule(name, btn) {
+    const turningOn = !btn.classList.contains('on');
+    try {
+      await api('POST', '/modules/' + name, { enabled: turningOn });
+      btn.classList.toggle('on', turningOn);
+      btn.setAttribute('aria-checked', turningOn ? 'true' : 'false');
+      toast((MODULE_COPY[name] || [name])[0] + (turningOn ? ' is on' : ' is off'));
+      // The sidebar and the section it owns both follow from this.
+      state.loaded = {};
+      loadModuleSettings();
+    } catch (e) {
+      toast((e && e.message) || 'Could not change that', 'error');
     }
   }
 
@@ -4228,7 +5462,57 @@
   const webhookTests = {};
   const webhookDeliveries = {};
 
+  // The event names come from the server so a new one does not need a
+  // frontend change. /webhooks/events was built for this and had no caller,
+  // which is why every webhook silently subscribed to standup.completed only
+  // and the other two events were unreachable from the dashboard.
+  let webhookEventCatalog = null;
+
+  function eventLabel(name) {
+    return ({
+      'standup.completed': 'Standup completed',
+      'blocker.detected': 'Blocker detected',
+      'participation.low': 'Low participation',
+    })[name] || name;
+  }
+
+  async function loadWebhookEvents() {
+    if (webhookEventCatalog) return webhookEventCatalog;
+    try {
+      const res = await api('GET', '/webhooks/events');
+      webhookEventCatalog = {
+        events: res.events || [],
+        default: res.default || [],
+      };
+    } catch (e) {
+      webhookEventCatalog = { events: [], default: [] };
+    }
+    return webhookEventCatalog;
+  }
+
+  function eventCheckboxes(idPrefix, selected) {
+    const cat = webhookEventCatalog || { events: [], default: [] };
+    if (!cat.events.length) return '';
+    const chosen = selected && selected.length ? selected : cat.default;
+    return '<div class="event-picker">' + cat.events.map(name =>
+      '<label class="event-opt">' +
+        '<input type="checkbox" value="' + esc(name) + '" id="' + idPrefix + '-' + esc(name) + '"' +
+        (chosen.indexOf(name) !== -1 ? ' checked' : '') + '/>' +
+        '<span>' + esc(eventLabel(name)) + '</span>' +
+      '</label>'
+    ).join('') + '</div>';
+  }
+
+  function readEventPicker(idPrefix) {
+    const cat = webhookEventCatalog || { events: [] };
+    return cat.events.filter(name => {
+      const box = document.getElementById(idPrefix + '-' + name);
+      return box && box.checked;
+    });
+  }
+
   async function loadWebhooks() {
+    await loadWebhookEvents();
     const el = document.getElementById('webhooks-content');
     el.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
     newWebhookSecret = null;
@@ -4301,18 +5585,45 @@
         const codeText = (code === undefined || code === null || code === '') ? EMPTY_CELL : String(code);
         const when = d.created_at || d.attempted_at || d.delivered_at || d.timestamp;
         const err = d.error || d.error_message || '';
+        const ms = Number(d.duration_ms);
         return '<tr>' +
           '<td class="status-code ' + (good ? 'ok' : 'bad') + '">' + esc(codeText) + '</td>' +
+          '<td>' + (d.event_type ? '<span class="pill att-zero">' + esc(eventLabel(d.event_type)) +
+            '</span>' : EMPTY_CELL) + '</td>' +
           '<td class="col-date">' + relativeCell(when, EMPTY_CELL) + '</td>' +
+          '<td style="text-align:right;font-variant-numeric:tabular-nums">' +
+            (Number.isFinite(ms) ? esc(String(Math.round(ms))) + ' ms' : EMPTY_CELL) + '</td>' +
+          '<td>' + (d.signed === false
+            ? '<span class="pill att-missed" title="Sent without a signature">unsigned</span>'
+            : EMPTY_CELL) + '</td>' +
           '<td>' + (err ? esc(err) : EMPTY_CELL) + '</td>' +
           '</tr>';
       }).join('');
-      inner = '<div class="table-scroll"><table class="data-table" style="min-width:360px">' +
-        '<thead><tr><th>Status</th><th class="col-date">When</th><th>Error</th></tr></thead>' +
+      inner = '<div class="table-scroll"><table class="data-table" style="min-width:560px">' +
+        '<thead><tr><th>Status</th><th>Event</th><th class="col-date">When</th>' +
+        '<th style="text-align:right">Took</th><th>Signing</th><th>Error</th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table></div>';
     }
     return '<tr><td class="deliveries-cell" colspan="4">' +
       '<div class="stat-label" style="margin-bottom:6px">Recent deliveries</div>' + inner + '</td></tr>';
+  }
+
+  // Says what a webhook is for and which events exist, rather than only that
+  // there are none. The catalogue is already fetched for the checkboxes.
+  function webhookEmptyState() {
+    const cat = webhookEventCatalog || { events: [] };
+    const list = cat.events.length
+      ? '<p>Morgenruf will POST to your URL, signed, when any of these happen:</p>' +
+        '<div class="event-tags" style="justify-content:center;margin-bottom:18px">' +
+          cat.events.map(n => '<span class="event-tag">' + esc(eventLabel(n)) + '</span>').join('') +
+        '</div>'
+      : '';
+    return '<div class="empty-state">' +
+      '<img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/>' +
+      '<h3>No webhooks yet</h3>' +
+      '<p>Send standup activity to your own systems &mdash; a build pipeline, a status page, ' +
+        'anything that speaks HTTP.</p>' + list +
+    '</div>';
   }
 
   function renderWebhooks() {
@@ -4324,11 +5635,24 @@
         ? '<div class="test-result ' + (test.ok ? 'ok' : 'bad') + '">' + esc(test.text) + '</div>'
         : '';
       const open = webhookDeliveries[h.id] && webhookDeliveries[h.id].open;
+      const subscribed = (h.events && h.events.length) ? h.events : ((webhookEventCatalog || {}).default || []);
+      const editing = webhookEventEdit === h.id;
+      const eventsCell = editing
+        ? eventCheckboxes('wh-edit-' + h.id, subscribed) +
+          '<div class="row-actions" style="margin-top:6px">' +
+            '<button class="btn btn-primary btn-sm" onclick="saveWebhookEvents(' + h.id + ')">Save</button>' +
+            '<button class="btn btn-ghost btn-sm" onclick="cancelWebhookEvents()">Cancel</button>' +
+          '</div>'
+        : '<div class="event-tags">' +
+            subscribed.map(n => '<span class="event-tag">' + esc(eventLabel(n)) + '</span>').join('') +
+          '</div>';
       return '<tr>' +
         '<td class="webhook-url">' + esc(h.url) + testHtml + '</td>' +
+        '<td>' + eventsCell + '</td>' +
         '<td>' + webhookSecretCell(h) + '</td>' +
         '<td class="col-date" style="font-size:12px">' + esc(formatDate(h.created_at, EMPTY_CELL)) + '</td>' +
         '<td><div class="row-actions">' +
+        (editing ? '' : '<button class="btn btn-ghost btn-sm" onclick="editWebhookEvents(' + h.id + ')">Edit events</button>') +
         '<button class="btn btn-secondary btn-sm" onclick="testWebhook(' + h.id + ')">Send test event</button>' +
         '<button class="btn btn-secondary btn-sm" onclick="toggleDeliveries(' + h.id + ')">' + (open ? 'Hide deliveries' : 'Deliveries') + '</button>' +
         '<button class="btn btn-ghost btn-sm" onclick="rotateWebhookSecret(' + h.id + ')">Rotate secret</button>' +
@@ -4340,13 +5664,17 @@
     el.innerHTML =
       renderWebhookSecretPanel() +
       '<div class="webhooks-table-wrap">' +
-      '<table class="webhooks-table" style="min-width:720px"><thead><tr><th>URL</th><th>Signing</th><th>Added</th><th></th></tr></thead>' +
-      '<tbody>' + (rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:24px">No webhooks yet</td></tr>') + '</tbody>' +
+      '<table class="webhooks-table" style="min-width:820px"><thead><tr><th>URL</th><th>Events</th><th>Signing</th><th>Added</th><th></th></tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="5">' + webhookEmptyState() + '</td></tr>') + '</tbody>' +
       '</table></div>' +
       '<div class="add-webhook-row">' +
       '<input type="url" id="new-webhook-url" placeholder="https://example.com/webhook" value="' + esc(draft) + '"/>' +
       '<button class="btn btn-primary" onclick="addWebhook()">&#43; Add Webhook</button>' +
-      '</div>';
+      '</div>' +
+      (webhookEventCatalog && webhookEventCatalog.events.length
+        ? '<div class="add-webhook-events"><span class="add-webhook-events-label">Send on</span>' +
+          eventCheckboxes('wh-new', null) + '</div>'
+        : '');
   }
 
   // A secret may arrive under any of these names, or not at all on the older API.
@@ -4359,7 +5687,9 @@
     const urlEl = document.getElementById('new-webhook-url');
     const url = urlEl.value.trim();
     if (!url) { toast('Please enter a URL', 'error'); return; }
-    const res = await apiSoft('POST', '/webhooks', { url });
+    const events = readEventPicker('wh-new');
+    if (!events.length) { toast('Pick at least one event', 'error'); return; }
+    const res = await apiSoft('POST', '/webhooks', { url, events });
     if (!res.ok) { toast(res.error || 'Failed to add webhook', 'error'); return; }
     const hook = res.data || { id: 0, url, created_at: '' };
     state.webhooks.push(hook);
@@ -4368,6 +5698,30 @@
     urlEl.value = '';
     renderWebhooks();
     toast('Webhook added');
+  }
+
+  let webhookEventEdit = null;
+
+  function editWebhookEvents(id) {
+    webhookEventEdit = id;
+    renderWebhooks();
+  }
+
+  function cancelWebhookEvents() {
+    webhookEventEdit = null;
+    renderWebhooks();
+  }
+
+  async function saveWebhookEvents(id) {
+    const events = readEventPicker('wh-edit-' + id);
+    if (!events.length) { toast('Pick at least one event', 'error'); return; }
+    const res = await apiSoft('PATCH', '/webhooks/' + id, { events });
+    if (!res.ok) { toast(res.error || 'Could not update events', 'error'); return; }
+    const hook = state.webhooks.find(h => h.id === id);
+    if (hook) hook.events = (res.data && res.data.events) || events;
+    webhookEventEdit = null;
+    renderWebhooks();
+    toast('Events updated');
   }
 
   async function rotateWebhookSecret(id) {
@@ -4504,6 +5858,10 @@
     if (dEmail) dEmail.value = s.digest_email || '';
     const dOn = document.getElementById('f-digest-enabled');
     if (dOn) dOn.checked = !!s.digest_enabled;
+    const nOn = document.getElementById('f-nudge-missing');
+    if (nOn) nOn.checked = !!s.nudge_missing;
+    const nMin = document.getElementById('f-nudge-minutes');
+    if (nMin) nMin.value = s.nudge_minutes_before || 20;
     document.getElementById('f-report-time').value = s.report_time || '';
     document.getElementById('f-group-by').value = s.group_by || 'member';
     document.getElementById('f-post-as').value = s.post_as || 'combined';
@@ -4569,14 +5927,15 @@
       report_channel: document.getElementById('f-report-channel').value,
       digest_email: (document.getElementById('f-digest-email') || {}).value || '',
       digest_enabled: !!(document.getElementById('f-digest-enabled') || {}).checked,
+      nudge_missing: !!(document.getElementById('f-nudge-missing') || {}).checked,
+      nudge_minutes_before: parseInt((document.getElementById('f-nudge-minutes') || {}).value, 10) || 20,
       report_time: document.getElementById('f-report-time').value,
       group_by: document.getElementById('f-group-by').value,
-      post_as: document.getElementById('f-post-as').value,
-      sort_order: document.getElementById('f-sort-order').value,
+      // post_as, sort_order and display_avatar are not sent: nothing stores
+      // them. Their controls are marked "Coming soon" rather than accepting a
+      // value that the save would drop.
       edit_window: document.getElementById('f-edit-window').value,
-      display_avatar: document.getElementById('f-avatar-toggle').classList.contains('on'),
       jira_base_url: document.getElementById('f-jira').value.trim(),
-      zendesk_base_url: document.getElementById('f-zendesk').value.trim(),
       github_repo: document.getElementById('f-github-repo').value.trim(),
       linear_team: document.getElementById('f-linear-team').value.trim(),
       reminder_minutes: parseInt(document.getElementById('f-reminder').value) || 0,
@@ -5035,7 +6394,6 @@
   }
 
   // ── Avatar toggle ──
-  function toggleAvatar(btn) { btn.classList.toggle('on'); }
 
   // ── Participants multi-select ──
   const MAX_PARTICIPANT_CHIPS = 6;
@@ -5534,11 +6892,7 @@
 
   // Relative wording with the absolute value in a tooltip.
   // "24 Aug" for a chart axis, where the year is noise.
-  function shortDate(value) {
-    const d = toDate(value);
-    if (!d) return String(value || '');
-    return d.getDate() + ' ' + MONTH_ABBR[d.getMonth()];
-  }
+
 
   function relativeCell(value, fallback) {
     const d = toDate(value);
@@ -5563,14 +6917,6 @@
   // A proportional completion meter. Percentage decides the fill, so rows with
   // different denominators are comparable at a glance, and the number beside it
   // keeps the raw counts readable. Screen readers get the figure, not the bar.
-  function meterHtml(done, total) {
-    const t = Number(total) > 0 ? Number(total) : 0;
-    const d = Math.max(0, Math.min(Number(done) || 0, t || Number(done) || 0));
-    const pct = t ? Math.round((d / t) * 100) : 0;
-    const tone = pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'poor';
-    return '<span class="meter" role="img" aria-label="' + d + ' of ' + t + ' completed">' +
-      '<span class="meter-fill meter-' + tone + '" style="width:' + pct + '%"></span></span>';
-  }
 
   // Whether a standup's blocker answer is worth showing in red.
   //
@@ -5892,7 +7238,6 @@
 
   // Kept as a thin alias so every relative time in the dashboard comes out of
   // the same helper.
-  function timeAgo(iso) { return formatRelative(iso, ''); }
 
   // ── Templates ──
   async function fetchTemplates() {
@@ -5955,26 +7300,63 @@
     }
   }
 
+  const TRIGGER_LABELS = {
+    blocker_detected: 'a blocker is flagged',
+    low_participation: 'participation drops',
+    standup_complete: 'a standup completes',
+  };
+  const ACTION_LABELS = {
+    post_to_channel: 'post to', send_dm: 'send a DM to', fire_webhook: 'call',
+  };
+
+  // A rule reads as a sentence: when X, do Y. The old card showed two coloured
+  // pills and a raw id, so a rule firing at 50% participation and one firing at
+  // 20% were indistinguishable, and the message it would post was never shown
+  // at all even though that is the thing you want to check before saving.
+  function ruleSentence(r) {
+    const trigger = TRIGGER_LABELS[r.trigger] || r.trigger;
+    const threshold = (r.trigger === 'low_participation' && r.condition_value !== null &&
+      r.condition_value !== undefined)
+      ? ' below <strong>' + esc(String(r.condition_value)) + '%</strong>'
+      : '';
+    const action = ACTION_LABELS[r.action] || r.action;
+    const target = r.action === 'post_to_channel'
+      ? '#' + esc(channelName(r.action_target))
+      : esc(r.action_target || '');
+    return 'When ' + esc(trigger) + threshold + ', ' + esc(action) + ' <strong>' + target + '</strong>.';
+  }
+
   function renderRules(rules) {
     const el = document.getElementById('rules-list');
     if (!el) return;
     if (!rules.length) {
-      el.innerHTML = '<div class="empty-state"><svg class="empty-icon-svg"><use href="#i-automation"/></svg><h3>No automation rules</h3><p>Add a rule to automate actions when standups trigger events.</p></div>';
+      // The three templates already exist and were hidden inside a collapsed
+      // form. An empty page is exactly where they are worth showing.
+      el.innerHTML =
+        '<div class="empty-state">' +
+          '<img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/>' +
+          '<h3>Nothing runs by itself yet</h3>' +
+          '<p>A rule watches for something in a standup and does one thing about it. ' +
+            'Start from one of these, or build your own.</p>' +
+        '</div>' +
+        '<div class="rule-template-grid">' + ruleTemplateCards() + '</div>';
       return;
     }
-    const triggerLabels = { blocker_detected: 'Blockers Detected', low_participation: 'Low Participation', standup_complete: 'Standup Complete' };
-    const actionLabels = { post_to_channel: 'Post to Channel', send_dm: 'Send DM', fire_webhook: 'Webhook' };
     el.innerHTML = '<div class="standups-grid">' + rules.map(r =>
-      '<div class="stat-card" style="display:flex;align-items:center;gap:14px;padding:14px 18px;">' +
-      '<div style="flex:1;min-width:0;">' +
-      '<div style="font-weight:600;margin-bottom:4px;">' + esc(r.name) + '</div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-      '<span style="background:rgba(99,102,241,0.15);color:var(--accent-strong);padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(triggerLabels[r.trigger] || r.trigger) + '</span>' +
-      '<span style="background:rgba(16,185,129,0.15);color:var(--sev-good);padding:2px 9px;border-radius:99px;font-size:0.78rem;font-weight:600;">' + esc(actionLabels[r.action] || r.action) + '</span>' +
-      '<span style="font-size:0.8rem;color:var(--text-muted);align-self:center;">' + esc(r.action_target) + '</span>' +
-      '</div>' +
-      '</div>' +
-      '<button class="btn btn-secondary btn-sm" onclick="deleteRule(' + r.id + ')" style="flex-shrink:0;">Delete</button>' +
+      '<div class="stat-card rule-card">' +
+        '<div class="rule-body">' +
+          '<div class="rule-name">' + esc(r.name) + '</div>' +
+          '<div class="rule-sentence">' + ruleSentence(r) + '</div>' +
+          (r.action_message
+            ? '<div class="slack-preview rule-preview">' +
+                '<div class="sp-avatar">M</div>' +
+                '<div style="min-width:0">' +
+                  '<div class="sp-name">Morgenruf <span class="sp-tag">APP</span></div>' +
+                  '<div class="sp-body">' + esc(r.action_message) + '</div>' +
+                '</div></div>'
+            : '') +
+        '</div>' +
+        '<button class="btn btn-secondary btn-sm" onclick="deleteRule(' + r.id + ')">Delete</button>' +
       '</div>'
     ).join('') + '</div>';
   }
@@ -6012,18 +7394,30 @@
     }
   ];
 
-  function renderRuleTemplates() {
-    const el = document.getElementById('rule-templates');
-    if (!el) return;
-    el.innerHTML = RULE_TEMPLATES.map(t =>
+  // One builder, two places: the collapsed form and the empty state. Returning
+  // the markup rather than writing it means the empty page can show the
+  // templates without a second copy of this.
+  function ruleTemplateCards() {
+    return RULE_TEMPLATES.map(t =>
       '<button type="button" class="rule-template" onclick="applyRuleTemplate(\'' + t.key + '\')">' +
         '<b>' + esc(t.title) + '</b><span>' + esc(t.blurb) + '</span>' +
       '</button>').join('');
   }
 
+  function renderRuleTemplates() {
+    const el = document.getElementById('rule-templates');
+    if (!el) return;
+    el.innerHTML = ruleTemplateCards();
+  }
+
   function applyRuleTemplate(key) {
     const t = RULE_TEMPLATES.find(x => x.key === key);
     if (!t) return;
+    // Reachable from the empty state now, where the form is still collapsed.
+    const form = document.getElementById('add-rule-form');
+    if (form && form.style.display === 'none' && typeof openAddRuleForm === 'function') {
+      openAddRuleForm();
+    }
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     set('rule-name', t.name);
     set('rule-trigger', t.trigger);
@@ -6093,7 +7487,7 @@
   // Every client gets the same remote HTTP endpoint plus a scoped bearer key.
   // There is deliberately no local/stdio variant: it would need a database
   // connection string, and an example credential is a credential.
-  const MCP_ENDPOINT = 'https://api.morgenruf.dev/mcp';
+  const MCP_ENDPOINT = '{{ mcp_endpoint }}';
   const MCP_KEY_PLACEHOLDER = 'mrn_YOUR_KEY_HERE';
 
   function renderMCPConfig() {
@@ -6228,10 +7622,41 @@
     toast('Copied!');
   }
 
+  // Hide the sidebar rows for modules this deployment does not ship.
+  //
+  // MORGENRUF_MODULES is the deploy allowlist, and a module left out of it can
+  // never be switched on by the workspace, so offering the row leads only to a
+  // dead page. A module that is merely switched off stays listed: its page
+  // carries the button that turns it on, and hiding the row would strand it.
+  //
+  // Matched through each module's declared nav path, which is what ModuleSpec.nav
+  // is for. It was declared by every module and read by nothing.
+  async function hideUnavailableModules() {
+    let mods;
+    try {
+      mods = await api('GET', '/modules');
+    } catch (e) {
+      return;  // leave every row in place rather than hide one wrongly
+    }
+    (mods || []).forEach(m => {
+      if (m.available !== false) return;
+      const sections = (m.nav || [])
+        .map(n => String(n.path || '').replace(/^#/, ''))
+        .filter(Boolean);
+      if (!sections.length) sections.push(m.name);
+      sections.forEach(section => {
+        document
+          .querySelectorAll('.nav-item[data-module="' + m.name + '"][data-section="' + section + '"]')
+          .forEach(el => { el.style.display = 'none'; });
+      });
+    });
+  }
+
   // ── Boot ──
   // Open whatever the URL asks for. An old #schedules link lands on Standups.
   switchSection(window.location.hash.replace(/^#/, '') || 'standups');
   loadMCPSection();
+  hideUnavailableModules();
   </script>
 </body>
 </html>

@@ -8,6 +8,7 @@ resumes from the undelivered ones rather than messaging everyone twice.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.triggers.cron import CronTrigger
@@ -89,7 +90,9 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         return
 
     today = date.today()
-    if not force and not is_round_due(program["interval_weeks"], program.get("last_round"), today):
+    if not force and not is_round_due(
+        program["interval_weeks"], program.get("last_round"), today, program.get("next_round_date")
+    ):
         logger.info("connect: programme %s not due today", program_id)
         return
 
@@ -132,6 +135,8 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         current_round=round_row["id"],
         timezones=zones,
         minimum_overlap_hours=1.0 if program.get("match_working_hours") else 0.0,
+        group_size=int(program.get("group_size") or 2),
+        strict_group_size=bool(program.get("strict_group_size")),
     )
     if not groups:
         cdb.set_round_state(round_row["id"], "closed", 0)
@@ -140,6 +145,11 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
     cdb.create_matches(round_row["id"], team_id, groups)
     cdb.record_pairs(program_id, round_row["id"], groups)
     cdb.set_round_state(round_row["id"], "matched", len(pool))
+    if program.get("next_round_date"):
+        try:
+            cdb.update_program(team_id, program_id, next_round_date=None)
+        except Exception:
+            logger.warning("connect: could not clear the pinned date on programme %s", program_id)
 
     deliver_round(round_row["id"], bot_token, team_id, program_id)
     _schedule_followups(round_row["id"], bot_token, team_id)
@@ -166,12 +176,19 @@ def _suggest_times(members: list[str], zones: dict[str, str], minutes: int, meet
         return []
     try:
         from src.modules.connect.calendar import google_link  # noqa: PLC0415
-        from src.modules.connect.hours import next_slots  # noqa: PLC0415
+        from src.modules.connect.hours import local_label, next_slots, within_working_hours  # noqa: PLC0415
 
         slots = next_slots(zones.get(members[0], ""), zones.get(members[1], ""), 3, minutes)
+        outside = not within_working_hours(zones.get(members[0], ""), zones.get(members[1], ""))
+        tz_names = [zones.get(m, "") for m in members]
         return [
             {
-                "label": slot.strftime("%A %H:%M UTC"),
+                "outside_hours": outside,
+                # Both readers' own clocks. A UTC time is one neither of them
+                # thinks in, and tells them nothing about whether the slot is
+                # their morning or their evening.
+                "label": local_label(slot, tz_names),
+                "utc": slot.replace(microsecond=0).isoformat(),
                 "add_url": google_link(
                     slot,
                     minutes,
@@ -200,10 +217,17 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
         return
 
     program = cdb.get_program(program_id) or {}
-    meeting_link = program.get("meeting_link") or ""
+    # "How they meet" decides whether the shared room appears at all. It saved
+    # and did nothing until now: a programme set to Zoom or to "they sort it
+    # out" still had its meeting_link pasted into every introduction.
+    video_mode = str(program.get("video_mode") or "link")
+    meeting_link = (program.get("meeting_link") or "") if video_mode == "link" else ""
     meeting_minutes = int(program.get("meeting_minutes") or 30)
-    # Timezones come from the roster, which is already loaded for matching.
-    zones = _member_timezones(team_id)
+    # Both default on, so a programme predating these columns behaves as before.
+    want_times = program.get("suggest_times", True) is not False
+    want_icebreaker = program.get("use_icebreaker", True) is not False
+    # Reading timezones is only worth it if the times are going to be offered.
+    zones = _member_timezones(team_id) if want_times else {}
 
     pending = cdb.undelivered_matches(round_id)
     for m in pending:
@@ -216,9 +240,18 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
                 program_id,
                 meeting_link=meeting_link,
                 meeting_minutes=meeting_minutes,
-                suggested_times=_suggest_times(members, zones, meeting_minutes, meeting_link),
+                suggested_times=(
+                    times := (_suggest_times(members, zones, meeting_minutes, meeting_link) if want_times else [])
+                ),
+                times_are_outside_hours=bool(times and times[0].get("outside_hours")),
+                with_icebreaker=want_icebreaker,
+                # The accept buttons carry the match, so the message needs it.
+                match_id=m["id"],
+                tone=str(program.get("intro_tone") or "hybrid"),
             )
             api.post(client, channel, text, blocks)
+            if video_mode == "zoom":
+                _offer_zoom(client, channel, team_id, members)
             cdb.mark_delivered(m["id"], channel)
         except api.PermanentSlackError as exc:
             # A deactivated member or a lost scope will not fix itself on
@@ -270,6 +303,33 @@ def close_round(round_id: int, bot_token: str, team_id: str) -> None:
         finally:
             api.throttle()
     cdb.set_round_state(round_id, "closed")
+    _post_round_stats(client, round_id, team_id)
+
+
+def _post_round_stats(client, round_id: int, team_id: str) -> None:
+    """Post how the round went to the channel, when the programme asks for it.
+
+    After closing rather than before: the check-in replies are what makes the
+    number mean anything, and they only exist once the closing question has
+    been out for a while.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+
+    try:
+        program = cdb.program_for_round(round_id) or {}
+        if not program.get("post_stats"):
+            return
+        rounds = cdb.recent_rounds(team_id, program["id"], limit=20)
+        row = next((r for r in rounds if r["id"] == round_id), None)
+        if not row:
+            return
+        met, missed = int(row["met"]), int(row["missed"])
+        text, blocks = cblocks.round_stats_message(met, met + missed, int(row["matches"]))
+        api.post(client, program["channel_id"], text, blocks)
+    except Exception:
+        # A missing stats post must never be the reason a round fails to close.
+        logger.exception("connect: could not post round stats for %s", round_id)
 
 
 def _schedule_followups(round_id: int, bot_token: str, team_id: str) -> None:
@@ -294,3 +354,31 @@ def _schedule_followups(round_id: int, bot_token: str, team_id: str) -> None:
         id=f"connect:{team_id}:close:{round_id}",
         replace_existing=True,
     )
+
+
+def _offer_zoom(client, channel: str, team_id: str, members: list) -> None:
+    """Offer Zoom linking to the people in this match who have not linked.
+
+    Ephemeral, and only to those who need it: the person who already linked
+    should not be shown an upsell, and neither should see the other's. Failing
+    here must never cost the introduction, which has already been delivered.
+    """
+    try:
+        import src.modules.connect.db as cdb  # noqa: PLC0415
+        from src.modules.connect import zoom  # noqa: PLC0415
+        from src.modules.connect.blocks import zoom_offer_blocks  # noqa: PLC0415
+        from src.modules.connect.zoom_routes import mint_link_token  # noqa: PLC0415
+
+        if not zoom.configured():
+            return
+        linked = set(cdb.zoom_linked_user_ids(team_id, members))
+        base = (os.environ.get("APP_URL") or "").rstrip("/")
+        for user_id in members:
+            if user_id in linked:
+                continue
+            url = f"{base}/connect/zoom/start?t={mint_link_token(team_id, user_id)}"
+            client.chat_postEphemeral(
+                channel=channel, user=user_id, blocks=zoom_offer_blocks(url), text="Meet over Zoom"
+            )
+    except Exception:
+        logger.info("connect: could not offer Zoom linking in %s", channel)

@@ -144,6 +144,35 @@ externalRedis:
 # ---------------------------------------------------------------------------
 # Optional: Sentry error monitoring
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Zoom (optional)
+#
+# Lets each person connect their own Zoom account, after which a coffee chat
+# gets a meeting scheduled for the time the pair agree. Leave both empty and
+# the feature is simply absent: no button is shown and nothing fails.
+#
+# Create a user-managed OAuth app at https://marketplace.zoom.us/develop/create
+# with the redirect URL <app.url>/connect/zoom/callback and the scopes
+# meeting:write:meeting and user:read:user.
+#
+# An unpublished app can only be installed by users inside your own Zoom
+# account. To let other workspaces connect, the app has to be published on the
+# Zoom Marketplace, which requires their review.
+# ---------------------------------------------------------------------------
+zoom:
+  clientId: ""
+  clientSecret: ""
+
+# ---------------------------------------------------------------------------
+# Operations
+#
+# logLevel: set to DEBUG for verbose logs, including Flask debug output.
+# opsEmail: where the bot emails when a scheduled job fails. Blank disables it.
+# ---------------------------------------------------------------------------
+ops:
+  logLevel: ""
+  email: ""
+
 sentry:
   dsn: ""
   env: "production"

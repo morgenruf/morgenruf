@@ -109,8 +109,27 @@ def test_slots_fall_on_weekdays():
         assert slot.weekday() < 5
 
 
-def test_no_slots_when_the_day_does_not_overlap():
-    assert next_slots("America/Toronto", "Asia/Kolkata", 3, 30, SEPT) == []
+def test_a_pair_with_no_shared_working_day_still_gets_times():
+    """This used to return nothing, which read exactly like the feature not
+    existing — for the pair who most needed help finding a time. They now get
+    edge-of-day options, which the message labels as such."""
+    slots = next_slots("America/Toronto", "Asia/Kolkata", 3, 30, SEPT)
+    assert slots, "a cross-timezone pair got no suggestions at all"
+
+
+def test_the_caller_can_tell_whether_the_day_was_shared():
+    """So the message can say these sit at the edges rather than implying they
+    are comfortable."""
+    from src.modules.connect.hours import within_working_hours
+
+    assert within_working_hours("America/Toronto", "America/New_York", SEPT) is True
+    assert within_working_hours("America/Toronto", "Asia/Kolkata", SEPT) is False
+
+
+def test_edge_times_stay_civil():
+    """Early and late, not the middle of the night."""
+    for slot in next_slots("America/Toronto", "Asia/Kolkata", 3, 30, SEPT):
+        assert 0 <= slot.hour <= 23
 
 
 def test_slots_are_spread_rather_than_consecutive():

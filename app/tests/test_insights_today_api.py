@@ -156,12 +156,73 @@ def test_recent_kudos_name_both_sides(call):
     assert kudo["created_at"] == "2026-09-14T09:00:00+00:00"
 
 
-def test_the_next_coffee_chat_is_a_plain_date(call):
-    assert call().get_json()["next_chat"] == {
+def _today() -> dt.date:
+    # The endpoint asks the clock, so the fixtures are placed relative to it
+    # rather than pinned to a date that stops being today tomorrow.
+    return dt.datetime.now(dt.timezone.utc).date()
+
+
+def test_the_next_coffee_chat_says_how_far_off_it_is(call):
+    scheduled = _today() + dt.timedelta(days=5)
+    program = dict(PROGRAM, next_scheduled=dt.datetime.combine(scheduled, dt.time(10), dt.timezone.utc))
+    assert call(program=program).get_json()["next_chat"] == {
         "program_id": 3,
         "name": "Coffee chats",
-        "date": "2026-09-21",
+        "date": scheduled.isoformat(),
+        "days_away": 5,
+        "overdue": False,
     }
+
+
+def test_a_round_due_today_is_not_overdue(call):
+    program = dict(
+        PROGRAM,
+        next_scheduled=None,
+        last_round=dt.datetime.combine(_today() - dt.timedelta(days=7), dt.time(10), dt.timezone.utc),
+    )
+    chat = call(program=program).get_json()["next_chat"]
+    assert (chat["days_away"], chat["overdue"]) == (0, False)
+
+
+def test_a_round_that_should_have_run_is_marked_overdue(call):
+    """A due date in the past means the round did not run.
+
+    Shown as "next coffee chat" it read as a forecast for a day that had
+    already gone: on a Thursday the page said the chat was on Wednesday.
+    """
+    program = dict(
+        PROGRAM,
+        next_scheduled=None,
+        last_round=dt.datetime.combine(_today() - dt.timedelta(days=9), dt.time(10), dt.timezone.utc),
+    )
+    chat = call(program=program).get_json()["next_chat"]
+    assert chat["date"] == (_today() - dt.timedelta(days=2)).isoformat()
+    assert (chat["days_away"], chat["overdue"]) == (-2, True)
+
+
+def test_the_query_supplies_the_weekday_the_fallback_needs():
+    """A programme that has never run falls back to its own weekday.
+
+    The function that does it reads program["day_of_week"], and the query did
+    not select that column, so the fallback quietly returned "today" on every
+    day of the week.
+    """
+    import pathlib
+
+    src = pathlib.Path("src/modules/insights/db.py").resolve()
+    if not src.exists():
+        src = pathlib.Path(__file__).resolve().parent.parent / "src/modules/insights/db.py"
+    fn = src.read_text()
+    fn = fn[fn.index("def connect_program_timing") :][:1400]
+    assert "p.day_of_week" in fn
+    assert "GROUP BY" in fn and "p.day_of_week" in fn[fn.index("GROUP BY") :]
+
+
+def test_a_programme_that_has_never_run_uses_its_own_weekday(call):
+    program = dict(PROGRAM, next_scheduled=None, last_round=None, day_of_week=(_today().weekday() + 3) % 7)
+    chat = call(program=program).get_json()["next_chat"]
+    assert chat["days_away"] == 3, "a Thursday was told its Sunday coffee chat was today"
+    assert chat["overdue"] is False
 
 
 def test_a_workspace_without_connect_gets_a_null_rather_than_an_error(call):

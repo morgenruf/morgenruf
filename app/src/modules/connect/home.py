@@ -89,4 +89,73 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
         blocks.append({"type": "actions", "elements": elements})
 
     blocks.append(_context("Snoozing or leaving stops future introductions. Neither cancels one already sent."))
+    blocks.extend(_zoom_blocks(team_id, user_id))
     return blocks
+
+
+def _zoom_blocks(team_id: str, user_id: str) -> list[dict]:
+    """Zoom connection state, and the way to undo it.
+
+    Somebody who connects an account must be able to disconnect it from the
+    same place they see it, without asking an admin. This is the only surface
+    where that is true: the linking prompt is ephemeral and gone by the next
+    day, and the dashboard belongs to admins.
+    """
+    from src.modules.connect import zoom  # noqa: PLC0415
+
+    if not zoom.configured():
+        return []
+
+    try:
+        import src.modules.connect.db as cdb  # noqa: PLC0415
+
+        link = cdb.zoom_link(team_id, user_id)
+    except Exception:
+        logger.exception("connect: could not read the Zoom link for the App Home")
+        return []
+
+    if link:
+        who = link.get("zoom_email") or "your Zoom account"
+        return [
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Zoom*\n{who} is connected. Meetings are created on it."},
+                "accessory": {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Disconnect"},
+                    "action_id": "connect:zoom_unlink",
+                    "value": "unlink",
+                    "style": "danger",
+                },
+            },
+        ]
+
+    # Never linked, or linked and since expired. The two need different words:
+    # "connect" reads as a new decision, which is wrong for somebody who
+    # already made it and whose token merely aged out.
+    import os  # noqa: PLC0415
+
+    from src.modules.connect.zoom_routes import mint_link_token  # noqa: PLC0415
+
+    base = (os.environ.get("APP_URL") or "").rstrip("/")
+    if not base:
+        return []
+    url = f"{base}/connect/zoom/start?t={mint_link_token(team_id, user_id)}"
+    return [
+        {"type": "divider"},
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Zoom*\nConnect your account and your coffee chats come with a meeting, "
+                "scheduled for the time you agree.",
+            },
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Connect Zoom"},
+                "url": url,
+                "action_id": "connect:zoom_link",
+            },
+        },
+    ]

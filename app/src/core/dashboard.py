@@ -62,23 +62,53 @@ def _login_required(f):
     return wrapper
 
 
-def _admin_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        team_id = session.get("team_id")
-        user_id = session.get("user_id")
-        if not team_id:
-            return jsonify({"error": "Unauthorized"}), 401
-        try:
-            role = db.get_member_role(team_id, user_id or "")
-            if role != "admin":
-                return jsonify({"error": "Admin required"}), 403
-        except Exception as exc:
-            logger.warning("_admin_required DB error: %s", exc)
-            return jsonify({"error": "Service unavailable"}), 503
-        return f(*args, **kwargs)
+def _no_grant_message(module: str) -> str:
+    """Why the request was refused, naming the feature as the sidebar does.
 
-    return wrapper
+    The registry holds the label, so core still knows no feature by name.
+    """
+    try:
+        from src.modules import REGISTRY  # noqa: PLC0415
+
+        spec = next((s for s in REGISTRY if s.name == module), None)
+        label = spec.nav[0].label if spec and spec.nav else module
+    except Exception:
+        label = module
+    return f"Ask an admin to put you in charge of {label}"
+
+
+def _admin_required(arg=None):
+    """Require workspace admin, or admin of one named feature.
+
+    Used bare, `@_admin_required`, it means workspace admin, which is right
+    for the things that belong to the whole workspace: roles, invitations, API
+    keys, the public feed. Used with a feature, `@_admin_required("standup")`,
+    a person holding that grant passes too.
+
+    Both spellings work so the change adds a capability without touching the
+    seventeen routes that were already correct.
+    """
+    module = arg if isinstance(arg, str) else None
+
+    def decorate(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            team_id = session.get("team_id")
+            user_id = session.get("user_id")
+            if not team_id:
+                return jsonify({"error": "Unauthorized"}), 401
+            try:
+                if not db.can_administer(team_id, user_id or "", module):
+                    return jsonify({"error": "Admin required" if module is None else _no_grant_message(module)}), 403
+            except Exception as exc:
+                logger.warning("_admin_required DB error: %s", exc)
+                return jsonify({"error": "Service unavailable"}), 503
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    # Bare use: the decorator was applied directly to the function.
+    return decorate(arg) if callable(arg) else decorate
 
 
 def _get_bot_token() -> str | None:
@@ -124,7 +154,15 @@ def dashboard():
         team_name = inst["team_name"] if inst else team_id
     except Exception:
         team_name = team_id
-    return render_template("dashboard.html", team_name=team_name, team_id=team_id)
+    # The MCP setup panel used to hardcode the hosted endpoint, so every
+    # self-hosted install told its users to point their assistant at our
+    # SaaS. APP_URL is what the deployment already sets for OAuth.
+    return render_template(
+        "dashboard.html",
+        team_name=team_name,
+        team_id=team_id,
+        mcp_endpoint=f"{_APP_URL.rstrip('/')}/mcp",
+    )
 
 
 @dashboard_bp.route("/dashboard/login")
@@ -176,7 +214,7 @@ def _post_summary_default(data: dict) -> bool:
     return bool(data.get("post_summary", True))
 
 
-def _schedule_to_standup(row: dict) -> dict:
+def _schedule_to_standup(row: dict, workspace: dict | None = None) -> dict:
     """Normalise a standup_schedules row into a standup API object."""
     questions = row.get("questions") or []
     if isinstance(questions, str):
@@ -202,6 +240,14 @@ def _schedule_to_standup(row: dict) -> dict:
     else:
         schedule_days = raw_days
 
+    ws = workspace if workspace is not None else {}
+
+    def _ws(key, default=""):
+        """Workspace value, falling back to the row for older callers."""
+        if key in ws:
+            return ws[key]
+        return row.get(key, default)
+
     return {
         "id": row["id"],
         "name": row.get("name") or "Morning Standup",
@@ -217,22 +263,28 @@ def _schedule_to_standup(row: dict) -> dict:
         "report_channel": row.get("report_channel") or "",
         "digest_email": row.get("digest_email") or "",
         "digest_enabled": bool(row.get("digest_enabled")),
+        "nudge_missing": bool(row.get("nudge_missing")),
+        "nudge_minutes_before": row.get("nudge_minutes_before") or 20,
         "report_time": row.get("report_time") or "",
         "group_by": row.get("group_by") or "member",
         "post_as": row.get("post_as") or "combined",
         "sort_order": row.get("sort_order") or "chronological",
-        "edit_window": row.get("edit_window") or "report",
+        "edit_window": _HOURS_TO_EDIT_WINDOW.get(_ws("edit_window_hours", 4), "none"),
         "display_avatar": bool(row.get("display_avatar", True)),
-        "jira_base_url": row.get("jira_base_url") or "",
-        "zendesk_base_url": row.get("zendesk_base_url") or "",
-        "github_repo": row.get("github_repo") or "",
-        "linear_team": row.get("linear_team") or "",
-        "ai_summary_enabled": bool(row.get("ai_summary_enabled", False)),
-        "ai_provider": row.get("ai_provider") or "openai",
-        "feed_token": row.get("feed_token") or "",
-        "feed_public": bool(row.get("feed_public", False)),
-        "manager_email": row.get("manager_email") or "",
-        "manager_digest_enabled": bool(row.get("manager_digest_enabled", False)),
+        "jira_base_url": _ws("jira_base_url") or "",
+        # Not stored: Zendesk autolinking is not implemented. linkify_issues
+        # can render it but is never given a URL, and there is no column. The
+        # form shows the field as unavailable rather than accepting a value it
+        # would throw away.
+        "zendesk_base_url": "",
+        "github_repo": _ws("github_repo") or "",
+        "linear_team": _ws("linear_team") or "",
+        "ai_summary_enabled": bool(_ws("ai_summary_enabled", False)),
+        "ai_provider": _ws("ai_provider") or "openai",
+        "feed_token": _ws("feed_token") or "",
+        "feed_public": bool(_ws("feed_public", False)),
+        "manager_email": _ws("manager_email") or "",
+        "manager_digest_enabled": bool(_ws("manager_digest_enabled", False)),
         "post_to_thread": bool(row.get("post_to_thread", False)),
         "notify_on_report": bool(row.get("notify_on_report", True)),
         "post_summary": bool(row.get("post_summary", False)),
@@ -246,20 +298,89 @@ def _schedule_to_standup(row: dict) -> dict:
     }
 
 
+# Settings the schedule form shows but that belong to the workspace, not to one
+# schedule. Every one of these was accepted by the PUT below, passed to
+# update_standup_schedule, and dropped on the floor by its allowlist: the
+# dashboard reported success and stored nothing. They are written to
+# workspace_config now, which is where their consumers already read them.
+_WORKSPACE_SETTING_FIELDS = (
+    "ai_summary_enabled",
+    "ai_provider",
+    "jira_base_url",
+    "github_repo",
+    "linear_team",
+    "manager_email",
+    "manager_digest_enabled",
+    "feed_token",
+    "feed_public",
+)
+
+_BOOL_WORKSPACE_FIELDS = ("ai_summary_enabled", "manager_digest_enabled", "feed_public")
+
+# Publishing the workspace's standups is not part of running standups.
+_FEED_FIELDS = ("feed_token", "feed_public")
+
+# "Until report time", "4 hours", "No limit" in the form, against the integer
+# hours that can_edit_response reads.
+_EDIT_WINDOW_TO_HOURS = {"report": 0, "4h": 4, "none": None}
+_HOURS_TO_EDIT_WINDOW = {0: "report", 4: "4h"}
+
+
+def _workspace_settings(team_id: str) -> dict:
+    """Workspace-level settings, for merging into a schedule response."""
+    try:
+        return db.get_workspace_config(team_id) or {}
+    except Exception:
+        return {}
+
+
+def _is_workspace_admin() -> bool:
+    """True for a full workspace admin, false for a feature admin or member."""
+    try:
+        return db.get_member_role(session.get("team_id") or "", session.get("user_id") or "") == "admin"
+    except Exception:
+        return False
+
+
+def _split_workspace_fields(data: dict) -> dict:
+    """Pull the workspace-level settings out of a schedule payload.
+
+    The standup form also carries the public feed switch, which publishes the
+    team's standups at an unauthenticated URL. Someone who administers
+    standups should not reach that through the form when they cannot reach
+    the feed endpoint directly, so those two fields need workspace admin.
+    """
+    workspace_admin = _is_workspace_admin()
+    ws: dict = {}
+    for field in _WORKSPACE_SETTING_FIELDS:
+        if field not in data:
+            continue
+        if field in _FEED_FIELDS and not workspace_admin:
+            continue
+        ws[field] = bool(data[field]) if field in _BOOL_WORKSPACE_FIELDS else data[field]
+    if "edit_window" in data:
+        ws["edit_window_hours"] = _EDIT_WINDOW_TO_HOURS.get(str(data["edit_window"]), 4)
+    return ws
+
+
 @dashboard_bp.route("/dashboard/api/standups", methods=["GET"])
 @_login_required
 def api_list_standups():
     team_id = session["team_id"]
     try:
         rows = db.get_standup_schedules(team_id)
-        return jsonify([_schedule_to_standup(r) for r in rows])
+        # Merged so the form reads back what was saved. Without this the
+        # workspace settings always came back as their defaults, which is why
+        # choosing Anthropic and reloading snapped the dropdown to OpenAI.
+        ws = _workspace_settings(team_id)
+        return jsonify([_schedule_to_standup(r, ws) for r in rows])
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
         return jsonify([])
 
 
 @dashboard_bp.route("/dashboard/api/standups", methods=["POST"])
-@_login_required
+@_admin_required("standup")
 def api_create_standup():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -294,7 +415,7 @@ def api_create_standup():
 
 
 @dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["PUT"])
-@_login_required
+@_admin_required("standup")
 def api_update_standup(standup_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -315,19 +436,9 @@ def api_update_standup(standup_id: str):
             "report_time",
             "digest_email",
             "digest_enabled",
+            "nudge_missing",
+            "nudge_minutes_before",
             "group_by",
-            "post_as",
-            "sort_order",
-            "edit_window",
-            "display_avatar",
-            "jira_base_url",
-            "zendesk_base_url",
-            "github_repo",
-            "linear_team",
-            "ai_provider",
-            "feed_token",
-            "feed_public",
-            "manager_email",
         ):
             if field in data:
                 kwargs[field] = data[field]
@@ -336,10 +447,6 @@ def api_update_standup(standup_id: str):
             kwargs["schedule_days"] = ",".join(days) if isinstance(days, list) else days
         if "reminder_minutes" in data:
             kwargs["reminder_minutes"] = int(data.get("reminder_minutes") or 0)
-        if "ai_summary_enabled" in data:
-            kwargs["ai_summary_enabled"] = bool(data["ai_summary_enabled"])
-        if "manager_digest_enabled" in data:
-            kwargs["manager_digest_enabled"] = bool(data["manager_digest_enabled"])
         if "post_to_thread" in data:
             kwargs["post_to_thread"] = bool(data["post_to_thread"])
         if "notify_on_report" in data:
@@ -347,14 +454,20 @@ def api_update_standup(standup_id: str):
         if "post_summary" in data:
             kwargs["post_summary"] = bool(data["post_summary"])
         row = db.update_standup_schedule(team_id, int(standup_id), **kwargs)
-        return jsonify(_schedule_to_standup(row))
+
+        # The workspace-level half of the same form.
+        ws_fields = _split_workspace_fields(data)
+        if ws_fields:
+            db.upsert_workspace_config(team_id, **ws_fields)
+
+        return jsonify(_schedule_to_standup(row, _workspace_settings(team_id)))
     except Exception as exc:
         logger.error("api_update_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
 @dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["DELETE"])
-@_login_required
+@_admin_required("standup")
 def api_delete_standup(standup_id: str):
     team_id = session["team_id"]
     try:
@@ -379,12 +492,20 @@ def api_me():
         role = db.get_member_role(team_id, user_id)
     except Exception:
         role = "member"
+    try:
+        modules = sorted(db.module_admin_grants(team_id, user_id))
+    except Exception:
+        modules = []
     return jsonify(
         {
             "team_id": team_id,
             "user_id": user_id,
             "team_name": session.get("team_name", ""),
             "role": role,
+            # Features this person administers without being a workspace admin.
+            # An admin administers all of them, which the page derives from the
+            # role rather than from a list that would go stale.
+            "module_admin": modules,
         }
     )
 
@@ -396,12 +517,50 @@ def api_set_member_role(user_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
     role = data.get("role", "member")
+
+    # Demoting the last admin leaves nobody who can promote anyone, and every
+    # admin-only route shut. The installer still counts as an admin underneath,
+    # so this is not strictly a lockout, but it is a foot-gun with no upside.
+    if role != "admin":
+        try:
+            if db.get_member_role(team_id, user_id) == "admin" and db.count_admins(team_id) <= 1:
+                return jsonify({"error": "Promote someone else to admin first"}), 400
+        except Exception as exc:
+            logger.warning("api_set_member_role admin count failed: %s", exc)
     try:
         db.set_member_role(team_id, user_id, role)
         return jsonify({"ok": True, "user_id": user_id, "role": role})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/members/<user_id>/modules/<module>", methods=["PUT", "DELETE"])
+@_admin_required
+def api_set_module_admin(user_id: str, module: str):
+    """Give one person charge of one feature, or take it back.
+
+    This is how a team lead runs the standups and someone else runs a feature
+    of their own, without either of them being able to mint API keys or
+    publish the workspace's standups. Only a workspace admin hands out a
+    grant, including for a feature they have delegated already.
+
+    The feature names come from the registry, so core never knows one by name.
+    """
+    from src.modules import REGISTRY  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    if module not in {spec.name for spec in REGISTRY}:
+        return jsonify({"error": "unknown feature"}), 404
+    try:
+        if request.method == "DELETE":
+            db.revoke_module_admin(team_id, user_id, module)
+        else:
+            db.grant_module_admin(team_id, user_id, module, session.get("user_id", ""))
+        return jsonify({"ok": True, "user_id": user_id, "module": module, "granted": request.method == "PUT"})
+    except Exception as exc:
+        logger.error("api_set_module_admin: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
@@ -431,6 +590,12 @@ def api_members():
             tracked.add(r["user_id"])
     except Exception as e:
         logger.warning("Unexpected error in api_members loading role map: %s", e)
+
+    try:
+        grants = db.team_module_admins(team_id)
+    except Exception as e:
+        logger.warning("Unexpected error in api_members loading module grants: %s", e)
+        grants = {}
 
     channel_id = request.args.get("channel_id")
 
@@ -478,6 +643,7 @@ def api_members():
                     "email": profile.get("email", ""),
                     "tz": u.get("tz", "UTC"),
                     "role": role_map.get(uid, "member"),
+                    "module_admin": sorted(grants.get(uid, ())),
                     # False means: in Slack, but the bot holds no active row,
                     # so they are in no standup and in no participation figure.
                     "tracked": uid in tracked,
@@ -501,6 +667,7 @@ def api_members():
                         "email": r.get("email", ""),
                         "tz": r.get("tz", "UTC"),
                         "role": r.get("role", "member"),
+                        "module_admin": sorted(grants.get(r["user_id"], ())),
                         "tracked": True,
                     }
                     for r in rows
@@ -891,7 +1058,7 @@ def api_webhook_events():
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["POST"])
-@_login_required
+@_admin_required
 def api_add_webhook():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -917,7 +1084,7 @@ def api_add_webhook():
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["PATCH"])
-@_login_required
+@_admin_required
 def api_update_webhook(hook_id: str):
     """Update a webhook's URL and/or its event subscription."""
     team_id = session["team_id"]
@@ -950,7 +1117,7 @@ def api_update_webhook(hook_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/rotate", methods=["POST"])
-@_login_required
+@_admin_required
 def api_rotate_webhook_secret(hook_id: str):
     """Issue a new signing secret and return it once.
 
@@ -977,7 +1144,7 @@ def api_rotate_webhook_secret(hook_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/test", methods=["POST"])
-@_login_required
+@_admin_required
 def api_test_webhook(hook_id: str):
     """Send a synthetic event through the real signing and logging path."""
     team_id = session["team_id"]
@@ -1009,7 +1176,6 @@ def api_test_webhook(hook_id: str):
         return jsonify({"error": str(exc)}), 500
 
 
-@dashboard_bp.route("/dashboard/api/webhooks/deliveries", methods=["GET"])
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/deliveries", methods=["GET"])
 @_login_required
 def api_webhook_deliveries(hook_id: str | None = None):
@@ -1034,7 +1200,7 @@ def api_webhook_deliveries(hook_id: str | None = None):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_delete_webhook(hook_id: str):
     team_id = session["team_id"]
     try:
@@ -1107,25 +1273,6 @@ def api_analytics():
         return jsonify({"members": [], "schedules": []})
 
 
-@dashboard_bp.route("/dashboard/api/analytics/schedules", methods=["GET"])
-@_login_required
-def api_analytics_schedules():
-    """Per-schedule completion rates for the last N days, plus the workspace headline."""
-    team_id = session["team_id"]
-    days = int(request.args.get("days", 7))
-    try:
-        overview = db.get_participation_overview(team_id, days=days)
-        return jsonify(
-            {
-                "summary": _participation_summary(overview),
-                "schedules": overview.get("schedules") or [],
-            }
-        )
-    except Exception as exc:
-        logger.error("api_analytics_schedules error: %s", exc)
-        return jsonify({"summary": _participation_summary({}), "schedules": []})
-
-
 # ---------------------------------------------------------------------------
 # CSV Export API
 # ---------------------------------------------------------------------------
@@ -1185,164 +1332,6 @@ def api_templates():
     return jsonify(TEMPLATES)
 
 
-# ── Standup Schedules API ───────────────────────────────────────────────────
-
-
-@dashboard_bp.route("/dashboard/api/schedules", methods=["GET"])
-@_login_required
-def api_list_schedules():
-    team_id = session["team_id"]
-    try:
-        schedules = db.get_standup_schedules(team_id)
-        for row in schedules:
-            # #67: flag rows the scheduler will refuse, so an Active schedule
-            # that can never fire does not look healthy.
-            row["registration_error"] = schedule_config_error(row) if row.get("active", True) else None
-            row["next_run"] = _next_run(row)
-        return jsonify(schedules)
-    except Exception as exc:
-        logger.error("api_list_schedules: %s", exc)
-        return jsonify([])
-
-
-@dashboard_bp.route("/dashboard/api/schedules", methods=["POST"])
-@_login_required
-def api_create_schedule():
-    team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
-    invalid = schedule_payload_error(data)
-    if invalid:
-        return jsonify({"error": invalid}), 400
-    try:
-        days = data.get("schedule_days", ["mon", "tue", "wed", "thu", "fri"])
-        if isinstance(days, list):
-            days = ",".join(days)
-        schedule = db.create_standup_schedule(
-            team_id,
-            name=data.get("name", "Daily Standup"),
-            channel_id=data.get("channel_id", ""),
-            schedule_time=data.get("schedule_time", "09:00"),
-            schedule_tz=data.get("schedule_tz", "UTC"),
-            schedule_days=days,
-            questions=data.get(
-                "questions", ["What did you complete yesterday?", "What are you working on today?", "Any blockers?"]
-            ),
-            participants=data.get("participants", []),
-            reminder_minutes=int(data.get("reminder_minutes") or 0),
-            active=data.get("active", True),
-            post_to_thread=bool(data.get("post_to_thread", False)),
-            notify_on_report=bool(data.get("notify_on_report", True)),
-            weekend_reminder=bool(data.get("weekend_reminder", False)),
-            post_summary=_post_summary_default(data),
-        )
-        try:
-            from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-            inst = db.get_installation(team_id)
-            if inst and get_scheduler():
-                sched_with_token = dict(schedule)
-                sched_with_token["bot_token"] = inst["bot_token"]
-                register_schedule_job(get_scheduler(), sched_with_token)
-        except Exception as exc2:
-            logger.warning("Could not register schedule job live: %s", exc2)
-        return jsonify(schedule), 201
-    except Exception as exc:
-        logger.error("api_create_schedule: %s", exc)
-        return jsonify({"error": str(exc)}), 500
-
-
-@dashboard_bp.route("/dashboard/api/schedules/<int:schedule_id>", methods=["PUT"])
-@_login_required
-def api_update_schedule(schedule_id: int):
-    team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
-    invalid = schedule_payload_error(data)
-    if invalid:
-        return jsonify({"error": invalid}), 400
-    try:
-        days = data.get("schedule_days")
-        if isinstance(days, list):
-            days = ",".join(days)
-        kwargs: dict = {}
-        for field in (
-            "name",
-            "channel_id",
-            "schedule_time",
-            "schedule_tz",
-            "reminder_minutes",
-            "active",
-            "questions",
-            "participants",
-        ):
-            if field in data:
-                kwargs[field] = data[field]
-        if days is not None:
-            kwargs["schedule_days"] = days
-        if "post_to_thread" in data:
-            kwargs["post_to_thread"] = bool(data["post_to_thread"])
-        if "notify_on_report" in data:
-            kwargs["notify_on_report"] = bool(data["notify_on_report"])
-        if "weekend_reminder" in data:
-            kwargs["weekend_reminder"] = bool(data["weekend_reminder"])
-        if "post_summary" in data:
-            kwargs["post_summary"] = bool(data["post_summary"])
-        if "sync_with_channel" in data:
-            kwargs["sync_with_channel"] = bool(data["sync_with_channel"])
-        if "group_by" in data:
-            kwargs["group_by"] = data["group_by"]
-        schedule = db.update_standup_schedule(team_id, schedule_id, **kwargs)
-        if not schedule:
-            return jsonify({"error": "Not found"}), 404
-        # Refresh the running scheduler so the new time/days take effect immediately
-        try:
-            from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-            inst = db.get_installation(team_id)
-            sched_obj = get_scheduler()
-            if inst and sched_obj:
-                if schedule.get("active", True):
-                    sched_with_token = dict(schedule)
-                    sched_with_token["bot_token"] = inst["bot_token"]
-                    register_schedule_job(sched_obj, sched_with_token)
-                else:
-                    # Deactivated — remove jobs from scheduler
-                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                        try:
-                            sched_obj.remove_job(f"{prefix}{team_id}_{schedule_id}")
-                        except Exception:
-                            pass
-        except Exception as exc2:
-            logger.warning("Could not refresh schedule job in scheduler: %s", exc2)
-        return jsonify(schedule)
-    except Exception as exc:
-        logger.error("api_update_schedule: %s", exc)
-        return jsonify({"error": str(exc)}), 500
-
-
-@dashboard_bp.route("/dashboard/api/schedules/<int:schedule_id>", methods=["DELETE"])
-@_login_required
-def api_delete_schedule(schedule_id: int):
-    team_id = session["team_id"]
-    try:
-        db.delete_standup_schedule(team_id, schedule_id)
-        # Remove jobs from the running scheduler
-        try:
-            from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-            sched_obj = get_scheduler()
-            if sched_obj:
-                for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                    try:
-                        sched_obj.remove_job(f"{prefix}{team_id}_{schedule_id}")
-                    except Exception:
-                        pass
-        except Exception as exc2:
-            logger.warning("Could not remove schedule job from scheduler: %s", exc2)
-        return jsonify({"ok": True})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
-
-
 # ── Workflow Rules API ──────────────────────────────────────────────────────
 
 
@@ -1361,7 +1350,7 @@ def api_list_rules():
 
 
 @dashboard_bp.route("/dashboard/api/rules", methods=["POST"])
-@_login_required
+@_admin_required("standup")
 def api_create_rule():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -1386,7 +1375,7 @@ def api_create_rule():
 
 
 @dashboard_bp.route("/dashboard/api/rules/<int:rule_id>", methods=["DELETE"])
-@_login_required
+@_admin_required("standup")
 def api_delete_rule(rule_id: int):
     team_id = session["team_id"]
     try:
@@ -1415,7 +1404,7 @@ def public_feed(token: str):
 
 
 @dashboard_bp.route("/dashboard/api/feed-token", methods=["POST"])
-@_login_required
+@_admin_required
 def api_generate_feed_token():
     team_id = session["team_id"]
     token = secrets.token_urlsafe(24)
@@ -1425,26 +1414,11 @@ def api_generate_feed_token():
 
 
 @dashboard_bp.route("/dashboard/api/feed-token", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_disable_feed():
     team_id = session["team_id"]
     db.upsert_workspace_config(team_id, feed_public=False)
     return jsonify({"ok": True})
-
-
-@dashboard_bp.route("/dashboard/api/mcp-config")
-@_login_required
-def api_mcp_config():
-    team_id = session["team_id"]
-    app_url = os.environ.get("APP_URL", "")
-    return jsonify(
-        {
-            "team_id": team_id,
-            "app_url": app_url,
-            "mcp_server_path": "app/src/modules/mcp/server.py",
-            "docs_url": "https://docs.morgenruf.dev/mcp.html",
-        }
-    )
 
 
 # ── MCP API Key management ───────────────────────────────────────────────────
@@ -1459,7 +1433,7 @@ def api_get_mcp_keys():
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys", methods=["POST"])
-@_login_required
+@_admin_required
 def api_create_mcp_key():
     team_id = session["team_id"]
     name = request.json.get("name", "Default") if request.json else "Default"
@@ -1468,7 +1442,7 @@ def api_create_mcp_key():
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys/<int:key_id>", methods=["DELETE"])
-@_login_required
+@_admin_required
 def api_revoke_mcp_key(key_id: int):
     team_id = session["team_id"]
     db.revoke_mcp_key(key_id, team_id)

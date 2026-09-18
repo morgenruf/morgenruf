@@ -72,6 +72,14 @@ def update_program(team_id: str, program_id: int, **fields) -> dict | None:
         "match_working_hours",
         "meeting_minutes",
         "meeting_link",
+        "suggest_times",
+        "use_icebreaker",
+        "post_stats",
+        "group_size",
+        "strict_group_size",
+        "intro_tone",
+        "video_mode",
+        "next_round_date",
     }
     changes = {k: v for k, v in fields.items() if k in allowed}
     if not changes:
@@ -170,7 +178,14 @@ def recent_rounds(team_id: str, program_id: int, limit: int = 10) -> list[dict]:
                COUNT(*) FILTER (WHERE m.met IS TRUE) AS met,
                COUNT(*) FILTER (WHERE m.met IS FALSE) AS missed,
                COUNT(*) FILTER (WHERE m.met IS NULL AND m.delivered_at IS NOT NULL) AS no_reply,
-               COUNT(*) FILTER (WHERE m.delivered_at IS NULL) AS undelivered
+               COUNT(*) FILTER (WHERE m.delivered_at IS NULL) AS undelivered,
+               -- Agreeing a time is the step between an introduction and a
+               -- meeting, so it is the leading indicator: a round where nobody
+               -- agreed anything is failing earlier than one where they agreed
+               -- and did not turn up.
+               COUNT(*) FILTER (WHERE m.agreed_slot_utc IS NOT NULL) AS agreed,
+               COUNT(*) FILTER (WHERE m.zoom_join_url IS NOT NULL) AS with_zoom,
+               (SELECT COUNT(*) FROM connect_rematch_requests q WHERE q.round_id = r.id) AS rematch_requests
         FROM connect_rounds r
         LEFT JOIN connect_matches m ON m.round_id = r.id
         WHERE r.program_id = %s AND r.team_id = %s
@@ -188,7 +203,7 @@ def round_matches(team_id: str, round_id: int) -> list[dict]:
     """Every pairing in one round, and what became of it."""
     sql = """
         SELECT m.id, m.member_ids, m.met, m.delivered_at, m.nudged_at,
-               m.mpim_channel_id
+               m.mpim_channel_id, m.agreed_slot_utc, m.zoom_join_url
         FROM connect_matches m
         WHERE m.round_id = %s AND m.team_id = %s
         ORDER BY m.id
@@ -434,3 +449,319 @@ def matches_for_close(round_id: int) -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (round_id,))
             return [dict(r) for r in cur.fetchall()]
+
+
+# ── Agreeing a time ─────────────────────────────────────────────────────────
+#
+# The gap Donut leaves: two willing people and nobody wanting to be the one who
+# picks. A tap per acceptable slot is enough for the bot to settle it as soon as
+# everyone has accepted the same one.
+
+
+def match_by_id(match_id: int) -> dict | None:
+    sql = "SELECT * FROM connect_matches WHERE id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (match_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def accept_slot(match_id: int, team_id: str, user_id: str, slot_utc) -> None:
+    """Record that this person can make this time. Tapping twice is harmless."""
+    sql = """
+        INSERT INTO connect_slot_votes (match_id, team_id, user_id, slot_utc)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (match_id, user_id, slot_utc) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (match_id, team_id, user_id, slot_utc))
+
+
+def withdraw_slot(match_id: int, user_id: str, slot_utc) -> None:
+    """Undo one acceptance, for a mis-tap."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM connect_slot_votes WHERE match_id = %s AND user_id = %s AND slot_utc = %s",
+                (match_id, user_id, slot_utc),
+            )
+
+
+def slot_votes(match_id: int) -> dict:
+    """`{slot_iso: [user_id, ...]}` for every slot anyone has accepted."""
+    sql = """
+        SELECT slot_utc, user_id FROM connect_slot_votes
+        WHERE match_id = %s ORDER BY slot_utc, user_id
+    """
+    out: dict = {}
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (match_id,))
+            for slot, user_id in cur.fetchall():
+                out.setdefault(slot, []).append(user_id)
+    return out
+
+
+def agree_slot(match_id: int, slot_utc) -> bool:
+    """Settle the match on this time, unless it is already settled.
+
+    Conditional on agreed_slot_utc still being NULL, so two people tapping the
+    last slot at the same moment cannot produce two confirmations.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE connect_matches SET agreed_slot_utc = %s
+                   WHERE id = %s AND agreed_slot_utc IS NULL""",
+                (slot_utc, match_id),
+            )
+            return cur.rowcount == 1
+
+
+def program_for_round(round_id: int) -> dict | None:
+    """The programme a round belongs to, for the settings a match message needs
+    (the meeting room, the length) without the caller tracking the programme id."""
+    sql = """
+        SELECT p.* FROM connect_programs p
+        JOIN connect_rounds r ON r.program_id = p.id
+        WHERE r.id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (round_id,))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+# ── Zoom links ──────────────────────────────────────────────────────────────
+
+
+def save_zoom_link(
+    team_id: str,
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+    access_expires_at,
+    refresh_expires_at=None,
+) -> None:
+    """Store or replace one person's Zoom authorisation.
+
+    Called on first link and again on every refresh, because Zoom rotates the
+    refresh token: the one in a refresh response has already replaced the
+    stored one on Zoom's side, so not writing it here loses the link.
+
+    Re-linking clears revoked_at, so somebody who reconnects after their
+    refresh token expired is simply linked again.
+    """
+    sql = """
+        INSERT INTO connect_zoom_links
+            (team_id, user_id, access_token, refresh_token, access_expires_at, refresh_expires_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (team_id, user_id) DO UPDATE SET
+            access_token = EXCLUDED.access_token,
+            refresh_token = EXCLUDED.refresh_token,
+            access_expires_at = EXCLUDED.access_expires_at,
+            refresh_expires_at = EXCLUDED.refresh_expires_at,
+            revoked_at = NULL,
+            updated_at = NOW()
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (team_id, user_id, access_token, refresh_token, access_expires_at, refresh_expires_at),
+            )
+
+
+def set_zoom_identity(team_id: str, user_id: str, zoom_user_id: str, zoom_email: str) -> None:
+    """Record which Zoom account was linked, so the UI can name it."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE connect_zoom_links SET zoom_user_id = %s, zoom_email = %s, updated_at = NOW()
+                   WHERE team_id = %s AND user_id = %s""",
+                (zoom_user_id, zoom_email, team_id, user_id),
+            )
+
+
+def zoom_link(team_id: str, user_id: str) -> dict | None:
+    """One person's live link, or None if absent or revoked."""
+    sql = """
+        SELECT * FROM connect_zoom_links
+        WHERE team_id = %s AND user_id = %s AND revoked_at IS NULL
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def revoke_zoom_link(team_id: str, user_id: str) -> None:
+    """Mark a link unusable without deleting it.
+
+    Kept rather than deleted so the App Home can say "reconnect Zoom" instead
+    of silently showing an unlinked state, which looks like the link was never
+    made and invites a support question.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE connect_zoom_links SET revoked_at = NOW(), updated_at = NOW() "
+                "WHERE team_id = %s AND user_id = %s",
+                (team_id, user_id),
+            )
+
+
+def zoom_linked_user_ids(team_id: str, user_ids: list) -> list:
+    """Which of these people have a live Zoom link, in the order given."""
+    if not user_ids:
+        return []
+    sql = """
+        SELECT user_id FROM connect_zoom_links
+        WHERE team_id = %s AND user_id = ANY(%s) AND revoked_at IS NULL
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, list(user_ids)))
+            live = {r[0] for r in cur.fetchall()}
+    return [u for u in user_ids if u in live]
+
+
+def set_match_meeting(match_id: int, join_url: str, meeting_id: str) -> bool:
+    """Attach a created meeting to a match, once.
+
+    Conditional on there being none, so a retry or a second delivery cannot
+    leave two meetings on somebody's Zoom account.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE connect_matches SET zoom_join_url = %s, zoom_meeting_id = %s
+                   WHERE id = %s AND zoom_join_url IS NULL""",
+                (join_url, meeting_id, match_id),
+            )
+            return cur.rowcount == 1
+
+
+# ── Re-match requests ───────────────────────────────────────────────────────
+#
+# A round has no spare people: everyone eligible is already matched. So a
+# request to be re-matched waits for a second one, and the two people who both
+# asked are introduced to each other.
+
+
+def request_rematch(round_id: int, match_id: int, team_id: str, user_id: str) -> None:
+    """Record an open request. Asking twice in a round changes nothing."""
+    sql = """
+        INSERT INTO connect_rematch_requests (round_id, match_id, team_id, user_id)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (round_id, user_id) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (round_id, match_id, team_id, user_id))
+
+
+def claim_rematch_partner(round_id: int, user_id: str) -> str | None:
+    """Resolve this person against another open request, if there is one.
+
+    Both rows are closed in one statement so two people asking at the same
+    moment cannot both be handed the other and then each wait for a third.
+    Returns the partner's user_id, or None if nobody else is waiting.
+    """
+    sql = """
+        WITH partner AS (
+            SELECT id, user_id FROM connect_rematch_requests
+            WHERE round_id = %s AND user_id <> %s AND resolved_at IS NULL
+            ORDER BY created_at
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+        ), closed AS (
+            UPDATE connect_rematch_requests r
+            SET resolved_at = NOW(),
+                paired_with = CASE WHEN r.user_id = %s THEN (SELECT user_id FROM partner) ELSE %s END
+            WHERE r.round_id = %s
+              AND r.resolved_at IS NULL
+              AND (r.user_id = %s OR r.id = (SELECT id FROM partner))
+              AND EXISTS (SELECT 1 FROM partner)
+            RETURNING r.user_id
+        )
+        SELECT user_id FROM closed WHERE user_id <> %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (round_id, user_id, user_id, user_id, round_id, user_id, user_id))
+            row = cur.fetchone()
+    return row[0] if row else None
+
+
+def open_rematch_count(round_id: int) -> int:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM connect_rematch_requests WHERE round_id = %s AND resolved_at IS NULL",
+                (round_id,),
+            )
+            return int(cur.fetchone()[0])
+
+
+def zoom_link_summary(team_id: str) -> dict:
+    """How many people have Zoom connected, and how many need reconnecting.
+
+    A revoked row is kept precisely so this can tell the two apart: somebody
+    who never linked needs an invitation, somebody whose refresh token expired
+    needs telling.
+    """
+    sql = """
+        SELECT COUNT(*) FILTER (WHERE revoked_at IS NULL)  AS linked,
+               COUNT(*) FILTER (WHERE revoked_at IS NOT NULL) AS needs_reconnect
+        FROM connect_zoom_links WHERE team_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            linked, stale = cur.fetchone()
+    return {"linked": int(linked or 0), "needs_reconnect": int(stale or 0)}
+
+
+def member_states(team_id: str, program_id: int) -> dict:
+    """`{user_id: {"state", "until"}}` for everyone with a recorded state.
+
+    One query rather than personal_state per person: a members table for a
+    channel of 57 would otherwise be 57 round trips, which is how a page ends
+    up taking two seconds to say almost nothing.
+    """
+    sql = """
+        SELECT user_id, mode, paused_until FROM connect_optouts
+        WHERE team_id = %s AND program_id = %s
+    """
+    out: dict = {}
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, program_id))
+            for user_id, mode, until in cur.fetchall():
+                if mode == "paused" and until:
+                    out[user_id] = {"state": "snoozed", "until": until}
+                else:
+                    out[user_id] = {"state": "out", "until": None}
+    return out
+
+
+def pair_counts(team_id: str, program_id: int) -> dict:
+    """`{user_id: times_paired}` for this programme, so the members table can
+    show who has actually been introduced and who keeps being left out."""
+    sql = """
+        SELECT member, COUNT(*) FROM (
+            SELECT UNNEST(m.member_ids) AS member
+            FROM connect_matches m
+            JOIN connect_rounds r ON r.id = m.round_id
+            WHERE r.program_id = %s AND m.team_id = %s
+        ) x GROUP BY member
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (program_id, team_id))
+            return {u: int(n) for u, n in cur.fetchall()}

@@ -22,6 +22,13 @@ def register_routes(flask_app) -> None:
 
     bp = Blueprint("connect", __name__)
 
+    # Zoom linking lives on the same blueprint. Its two endpoints are reached
+    # from a Slack button rather than the dashboard, so they carry a signed
+    # token instead of relying on a session.
+    from src.modules.connect.zoom_routes import register_zoom_routes  # noqa: PLC0415
+
+    register_zoom_routes(bp)
+
     @bp.route("/dashboard/api/connect/programs", methods=["GET"])
     @_login_required
     def list_programs():
@@ -34,6 +41,7 @@ def register_routes(flask_app) -> None:
         for p in programs:
             p["created_at"] = p["created_at"].isoformat() if p.get("created_at") else None
             p["last_round"] = p["last_round"].isoformat() if p.get("last_round") else None
+            p["next_round_date"] = p["next_round_date"].isoformat() if p.get("next_round_date") else None
             try:
                 # The same intersection the round itself does: people in the
                 # channel who are also eligible and have not opted out.
@@ -58,7 +66,7 @@ def register_routes(flask_app) -> None:
         return jsonify(programs)
 
     @bp.route("/dashboard/api/connect/programs", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def create_program():
         team_id = session["team_id"]
         data = request.get_json(silent=True) or {}
@@ -85,7 +93,7 @@ def register_routes(flask_app) -> None:
         return jsonify(program)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def update_program(program_id: int):
         """Change a programme. A body with only `enabled` keeps the old toggle
         behaviour, so the switch on the card still works unchanged."""
@@ -139,7 +147,7 @@ def register_routes(flask_app) -> None:
         return jsonify(program)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["DELETE"])
-    @_admin_required
+    @_admin_required("connect")
     def delete_program(program_id: int):
         team_id = session["team_id"]
         if not cdb.delete_program(team_id, program_id):
@@ -147,7 +155,7 @@ def register_routes(flask_app) -> None:
         return jsonify({"deleted": program_id})
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/run", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def run_now(program_id: int):
         """Start a round immediately, rather than waiting for the cadence.
 
@@ -201,9 +209,124 @@ def register_routes(flask_app) -> None:
                     "status": match_status(m["met"], delivered),
                     "delivered_at": delivered.isoformat() if delivered else None,
                     "nudged_at": m["nudged_at"].isoformat() if m.get("nudged_at") else None,
+                    # Agreeing a time is the step between an introduction and a
+                    # meeting, so a pairing that settled one reads differently
+                    # from one that went quiet, even before anybody answers
+                    # whether they met.
+                    "agreed_at": m["agreed_slot_utc"].isoformat() if m.get("agreed_slot_utc") else None,
+                    "has_zoom": bool(m.get("zoom_join_url")),
                 }
             )
         return jsonify(out)
+
+    @bp.route("/dashboard/api/connect/programs/<int:program_id>/members", methods=["GET"])
+    @_login_required
+    def list_program_members(program_id: int):
+        """Who is in this programme and how each of them stands.
+
+        There was no way to see or change this from the dashboard at all: the
+        opt-out table has existed since the module shipped and only the person
+        themselves could write to it, from Slack. An admin could not tell who
+        had quietly excluded themselves, let alone put somebody back in.
+        """
+        team_id = session["team_id"]
+        program = cdb.get_program(program_id)
+        if not program or program.get("team_id") != team_id:
+            return jsonify([]), 404
+        try:
+            states = cdb.member_states(team_id, program_id)
+            paired = cdb.pair_counts(team_id, program_id)
+            roster = {m.user_id: m for m in eligible_members(team_id)}
+        except Exception as exc:
+            logger.warning("connect list_program_members: %s", exc)
+            return jsonify([])
+
+        # The channel decides who is in the programme, so it is the source of
+        # truth for the list. Without Slack reachable we still show everyone we
+        # know about rather than an empty table.
+        try:
+            from slack_sdk import WebClient
+
+            from src.modules.connect import slack_api as api
+
+            inst = db.get_installation(team_id) or {}
+            client = WebClient(token=inst.get("bot_token") or "")
+            in_channel = list(api.channel_member_ids(client, program["channel_id"]))
+        except Exception:
+            logger.info("connect: channel membership unavailable, showing the roster")
+            in_channel = list(roster)
+
+        out = []
+        for user_id in in_channel:
+            member = roster.get(user_id)
+            state = states.get(user_id) or {"state": "in", "until": None}
+            until = state.get("until")
+            out.append(
+                {
+                    "user_id": user_id,
+                    "name": (getattr(member, "real_name", "") or user_id) if member else user_id,
+                    "avatar": getattr(member, "avatar", "") if member else "",
+                    # Somebody in the channel who is not on the roster is a
+                    # deactivated account or a guest: shown, not silently
+                    # dropped, because "why is this person never matched" is
+                    # the question this table exists to answer.
+                    "eligible": bool(member),
+                    "state": state["state"],
+                    "until": until.isoformat() if hasattr(until, "isoformat") else None,
+                    "paired": paired.get(user_id, 0),
+                }
+            )
+        out.sort(key=lambda r: (r["state"] != "in", r["name"].lower()))
+        return jsonify(out)
+
+    @bp.route("/dashboard/api/connect/programs/<int:program_id>/members/<user_id>", methods=["POST"])
+    @_admin_required("connect")
+    def set_program_member(program_id: int, user_id: str):
+        """Put somebody in, take them out, or snooze them until a date."""
+        team_id = session["team_id"]
+        program = cdb.get_program(program_id)
+        if not program or program.get("team_id") != team_id:
+            return jsonify({"error": "Not found"}), 404
+
+        data = request.get_json(force=True) or {}
+        state = str(data.get("state") or "").strip()
+        try:
+            if state == "in":
+                cdb.opt_in(team_id, program_id, user_id)
+            elif state == "out":
+                cdb.opt_out(team_id, program_id, user_id, mode="off")
+            elif state == "snoozed":
+                from datetime import date, timedelta
+
+                weeks = int(data.get("weeks") or 2)
+                cdb.snooze(team_id, program_id, user_id, date.today() + timedelta(weeks=weeks))
+            else:
+                return jsonify({"error": "state must be in, out or snoozed"}), 400
+        except Exception as exc:
+            logger.warning("connect set_program_member: %s", exc)
+            return jsonify({"error": "Could not save"}), 500
+        return jsonify(cdb.personal_state(team_id, program_id, user_id) | {"user_id": user_id})
+
+    @bp.route("/dashboard/api/connect/zoom", methods=["GET"])
+    @_login_required
+    def zoom_summary():
+        """Whether Zoom is available here, and how many people have connected.
+
+        `configured` is what lets the page say "not set up on this deployment"
+        rather than "nobody has connected", which are different problems with
+        different fixes.
+        """
+        from src.modules.connect import zoom as zoom_mod
+
+        team_id = session["team_id"]
+        if not zoom_mod.configured():
+            return jsonify({"configured": False, "linked": 0, "needs_reconnect": 0})
+        try:
+            summary = cdb.zoom_link_summary(team_id)
+        except Exception as exc:
+            logger.warning("connect zoom_summary: %s", exc)
+            summary = {"linked": 0, "needs_reconnect": 0}
+        return jsonify({"configured": True, **summary})
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/participation", methods=["GET"])
     @_login_required

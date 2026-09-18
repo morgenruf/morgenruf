@@ -89,6 +89,28 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: APP_URL
+            {{- if and .Values.zoom.clientId .Values.zoom.clientSecret }}
+            - name: ZOOM_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: ZOOM_CLIENT_ID
+            - name: ZOOM_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: ZOOM_CLIENT_SECRET
+            {{- end }}
+            - name: LOG_LEVEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: LOG_LEVEL
+            - name: MORGENRUF_OPS_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: MORGENRUF_OPS_EMAIL
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:
