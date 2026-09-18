@@ -558,6 +558,8 @@
     .rule-preview { margin-top: 12px; }
     .rule-template-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 4px; }
     .insight-when { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+    .settings-next { font-size: 13px; color: var(--text-muted); margin-top: 10px; }
+    .settings-next strong { color: var(--text); }
     .att-agreed { background: rgba(94,129,244,.14); border: 1px solid rgba(94,129,244,.34); color: #9db2f7; }
     .att-zoom { background: rgba(45,140,255,.12); border: 1px solid rgba(45,140,255,.3); color: #7fb4ff; }
     .att-zero {
@@ -4975,20 +4977,128 @@
       if (standups.length) {
         const s = standups[0];
         el.className = 'settings-grid';
-        el.innerHTML = '<div class="standup-card" style="flex-direction:column;align-items:flex-start;gap:12px">' +
-          '<div class="card-title">Primary Standup Config</div>' +
-          '<div class="standup-meta"><span>Channel: #' + esc(channelName(s.channel_id)) + '</span><span>Time: ' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span></div>' +
-          '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit Configuration</button>' +
+        // next_run and registration_error are computed on every list call and
+        // were both discarded. Between them they answer the only question this
+        // card exists for: is this thing going to run, and when.
+        const broken = s.registration_error;
+        const when = s.next_run ? formatDateTime(s.next_run, '') : '';
+        el.innerHTML = '<div class="stat-card' + (broken ? ' card-broken' : '') + '">' +
+          '<div class="card-title">' + esc(s.name || 'Standup') + '</div>' +
+          '<div class="standup-meta" style="margin-top:6px">' +
+            '<span>#' + esc(channelName(s.channel_id)) + '</span>' +
+            '<span>' + esc(s.schedule_time) + ' ' + esc(s.schedule_tz) + '</span>' +
+            '<span>' + (s.participants || []).length + ' taking part</span>' +
           '</div>' +
+          (broken
+            ? '<div class="card-alert"><svg aria-hidden="true"><use href="#i-alarm-clock"/></svg>' +
+                '<span><strong>This standup never runs.</strong> ' + esc(broken) + '</span></div>'
+            : when
+              ? '<div class="settings-next">Next run <strong>' + esc(when) + '</strong></div>'
+              : '') +
+          '<div class="row-actions" style="margin-top:14px">' +
+            '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + s.id + '); switchSection(&quot;standups&quot;)">Edit this standup</button>' +
+            (standups.length > 1
+              ? '<span class="set-help">and ' + (standups.length - 1) +
+                ' other' + (standups.length === 2 ? '' : 's') + ' on the Standups page</span>'
+              : '') +
+          '</div>' +
+          '</div>' +
+          '<div id="modules-section"></div>' +
           '<div id="feed-section"></div>' +
           '<div id="digest-section"></div>';
         loadFeedSettings(s);
         loadDigestSettings(s);
+        loadModuleSettings();
       } else {
         el.innerHTML = '<div class="empty-state"><img class="mascot" src="/static/icon-192.png" alt="" width="108" height="108"/><h3>No configuration yet</h3><p>Create a standup to configure your workspace.</p><button class="btn btn-primary" onclick="openCreateModal(); switchSection(&quot;standups&quot;)">&#43; New Standup</button></div>';
       }
     } catch (e) {
       el.innerHTML = '<p style="color:var(--text-dim)">Failed to load settings.</p>';
+    }
+  }
+
+  // ── Modules ──
+  // Turning a feature on or off was reachable from exactly one button, buried
+  // on the Coffee chats page, even though the API has supported every module
+  // since the module contract landed. This is where someone looks for it.
+  const MODULE_COPY = {
+    standup: ['Standups', 'Asks your team the questions and posts the summary.'],
+    connect: ['Coffee chats', 'Introduces people from a channel on a cadence.'],
+    kudos: ['Kudos', 'Peer recognition, with a daily allowance per person.'],
+    insights: ['Insights', 'Who is going unthanked and who is stuck on the same blocker.'],
+    mcp: ['MCP', 'Lets an assistant query your standup data over HTTP.'],
+    google_chat: ['Google Chat', 'Mirrors standups into Google Chat.'],
+  };
+
+  async function loadModuleSettings() {
+    const el = document.getElementById('modules-section');
+    if (!el) return;
+    let mods = [];
+    try {
+      mods = await api('GET', '/modules');
+    } catch (e) {
+      el.innerHTML = '';
+      return;
+    }
+    // A module the deployment does not ship cannot be switched on by anybody,
+    // so listing it would only offer a dead control.
+    const usable = mods.filter(m => m.available !== false);
+    if (!usable.length) { el.innerHTML = ''; return; }
+
+    el.innerHTML = '<div class="stat-card">' +
+      '<div class="card-title">Features</div>' +
+      '<p class="set-help" style="margin:4px 0 14px">' +
+        'Switch a part of Morgenruf off and it stops running and disappears from the sidebar. ' +
+        'Nothing is deleted.' +
+        (window._myRole === 'admin' ? '' : ' Only an admin can change these.') + '</p>' +
+      usable.map(m => {
+        const copy = MODULE_COPY[m.name] || [m.name, ''];
+        const missing = (m.missing_scopes || []);
+        return '<div class="set-row">' +
+          '<div class="set-ico"><svg aria-hidden="true"><use href="#i-' +
+            (m.name === 'connect' ? 'connect' : m.name === 'kudos' ? 'kudos'
+              : m.name === 'insights' ? 'insights' : m.name === 'mcp' ? 'mcp' : 'standups') +
+            '"/></svg></div>' +
+          '<div>' +
+            '<div class="set-label">' + esc(copy[0]) + '</div>' +
+            '<div class="set-help">' + esc(copy[1]) +
+              (missing.length
+                ? '<br/><span style="color:var(--warning)">Needs more Slack access: ' +
+                  esc(missing.join(', ')) + '. <a href="/install">Re-authorise</a>.</span>'
+                : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="set-control">' +
+            (missing.length
+              ? '<span class="pill att-zero">Unavailable</span>'
+              // Only an admin may switch a feature. Showing everyone a toggle
+              // that answers 403 reads as a broken page, which is exactly what
+              // the members table did before it was given the same treatment.
+              : window._myRole !== 'admin'
+                ? '<span class="pill ' + (m.active ? 'att-met' : 'att-zero') + '">' +
+                  (m.active ? 'On' : 'Off') + '</span>'
+                : '<button class="toggle ' + (m.active ? 'on' : '') + '" role="switch" ' +
+                  'aria-checked="' + (m.active ? 'true' : 'false') + '" ' +
+                  'aria-label="' + esc(copy[0]) + '" ' +
+                  'onclick="toggleModule(\'' + esc(m.name) + '\', this)"></button>') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  async function toggleModule(name, btn) {
+    const turningOn = !btn.classList.contains('on');
+    try {
+      await api('POST', '/modules/' + name, { enabled: turningOn });
+      btn.classList.toggle('on', turningOn);
+      btn.setAttribute('aria-checked', turningOn ? 'true' : 'false');
+      toast((MODULE_COPY[name] || [name])[0] + (turningOn ? ' is on' : ' is off'));
+      // The sidebar and the section it owns both follow from this.
+      state.loaded = {};
+      loadModuleSettings();
+    } catch (e) {
+      toast((e && e.message) || 'Could not change that', 'error');
     }
   }
 

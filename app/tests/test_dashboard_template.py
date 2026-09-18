@@ -596,3 +596,25 @@ class TestNoDeadCss:
         css = markup[markup.index("<style>") : markup.index("</style>")]
         found = self._defined(css)
         assert "stat-card" in found and len(found) > 100
+
+
+class TestAdminOnlyControlsAreNotOfferedToEveryone:
+    """A control that answers 403 reads as a broken page.
+
+    This was fixed for the coffee-chat members table and then repeated hours
+    later on the Settings module switches, so it is asserted for both.
+    """
+
+    def test_module_switches_are_read_only_for_a_member(self):
+        markup = read_template()
+        fn = markup[markup.index("async function loadModuleSettings") :][:3000]
+        assert "window._myRole !== 'admin'" in fn
+
+    def test_member_status_control_is_read_only_for_a_member(self):
+        markup = read_template()
+        fn = markup[markup.index("function memberStateControl") :][:900]
+        assert "window._myRole !== 'admin'" in fn
+
+    def test_both_say_why_rather_than_silently_hiding_it(self):
+        markup = read_template()
+        assert markup.count("Only an admin can change these.") >= 2
