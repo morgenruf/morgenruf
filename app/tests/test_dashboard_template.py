@@ -690,3 +690,51 @@ class TestAnOverdueCoffeeChatSaysSo:
     def test_a_future_round_says_how_far_off_it_is(self):
         fn = self._fn()
         assert "Today" in fn and "Tomorrow" in fn and "In ' + away + ' days" in fn
+
+
+class TestNoBlockSwallowsAnother:
+    """One missing </div> put the standup modal inside a hidden one.
+
+    The coffee chat settings modal never closed its body, so everything after
+    it in the file (the create/edit standup modal, the new coffee chat modal
+    and the toast container, 48 elements) became its children. Its parent is
+    display:none until opened, so editing a standup opened a modal nobody
+    could see, creating one did nothing, and no toast ever appeared. Nothing
+    threw: the browser nests happily and the page looks fine until you press
+    something.
+    """
+
+    def _top_level_blocks(self, markup: str):
+        """Walk the body, returning (id, depth) for every element with an id."""
+        body = markup[markup.index("<body") :]
+        body = body[: body.index("</body>")]
+        out, depth = [], 0
+        for token in re.finditer(r"<div\b[^>]*>|</div>", body):
+            text = token.group(0)
+            if text == "</div>":
+                depth -= 1
+                continue
+            found = re.search(r'id="([^"]+)"', text)
+            if found:
+                out.append((found.group(1), depth))
+            if not text.rstrip().endswith("/>"):
+                depth += 1
+        return out, depth
+
+    def test_every_modal_is_a_top_level_element(self):
+        markup = read_template()
+        blocks, _ = self._top_level_blocks(markup)
+        modals = {"invite-modal", "mcp-key-modal", "cc-settings-modal", "connect-modal", "standup-modal"}
+        nested = [(i, d) for i, d in blocks if i in modals and d != 0]
+        assert not nested, f"modals nested inside another element: {nested}"
+
+    def test_the_toast_container_is_not_inside_a_modal(self):
+        markup = read_template()
+        blocks, _ = self._top_level_blocks(markup)
+        depth = dict(blocks).get("toast-container")
+        assert depth == 0, f"toast-container sits at depth {depth}; a hidden parent hides every toast"
+
+    def test_the_body_balances(self):
+        markup = read_template()
+        _, leftover = self._top_level_blocks(markup)
+        assert leftover == 0, f"{leftover} unclosed <div> in the page body"

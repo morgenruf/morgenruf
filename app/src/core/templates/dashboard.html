@@ -2784,6 +2784,7 @@
             </div>
           </aside>
         </div>
+      </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeConnectSettings()">Cancel</button>
         <button class="btn btn-primary" onclick="saveConnectSettings()">Save changes</button>
@@ -3136,10 +3137,13 @@
   function closeSidebar() { setSidebar(false); }
 
   // ── Navigation ──
-  document.querySelectorAll('.nav-item').forEach(item => {
+  // Only rows that name a section. The coffee chat sub-items are .nav-item too
+  // and carry no data-section, so this bound them to switchSection(undefined),
+  // which resolves to the fallback: their own onclick opened Coffee chats and
+  // this listener immediately sent the person back to Standups.
+  document.querySelectorAll('.nav-item[data-section]').forEach(item => {
     item.addEventListener('click', () => {
-      const sec = item.dataset.section;
-      switchSection(sec);
+      switchSection(item.dataset.section);
       closeSidebar();
     });
   });
