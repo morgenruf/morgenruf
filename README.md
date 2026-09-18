@@ -1,28 +1,43 @@
 <div align="center">
 
-<img src="brand/wordmark.png" alt="Morgenruf" width="320">
+<img src="brand/logo.png" alt="Morgenruf logo: a rooster in sunglasses holding a mug of coffee" width="240">
 
-**The team rituals you host yourself.**
-Async standups, coffee chats, kudos, and the insights they add up to.
+### Async standups, coffee chats and kudos for Slack. Self-hosted, open source, free for every seat.
 
-[![Release](https://img.shields.io/github/v/release/morgenruf/morgenruf?label=release&color=2ea043)](https://github.com/morgenruf/morgenruf/releases) [![Tests](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf) [![Status](https://img.shields.io/badge/status-live-2ea043)](https://status.morgenruf.dev) [![License: MIT](https://img.shields.io/github/license/morgenruf/morgenruf?color=blue)](LICENSE)
+An open-source alternative to Donut, Geekbot, Standuply and HeyTaco, in one app you run yourself. Morgenruf collects async daily standups, pairs people for random coffee chats, handles peer recognition, and answers the questions that need all three at once. Postgres, Docker or Helm, MIT licensed, no per-seat subscription and no data leaving your infrastructure.
 
-[morgenruf.dev](https://morgenruf.dev) · [Documentation](https://docs.morgenruf.dev) · [Helm charts](https://charts.morgenruf.dev) · [Status](https://status.morgenruf.dev)
+[![Release](https://img.shields.io/github/v/release/morgenruf/morgenruf?label=release&color=2ea043)](https://github.com/morgenruf/morgenruf/releases) [![Tests](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf) [![Docker pulls](https://img.shields.io/docker/pulls/morgenruf/morgenruf?color=2496ed&logo=docker&logoColor=white)](https://hub.docker.com/r/morgenruf/morgenruf) [![Helm chart](https://img.shields.io/badge/helm-charts.morgenruf.dev-0f1689?logo=helm&logoColor=white)](https://charts.morgenruf.dev) [![Status](https://img.shields.io/badge/status-live-2ea043)](https://status.morgenruf.dev) [![License: MIT](https://img.shields.io/github/license/morgenruf/morgenruf?color=blue)](LICENSE)
 
-<sub>*Morgenruf* (German), *morning call*. Built over a weekend at a Tim Hortons in Kitchener 🇨🇦☕</sub>
+[**Website**](https://morgenruf.dev) · [**Documentation**](https://docs.morgenruf.dev) · [**Helm charts**](https://charts.morgenruf.dev) · [**Status**](https://status.morgenruf.dev) · [**Changelog**](CHANGELOG.md) · [**Roadmap**](ROADMAP.md)
+
+<sub>*Morgenruf* (German), *morning call*. Built over a weekend at a Tim Hortons in Kitchener, Ontario 🇨🇦☕</sub>
 
 </div>
 
 ---
 
+<img src="docs/screenshots/today.jpg" alt="The Morgenruf dashboard: who has answered today's standup, who is blocked, recent kudos and the next coffee chat" width="100%">
+
+## Why self-host your standup bot
+
 Standup tools charge per person per month to send a message and collect a reply.
-Pairing tools charge again for the introductions. Recognition tools charge a third
-time. Morgenruf does all three on your own infrastructure, for nothing, and the
-data never leaves it.
+Pairing tools charge again for the introductions. Recognition tools charge a
+third time. Morgenruf does all three on your own infrastructure, for nothing,
+and the data never leaves it.
 
-<img src="docs/screenshots/today.jpg" alt="The Today page: who has answered, who is blocked, recent recognition and the next coffee chat" width="100%">
+| | Morgenruf | Hosted SaaS |
+|---|---|---|
+| Cost per seat | none, any team size | a per-person monthly fee, per product |
+| Where standup data lives | your Postgres | the vendor's |
+| Source | MIT, all of it | closed |
+| Standups, pairing and recognition | one app | usually three subscriptions |
+| Kubernetes and Helm | first class | rarely offered |
+| AI assistant access | MCP server included | not offered |
+| Leaving | it is already yours | export and migrate |
 
----
+This table sticks to what is structural, because feature-by-feature comparisons
+age badly. If a hosted tool does something you need and Morgenruf does not,
+[open an issue](https://github.com/morgenruf/morgenruf/issues/new/choose).
 
 ## What you get
 
@@ -629,6 +644,81 @@ Morgenruf supports Google Chat via the Chat REST API and a service account.
 
 ---
 
+## FAQ
+
+### Is Morgenruf really free?
+
+Yes, and for any number of people. It is MIT licensed and there is no hosted
+tier to upsell you: you run it, so you pay for the server and the database and
+nothing else. There is no per-seat pricing to grow into.
+
+### Can I run it without Kubernetes?
+
+Yes. Docker Compose is a `cp .env.example .env` and a `docker compose up -d`
+away, and it runs happily on a spare Mac mini or a small VPS. The Helm chart is
+there for people who already have a cluster, not as the only route.
+
+### Where is my standup data stored?
+
+In your own Postgres, and nowhere else. No telemetry is sent anywhere. The only
+outbound calls are to Slack, to whichever AI provider you configure for
+summaries (optional, off by default), and to Resend if you turn on digest email.
+
+### Is this a Donut alternative? A Geekbot alternative?
+
+It covers what teams use those for: Geekbot and Standuply for async standups,
+Donut for random coffee chats and introductions, HeyTaco for kudos. Running one
+app rather than three is most of the point, along with owning the data. It is
+not a clone of any of them, and if something you rely on is missing, say so in
+an issue.
+
+### Does it work with Microsoft Teams or Google Chat?
+
+Google Chat is in beta: standups collected and posted, `/standup` and `/kudos`
+commands. Microsoft Teams is not supported as a platform; a Teams meeting link
+can be used as a coffee chat room, which is a different thing. Slack is the
+first-class platform.
+
+### What Slack permissions does it need?
+
+The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list.
+Coffee chats need three extra scopes (`mpim:write`, `mpim:history`,
+`users.profile:read`), and a workspace that installed before those existed keeps
+the feature dark until it re-authorises rather than failing at runtime.
+
+### Can I let someone run standups without making them an admin?
+
+Yes, that is what the per-feature grants are for. See
+[**Who can change what**](#who-can-change-what).
+
+### Does it need a public URL?
+
+Slack needs to reach it over HTTPS. A Cloudflare tunnel is enough, including for
+a machine with no open ports and no ingress controller, and that path is
+documented.
+
+### Will it work for a team of five? Of five hundred?
+
+Both. Delivery is per-person and resumable, so a large channel is a queue rather
+than a burst, and a restart mid-round picks up where it stopped instead of
+messaging everyone twice.
+
+---
+
+## Built in Canada, over coffee
+
+Morgenruf was written over a weekend at a Tim Hortons in Kitchener, Ontario,
+which is also where the name comes from: *Morgenruf* is German for *morning
+call*, and Kitchener was Berlin, Ontario until 1916. The rooster in the logo is
+holding a double-double.
+
+Canadian open source, MIT licensed, and independent: no venture funding, no
+per-seat pricing, no hosted tier waiting to charge you once your team grows. If
+you are also building open-source developer tools in Waterloo Region or anywhere
+else in Canada, [say hello](https://github.com/morgenruf/morgenruf/discussions).
+
+---
+
 ## Repository Structure
 
 ```
@@ -646,25 +736,26 @@ morgenruf/
 
 ---
 
-## Roadmap
+## What's next
 
-- [x] Multi-workspace Slack OAuth
-- [x] Web dashboard (`/dashboard`)
-- [x] Webhooks with HMAC signing
-- [x] Jira/GitHub auto-linking
-- [x] Edit window for responses
-- [x] Email notifications (Resend)
-- [x] Custom questions
-- [x] Skip today
-- [x] Pre-standup reminders
-- [x] Per-user timezone
-- [x] Mood tracking
-- [x] Analytics dashboard + CSV export
-- [x] Weekly digest email
-- [ ] Multiple standup schedules per workspace
-- [ ] Jira/Linear/GitHub integration
-- [ ] Microsoft Teams support *(coming soon)*
-- [ ] Public REST API
+Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discussions)
+and in the [release notes](https://github.com/morgenruf/morgenruf/releases). Watch
+the repo if you want them as they happen. Nothing below is built yet, and the
+order follows what people ask for, so
+[saying you want one](https://github.com/morgenruf/morgenruf/discussions/new?category=ideas)
+moves it.
+
+| Coming | What it is | State |
+|---|---|---|
+| **Celebrations** | Birthdays and work anniversaries, announced in a channel on the day, with the roster kept in Morgenruf rather than a spreadsheet | Next module |
+| **Calendar** | Hold the hour a coffee chat pair agreed on their calendars, not just in the message. Google Calendar first | Designed |
+| **Meet and Teams rooms** | Created for a pairing the way Zoom already is. A pasted room link works today | Designed |
+| **Microsoft Teams** | Teams as a platform alongside Slack: standups collected and posted, commands, Adaptive Cards | In progress |
+| **Public REST API** | Read and write what the dashboard can, for teams that want to script it. The MCP server already covers reading | Planned |
+| **Onboarding journeys** | A sequence of messages over someone's first fortnight, with the manager nudged at the right points | Planned |
+
+Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking:
+[ROADMAP.md](ROADMAP.md).
 
 ---
 
