@@ -76,8 +76,8 @@ def _fake_db(role="member", grants=(), admins=1):
     db.count_admins.return_value = admins
     db.module_admin_grants.return_value = grants
     db.team_module_admins.return_value = {"U_MEMBER": grants} if grants else {}
-    db.can_administer.side_effect = lambda t, u, module=None: role == "admin" or (
-        module is not None and module in grants
+    db.can_administer.side_effect = lambda t, u, module=None: (
+        role == "admin" or (module is not None and module in grants)
     )
     return db
 

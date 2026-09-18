@@ -56,8 +56,8 @@ def _client(monkeypatch, role="member", grants=(), user_id="U_LEAD"):
     db.count_admins.return_value = 2
     db.module_admin_grants.return_value = grants
     db.team_module_admins.return_value = {user_id: grants} if grants else {}
-    db.can_administer.side_effect = lambda t, u, module=None: role == "admin" or (
-        module is not None and module in grants
+    db.can_administer.side_effect = lambda t, u, module=None: (
+        role == "admin" or (module is not None and module in grants)
     )
     # Real enough to serialise back out of the update route.
     db.update_standup_schedule.return_value = {
@@ -117,7 +117,7 @@ class TestAStandupAdminRunsStandups:
         assert "Admin required" in resp.get_json()["error"]
 
     def test_a_feature_route_says_what_to_ask_for(self, monkeypatch):
-        """"You need to administer connect" is the column name, not a feature."""
+        """ "You need to administer connect" is the column name, not a feature."""
         client, _ = _client(monkeypatch, grants={"connect"})
         resp = client.post("/dashboard/api/standups", json={})
         assert resp.get_json()["error"] == "Ask an admin to put you in charge of Standups"

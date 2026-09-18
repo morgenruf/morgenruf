@@ -175,8 +175,11 @@ def test_the_next_coffee_chat_says_how_far_off_it_is(call):
 
 
 def test_a_round_due_today_is_not_overdue(call):
-    program = dict(PROGRAM, next_scheduled=None, last_round=dt.datetime.combine(
-        _today() - dt.timedelta(days=7), dt.time(10), dt.timezone.utc))
+    program = dict(
+        PROGRAM,
+        next_scheduled=None,
+        last_round=dt.datetime.combine(_today() - dt.timedelta(days=7), dt.time(10), dt.timezone.utc),
+    )
     chat = call(program=program).get_json()["next_chat"]
     assert (chat["days_away"], chat["overdue"]) == (0, False)
 
@@ -187,8 +190,11 @@ def test_a_round_that_should_have_run_is_marked_overdue(call):
     Shown as "next coffee chat" it read as a forecast for a day that had
     already gone: on a Thursday the page said the chat was on Wednesday.
     """
-    program = dict(PROGRAM, next_scheduled=None, last_round=dt.datetime.combine(
-        _today() - dt.timedelta(days=9), dt.time(10), dt.timezone.utc))
+    program = dict(
+        PROGRAM,
+        next_scheduled=None,
+        last_round=dt.datetime.combine(_today() - dt.timedelta(days=9), dt.time(10), dt.timezone.utc),
+    )
     chat = call(program=program).get_json()["next_chat"]
     assert chat["date"] == (_today() - dt.timedelta(days=2)).isoformat()
     assert (chat["days_away"], chat["overdue"]) == (-2, True)
