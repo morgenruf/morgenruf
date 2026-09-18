@@ -23,9 +23,9 @@ from flask import (
 )
 
 import src.core.db as db
-from src.core.scopes import SCOPE_STRING
 from src.core.oauth import verify_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
+from src.core.scopes import SCOPE_STRING
 from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
 

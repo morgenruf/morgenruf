@@ -21,7 +21,7 @@ REPO = APP.parent
 MANIFEST_YAML = REPO / "slack-manifest.yaml"
 MANIFEST_JSON = REPO / "slack-manifest.json"
 
-from src.core.scopes import BOT_SCOPES, SCOPE_STRING  # noqa: E402
+from src.core.scopes import BOT_SCOPES  # noqa: E402
 
 
 def manifest():

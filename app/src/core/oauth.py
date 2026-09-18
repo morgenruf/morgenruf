@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-
-from src.core.scopes import BOT_SCOPES
 import logging
 import os
 import time
@@ -18,6 +16,7 @@ from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import src.core.db as db
+from src.core.scopes import BOT_SCOPES
 from src.modules.standup.mailer import send_welcome_email
 
 logger = logging.getLogger(__name__)
