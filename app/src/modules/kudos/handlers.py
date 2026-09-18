@@ -104,6 +104,7 @@ def register_handlers(app) -> None:
     """Register the kudos command and message listeners."""
 
     @app.command("/kudos")
+    @app.command("/morgenruf-kudos")
     def handle_kudos_command(ack, body, client):  # noqa: ANN001
         """Slash command to give kudos to a teammate."""
         ack()

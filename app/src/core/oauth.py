@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+
+from src.core.scopes import BOT_SCOPES
 import logging
 import os
 import time
@@ -26,23 +28,7 @@ _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
 _CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 
-_SCOPES = [
-    "channels:read",
-    "chat:write",
-    "commands",
-    "groups:read",
-    "im:history",
-    "im:read",
-    "im:write",
-    "users:read",
-    "users:read.email",
-    # Lets kudos confirm the branded emoji exists before switching to it.
-    "emoji:read",
-    # Coffee chats: open a group DM and see whether anyone replied.
-    "mpim:write",
-    "mpim:history",
-    "users.profile:read",
-]
+_SCOPES = list(BOT_SCOPES)
 
 _url_generator = AuthorizeUrlGenerator(
     client_id=_CLIENT_ID,

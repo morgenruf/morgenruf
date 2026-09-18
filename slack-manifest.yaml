@@ -13,35 +13,42 @@ features:
     display_name: Morgenruf
     always_online: true
   slash_commands:
-    - command: /standup
+    - command: /morgenruf
+      description: Morgenruf commands and help
+    - command: /morgenruf-standup
       description: Start your daily standup now
-    - command: /skip
+    - command: /morgenruf-skip
       description: Skip today's standup
-    - command: /kudos
+    - command: /morgenruf-kudos
       description: Give a shoutout to a teammate
       usage_hint: "@teammate [message]"
-    - command: /help
-      description: Show Morgenruf commands and help
+    - command: /standup
+      description: Start your daily standup now (alias)
+    - command: /skip
+      description: Skip today's standup (alias)
+    - command: /kudos
+      description: Give a shoutout to a teammate (alias)
+      usage_hint: "@teammate [message]"
 
 oauth_config:
   redirect_urls:
     - "https://api.morgenruf.dev/oauth/callback"
   scopes:
     bot:
+      - commands
+      - app_mentions:read
       - chat:write
+      - channels:read
+      - groups:read
+      - im:write
       - im:history
       - im:read
-      - im:write
-      - channels:read
-      - channels:history
-      - groups:read
-      - reactions:write
-      - users:read
-      - users:read.email
-      - emoji:read
       - mpim:write
       - mpim:history
+      - users:read
+      - users:read.email
       - users.profile:read
+      - emoji:read
       - team:read
 
 settings:

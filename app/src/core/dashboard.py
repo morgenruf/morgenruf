@@ -23,6 +23,7 @@ from flask import (
 )
 
 import src.core.db as db
+from src.core.scopes import SCOPE_STRING
 from src.core.oauth import verify_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
 from src.core.slack_users import is_human
@@ -34,7 +35,7 @@ dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
 
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
-_SCOPES = "channels:read,commands,groups:read,chat:write,im:history,im:read,im:write,users:read,users:read.email,emoji:read,mpim:write,mpim:history,users.profile:read"
+_SCOPES = SCOPE_STRING
 
 
 def _is_safe_webhook_url(url: str) -> bool:

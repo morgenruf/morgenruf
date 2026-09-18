@@ -1459,6 +1459,7 @@ def register_handlers(app: App) -> None:
         _complete_standup(user_id, session, client)
 
     @app.command("/standup")
+    @app.command("/morgenruf-standup")
     def handle_standup_command(ack, body, client):  # noqa: ANN001
         """Slash command to start a standup session."""
         ack()
@@ -1467,6 +1468,7 @@ def register_handlers(app: App) -> None:
         _start_standup_session(user_id, team_id, client)
 
     @app.command("/skip")
+    @app.command("/morgenruf-skip")
     def handle_skip_command(ack, body, client):  # noqa: ANN001
         """Slash command to skip today's standup."""
         ack()
@@ -1483,6 +1485,7 @@ def register_handlers(app: App) -> None:
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
     @app.command("/help")
+    @app.command("/morgenruf")
     def handle_help_command(ack, body, client):  # noqa: ANN001
         """Slash command to show available commands and help."""
         ack()
