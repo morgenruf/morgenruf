@@ -736,25 +736,26 @@ morgenruf/
 
 ---
 
-## Roadmap
+## What's next
 
-- [x] Multi-workspace Slack OAuth
-- [x] Web dashboard (`/dashboard`)
-- [x] Webhooks with HMAC signing
-- [x] Jira/GitHub auto-linking
-- [x] Edit window for responses
-- [x] Email notifications (Resend)
-- [x] Custom questions
-- [x] Skip today
-- [x] Pre-standup reminders
-- [x] Per-user timezone
-- [x] Mood tracking
-- [x] Analytics dashboard + CSV export
-- [x] Weekly digest email
-- [ ] Multiple standup schedules per workspace
-- [ ] Jira/Linear/GitHub integration
-- [ ] Microsoft Teams support *(coming soon)*
-- [ ] Public REST API
+Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discussions)
+and in the [release notes](https://github.com/morgenruf/morgenruf/releases). Watch
+the repo if you want them as they happen. Nothing below is built yet, and the
+order follows what people ask for, so
+[saying you want one](https://github.com/morgenruf/morgenruf/discussions/new?category=ideas)
+moves it.
+
+| Coming | What it is | State |
+|---|---|---|
+| **Celebrations** | Birthdays and work anniversaries, announced in a channel on the day, with the roster kept in Morgenruf rather than a spreadsheet | Next module |
+| **Calendar** | Hold the hour a coffee chat pair agreed on their calendars, not just in the message. Google Calendar first | Designed |
+| **Meet and Teams rooms** | Created for a pairing the way Zoom already is. A pasted room link works today | Designed |
+| **Microsoft Teams** | Teams as a platform alongside Slack: standups collected and posted, commands, Adaptive Cards | In progress |
+| **Public REST API** | Read and write what the dashboard can, for teams that want to script it. The MCP server already covers reading | Planned |
+| **Onboarding journeys** | A sequence of messages over someone's first fortnight, with the manager nudged at the right points | Planned |
+
+Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking:
+[ROADMAP.md](ROADMAP.md).
 
 ---
 
