@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.2] — 2026-09-18
+
+### Fixed
+- **The coffee chat member table showed Slack ids instead of names.** Every
+  row read U06CRLYF72L with no face. The table asked each person for
+  `real_name` and `avatar`, and the roster record carries neither: the field
+  is `name`, and there was no picture on it at all. Both silently became empty
+  strings, so the name fell back to the id. Present since that table shipped.
+  The roster record now carries the name and the picture, falling back to the
+  Slack handle.
+
+### Changed
+- The coffee chat settings preview moves below the controls at 1080px rather
+  than 900px, so the form is not squeezed into half a narrow window, and every
+  modal is capped by the window as well as by its own maximum.
+
 ## [1.8.1] — 2026-09-18
 
 ### Fixed
