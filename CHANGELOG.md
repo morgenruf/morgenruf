@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.1] — 2026-09-18
+
+### Fixed
+- **Every modal and every toast was invisible.** The coffee chat settings
+  modal never closed its body, so the forty-eight elements after it in the
+  file became its children, including the create/edit standup modal, the new
+  coffee chat modal and the toast container. That parent is hidden until the
+  settings modal opens, so pressing Edit on a standup did nothing, New
+  Standup did nothing, New coffee chat did nothing, and no action ever
+  confirmed itself. Shipped in 1.8.0.
+- **The coffee chat sub-navigation bounced back to Standups.** Every sidebar
+  row was bound to its own section, and the three sub-items name none, so each
+  click opened Coffee chats and was immediately sent back to the fallback.
+
 ## [1.8.0] — 2026-09-18
 
 ### Added
