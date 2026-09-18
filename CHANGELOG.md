@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.3] — 2026-09-18
+
+### Fixed
+- **A standup dialog reopened on whatever tab it was left on.** Panes are
+  toggled in place, so leaving it on Advanced and pressing Edit again showed
+  Advanced: one collapsed accordion and none of the fields somebody came back
+  for. Both openers start on Basics now.
+
 ## [1.8.2] — 2026-09-18
 
 ### Fixed
