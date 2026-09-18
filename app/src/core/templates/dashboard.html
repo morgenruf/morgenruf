@@ -3501,12 +3501,22 @@
 
   function todayNextChat(next) {
     if (!next) return '';
-    return '<div class="stat-card" style="margin-top:20px">' +
-      '<div class="stat-head"><div class="stat-label">Next coffee chat</div>' +
+    const when = new Date(next.date + 'T00:00:00').toLocaleDateString(undefined,
+      { weekday: 'long', day: 'numeric', month: 'long' });
+    const away = typeof next.days_away === 'number' ? next.days_away : null;
+    // A date on its own reads as a forecast. "Wednesday, 16 September" on a
+    // Thursday is a round that did not run, which is worth saying plainly.
+    const line = next.overdue
+      ? '<div class="stat-sub" style="color:var(--warning)">Was due ' + when + ' and has not run</div>'
+      : '<div class="stat-sub">' +
+          (away === 0 ? 'Today &middot; ' : away === 1 ? 'Tomorrow &middot; ' :
+           away > 1 ? 'In ' + away + ' days &middot; ' : '') + when + '</div>';
+    return '<div class="stat-card' + (next.overdue ? ' card-broken' : '') + '" style="margin-top:20px">' +
+      '<div class="stat-head"><div class="stat-label">' +
+        (next.overdue ? 'Coffee chat overdue' : 'Next coffee chat') + '</div>' +
       '<div class="stat-ico"><svg aria-hidden="true"><use href="#i-connect"/></svg></div></div>' +
       '<div style="font-weight:600;color:var(--text);margin-top:10px">' + esc(next.name) + '</div>' +
-      '<div class="stat-sub">' + new Date(next.date + 'T00:00:00').toLocaleDateString(undefined,
-        { weekday: 'long', day: 'numeric', month: 'long' }) + '</div></div>';
+      line + '</div>';
   }
 
   // ── Insights ──────────────────────────────────────────────────────────────

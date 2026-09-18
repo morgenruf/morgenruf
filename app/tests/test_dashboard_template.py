@@ -670,3 +670,23 @@ class TestEveryPageCarriesItsMark:
         fn = markup[markup.index("function grantsHtml") :][:1600]
         assert "grant-ico" in fn
         assert "MODULE_ICON[name]" in fn
+
+
+class TestAnOverdueCoffeeChatSaysSo:
+    """A past date under "Next coffee chat" reads as a forecast."""
+
+    def _fn(self):
+        markup = read_template()
+        return markup[markup.index("function todayNextChat") :][:1400]
+
+    def test_the_card_changes_its_title(self):
+        fn = self._fn()
+        assert "Coffee chat overdue" in fn
+        assert "next.overdue" in fn
+
+    def test_it_says_the_round_did_not_run(self):
+        assert "and has not run" in self._fn()
+
+    def test_a_future_round_says_how_far_off_it_is(self):
+        fn = self._fn()
+        assert "Today" in fn and "Tomorrow" in fn and "In ' + away + ' days" in fn
