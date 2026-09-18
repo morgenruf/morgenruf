@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.4] — 2026-09-18
+
+### Fixed
+- **The Members page offered grants for two features with nothing to
+  administer.** Insights only reads and MCP keys are workspace-wide, so either
+  grant sat in the table and changed nothing while the card showed a switch
+  that looked live. A module now declares whether it can be delegated.
+
+### Changed
+- The README shows the product: four screenshots, one badge row, and a quick
+  start that leads with Helm and Docker Compose.
+
 ## [1.8.3] — 2026-09-18
 
 ### Fixed
