@@ -245,6 +245,22 @@
       z-index: 40;
     }
     .page-title { font-size: 18px; font-weight: 600; }
+    /* The sidebar has carried a mark per page since the redesign and the page
+       itself had none, so every screen opened as a wall of words. Same mark,
+       in the accent, at heading size. */
+    .page-head { display: flex; align-items: center; gap: 10px; }
+    /* An empty panel is the one place with room for a mark, and the one that
+       most needs saying what the panel is for. */
+    .empty-ico {
+      width: 26px; height: 26px; margin-bottom: 10px; color: var(--text-dim);
+      fill: none; stroke: currentColor; stroke-width: 1.5;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .title-ico {
+      width: 22px; height: 22px; flex-shrink: 0; color: var(--accent);
+      fill: none; stroke: currentColor; stroke-width: 1.6;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
     .page-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
     .btn {
       display: inline-flex; align-items: center; gap: 7px;
@@ -829,6 +845,13 @@
     .member-grants { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); }
     .member-grants .grants-label { display: block; font-size: 10.5px; color: var(--text-dim); margin-bottom: 6px; }
     .member-grants .grants-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* The card was a stack of words. These are the same marks as the sidebar,
+       so a glance tells you which line is about what. */
+    .pill-ico { width: 12px; height: 12px; flex-shrink: 0; vertical-align: -2px; margin-right: 4px;
+                fill: none; stroke: currentColor; stroke-width: 1.7;
+                stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+    .member-tz .pill-ico { width: 11px; height: 11px; }
+    .count-chip, .role-badge { display: inline-flex; align-items: center; }
     .grant-chip {
       display: inline-flex; align-items: center; gap: 5px;
       font-size: 11px; font-weight: 500;
@@ -839,12 +862,14 @@
     }
     .grant-chip:not(.readonly):hover { border-color: var(--accent-line); color: var(--text); }
     .grant-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .grant-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); }
+    .grant-chip .grant-ico { width: 13px; height: 13px; flex-shrink: 0; opacity: .75;
+                             fill: none; stroke: currentColor; stroke-width: 1.7;
+                             stroke-linecap: round; stroke-linejoin: round; }
+    .grant-chip.on .grant-ico { opacity: 1; }
     /* Tinted, not filled: --mint is a light wash, so filling it left the label
        unreadable on the dark theme. --good carries the same "this is on"
        meaning as the Admin badge and is lifted for dark. */
     .grant-chip.on { background: rgba(34,197,94,0.13); border-color: rgba(34,197,94,0.34); color: var(--good); }
-    .grant-chip.on .dot { background: var(--good); }
     /* Shown to someone who cannot change it: still a chip, not a button. */
     .grant-chip.readonly { cursor: default; }
     .grant-chip[aria-busy="true"] { opacity: .55; cursor: progress; }
@@ -1912,7 +1937,10 @@
     <div id="section-today" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title" id="today-greeting">Today</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-sunrise"/></svg>
+            <div class="page-title" id="today-greeting">Today</div>
+          </div>
           <div class="page-subtitle" id="today-date"></div>
         </div>
       </div>
@@ -1923,7 +1951,10 @@
     <div id="section-standups" class="section active">
       <div class="topbar">
         <div>
-          <div class="page-title">Standups</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-standups"/></svg>
+            <div class="page-title">Standups</div>
+          </div>
           <div class="page-subtitle">Manage your team's standup schedules</div>
         </div>
         <button class="btn btn-primary" onclick="openCreateModal()">&#43; New Standup</button>
@@ -1937,7 +1968,10 @@
     <div id="section-insights" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Insights</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-insights"/></svg>
+            <div class="page-title">Insights</div>
+          </div>
           <div class="page-subtitle">What the standup and kudos data says when you read it together</div>
         </div>
       </div>
@@ -1969,7 +2003,10 @@
     <div id="section-connect" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Coffee chats</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-connect"/></svg>
+            <div class="page-title">Coffee chats</div>
+          </div>
           <div class="page-subtitle">Introduce people from a channel on a regular cadence</div>
         </div>
         <button class="btn btn-primary" onclick="openConnectModal()">&#43; New coffee chat</button>
@@ -1985,7 +2022,10 @@
     <div id="section-members" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Members</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-members"/></svg>
+            <div class="page-title">Members</div>
+          </div>
           <div class="page-subtitle">Team members synced from Slack</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -2020,7 +2060,10 @@
     <div id="section-reports" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Reports</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-reports"/></svg>
+            <div class="page-title">Reports</div>
+          </div>
           <div class="page-subtitle">Standup history, filtered by date or member</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -2036,7 +2079,10 @@
     <div id="section-analytics" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Analytics</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-analytics"/></svg>
+            <div class="page-title">Analytics</div>
+          </div>
           <div class="page-subtitle">Per-member participation breakdown</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -2062,7 +2108,10 @@
     <div id="section-settings" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Settings</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-settings"/></svg>
+            <div class="page-title">Settings</div>
+          </div>
           <div class="page-subtitle">Workspace-level configuration</div>
         </div>
       </div>
@@ -2073,7 +2122,10 @@
     <div id="section-webhooks" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Webhooks</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-webhooks"/></svg>
+            <div class="page-title">Webhooks</div>
+          </div>
           <div class="page-subtitle">Receive POST notifications when a standup completes, a blocker is flagged or participation drops</div>
         </div>
       </div>
@@ -2084,7 +2136,10 @@
     <div id="section-kudos" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Kudos</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-kudos"/></svg>
+            <div class="page-title">Kudos</div>
+          </div>
           <div class="page-subtitle">Celebrate your teammates' great work</div>
         </div>
       </div>
@@ -2163,7 +2218,10 @@
     <div id="section-automation" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">Automation</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-automation"/></svg>
+            <div class="page-title">Automation</div>
+          </div>
           <div class="page-subtitle">Have Morgenruf react on its own when something happens in a standup</div>
         </div>
         <button class="btn btn-primary" onclick="openAddRuleForm()">+ Add Rule</button>
@@ -2227,7 +2285,10 @@
     <div id="section-mcp" class="section">
       <div class="topbar">
         <div>
-          <div class="page-title">MCP</div>
+          <div class="page-head">
+            <svg class="title-ico" aria-hidden="true"><use href="#i-mcp"/></svg>
+            <div class="page-title">MCP</div>
+          </div>
           <div class="page-subtitle">Let Claude, Cursor and VS Code query your standup data via <code>{{ mcp_endpoint }}</code></div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3393,7 +3454,7 @@
     const rows = cap.rows;
     let html = '<div class="stat-card" id="today-morning"><div class="stat-label" style="margin-bottom:14px">This morning</div>';
     if (!rows.length) {
-      html += '<div class="empty" style="padding:34px 20px"><div class="empty-title">No answers yet</div>' +
+      html += '<div class="empty" style="padding:34px 20px"><svg class="empty-ico" aria-hidden="true"><use href="#i-sunrise"/></svg><div class="empty-title">No answers yet</div>' +
         '<div class="empty-body">When your team replies to the bot, their answers appear here.</div></div>';
     } else {
       html += rows.map(function (r) {
@@ -3425,7 +3486,7 @@
   function todayKudos(rows) {
     if (!rows.length) {
       return '<div class="stat-card"><div class="stat-label" style="margin-bottom:12px">Recent recognition</div>' +
-        '<div class="empty" style="padding:28px 18px"><div class="empty-title">Nothing yet this week</div>' +
+        '<div class="empty" style="padding:28px 18px"><svg class="empty-ico" aria-hidden="true"><use href="#i-kudos"/></svg><div class="empty-title">Nothing yet this week</div>' +
         '<div class="empty-body">Kudos given in Slack show up here.</div></div></div>';
     }
     return '<div class="stat-card"><div class="stat-label" style="margin-bottom:12px">Recent recognition</div>' +
@@ -3791,8 +3852,8 @@
       el.innerHTML =
         '<div class="stat-card"><div class="stat-head"><div class="stat-label">' + title +
         ' &middot; attendance</div></div>' +
-        '<div class="empty" style="padding:28px 4px">No rounds have run yet. ' +
-        'Attendance appears here once the first pairs go out.</div></div>';
+        '<div class="empty" style="padding:28px 4px"><svg class="empty-ico" aria-hidden="true"><use href="#i-connect"/></svg><div>No rounds have run yet. ' +
+        'Attendance appears here once the first pairs go out.</div></div></div>';
       return;
     }
 
@@ -4041,7 +4102,7 @@
   // as decoration.
   function peopleTable(people, hasOutcomes) {
     if (!people || !people.length) {
-      return '<div class="empty" style="padding:24px 4px">Nobody has been paired yet.</div>';
+      return '<div class="empty" style="padding:24px 4px"><svg class="empty-ico" aria-hidden="true"><use href="#i-connect"/></svg><div>Nobody has been paired yet.</div></div>';
     }
     // Ordered by fewest met, so the people worth a nudge are the ones on screen.
     const showAll = state.attendance && state.attendance.showAllPeople;
@@ -4738,7 +4799,12 @@
     if (!grantable.length) return '';
     const held = new Set(m.module_admin || []);
     if ((m.role || 'member') === 'admin') {
-      return '<div class="member-grants"><span class="grants-label">Runs every feature</span></div>';
+      return '<div class="member-grants"><span class="grants-label">Runs every feature</span>' +
+        '<div class="grants-chips">' + grantable.map(name =>
+          '<span class="grant-chip on readonly" title="' + esc((MODULE_COPY[name] || [name])[0]) + '">' +
+            '<svg class="grant-ico" aria-hidden="true"><use href="#i-' + (MODULE_ICON[name] || 'settings') + '"/></svg>' +
+            esc((MODULE_COPY[name] || [name])[0]) +
+          '</span>').join('') + '</div></div>';
     }
     const iAmAdmin = window._myRole === 'admin';
     if (!iAmAdmin && !held.size) return '';
@@ -4750,7 +4816,8 @@
       .map(name => {
         const label = (MODULE_COPY[name] || [name])[0];
         const on = held.has(name);
-        const body = '<span class="dot"></span>' + esc(label);
+        const ico = MODULE_ICON[name] || 'settings';
+        const body = '<svg class="grant-ico" aria-hidden="true"><use href="#i-' + ico + '"/></svg>' + esc(label);
         if (!iAmAdmin) {
           return '<span class="grant-chip on readonly" title="Runs ' + esc(label) + '">' + body + '</span>';
         }
@@ -4803,14 +4870,15 @@
         '</div>';
       const role = m.role || 'member';
       const badgeHtml = role === 'admin'
-        ? '<span class="role-badge">Admin</span>'
-        : '<span class="role-badge member">Member</span>';
+        ? '<span class="role-badge"><svg class="pill-ico" aria-hidden="true"><use href="#i-members"/></svg>Admin</span>'
+        : '<span class="role-badge member"><svg class="pill-ico" aria-hidden="true"><use href="#i-members"/></svg>Member</span>';
       const inCount = standupsForMember(m.id).length;
+      const standupIco = '<svg class="pill-ico" aria-hidden="true"><use href="#i-standups"/></svg>';
       const chip = inCount
-        ? '<span class="count-chip" title="Standups this person is in">' + inCount + (inCount === 1 ? ' standup' : ' standups') + '</span>'
+        ? '<span class="count-chip" title="Standups this person is in">' + standupIco + inCount + (inCount === 1 ? ' standup' : ' standups') + '</span>'
         : m.tracked === false
-          ? '<span class="count-chip none" title="In your Slack workspace, but not tracked by Morgenruf and not counted in Analytics">Not in Morgenruf</span>'
-          : '<span class="count-chip none" title="Tracked by Morgenruf, but not a participant in any standup">No standups</span>';
+          ? '<span class="count-chip none" title="In your Slack workspace, but not tracked by Morgenruf and not counted in Analytics">' + standupIco + 'Not in Morgenruf</span>'
+          : '<span class="count-chip none" title="Tracked by Morgenruf, but not a participant in any standup">' + standupIco + 'No standups</span>';
       let roleBtn = '';
       if (window._myRole === 'admin' && m.id !== window._myUserId) {
         roleBtn = role === 'admin'

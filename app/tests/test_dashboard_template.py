@@ -631,3 +631,42 @@ class TestAdminOnlyControlsAreNotOfferedToEveryone:
         markup = read_template()
         assert "Only an admin can change these." in markup  # the feature switches
         assert "Only someone who runs coffee chats can change these." in markup
+
+
+class TestEveryPageCarriesItsMark:
+    """The sidebar had a mark per page and the page itself had none.
+
+    A <use> pointing at a symbol that does not exist renders as nothing, and
+    nothing is exactly what a missing icon looks like, so it goes unnoticed.
+    """
+
+    def _markup(self):
+        return read_template()
+
+    def test_every_page_title_has_one(self):
+        markup = self._markup()
+        titles = re.findall(r'<div class="page-title"[^>]*>([^<]+)</div>', markup)
+        heads = markup.count('class="page-head"')
+        assert heads == len(titles), f"{len(titles)} page titles, {heads} with a mark"
+        assert heads >= 12
+
+    def test_every_icon_reference_resolves(self):
+        markup = self._markup()
+        defined = set(re.findall(r'<symbol id="(i-[a-z0-9-]+)"', markup))
+        used = set(re.findall(r'<use href="#(i-[a-z0-9-]+)"', markup))
+        missing = sorted(used - defined)
+        assert not missing, f"icons referenced but never drawn: {missing}"
+
+    def test_the_greeting_keeps_its_mark(self):
+        # today-greeting is rewritten with textContent, which would wipe an
+        # icon nested inside it.
+        markup = self._markup()
+        head = markup[markup.index('id="section-today"') :][:600]
+        assert 'class="title-ico"' in head
+        assert '<div class="page-title" id="today-greeting">' in head
+
+    def test_the_grant_chips_show_the_feature_not_a_dot(self):
+        markup = self._markup()
+        fn = markup[markup.index("function grantsHtml") :][:1600]
+        assert "grant-ico" in fn
+        assert "MODULE_ICON[name]" in fn
