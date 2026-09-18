@@ -5831,6 +5831,7 @@
   async function openCreateModal() {
     await loadMembers();
     document.getElementById('modal-title').textContent = 'New Standup';
+    showModalTab('basics');
     document.getElementById('modal-standup-id').value = '';
     document.getElementById('f-name').value = 'Morning Standup';
     document.getElementById('f-channel').value = '';
@@ -5865,6 +5866,9 @@
     if (s.channel_id) await loadChannelMembers(s.channel_id);
     else await loadMembers();
     document.getElementById('modal-title').textContent = 'Edit Standup';
+    // Always open where the name and the channel are. The tab is sticky
+    // otherwise: leave on Advanced, come back, and the form looks empty.
+    showModalTab('basics');
     document.getElementById('modal-standup-id').value = id;
     document.getElementById('f-name').value = s.name || '';
     document.getElementById('f-channel').value = s.channel_id || '';

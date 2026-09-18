@@ -799,3 +799,33 @@ class TestEveryControlHasSomethingBehindIt:
     def test_the_scan_sees_the_controls(self):
         # Guard against a regex change making the check pass vacuously.
         assert len(self._handlers(read_template())) > 60
+
+
+class TestATabbedModalOpensWhereYouExpect:
+    """Panes are toggled by class, so the last tab used is still showing when
+    the dialog is opened again. Reopening Edit after a look at Advanced
+    presented a pane with one collapsed accordion in it and none of the fields
+    the person came back for.
+    """
+
+    def _fn(self, name: str) -> str:
+        markup = read_template()
+        start = markup.index(f"function {name}(")
+        return markup[start : start + 1800]
+
+    def test_editing_a_standup_starts_on_basics(self):
+        assert "showModalTab('basics')" in self._fn("openEditModal")
+
+    def test_creating_one_does_too(self):
+        assert "showModalTab('basics')" in self._fn("openCreateModal")
+
+    def test_the_coffee_chat_settings_do_the_same(self):
+        assert "ccTab('basics')" in self._fn("openConnectSettings")
+
+    def test_the_first_pane_is_the_visible_one_in_the_markup(self):
+        # Belt and braces for the very first open, before any tab is pressed.
+        markup = read_template()
+        panes = re.findall(r'<div class="modal-pane" id="pane-([a-z]+)"( hidden)?>', markup)
+        assert panes, "no standup modal panes found"
+        assert panes[0][0] == "basics" and not panes[0][1], "the first pane must start visible"
+        assert all(hidden for _, hidden in panes[1:]), "only one pane may start visible"
