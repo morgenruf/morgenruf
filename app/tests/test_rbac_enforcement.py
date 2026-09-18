@@ -63,22 +63,41 @@ GUARDED = [
 ]
 
 
-@pytest.fixture()
-def member_client(monkeypatch):
+def _fake_db(role="member", grants=(), admins=1):
+    """A db double that answers permission questions like the real one.
+
+    A bare MagicMock returns a truthy object for `can_administer`, which would
+    make every one of these tests pass while the app let anyone through, so
+    the double carries the rule instead.
+    """
+    grants = set(grants)
+    db = MagicMock()
+    db.get_member_role.return_value = role
+    db.count_admins.return_value = admins
+    db.module_admin_grants.return_value = grants
+    db.team_module_admins.return_value = {"U_MEMBER": grants} if grants else {}
+    db.can_administer.side_effect = lambda t, u, module=None: role == "admin" or (
+        module is not None and module in grants
+    )
+    return db
+
+
+def _client(monkeypatch, db, user_id="U_MEMBER"):
     flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
     flask_app.config["TESTING"] = True
     flask_app.config["SECRET_KEY"] = "test-secret"
     flask_app.register_blueprint(dashboard.dashboard_bp)
-
-    db = MagicMock()
-    db.get_member_role.return_value = "member"
     monkeypatch.setattr(dashboard, "db", db)
-
     client = flask_app.test_client()
     with client.session_transaction() as sess:
         sess["team_id"] = "T123"
-        sess["user_id"] = "U_MEMBER"
+        sess["user_id"] = user_id
     return client
+
+
+@pytest.fixture()
+def member_client(monkeypatch):
+    return _client(monkeypatch, _fake_db())
 
 
 class TestAMemberIsRefused:
@@ -133,19 +152,8 @@ class TestAWorkspaceCannotLockItselfOut:
     """
 
     def _client(self, monkeypatch, role="member", installer=None, admins=1):
-        flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
-        flask_app.config["TESTING"] = True
-        flask_app.config["SECRET_KEY"] = "test-secret"
-        flask_app.register_blueprint(dashboard.dashboard_bp)
-        db = MagicMock()
-        db.get_member_role.return_value = role
-        db.count_admins.return_value = admins
-        monkeypatch.setattr(dashboard, "db", db)
-        client = flask_app.test_client()
-        with client.session_transaction() as sess:
-            sess["team_id"] = "T123"
-            sess["user_id"] = installer or "U_SOMEONE"
-        return client, db
+        db = _fake_db(role=role, admins=admins)
+        return _client(monkeypatch, db, user_id=installer or "U_SOMEONE"), db
 
     def test_demoting_the_last_admin_is_refused(self, monkeypatch):
         client, db = self._client(monkeypatch, role="admin", admins=1)

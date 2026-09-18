@@ -83,7 +83,7 @@ def register_routes(flask_app) -> None:
         return jsonify(kudos_db.get_config(session["team_id"]))
 
     @kudos_bp.route("/dashboard/api/kudos/config", methods=["POST"])
-    @_admin_required
+    @_admin_required("kudos")
     def api_set_kudos_config():
         data = request.get_json(silent=True) or {}
         emoji = (data.get("emoji") or "").strip()

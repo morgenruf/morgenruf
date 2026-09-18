@@ -211,7 +211,11 @@ class TestNoEmojiAsIcons:
         markup = read_template()
         defined = set(re.findall(r'<symbol id="(i-[\w-]+)"', markup))
         used = set(re.findall(r'use href="#(i-[\w-]+)"', markup))
-        assert defined <= used, f"defined but unused: {sorted(defined - used)}"
+        # Some are referenced by building the href, e.g. "'#i-' + MODULE_ICON[m]",
+        # so the bare id appearing in a JS string counts as a use. Without this
+        # the check would push people towards literal duplication to satisfy it.
+        dynamic = {sid for sid in defined - used if re.search(r"['\"]" + re.escape(sid[2:]) + r"['\"]", markup)}
+        assert defined <= (used | dynamic), f"defined but unused: {sorted(defined - used - dynamic)}"
 
 
 class TestContrast:

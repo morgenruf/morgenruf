@@ -66,7 +66,7 @@ def register_routes(flask_app) -> None:
         return jsonify(programs)
 
     @bp.route("/dashboard/api/connect/programs", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def create_program():
         team_id = session["team_id"]
         data = request.get_json(silent=True) or {}
@@ -93,7 +93,7 @@ def register_routes(flask_app) -> None:
         return jsonify(program)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def update_program(program_id: int):
         """Change a programme. A body with only `enabled` keeps the old toggle
         behaviour, so the switch on the card still works unchanged."""
@@ -147,7 +147,7 @@ def register_routes(flask_app) -> None:
         return jsonify(program)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["DELETE"])
-    @_admin_required
+    @_admin_required("connect")
     def delete_program(program_id: int):
         team_id = session["team_id"]
         if not cdb.delete_program(team_id, program_id):
@@ -155,7 +155,7 @@ def register_routes(flask_app) -> None:
         return jsonify({"deleted": program_id})
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/run", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def run_now(program_id: int):
         """Start a round immediately, rather than waiting for the cadence.
 
@@ -280,7 +280,7 @@ def register_routes(flask_app) -> None:
         return jsonify(out)
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/members/<user_id>", methods=["POST"])
-    @_admin_required
+    @_admin_required("connect")
     def set_program_member(program_id: int, user_id: str):
         """Put somebody in, take them out, or snooze them until a date."""
         team_id = session["team_id"]

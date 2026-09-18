@@ -1851,3 +1851,62 @@ def count_admins(team_id: str) -> int:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id,))
             return int(cur.fetchone()[0])
+
+
+# ── Per-feature administrators ──────────────────────────────────────────────
+
+
+def module_admin_grants(team_id: str, user_id: str) -> set[str]:
+    """Which features this person administers, ignoring their workspace role."""
+    sql = "SELECT module FROM module_admins WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            return {r[0] for r in cur.fetchall()}
+
+
+def team_module_admins(team_id: str) -> dict:
+    """`{user_id: {module, ...}}` for everyone with a grant in this workspace."""
+    out: dict = {}
+    sql = "SELECT user_id, module FROM module_admins WHERE team_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            for user_id, module in cur.fetchall():
+                out.setdefault(user_id, set()).add(module)
+    return out
+
+
+def grant_module_admin(team_id: str, user_id: str, module: str, granted_by: str = "") -> None:
+    sql = """
+        INSERT INTO module_admins (team_id, user_id, module, granted_by)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (team_id, user_id, module) DO NOTHING
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id, module, granted_by or None))
+
+
+def revoke_module_admin(team_id: str, user_id: str, module: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM module_admins WHERE team_id = %s AND user_id = %s AND module = %s",
+                (team_id, user_id, module),
+            )
+
+
+def can_administer(team_id: str, user_id: str, module: str | None = None) -> bool:
+    """Whether this person may change `module`, or anything when it is None.
+
+    A workspace admin always may. Otherwise they need a grant for that exact
+    feature, and a route that names no feature stays workspace-admin only,
+    because the things that name none are the workspace-wide ones: roles,
+    invitations, API keys, the public feed.
+    """
+    if get_member_role(team_id, user_id) == "admin":
+        return True
+    if not module:
+        return False
+    return module in module_admin_grants(team_id, user_id)

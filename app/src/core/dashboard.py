@@ -62,23 +62,44 @@ def _login_required(f):
     return wrapper
 
 
-def _admin_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        team_id = session.get("team_id")
-        user_id = session.get("user_id")
-        if not team_id:
-            return jsonify({"error": "Unauthorized"}), 401
-        try:
-            role = db.get_member_role(team_id, user_id or "")
-            if role != "admin":
-                return jsonify({"error": "Admin required"}), 403
-        except Exception as exc:
-            logger.warning("_admin_required DB error: %s", exc)
-            return jsonify({"error": "Service unavailable"}), 503
-        return f(*args, **kwargs)
+def _admin_required(arg=None):
+    """Require workspace admin, or admin of one named feature.
 
-    return wrapper
+    Used bare, `@_admin_required`, it means workspace admin, which is right
+    for the things that belong to the whole workspace: roles, invitations, API
+    keys, the public feed. Used with a feature, `@_admin_required("standup")`,
+    a person holding that grant passes too.
+
+    Both spellings work so the change adds a capability without touching the
+    seventeen routes that were already correct.
+    """
+    module = arg if isinstance(arg, str) else None
+
+    def decorate(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            team_id = session.get("team_id")
+            user_id = session.get("user_id")
+            if not team_id:
+                return jsonify({"error": "Unauthorized"}), 401
+            try:
+                if not db.can_administer(team_id, user_id or "", module):
+                    return jsonify(
+                        {
+                            "error": "Admin required"
+                            if module is None
+                            else f"You need to administer {module} to do that"
+                        }
+                    ), 403
+            except Exception as exc:
+                logger.warning("_admin_required DB error: %s", exc)
+                return jsonify({"error": "Service unavailable"}), 503
+            return f(*args, **kwargs)
+
+        return wrapper
+
+    # Bare use: the decorator was applied directly to the function.
+    return decorate(arg) if callable(arg) else decorate
 
 
 def _get_bot_token() -> str | None:
@@ -287,6 +308,9 @@ _WORKSPACE_SETTING_FIELDS = (
 
 _BOOL_WORKSPACE_FIELDS = ("ai_summary_enabled", "manager_digest_enabled", "feed_public")
 
+# Publishing the workspace's standups is not part of running standups.
+_FEED_FIELDS = ("feed_token", "feed_public")
+
 # "Until report time", "4 hours", "No limit" in the form, against the integer
 # hours that can_edit_response reads.
 _EDIT_WINDOW_TO_HOURS = {"report": 0, "4h": 4, "none": None}
@@ -301,12 +325,30 @@ def _workspace_settings(team_id: str) -> dict:
         return {}
 
 
+def _is_workspace_admin() -> bool:
+    """True for a full workspace admin, false for a feature admin or member."""
+    try:
+        return db.get_member_role(session.get("team_id") or "", session.get("user_id") or "") == "admin"
+    except Exception:
+        return False
+
+
 def _split_workspace_fields(data: dict) -> dict:
-    """Pull the workspace-level settings out of a schedule payload."""
+    """Pull the workspace-level settings out of a schedule payload.
+
+    The standup form also carries the public feed switch, which publishes the
+    team's standups at an unauthenticated URL. Someone who administers
+    standups should not reach that through the form when they cannot reach
+    the feed endpoint directly, so those two fields need workspace admin.
+    """
+    workspace_admin = _is_workspace_admin()
     ws: dict = {}
     for field in _WORKSPACE_SETTING_FIELDS:
-        if field in data:
-            ws[field] = bool(data[field]) if field in _BOOL_WORKSPACE_FIELDS else data[field]
+        if field not in data:
+            continue
+        if field in _FEED_FIELDS and not workspace_admin:
+            continue
+        ws[field] = bool(data[field]) if field in _BOOL_WORKSPACE_FIELDS else data[field]
     if "edit_window" in data:
         ws["edit_window_hours"] = _EDIT_WINDOW_TO_HOURS.get(str(data["edit_window"]), 4)
     return ws
@@ -329,7 +371,7 @@ def api_list_standups():
 
 
 @dashboard_bp.route("/dashboard/api/standups", methods=["POST"])
-@_admin_required
+@_admin_required("standup")
 def api_create_standup():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -364,7 +406,7 @@ def api_create_standup():
 
 
 @dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["PUT"])
-@_admin_required
+@_admin_required("standup")
 def api_update_standup(standup_id: str):
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -416,7 +458,7 @@ def api_update_standup(standup_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["DELETE"])
-@_admin_required
+@_admin_required("standup")
 def api_delete_standup(standup_id: str):
     team_id = session["team_id"]
     try:
@@ -441,12 +483,20 @@ def api_me():
         role = db.get_member_role(team_id, user_id)
     except Exception:
         role = "member"
+    try:
+        modules = sorted(db.module_admin_grants(team_id, user_id))
+    except Exception:
+        modules = []
     return jsonify(
         {
             "team_id": team_id,
             "user_id": user_id,
             "team_name": session.get("team_name", ""),
             "role": role,
+            # Features this person administers without being a workspace admin.
+            # An admin administers all of them, which the page derives from the
+            # role rather than from a list that would go stale.
+            "module_admin": modules,
         }
     )
 
@@ -477,6 +527,34 @@ def api_set_member_role(user_id: str):
         return jsonify({"error": str(exc)}), 500
 
 
+@dashboard_bp.route("/dashboard/api/members/<user_id>/modules/<module>", methods=["PUT", "DELETE"])
+@_admin_required
+def api_set_module_admin(user_id: str, module: str):
+    """Give one person charge of one feature, or take it back.
+
+    This is how a team lead runs the standups and someone else runs a feature
+    of their own, without either of them being able to mint API keys or
+    publish the workspace's standups. Only a workspace admin hands out a
+    grant, including for a feature they have delegated already.
+
+    The feature names come from the registry, so core never knows one by name.
+    """
+    from src.modules import REGISTRY  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    if module not in {spec.name for spec in REGISTRY}:
+        return jsonify({"error": "unknown feature"}), 404
+    try:
+        if request.method == "DELETE":
+            db.revoke_module_admin(team_id, user_id, module)
+        else:
+            db.grant_module_admin(team_id, user_id, module, session.get("user_id", ""))
+        return jsonify({"ok": True, "user_id": user_id, "module": module, "granted": request.method == "PUT"})
+    except Exception as exc:
+        logger.error("api_set_module_admin: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
 # ---------------------------------------------------------------------------
 # Members API
 # ---------------------------------------------------------------------------
@@ -503,6 +581,12 @@ def api_members():
             tracked.add(r["user_id"])
     except Exception as e:
         logger.warning("Unexpected error in api_members loading role map: %s", e)
+
+    try:
+        grants = db.team_module_admins(team_id)
+    except Exception as e:
+        logger.warning("Unexpected error in api_members loading module grants: %s", e)
+        grants = {}
 
     channel_id = request.args.get("channel_id")
 
@@ -550,6 +634,7 @@ def api_members():
                     "email": profile.get("email", ""),
                     "tz": u.get("tz", "UTC"),
                     "role": role_map.get(uid, "member"),
+                    "module_admin": sorted(grants.get(uid, ())),
                     # False means: in Slack, but the bot holds no active row,
                     # so they are in no standup and in no participation figure.
                     "tracked": uid in tracked,
@@ -1255,7 +1340,7 @@ def api_list_rules():
 
 
 @dashboard_bp.route("/dashboard/api/rules", methods=["POST"])
-@_admin_required
+@_admin_required("standup")
 def api_create_rule():
     team_id = session["team_id"]
     data = request.get_json(force=True) or {}
@@ -1280,7 +1365,7 @@ def api_create_rule():
 
 
 @dashboard_bp.route("/dashboard/api/rules/<int:rule_id>", methods=["DELETE"])
-@_admin_required
+@_admin_required("standup")
 def api_delete_rule(rule_id: int):
     team_id = session["team_id"]
     try:
