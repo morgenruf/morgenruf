@@ -498,6 +498,10 @@
     .cc-tab:hover { color: var(--text); }
     .cc-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
     .cc-set-cols { display: grid; grid-template-columns: minmax(0,1fr) 370px; gap: 28px; align-items: start; }
+    /* Belt and braces: the box is capped by the window as well as by its own
+       maximum, so no zoom level can push it off either edge. */
+    .modal { max-width: min(640px, calc(100vw - 32px)); }
+    #cc-settings-modal .modal { max-width: min(1040px, calc(100vw - 32px)); }
     .cc-set-controls { min-width: 0; }
     .cc-pane { display: block; }
     .cc-pane[hidden] { display: none; }
@@ -538,8 +542,15 @@
       font-size: 11.5px; color: var(--text-muted); white-space: nowrap;
     }
     .cc-pv-sep { height: 1px; background: var(--border); margin: 10px 0; }
-    @media (max-width: 900px) {
-      .cc-set-cols { grid-template-columns: 1fr; }
+    /* The preview sits beside the controls only when both fit. The settings
+       box is 1040px wide, so a 900px breakpoint left a band where the two
+       columns were wider than the window and the modal scrolled sideways,
+       clipping the controls on one edge and the preview on the other. Browser
+       zoom lands squarely in that band: 200% on a 1900px screen is 950 CSS px.
+       One column from 1080 down, and the preview follows the controls. */
+    @media (max-width: 1080px) {
+      .cc-set-cols { grid-template-columns: minmax(0, 1fr); }
+      .cc-side { position: static; }
     }
     /* A standup's health, on the card rather than a page away. Colour carries
        state and the word is always beside it, so the colour is never the only
@@ -2419,7 +2430,7 @@
 
   <!-- Invite Admin Modal -->
   <div id="invite-modal" class="modal-overlay" style="display:none">
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:min(420px, calc(100vw - 32px))">
       <div class="modal-header">
         <div class="modal-title">Invite Admin</div>
         <button class="modal-close" onclick="closeInviteModal()">&#10005;</button>
@@ -2450,7 +2461,7 @@
   </div>
   <!-- MCP Create Key Modal -->
   <div class="modal-overlay" id="mcp-key-modal" style="display:none">
-    <div class="modal" style="max-width:440px">
+    <div class="modal" style="max-width:min(440px, calc(100vw - 32px))">
       <div class="modal-header">
         <div class="modal-title">Generate MCP API Key</div>
         <button class="modal-close" onclick="closeMCPKeyModal()">&times;</button>
@@ -2485,7 +2496,9 @@
     </div>
   </div>
   <div class="modal-overlay" id="cc-settings-modal">
-    <div class="modal" style="max-width:1040px">
+    <!-- Width lives in the stylesheet, where the window cap can reach it. An
+         inline max-width beats any rule and reintroduced the sideways scroll. -->
+    <div class="modal">
       <div class="modal-header">
         <div class="modal-title">Coffee chat settings</div>
         <button class="modal-close" onclick="closeConnectSettings()">&times;</button>
