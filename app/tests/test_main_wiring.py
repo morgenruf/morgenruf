@@ -60,7 +60,7 @@ def test_no_module_is_imported_by_name_in_main():
 #
 # This is a ratchet, not an allowance: the count may fall, never rise. It goes
 # to zero when standup owns its own endpoints and jobs.
-KNOWN_CORE_TO_MODULE_IMPORTS = 14
+KNOWN_CORE_TO_MODULE_IMPORTS = 13
 
 
 def _core_module_imports():

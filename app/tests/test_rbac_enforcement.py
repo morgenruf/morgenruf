@@ -44,6 +44,14 @@ else:
 APP = pathlib.Path(__file__).resolve().parent.parent
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 
+# Routes that must work with no session at all, with the reason each one does.
+PUBLIC_BY_DESIGN = {
+    # Arrives in a mail client, which has no cookies, and requiring a login to
+    # stop email is how an app gets reported as spam. The link carries an HMAC
+    # of the address instead.
+    "/email/unsubscribe",
+}
+
 # Every mutating route a member must be refused, with what it would let them do.
 GUARDED = [
     ("POST", "/dashboard/api/feed-token", "publish the team's standups publicly"),
@@ -128,6 +136,8 @@ class TestNoMutatingRouteIsLeftOpen:
                 methods = re.search(r"methods\s*=\s*\[([^\]]*)\]", opts)
                 methods = {x.strip().strip("\"'") for x in methods.group(1).split(",")} if methods else {"GET"}
                 if not (methods & MUTATING):
+                    continue
+                if path in PUBLIC_BY_DESIGN:
                     continue
                 if "_admin_required" not in decorators:
                     out.append(f"{sorted(methods & MUTATING)} {path} ({fn})")

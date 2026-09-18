@@ -17,7 +17,6 @@ from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import src.core.db as db
 from src.core.scopes import BOT_SCOPES
-from src.modules.standup.mailer import send_welcome_email
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +178,7 @@ def oauth_callback():
             logger.warning("Could not send welcome DM to %s: %s", authed_user_id, exc)
 
         # Send welcome email (best-effort)
-        _try_send_welcome_email(bot_token, team_name, authed_user_id)
+        _try_send_welcome_email(bot_token, team_name, authed_user_id, team_id)
 
     # Register scheduler job for this workspace
     _schedule_workspace(team_id, bot_token)
@@ -198,8 +197,15 @@ def oauth_callback():
 # ---------------------------------------------------------------------------
 
 
-def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str) -> None:
+def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str, team_id: str = "") -> None:
+    """Welcome the person who installed it, if Slack will tell us their address.
+
+    Seven of the first twenty workspaces had no address on file, and this
+    returned quietly, so nobody knew the welcome had not been sent. It says so
+    now.
+    """
     if not user_id:
+        logger.info("No installing user for %s; no welcome email", team_name)
         return
     try:
         bot_client = WebClient(token=bot_token)
@@ -207,8 +213,26 @@ def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str) -> Non
         profile = info["user"]["profile"]
         email = profile.get("email", "")
         real_name = profile.get("real_name", user_id)
+        if not email:
+            logger.info(
+                "Slack returned no email for the installer of %s, so no welcome email. "
+                "This usually means users:read.email was not granted.",
+                team_name,
+            )
+            return
         if email:
-            send_welcome_email(to_email=email, team_name=team_name, installed_by=real_name)
+            from src.core import mailer  # noqa: PLC0415
+
+            sent = mailer.send(
+                email,
+                f"Morgenruf is installed in {team_name}",
+                mailer.welcome_html(team_name, real_name, email),
+                kind="welcome",
+            )
+            if sent:
+                import src.core.db as _db  # noqa: PLC0415
+
+                _db.record_install_email(team_id, "welcome", email)
     except Exception as exc:
         logger.warning("Could not retrieve user email for welcome message: %s", exc)
 

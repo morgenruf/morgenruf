@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import json
 import logging
@@ -477,6 +478,50 @@ def api_delete_standup(standup_id: str):
     except Exception as exc:
         logger.error("api_delete_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/email/unsubscribe", methods=["GET", "POST"])
+def email_unsubscribe():
+    """Stop emailing this address. No login, one click, works from the header.
+
+    Mail clients hit this with POST via List-Unsubscribe-Post, and people click
+    it with GET from the footer. Both do the same thing.
+    """
+    from src.core.mailer import unsubscribe_token  # noqa: PLC0415
+
+    email = (request.args.get("e") or "").strip()
+    token = (request.args.get("t") or "").strip()
+    if not email or not hmac.compare_digest(token, unsubscribe_token(email)):
+        return _unsubscribe_page(
+            "That link is not valid",
+            "It may have been truncated by your mail client. Write to "
+            "support@morgenruf.dev and it will be handled by a person.",
+        ), 400
+    try:
+        db.suppress_email(email)
+    except Exception as exc:
+        logger.error("unsubscribe failed for one address: %s", exc)
+        return _unsubscribe_page(
+            "Something went wrong", "Write to support@morgenruf.dev and it will be done by hand."
+        ), 500
+    return _unsubscribe_page(
+        "Unsubscribed",
+        "No more email from Morgenruf to this address. The Slack app itself is unaffected and keeps working.",
+    )
+
+
+def _unsubscribe_page(heading: str, body: str) -> str:
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{heading} — Morgenruf</title></head>
+<body style="margin:0;background:#FFFDF8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+             display:flex;align-items:center;justify-content:center;min-height:100vh;">
+<div style="max-width:440px;padding:32px;text-align:center;">
+  <img src="https://morgenruf.dev/logo-mark.png" width="56" height="56" alt="" style="border-radius:12px"/>
+  <h1 style="font-size:24px;color:#191B2A;margin:18px 0 10px;">{heading}</h1>
+  <p style="font-size:15.5px;color:#5A5E74;line-height:1.6;margin:0 0 22px;">{body}</p>
+  <a href="https://morgenruf.dev" style="color:#E0322E;font-weight:600;text-decoration:none;">morgenruf.dev</a>
+</div></body></html>"""
 
 
 # ---------------------------------------------------------------------------

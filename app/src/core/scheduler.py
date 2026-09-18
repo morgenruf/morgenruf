@@ -1680,8 +1680,30 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         next_run_time=datetime.now(tz=timezone.utc) + timedelta(seconds=20),
     )
 
+    # A week after install, ask one question. Daily rather than hourly because
+    # the message is about a week having passed, and the hour it lands is worth
+    # keeping sane: 15:00 UTC is mid-morning in Toronto and late afternoon in
+    # Europe, which beats 03:00 for whoever reads it.
+    scheduler.add_job(
+        _send_install_followups,
+        trigger=CronTrigger(hour=15, minute=0, timezone="UTC"),
+        id="install_followups",
+        name="Install follow-up email",
+        replace_existing=True,
+    )
+
     _scheduler = scheduler
     return scheduler
+
+
+def _send_install_followups() -> None:
+    """One email per workspace, a week after it was installed."""
+    try:
+        from src.core.mailer import send_install_followups  # noqa: PLC0415
+
+        send_install_followups()
+    except Exception:
+        logger.exception("Install follow-up pass failed")
 
 
 @dataclass(frozen=True)
