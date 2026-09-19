@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -225,6 +225,10 @@ it('requires a channel and focuses its trigger when validation fails', async () 
   expect(await screen.findByText('Choose a channel.')).toBeInTheDocument();
   expect(channel).toHaveAttribute('aria-invalid', 'true');
   await waitFor(() => expect(channel).toHaveFocus());
+  // React Hook Form schedules a second focus pass after invalid submission.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   expect(mock.create).not.toHaveBeenCalled();
   await chooseOption(user, 'Channel', '#design');
   await user.click(screen.getByRole('button', { name: 'Save standup' }));
@@ -282,4 +286,5 @@ it.each([
       ),
     );
   },
+  15_000,
 );

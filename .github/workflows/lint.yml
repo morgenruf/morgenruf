@@ -17,7 +17,9 @@ jobs:
           python-version: '3.12'
       - uses: astral-sh/ruff-action@v3
         with:
-          args: check app/src --output-format=github
+          src: "."
+          args: check --output-format=github
       - uses: astral-sh/ruff-action@v3
         with:
-          args: format app/src --check
+          src: "."
+          args: format --check
