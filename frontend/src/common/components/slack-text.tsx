@@ -1,5 +1,12 @@
 import { Fragment, type ReactNode } from 'react';
 
+function decodeSlackEntities(value: string) {
+  // Decode only Slack's three entities, in one pass so &amp;lt; stays &lt;.
+  return value.replace(/&(amp|lt|gt);/g, (entity) =>
+    entity === '&amp;' ? '&' : entity === '&lt;' ? '<' : '>',
+  );
+}
+
 /** Render Slack text as React nodes; user-provided HTML is never interpreted. */
 export function SlackText({
   text,
@@ -17,7 +24,7 @@ export function SlackText({
   return (
     <span className="whitespace-pre-wrap break-words">
       {pieces.map((piece, index) => {
-        let content: ReactNode = piece;
+        let content: ReactNode = decodeSlackEntities(piece);
         const user = piece.match(/^<@([^>|]+)(?:\|([^>]+))?>$/);
         const channel = piece.match(/^<#([^>|]+)(?:\|([^>]+))?>$/);
         const link = piece.match(/^<(https?:\/\/[^>|]+)(?:\|([^>]+))?>$/);
@@ -25,40 +32,36 @@ export function SlackText({
         if (user)
           content = (
             <span className="font-medium">
-              @{members[user[1]] ?? user[2] ?? user[1]}
+              @{members[user[1]] ?? decodeSlackEntities(user[2] ?? user[1])}
             </span>
           );
         else if (channel)
           content = (
             <span className="font-medium">
-              #{channels[channel[1]] ?? channel[2] ?? channel[1]}
+              #
+              {channels[channel[1]] ??
+                decodeSlackEntities(channel[2] ?? channel[1])}
             </span>
           );
         else if (link)
           content = (
             <a
-              href={link[1]}
+              href={decodeSlackEntities(link[1])}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary underline underline-offset-2"
             >
-              {link[2] ?? link[1]}
+              {decodeSlackEntities(link[2] ?? link[1])}
             </a>
           );
         else if (piece.startsWith('*') && piece.endsWith('*'))
-          content = <strong>{piece.slice(1, -1)}</strong>;
+          content = <strong>{decodeSlackEntities(piece.slice(1, -1))}</strong>;
         else if (piece.startsWith('`') && piece.endsWith('`'))
           content = (
             <code className="rounded bg-muted px-1 text-xs">
-              {piece.slice(1, -1)}
+              {decodeSlackEntities(piece.slice(1, -1))}
             </code>
           );
-        else
-          content = piece
-            .replaceAll('&amp;', '&')
-            .replaceAll('&lt;', '<')
-            .replaceAll('&gt;', '>');
-
         return <Fragment key={index}>{content}</Fragment>;
       })}
     </span>

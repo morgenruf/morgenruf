@@ -248,6 +248,42 @@ const workspaceSettings = {
   ai_provider: 'anthropic',
 };
 
+it.each([
+  ['Summary', 'Daily email to', 'bad-address', 'lead@example.com'],
+  ['Advanced', 'Jira base URL', 'bad-url', 'https://team.atlassian.net'],
+  [
+    'Summary',
+    'Remind missing participants before report (minutes)',
+    '21',
+    '25',
+  ],
+])(
+  'reveals and focuses the invalid %s field %s before saving',
+  async (tab, label, invalid, valid) => {
+    const user = userEvent.setup();
+    view('/dashboard/standups?edit=7');
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('tab', { name: tab }));
+    const input = screen.getByLabelText(label);
+    await user.clear(input);
+    await user.type(input, invalid);
+    await user.click(screen.getByRole('tab', { name: 'Basics' }));
+    await user.click(screen.getByRole('button', { name: 'Save standup' }));
+
+    await waitFor(() => expect(input).toBeVisible());
+    expect(input).toHaveFocus();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      (input as HTMLInputElement).validationMessage,
+    );
+    expect(mock.update).not.toHaveBeenCalled();
+
+    await user.clear(input);
+    await user.type(input, valid);
+    await user.click(screen.getByRole('button', { name: 'Save standup' }));
+    await waitFor(() => expect(mock.update).toHaveBeenCalledOnce());
+  },
+);
+
 it('loads shared settings before opening a new standup and leaves them unchanged on save', async () => {
   let resolveStandups!: (value: { data: Standup[] }) => void;
   mock.list.mockReturnValue(

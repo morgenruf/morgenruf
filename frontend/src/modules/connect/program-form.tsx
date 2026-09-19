@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from '@/common/components/ui/select';
 import { applyApiErrors } from '@/common/forms/api-errors';
+import { useTabbedFormValidation } from '@/common/forms/use-tabbed-form-validation';
 
 import { dayNames, programDefaults, programTime } from './form-utils';
 import {
@@ -348,6 +349,7 @@ export function ProgramForm({ program }: { program?: Program }) {
   const form = useForm<ProgramInput>({
     defaultValues: programDefaults(program),
   });
+  const onInvalid = useTabbedFormValidation(tabs, setTab, form.setError);
   const { register, setValue } = form;
   const values = useWatch({ control: form.control });
 
@@ -446,7 +448,11 @@ export function ProgramForm({ program }: { program?: Program }) {
               </Button>
             ))}
           </div>
-          <form onSubmit={submit} className="space-y-6">
+          <form
+            onSubmit={submit}
+            onInvalidCapture={onInvalid}
+            className="space-y-6"
+          >
             <fieldset
               disabled={!editable || save.isPending}
               className="min-w-0 space-y-5"
@@ -455,6 +461,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 role="tabpanel"
                 aria-labelledby={`${id}-Basics`}
                 id={`${id}-panel-Basics`}
+                data-tab="Basics"
                 hidden={tab !== 'Basics'}
                 className="space-y-5"
               >
@@ -627,6 +634,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 role="tabpanel"
                 aria-labelledby={`${id}-Matching`}
                 id={`${id}-panel-Matching`}
+                data-tab="Matching"
                 hidden={tab !== 'Matching'}
                 className="space-y-5"
               >
@@ -693,6 +701,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 role="tabpanel"
                 aria-labelledby={`${id}-Message`}
                 id={`${id}-panel-Message`}
+                data-tab="Message"
                 hidden={tab !== 'Message'}
                 className="space-y-5"
               >
@@ -746,6 +755,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 role="tabpanel"
                 aria-labelledby={`${id}-Meeting`}
                 id={`${id}-panel-Meeting`}
+                data-tab="Meeting"
                 hidden={tab !== 'Meeting'}
                 className="space-y-5"
               >
@@ -876,6 +886,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 role="tabpanel"
                 aria-labelledby={`${id}-Members`}
                 id={`${id}-panel-Members`}
+                data-tab="Members"
               >
                 <ProgramMembers programId={program.id} />
               </section>

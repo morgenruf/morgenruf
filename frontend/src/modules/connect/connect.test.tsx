@@ -271,6 +271,34 @@ it('disables coffee chat choices for read-only members', async () => {
   expect(screen.getByRole('combobox', { name: 'On' })).toBeDisabled();
 });
 
+it('reveals an invalid meeting link on its tab and allows saving after correction', async () => {
+  mock.admin = true;
+  const user = userEvent.setup();
+  view(<ProgramForm />);
+  await chooseOption(user, 'Draw people from', '#engineering');
+  await user.click(screen.getByRole('tab', { name: 'Meeting' }));
+  const link = screen.getByLabelText('Shared meeting link');
+  await user.type(link, 'bad-url');
+  await user.click(screen.getByRole('tab', { name: 'Basics' }));
+  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+
+  await waitFor(() => expect(link).toBeVisible());
+  expect(link).toHaveFocus();
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    (link as HTMLInputElement).validationMessage,
+  );
+  expect(mock.create).not.toHaveBeenCalled();
+
+  await user.clear(link);
+  await user.type(link, 'https://example.com/meeting');
+  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+  await waitFor(() =>
+    expect(mock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ meeting_link: 'https://example.com/meeting' }),
+    ),
+  );
+});
+
 it('keeps the selected values and disables choices while saving a coffee chat', async () => {
   mock.admin = true;
   let resolveSave!: (value: { data: { id: number } }) => void;
