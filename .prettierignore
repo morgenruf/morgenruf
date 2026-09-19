@@ -1,0 +1,8 @@
+node_modules/
+frontend/dist/
+frontend/src/common/api/generated/
+app/openapi.json
+pnpm-lock.yaml
+
+frontend/playwright-report/
+frontend/test-results/
