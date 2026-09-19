@@ -16,7 +16,19 @@ export const defaultQuestions = [
   'Any blockers?',
 ];
 
-export function standupDefaults(value?: Standup): StandupInput {
+export const workspaceSettingFields = [
+  'edit_window',
+  'jira_base_url',
+  'github_repo',
+  'linear_team',
+  'ai_summary_enabled',
+  'ai_provider',
+] as const;
+
+export function standupDefaults(
+  value?: Standup,
+  workspace = value,
+): StandupInput {
   return {
     name: value?.name ?? 'Morning Standup',
     channel_id: value?.channel_id ?? '',
@@ -45,14 +57,15 @@ export function standupDefaults(value?: Standup): StandupInput {
     post_summary: value?.post_summary ?? true,
     notify_on_report: value?.notify_on_report ?? true,
     edit_window:
-      value?.edit_window === '4h' || value?.edit_window === 'none'
-        ? value.edit_window
+      workspace?.edit_window === '4h' || workspace?.edit_window === 'none'
+        ? workspace.edit_window
         : 'report',
-    jira_base_url: value?.jira_base_url ?? '',
-    github_repo: value?.github_repo ?? '',
-    linear_team: value?.linear_team ?? '',
-    ai_summary_enabled: value?.ai_summary_enabled ?? false,
-    ai_provider: value?.ai_provider === 'anthropic' ? 'anthropic' : 'openai',
+    jira_base_url: workspace?.jira_base_url ?? '',
+    github_repo: workspace?.github_repo ?? '',
+    linear_team: workspace?.linear_team ?? '',
+    ai_summary_enabled: workspace?.ai_summary_enabled ?? false,
+    ai_provider:
+      workspace?.ai_provider === 'anthropic' ? 'anthropic' : 'openai',
   };
 }
 

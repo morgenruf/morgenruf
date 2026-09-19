@@ -239,6 +239,94 @@ it('requires a channel and focuses its trigger when validation fails', async () 
   );
 });
 
+const workspaceSettings = {
+  edit_window: '4h',
+  jira_base_url: 'https://team.atlassian.net',
+  github_repo: 'team/project',
+  linear_team: 'ENG',
+  ai_summary_enabled: true,
+  ai_provider: 'anthropic',
+};
+
+it('loads shared settings before opening a new standup and leaves them unchanged on save', async () => {
+  let resolveStandups!: (value: { data: Standup[] }) => void;
+  mock.list.mockReturnValue(
+    new Promise((resolve) => {
+      resolveStandups = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  view('/dashboard/standups?new=true');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  await act(async () =>
+    resolveStandups({ data: [{ ...standup, ...workspaceSettings }] }),
+  );
+  await screen.findByRole('dialog');
+  await chooseOption(user, 'Channel', '#design');
+  await user.click(screen.getByRole('tab', { name: 'Advanced' }));
+  expect(
+    screen.getByRole('combobox', { name: 'Edit window' }),
+  ).toHaveTextContent('4 hours');
+  expect(screen.getByLabelText('Jira base URL')).toHaveValue(
+    workspaceSettings.jira_base_url,
+  );
+  expect(screen.getByLabelText('GitHub repository')).toHaveValue(
+    workspaceSettings.github_repo,
+  );
+  expect(screen.getByLabelText('Linear team prefix')).toHaveValue('ENG');
+  expect(
+    screen.getByRole('combobox', { name: 'AI provider' }),
+  ).toHaveTextContent('Anthropic');
+  expect(
+    screen.getByLabelText('Enable AI-generated daily summary'),
+  ).toBeChecked();
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  await waitFor(() => expect(mock.create).toHaveBeenCalled());
+  const payload = mock.create.mock.calls[0][0];
+  for (const field of Object.keys(workspaceSettings)) {
+    expect(payload).not.toHaveProperty(field);
+  }
+});
+
+it('does not overwrite shared settings when creating the first remaining standup', async () => {
+  mock.list.mockResolvedValue({ data: [] });
+  const user = userEvent.setup();
+  view('/dashboard/standups?new=true');
+  await screen.findByRole('dialog');
+  await chooseOption(user, 'Channel', '#design');
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  await waitFor(() => expect(mock.create).toHaveBeenCalled());
+  for (const field of Object.keys(workspaceSettings)) {
+    expect(mock.create.mock.calls[0][0]).not.toHaveProperty(field);
+  }
+});
+
+it('saves deliberate shared-setting changes while creating a standup, including cleared values', async () => {
+  mock.list.mockResolvedValue({ data: [{ ...standup, ...workspaceSettings }] });
+  const user = userEvent.setup();
+  view('/dashboard/standups?new=true');
+  await screen.findByRole('dialog');
+  await chooseOption(user, 'Channel', '#design');
+  await user.click(screen.getByRole('tab', { name: 'Advanced' }));
+  await chooseOption(user, 'Edit window', 'Until report time');
+  await chooseOption(user, 'AI provider', 'OpenAI');
+  await user.click(screen.getByLabelText('Enable AI-generated daily summary'));
+  await user.clear(screen.getByLabelText('Jira base URL'));
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  await waitFor(() =>
+    expect(mock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        edit_window: 'report',
+        ai_provider: 'openai',
+        ai_summary_enabled: false,
+        jira_base_url: '',
+      }),
+    ),
+  );
+  expect(mock.create.mock.calls[0][0]).not.toHaveProperty('github_repo');
+  expect(mock.create.mock.calls[0][0]).not.toHaveProperty('linear_team');
+});
+
 it.each([
   ['The weekend (~2.5 days)', -1],
   ['No reminder', 0],

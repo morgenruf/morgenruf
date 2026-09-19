@@ -10,7 +10,10 @@ export const dayNames = [
   'Sunday',
 ];
 
-export function programDefaults(program?: Program): ProgramInput {
+// Pause/Resume owns `enabled`; saving settings must leave that state alone.
+export function programDefaults(
+  program?: Program,
+): Omit<ProgramInput, 'enabled'> {
   return {
     name: program?.name ?? 'Coffee chats',
     channel_id: program?.channel_id ?? '',
@@ -22,7 +25,6 @@ export function programDefaults(program?: Program): ProgramInput {
       program?.timezone ??
       Intl.DateTimeFormat().resolvedOptions().timeZone ??
       'UTC',
-    enabled: program?.enabled ?? true,
     meeting_minutes:
       program?.meeting_minutes === 15 ||
       program?.meeting_minutes === 45 ||
