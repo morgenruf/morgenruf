@@ -27,8 +27,12 @@ REPLY_TO = "support@morgenruf.dev"
 SITE = "https://morgenruf.dev"
 APP = os.environ.get("APP_URL", "https://api.morgenruf.dev").rstrip("/")
 
-# Sender identity, required on any commercial electronic message under CASL.
-POSTAL = "CloudDrove, Kitchener, Ontario, Canada"
+# Sender identity and a mailing address, required on any commercial electronic
+# message under CASL. The day-seven message asks a question, which makes it
+# commercial rather than transactional, so this is not decoration. Taken from
+# CloudDrove's own contact page rather than invented.
+POSTAL = ("CloudDrove &middot; 18 King Street East, Suite 1400, "
+          "Toronto, Ontario M5C 1C4, Canada \U0001F1E8\U0001F1E6")
 
 
 def unsubscribe_token(email: str) -> str:
@@ -187,7 +191,8 @@ def welcome_html(team_name: str, installed_by: str, email: str) -> str:
 {_step("3", "One summary posts to your channel", "Grouped by person or question, with blockers pulled out.")}
 <p style="margin:24px 0 0;font-size:14.5px;color:{MUTED};line-height:1.6;">
   Coffee chats and kudos are in there too, switched off until you want them.
-  If anything is confusing, reply to this email: it reaches a person.</p>"""
+  If anything is confusing, reply to this email: it reaches a person.</p>
+{optin_block(email)}"""
     return _shell(f"Morgenruf is installed in {team_name}. One step left.", body, email)
 
 
@@ -314,3 +319,145 @@ def _installer_email(team_id: str, user_id) -> str:
     except Exception as exc:
         logger.warning("Could not look up the installer's address: %s", exc)
     return ""
+
+
+# ── Consent, and the contact list ───────────────────────────────────────────
+
+
+def subscribe_url(email: str) -> str:
+    from urllib.parse import quote
+
+    return f"{APP}/email/subscribe?e={quote(email)}&t={unsubscribe_token(email)}"
+
+
+def optin_block(email: str) -> str:
+    """The ask, in every install-time email.
+
+    Slack's guidelines want explicit email consent, and Canadian law wants it
+    in writing with a date. One link, no pre-ticked box, and nothing is sent
+    about features until it is pressed.
+    """
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:26px 0 0;">'
+            f'<tr><td style="border-top:1px solid {LINE};padding-top:18px;">'
+            f'<p style="margin:0 0 6px;font-size:14.5px;font-weight:700;color:{TEXT};">Want to hear when something ships?</p>'
+            f'<p style="margin:0 0 10px;font-size:14px;color:{MUTED};line-height:1.55;">'
+            f'New features, roughly monthly, never more. You are not subscribed to anything yet.</p>'
+            f'<a href="{subscribe_url(email)}" style="font-size:14.5px;font-weight:700;color:{ROOSTER};">'
+            f'Yes, email me product updates &rarr;</a>'
+            f'</td></tr></table>')
+
+
+def sync_contact(email: str, team_id: str = "") -> bool:
+    """Put an opted-in address on the Resend audience, if one is configured.
+
+    Resend is already the sender and already named in the privacy policy, so
+    using its audience adds no new company to the list of people who hold your
+    team's addresses. Without RESEND_AUDIENCE_ID this does nothing, which is
+    the right behaviour for a self-hosted install: somebody else's deployment
+    must never post contacts to ours.
+    """
+    audience = os.environ.get("RESEND_AUDIENCE_ID", "")
+    if not audience:
+        return False
+    try:
+        import resend  # type: ignore[import]  # noqa: PLC0415
+
+        resend.api_key = os.environ.get("RESEND_API_KEY", "")
+        if not resend.api_key:
+            return False
+        resend.Contacts.create({"audience_id": audience, "email": email, "unsubscribed": False})
+        logger.info("Added an opted-in contact to the audience")
+        return True
+    except Exception as exc:
+        logger.warning("Could not sync the contact to Resend: %s", exc)
+        return False
+
+
+def unsync_contact(email: str) -> None:
+    """Mark the contact unsubscribed upstream when somebody opts out here."""
+    audience = os.environ.get("RESEND_AUDIENCE_ID", "")
+    if not audience:
+        return
+    try:
+        import resend  # type: ignore[import]  # noqa: PLC0415
+
+        resend.api_key = os.environ.get("RESEND_API_KEY", "")
+        if resend.api_key:
+            resend.Contacts.update({"audience_id": audience, "email": email, "unsubscribed": True})
+    except Exception as exc:
+        logger.warning("Could not update the contact upstream: %s", exc)
+
+
+def uninstall_html(team_name: str, email: str, days_installed: int, standups: int) -> str:
+    """Sent when a workspace removes the app.
+
+    This is the feedback that matters. Companies install it, it does not stick,
+    and they leave without anybody learning why: eleven of the first twenty did
+    exactly that, and not one of them had ever created a standup.
+
+    The message confirms the deletion, which is the part they are owed, and
+    asks one question. It does not try to win them back, because an app that
+    argues on the way out is the reason people do not reply.
+    """
+    used = (f"It ran {standups} standups over {days_installed} days."
+            if standups else
+            f"It was installed for {days_installed} days and never ran a standup, "
+            f"which is the part worth understanding.")
+    body = f"""
+<p style="margin:0 0 6px;font-size:23px;font-weight:700;color:{TEXT};letter-spacing:-0.02em;">
+  Morgenruf has been removed from {team_name}</p>
+<p style="margin:0 0 20px;font-size:15.5px;color:{MUTED};line-height:1.6;">
+  Everything it held for your workspace has been deleted: standup answers, pairings,
+  kudos and the Slack token. Nothing is kept, and there is no copy anywhere else. {used}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+  <tr><td style="background:{PAPER};border-left:3px solid {AMBER};border-radius:0 10px 10px 0;padding:16px 18px;">
+    <p style="margin:0;font-size:15.5px;color:{TEXT};line-height:1.6;">
+      <strong>What was wrong with it?</strong><br/>
+      One sentence, as a reply to this email. It reaches the person who wrote it, and it is
+      worth more than the install was.</p>
+  </td></tr></table>
+<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:{ROOSTER};">If it helps, the usual answers</p>
+{_step("·", "It never got set up", "Installing does nothing on its own: somebody has to create a standup, and most people never get that far.")}
+{_step("·", "Wrong platform", "Teams is being built. Google Chat is in beta.")}
+{_step("·", "It was annoying", "Too many messages, wrong hour, or nagging people. All three are settings, and all three default badly for some teams.")}
+<p style="margin:22px 0 0;font-size:14px;color:{MUTED};line-height:1.6;">
+  No follow-up after this one. If you reinstall, everything starts fresh.</p>"""
+    return _shell(f"Morgenruf removed from {team_name}. Your data is deleted.", body, email)
+
+
+def farewell(team_id: str) -> None:
+    """Confirm the deletion and ask what was wrong, before anything is deleted.
+
+    Order matters: the address, the install date and the standup count all live
+    in rows that the uninstall handler is about to remove. Called afterwards,
+    this has nothing to write to and nothing to say.
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        inst = db.get_installation(team_id)
+        if not inst:
+            return
+        team_name = inst.get("team_name") or "your workspace"
+        installer = inst.get("installed_by_user_id")
+        email = _installer_email(team_id, installer)
+        if not email:
+            logger.info("No address for %s, so no farewell email", team_name)
+            return
+
+        installed_at = inst.get("installed_at")
+        days = 0
+        if installed_at:
+            from datetime import datetime, timezone  # noqa: PLC0415
+
+            now = datetime.now(timezone.utc)
+            days = max(0, (now - installed_at).days) if installed_at.tzinfo else 0
+        try:
+            standups = db.count_standups(team_id)
+        except Exception:
+            standups = 0
+
+        send(email, f"Morgenruf removed from {team_name}. Your data is deleted.",
+             uninstall_html(team_name, email, days, standups), kind="farewell")
+    except Exception as exc:
+        logger.warning("Could not send the farewell email: %s", exc)

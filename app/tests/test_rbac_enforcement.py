@@ -50,6 +50,8 @@ PUBLIC_BY_DESIGN = {
     # stop email is how an app gets reported as spam. The link carries an HMAC
     # of the address instead.
     "/email/unsubscribe",
+    # Same reason: it arrives as a link in an email, and the HMAC is the guard.
+    "/email/subscribe",
 }
 
 # Every mutating route a member must be refused, with what it would let them do.

@@ -79,8 +79,8 @@ class TestEveryMessageCanBeStopped:
             mailer.followup_stalled_html("T", "p@example.com"),
         ],
     )
-    def test_it_says_who_is_writing_and_from_where(self, html):
-        assert "Kitchener, Ontario, Canada" in html
+    def test_it_says_who_is_writing_and_gives_a_mailing_address(self, html):
+        assert "CloudDrove" in html and "Toronto, Ontario" in html
 
     def test_the_token_is_tied_to_the_address(self):
         a = mailer.unsubscribe_token("one@example.com")
@@ -214,3 +214,58 @@ class TestTheUnsubscribeEndpoint:
         r = c.post(f"/email/unsubscribe?e={email}&t={mailer.unsubscribe_token(email)}")
         assert r.status_code == 200
         db.suppress_email.assert_called_once()
+
+
+class TestTheFarewell:
+    """The message that catches the thing nobody has been learning.
+
+    Eleven of the first twenty workspaces removed the app, including companies
+    worth listening to, and not one was ever asked why.
+    """
+
+    def test_it_confirms_the_deletion_first(self):
+        html = mailer.uninstall_html("TUM Venture Labs", "s@example.com", 29, 0)
+        assert "has been deleted" in html
+        assert html.index("deleted") < html.index("What was wrong")
+
+    def test_it_says_when_nothing_ever_ran(self):
+        html = mailer.uninstall_html("B1", "s@example.com", 18, 0)
+        assert "never ran a standup" in html
+
+    def test_it_counts_the_standups_when_there_were_some(self):
+        html = mailer.uninstall_html("Northwind", "s@example.com", 90, 240)
+        assert "240 standups over 90 days" in html
+
+    def test_it_does_not_try_to_win_them_back(self):
+        html = mailer.uninstall_html("X", "s@example.com", 10, 0)
+        for plea in ("come back", "reconsider", "special offer", "discount"):
+            assert plea not in html.lower()
+
+    def test_it_promises_no_further_email(self):
+        assert "No follow-up after this one" in mailer.uninstall_html("X", "s@example.com", 3, 0)
+
+    def test_it_is_sent_before_the_data_is_deleted(self):
+        """Called after the delete, it has no address and no history to use."""
+        import pathlib
+
+        src = pathlib.Path("src/modules/standup/handlers.py").read_text()
+        for handler in ("tokens_revoked", "app_uninstalled"):
+            block = src[src.index(f'@app.event("{handler}")'):]
+            block = block[: block.index("deleted = db.delete_installation")]
+            assert "farewell(team_id)" in block, f"{handler} deletes before it asks"
+
+
+class TestConsentIsAskedForNotAssumed:
+    def test_the_welcome_asks_rather_than_subscribing_them(self):
+        html = mailer.welcome_html("T", "P", "p@example.com")
+        assert "You are not subscribed to anything yet" in html
+        assert "/email/subscribe" in html
+
+    def test_the_link_is_tied_to_the_address(self):
+        a = mailer.subscribe_url("one@example.com")
+        assert "one%40example.com" in a and mailer.unsubscribe_token("one@example.com") in a
+
+    def test_nothing_is_synced_without_an_audience(self, monkeypatch):
+        """A self-hosted install must never post its users to our contact list."""
+        monkeypatch.delenv("RESEND_AUDIENCE_ID", raising=False)
+        assert mailer.sync_contact("someone@example.com") is False

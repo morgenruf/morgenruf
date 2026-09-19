@@ -480,6 +480,34 @@ def api_delete_standup(standup_id: str):
         return jsonify({"error": str(exc)}), 500
 
 
+@dashboard_bp.route("/email/subscribe", methods=["GET", "POST"])
+def email_subscribe():
+    """Record an express opt-in to product update emails.
+
+    The link is in the welcome email, nothing is pre-ticked, and until it is
+    pressed the only email anybody gets is about their own install. The record
+    is the proof Canadian law asks for, so it keeps when and from where.
+    """
+    from src.core import mailer  # noqa: PLC0415
+
+    email = (request.args.get("e") or "").strip()
+    token = (request.args.get("t") or "").strip()
+    if not email or not hmac.compare_digest(token, mailer.unsubscribe_token(email)):
+        return _unsubscribe_page("That link is not valid",
+                                 "It may have been truncated by your mail client. Write to "
+                                 "support@morgenruf.dev and it will be handled by a person."), 400
+    try:
+        db.grant_email_consent(email, source="welcome-email", ip=request.headers.get("CF-Connecting-IP", ""))
+        mailer.sync_contact(email)
+    except Exception as exc:
+        logger.error("Could not record consent: %s", exc)
+        return _unsubscribe_page("Something went wrong",
+                                 "Write to support@morgenruf.dev and it will be done by hand."), 500
+    return _unsubscribe_page("You are on the list",
+                             "About one email a month, when something ships. Every one of them has "
+                             "an unsubscribe link, and pressing it stops them immediately.")
+
+
 @dashboard_bp.route("/email/unsubscribe", methods=["GET", "POST"])
 def email_unsubscribe():
     """Stop emailing this address. No login, one click, works from the header.
@@ -499,6 +527,10 @@ def email_unsubscribe():
         ), 400
     try:
         db.suppress_email(email)
+        db.revoke_email_consent(email)
+        from src.core import mailer as _mailer  # noqa: PLC0415
+
+        _mailer.unsync_contact(email)
     except Exception as exc:
         logger.error("unsubscribe failed for one address: %s", exc)
         return _unsubscribe_page(

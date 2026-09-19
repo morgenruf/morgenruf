@@ -780,6 +780,12 @@ def register_handlers(app: App) -> None:
         if not team_id:
             logger.warning("tokens_revoked received with no team_id: %s", event)
             return
+
+        # Before the delete, not after: the address and the history this email
+        # needs are in the rows about to be removed.
+        from src.core.mailer import farewell  # noqa: PLC0415
+
+        farewell(team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
             logger.info("tokens_revoked: deleted installation and all data for team %s", team_id)
@@ -795,6 +801,12 @@ def register_handlers(app: App) -> None:
         if not team_id:
             logger.warning("app_uninstalled received with no team_id: %s", event)
             return
+
+        # Before the delete, not after: the address and the history this email
+        # needs are in the rows about to be removed.
+        from src.core.mailer import farewell  # noqa: PLC0415
+
+        farewell(team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
             logger.info("app_uninstalled: deleted installation and all data for team %s", team_id)

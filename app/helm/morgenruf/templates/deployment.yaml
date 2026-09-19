@@ -84,6 +84,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: RESEND_API_KEY
+            {{- if .Values.resend.audienceId }}
+            - name: RESEND_AUDIENCE_ID
+              value: {{ .Values.resend.audienceId | quote }}
+            {{- end }}
             - name: APP_URL
               valueFrom:
                 secretKeyRef:

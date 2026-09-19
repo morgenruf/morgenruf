@@ -1982,3 +1982,72 @@ def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (days,))
             return [dict(r) for r in cur.fetchall()]
+
+
+# ── Consent to be emailed about the product ─────────────────────────────────
+
+
+def grant_email_consent(email: str, team_id: str = "", source: str = "welcome-email", ip: str = "") -> None:
+    """Record an express opt-in. The row is the proof, so it keeps the details."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO email_consents (email, team_id, source, ip, granted_at, revoked_at)
+                VALUES (%s, %s, %s, %s, NOW(), NULL)
+                ON CONFLICT (email) DO UPDATE
+                   SET granted_at = NOW(), revoked_at = NULL,
+                       source = EXCLUDED.source, ip = EXCLUDED.ip
+                """,
+                (email.lower(), team_id or None, source, ip or None),
+            )
+
+
+def revoke_email_consent(email: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE email_consents SET revoked_at = NOW() WHERE email = %s AND revoked_at IS NULL",
+                (email.lower(),),
+            )
+
+
+def has_email_consent(email: str) -> bool:
+    if not email:
+        return False
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM email_consents WHERE email = %s AND revoked_at IS NULL",
+                (email.lower(),),
+            )
+            return cur.fetchone() is not None
+
+
+def consented_contacts(unsynced_only: bool = False) -> list[dict]:
+    """Everyone who has opted in, for pushing to the contact list."""
+    sql = """
+        SELECT email, team_id, granted_at, synced_at FROM email_consents
+         WHERE revoked_at IS NULL
+    """
+    if unsynced_only:
+        sql += " AND synced_at IS NULL"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
+def mark_contact_synced(email: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE email_consents SET synced_at = NOW() WHERE email = %s", (email.lower(),))
+
+
+def count_standups(team_id: str) -> int:
+    """How many standups a workspace ever filed. Used on the way out."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM standups WHERE team_id = %s", (team_id,))
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
