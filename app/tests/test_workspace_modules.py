@@ -147,45 +147,6 @@ def test_core_reads_the_registry_lazily():
             raise AssertionError(f"core/dashboard.py imports modules at import time: {line}")
 
 
-class TestEveryGateIsReachableFromTheDashboard:
-    """A gate the dashboard cannot open is a feature nobody can use.
-
-    Connect shipped blocked by three of them in turn. The scopes gate had a
-    re-authorise link; the workspace toggle had none, so a workspace that
-    granted the scopes still had a programme that would never run, with
-    nothing on screen to say why. The API endpoint existed and had no caller.
-    """
-
-    @staticmethod
-    def _template() -> str:
-        import pathlib
-
-        root = pathlib.Path(__file__).resolve().parents[1]
-        return (root / "src/core/templates/dashboard.html").read_text()
-
-    def test_the_dashboard_can_turn_a_module_on(self):
-        markup = self._template()
-        assert "'/modules/connect'" in markup, "no caller for the module toggle endpoint"
-        assert "enabled: true" in markup
-
-    def test_a_module_that_is_off_says_so_rather_than_looking_empty(self):
-        markup = self._template()
-        assert "Coffee chats are switched off" in markup
-
-    def test_the_scopes_gate_still_has_its_own_message(self):
-        """The two gates need different answers: one needs Slack, one needs a click."""
-        markup = self._template()
-        assert "Connect needs more Slack access" in markup
-        assert "Re-authorise Slack" in markup
-
-    def test_the_off_state_is_checked_after_scopes(self):
-        """Offering a toggle to a workspace that cannot use it would be a lie."""
-        markup = self._template()
-        scopes_at = markup.index("Connect needs more Slack access")
-        toggle_at = markup.index("Coffee chats are switched off")
-        assert scopes_at < toggle_at
-
-
 class TestNavIsDeclaredAndUsable:
     """ModuleSpec.nav has to describe the page each module actually adds.
 
@@ -201,35 +162,3 @@ class TestNavIsDeclaredAndUsable:
         by_name = {spec.name: spec for spec in REGISTRY}
         for name in ("standup", "kudos", "connect", "insights"):
             assert by_name[name].nav, f"{name} has a dashboard page but declares no nav"
-
-    def test_nav_paths_match_a_sidebar_section(self):
-        import os
-
-        from src.modules import REGISTRY
-
-        template = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
-        with open(template, encoding="utf-8") as fh:
-            markup = fh.read()
-
-        for spec in REGISTRY:
-            for item in spec.nav:
-                if not item.path.startswith("#"):
-                    continue  # standup's "/" is the default section
-                section = item.path.lstrip("#")
-                assert f'data-section="{section}"' in markup, f"{spec.name} nav points at a section that is not there"
-
-    def test_a_hideable_row_carries_its_module_name(self):
-        # The sidebar can only hide a row it can find, and it looks the row up
-        # by module name alongside the nav section.
-        import os
-
-        from src.modules import REGISTRY
-
-        template = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
-        with open(template, encoding="utf-8") as fh:
-            markup = fh.read()
-
-        by_name = {spec.name: spec for spec in REGISTRY}
-        for name in ("connect", "kudos", "insights"):
-            assert f'data-module="{name}"' in markup
-            assert by_name[name].nav

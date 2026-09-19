@@ -185,26 +185,30 @@ class TestTheUnsubscribeEndpoint:
         app.config["TESTING"] = True
         app.config["SECRET_KEY"] = "test-secret"
         app.register_blueprint(dashboard.dashboard_bp)
+        app.register_blueprint(dashboard.browser_bp)
         return app.test_client(), db
 
     def test_a_valid_link_suppresses_the_address(self, client):
         c, db = client
         email = "someone@example.com"
         r = c.get(f"/email/unsubscribe?e={email}&t={mailer.unsubscribe_token(email)}")
-        assert r.status_code == 200
+        assert r.status_code == 303
+        assert r.location == "/email/result?status=unsubscribed"
         db.suppress_email.assert_called_once_with(email)
 
     def test_a_forged_token_changes_nothing(self, client):
         c, db = client
         r = c.get("/email/unsubscribe?e=victim@example.com&t=not-the-right-token")
-        assert r.status_code == 400
+        assert r.status_code == 303
+        assert r.location == "/email/result?status=invalid"
         db.suppress_email.assert_not_called()
 
     def test_somebody_elses_token_does_not_work_on_your_address(self, client):
         c, db = client
         stolen = mailer.unsubscribe_token("mine@example.com")
         r = c.get(f"/email/unsubscribe?e=victim@example.com&t={stolen}")
-        assert r.status_code == 400
+        assert r.status_code == 303
+        assert r.location == "/email/result?status=invalid"
         db.suppress_email.assert_not_called()
 
     def test_mail_clients_can_post_to_it(self, client):
@@ -248,9 +252,9 @@ class TestTheFarewell:
         """Called after the delete, it has no address and no history to use."""
         import pathlib
 
-        src = pathlib.Path("src/modules/standup/handlers.py").read_text()
+        src = (pathlib.Path(__file__).resolve().parent.parent / "src/modules/standup/handlers.py").read_text()
         for handler in ("tokens_revoked", "app_uninstalled"):
-            block = src[src.index(f'@app.event("{handler}")'):]
+            block = src[src.index(f'@app.event("{handler}")') :]
             block = block[: block.index("deleted = db.delete_installation")]
             assert "farewell(team_id)" in block, f"{handler} deletes before it asks"
 

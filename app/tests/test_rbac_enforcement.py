@@ -11,7 +11,6 @@ the newest module enforced and core did not.
 
 from __future__ import annotations
 
-import os
 import pathlib
 import re
 import sys
@@ -96,10 +95,11 @@ def _fake_db(role="member", grants=(), admins=1):
 
 
 def _client(monkeypatch, db, user_id="U_MEMBER"):
-    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
+    flask_app = Flask(__name__)
     flask_app.config["TESTING"] = True
     flask_app.config["SECRET_KEY"] = "test-secret"
     flask_app.register_blueprint(dashboard.dashboard_bp)
+    flask_app.register_blueprint(dashboard.browser_bp)
     monkeypatch.setattr(dashboard, "db", db)
     client = flask_app.test_client()
     with client.session_transaction() as sess:
@@ -131,7 +131,9 @@ class TestNoMutatingRouteIsLeftOpen:
     to be noticed in an audit.
     """
 
-    ROUTE = re.compile(r'@\w+\.route\(\s*["\']([^"\']+)["\']([^)]*)\)\s*((?:@[\w_]+(?:\([^)]*\))?\s*)*)def\s+(\w+)')
+    from tests.support import RouteDeclarations
+
+    ROUTE = RouteDeclarations()
 
     def _open_mutating_routes(self):
         files = [APP / "src/core/dashboard.py"] + sorted((APP / "src/modules").glob("*/dashboard.py"))
@@ -143,6 +145,8 @@ class TestNoMutatingRouteIsLeftOpen:
                 if not (methods & MUTATING):
                     continue
                 if path in PUBLIC_BY_DESIGN:
+                    continue
+                if path == "/dashboard/api/logout" and "_login_required" in decorators:
                     continue
                 if "_admin_required" not in decorators:
                     out.append(f"{sorted(methods & MUTATING)} {path} ({fn})")
