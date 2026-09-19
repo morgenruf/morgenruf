@@ -173,10 +173,15 @@ zoom:
 #
 # logLevel: set to DEBUG for verbose logs, including Flask debug output.
 # opsEmail: where the bot emails when a scheduled job fails. Blank disables it.
+# alertWebhook: a Slack incoming-webhook URL in the operator's own workspace.
+#   Posts a line when a workspace installs the app and when one removes it.
+#   Blank disables it. Treated as a secret because anyone holding the URL can
+#   post to that channel.
 # ---------------------------------------------------------------------------
 ops:
   logLevel: ""
   email: ""
+  alertWebhook: ""
 
 sentry:
   dsn: ""

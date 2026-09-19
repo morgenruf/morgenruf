@@ -783,8 +783,10 @@ def register_handlers(app: App) -> None:
 
         # Before the delete, not after: the address and the history this email
         # needs are in the rows about to be removed.
+        from src.core.alerts import departed  # noqa: PLC0415
         from src.core.mailer import farewell  # noqa: PLC0415
 
+        departed(team_id)
         farewell(team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
@@ -804,8 +806,10 @@ def register_handlers(app: App) -> None:
 
         # Before the delete, not after: the address and the history this email
         # needs are in the rows about to be removed.
+        from src.core.alerts import departed  # noqa: PLC0415
         from src.core.mailer import farewell  # noqa: PLC0415
 
+        departed(team_id)
         farewell(team_id)
         deleted = db.delete_installation(team_id)
         if deleted:

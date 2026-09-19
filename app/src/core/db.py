@@ -2051,3 +2051,12 @@ def count_standups(team_id: str) -> int:
             cur.execute("SELECT COUNT(*) FROM standups WHERE team_id = %s", (team_id,))
             row = cur.fetchone()
             return int(row[0]) if row else 0
+
+
+def count_installations() -> int:
+    """How many workspaces have the app right now. Used in the install alert."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM installations WHERE active")
+            row = cur.fetchone()
+            return int(row[0]) if row else 0

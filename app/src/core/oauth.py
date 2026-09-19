@@ -180,6 +180,14 @@ def oauth_callback():
         # Send welcome email (best-effort)
         _try_send_welcome_email(bot_token, team_name, authed_user_id, team_id)
 
+        # Tell the operator, in their own workspace, that this happened.
+        try:
+            from src.core.alerts import installed  # noqa: PLC0415
+
+            installed(team_id, team_name, authed_user_id)
+        except Exception as exc:
+            logger.warning("Could not post install alert for %s: %s", team_id, exc)
+
     # Register scheduler job for this workspace
     _schedule_workspace(team_id, bot_token)
 
