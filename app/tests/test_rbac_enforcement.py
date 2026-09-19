@@ -52,6 +52,9 @@ PUBLIC_BY_DESIGN = {
     "/email/unsubscribe",
     # Same reason: it arrives as a link in an email, and the HMAC is the guard.
     "/email/subscribe",
+    # Resend has no session with us. The Svix signature over the raw body is
+    # the authentication, and an unverified delivery is dropped unparsed.
+    "/webhooks/resend",
 }
 
 # Every mutating route a member must be refused, with what it would let them do.

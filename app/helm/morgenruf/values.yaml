@@ -112,6 +112,11 @@ resend:
   # anywhere. A self-hosted install should leave this empty.
   audienceId: ""
 
+  # The signing secret for a Resend webhook endpoint pointing at
+  # /webhooks/resend. Starts with whsec_. Blank means every delivery is
+  # rejected, so the endpoint is closed until you configure it.
+  webhookSecret: ""
+
 # ---------------------------------------------------------------------------
 # Redis — backs morgenruf's active standup DM session store.
 #

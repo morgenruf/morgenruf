@@ -120,6 +120,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: MORGENRUF_ALERT_WEBHOOK
+            - name: RESEND_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: RESEND_WEBHOOK_SECRET
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:

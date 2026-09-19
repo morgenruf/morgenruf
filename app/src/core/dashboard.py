@@ -493,19 +493,24 @@ def email_subscribe():
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
     if not email or not hmac.compare_digest(token, mailer.unsubscribe_token(email)):
-        return _unsubscribe_page("That link is not valid",
-                                 "It may have been truncated by your mail client. Write to "
-                                 "support@morgenruf.dev and it will be handled by a person."), 400
+        return _unsubscribe_page(
+            "That link is not valid",
+            "It may have been truncated by your mail client. Write to "
+            "support@morgenruf.dev and it will be handled by a person.",
+        ), 400
     try:
         db.grant_email_consent(email, source="welcome-email", ip=request.headers.get("CF-Connecting-IP", ""))
         mailer.sync_contact(email)
     except Exception as exc:
         logger.error("Could not record consent: %s", exc)
-        return _unsubscribe_page("Something went wrong",
-                                 "Write to support@morgenruf.dev and it will be done by hand."), 500
-    return _unsubscribe_page("You are on the list",
-                             "About one email a month, when something ships. Every one of them has "
-                             "an unsubscribe link, and pressing it stops them immediately.")
+        return _unsubscribe_page(
+            "Something went wrong", "Write to support@morgenruf.dev and it will be done by hand."
+        ), 500
+    return _unsubscribe_page(
+        "You are on the list",
+        "About one email a month, when something ships. Every one of them has "
+        "an unsubscribe link, and pressing it stops them immediately.",
+    )
 
 
 @dashboard_bp.route("/email/unsubscribe", methods=["GET", "POST"])
@@ -540,6 +545,40 @@ def email_unsubscribe():
         "Unsubscribed",
         "No more email from Morgenruf to this address. The Slack app itself is unaffected and keeps working.",
     )
+
+
+@dashboard_bp.route("/webhooks/resend", methods=["POST"])
+def resend_webhook():
+    """Resend telling us a message bounced or was marked as spam.
+
+    Public by necessity: Resend has no session with us. The Svix signature is
+    the authentication, and an unverified delivery is dropped without being
+    parsed.
+
+    Always answers 200 once the signature checks out, including for events we
+    ignore. A non-2xx makes Resend retry, and retrying an event nobody handles
+    is just noise arriving repeatedly.
+    """
+    from src.core import inbound_hooks  # noqa: PLC0415
+
+    body = request.get_data()
+    ok = inbound_hooks.verify(
+        body,
+        request.headers.get("svix-id", ""),
+        request.headers.get("svix-timestamp", ""),
+        request.headers.get("svix-signature", ""),
+    )
+    if not ok:
+        logger.warning("Rejected an unverified Resend webhook delivery")
+        return "", 401
+
+    payload = inbound_hooks.parse(body)
+    if payload is None:
+        return "", 400
+
+    inbound_hooks.suppress_after(payload)
+    inbound_hooks.handle(payload)
+    return "", 200
 
 
 def _unsubscribe_page(heading: str, body: str) -> str:
