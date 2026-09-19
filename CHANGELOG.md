@@ -5,6 +5,37 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-09-18
+
+### Added
+- **Consent is recorded rather than assumed.** The welcome email now carries an
+  opt-in block that says plainly that nobody is subscribed to anything yet.
+  Clicking it validates an HMAC token, writes the grant with its source and IP
+  address, and syncs the contact to a Resend audience. Unsubscribing reverses
+  both halves. The `email_consents` table is the record CASL asks for, and the
+  copy every downstream list gets rebuilt from.
+- **A farewell email when a workspace leaves.** Eleven of the first twenty
+  installs removed the app without ever running a standup, and not one said
+  why. The message confirms the data is gone, shows how long they had it and
+  how many standups they ran, asks one question, and does not argue. It runs
+  before the delete, because the address and the history it needs are in the
+  rows about to be removed.
+- **An operator alert when a workspace arrives or leaves.** `MORGENRUF_ALERT_WEBHOOK`
+  takes a Slack incoming webhook in the operator's own workspace. The install
+  alert carries the running workspace count, the uninstall alert carries the
+  days installed and standups run. Unset means silence, which is the right
+  default for a self-hosted install.
+- **Bounce and spam-complaint handling.** `/webhooks/resend` accepts Resend's
+  Svix-signed deliveries, verified with HMAC-SHA256 in constant time inside a
+  five-minute window, and checking every signature in the header so a secret
+  rotation does not drop events. A bounce or a complaint alerts the operator
+  and suppresses the address locally, which is the list the send path actually
+  consults. Opens and clicks are deliberately ignored.
+
+### Changed
+- `RESEND_AUDIENCE_ID` and `RESEND_WEBHOOK_SECRET` are both optional. Without
+  them, consent is still recorded locally and nothing is sent anywhere.
+
 ## [1.8.4] — 2026-09-18
 
 ### Fixed
