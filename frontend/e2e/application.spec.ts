@@ -122,7 +122,19 @@ test('standup creation uses CSRF and survives refresh', async ({
     .getByLabel('Standup name', { exact: true })
     .fill('Frontend migration check');
 
-  await dialog.getByRole('combobox', { name: 'Channel', exact: true }).click();
+  const channel = dialog.getByRole('combobox', {
+    name: 'Channel',
+    exact: true,
+  });
+  await dialog
+    .getByRole('button', { name: 'Save standup', exact: true })
+    .click();
+  await expect(
+    dialog.getByText('Choose a channel.', { exact: true }),
+  ).toBeVisible();
+  await expect(channel).toHaveAttribute('aria-invalid', 'true');
+  await expect(channel).toBeFocused();
+  await channel.click();
   await page.getByRole('option', { name: '#engineering', exact: true }).click();
 
   await dialog
@@ -147,9 +159,20 @@ test('coffee chat creation, details, and attendance have refreshable routes', as
   await page.goto('/dashboard/connect/new');
 
   await page.getByLabel('Name', { exact: true }).fill('Browser coffee check');
+  const channel = page.getByRole('combobox', {
+    name: 'Draw people from',
+    exact: true,
+  });
   await page
-    .getByRole('combobox', { name: 'Draw people from', exact: true })
+    .getByRole('button', { name: 'Create coffee chat', exact: true })
     .click();
+  await expect(
+    page.getByText('Choose a channel.', { exact: true }),
+  ).toBeVisible();
+  await expect(channel).toHaveAttribute('aria-invalid', 'true');
+  await expect(channel).toBeFocused();
+  await expect(page).toHaveURL(/\/dashboard\/connect\/new$/);
+  await channel.click();
   await page.getByRole('option', { name: '#engineering', exact: true }).click();
 
   await page

@@ -224,6 +224,10 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
     'Everyone eligible in this channel can be paired. People can opt out from Slack.',
   );
   await waitFor(() => expect(channel).toHaveFocus());
+  // React Hook Form schedules a second focus pass after invalid submission.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   expect(mock.create).not.toHaveBeenCalled();
   await chooseOption(user, 'Draw people from', '#engineering');
   await chooseOption(user, 'Repeat every', '3 weeks');
