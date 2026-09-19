@@ -1,0 +1,15 @@
+.git
+.local
+tilt_config.json
+.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.env
+**/.env.*
+!**/.env.example
+coverage*
+frontend/playwright-report
+frontend/test-results
+app/helm

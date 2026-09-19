@@ -4,7 +4,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ include "morgenruf.fullname" . }}
-  namespace: {{ include "morgenruf.namespace" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "morgenruf.labels" . | nindent 4 }}
 spec:
@@ -19,6 +19,6 @@ spec:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: {{ include "morgenruf.fullname" . }}
-          port: {{ .Values.service.port }}
+        - name: {{ include "morgenruf.fullname" . }}-frontend
+          port: 8080
 {{- end }}
