@@ -32,4 +32,47 @@ describe('Slack text rendering', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(container.textContent).toContain('<img');
   });
+
+  it('decodes Slack link destinations and labels exactly once', () => {
+    render(
+      <SlackText
+        text={
+          '<https://example.com/report?id=42&amp;view=detail|R&amp;D &lt;report&gt;> <https://example.com/?literal=&amp;amp;>'
+        }
+      />,
+    );
+
+    const report = screen.getByRole('link', { name: 'R&D <report>' });
+    expect(report).toHaveAttribute(
+      'href',
+      'https://example.com/report?id=42&view=detail',
+    );
+    expect(new URL(report.getAttribute('href')!).searchParams.get('view')).toBe(
+      'detail',
+    );
+    expect(
+      screen.getByRole('link', {
+        name: 'https://example.com/?literal=&amp;',
+      }),
+    ).toHaveAttribute('href', 'https://example.com/?literal=&amp;');
+  });
+
+  it('decodes text and formatting without interpreting escaped HTML', () => {
+    const { container } = render(
+      <SlackText
+        text={
+          '&amp;lt;literal&amp;gt; *R&amp;D* `a &lt; b` <#C1|R&amp;D> <@U1|Tom &amp; Sam> &lt;img src=x onerror=alert(1)&gt; &lt;javascript:alert(1)|Run&gt;'
+        }
+      />,
+    );
+
+    expect(container.textContent).toContain('&lt;literal&gt;');
+    expect(container.querySelector('strong')).toHaveTextContent('R&D');
+    expect(container.querySelector('code')).toHaveTextContent('a < b');
+    expect(screen.getByText('#R&D')).toBeInTheDocument();
+    expect(screen.getByText('@Tom & Sam')).toBeInTheDocument();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.textContent).toContain('<img src=x onerror=alert(1)>');
+  });
 });

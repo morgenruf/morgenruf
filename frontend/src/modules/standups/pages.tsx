@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '@/common/components/ui/select';
 import { applyApiErrors } from '@/common/forms/api-errors';
+import { useTabbedFormValidation } from '@/common/forms/use-tabbed-form-validation';
 
 import {
   healthLabel,
@@ -136,6 +137,7 @@ function StandupEditor({
   const form = useForm<StandupInput>({
     defaultValues: standupDefaults(standup, workspace),
   });
+  const onInvalid = useTabbedFormValidation(tabs, setTab, form.setError);
   const {
     register,
     setValue,
@@ -230,7 +232,11 @@ function StandupEditor({
             shared.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-6">
+        <form
+          onSubmit={onSubmit}
+          onInvalidCapture={onInvalid}
+          className="space-y-6"
+        >
           <div
             role="tablist"
             aria-label="Standup settings"
@@ -270,6 +276,7 @@ function StandupEditor({
             role="tabpanel"
             aria-labelledby={`${id}-Basics`}
             id={`${id}-panel-Basics`}
+            data-tab="Basics"
             hidden={tab !== 'Basics'}
             className="space-y-5"
           >
@@ -403,6 +410,7 @@ function StandupEditor({
             role="tabpanel"
             aria-labelledby={`${id}-Schedule`}
             id={`${id}-panel-Schedule`}
+            data-tab="Schedule"
             hidden={tab !== 'Schedule'}
             className="space-y-5"
           >
@@ -576,6 +584,7 @@ function StandupEditor({
             role="tabpanel"
             aria-labelledby={`${id}-Summary`}
             id={`${id}-panel-Summary`}
+            data-tab="Summary"
             hidden={tab !== 'Summary'}
             className="space-y-5"
           >
@@ -656,6 +665,7 @@ function StandupEditor({
             role="tabpanel"
             aria-labelledby={`${id}-Advanced`}
             id={`${id}-panel-Advanced`}
+            data-tab="Advanced"
             hidden={tab !== 'Advanced'}
             className="space-y-5"
           >
