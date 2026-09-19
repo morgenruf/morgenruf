@@ -1,15 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chooseOption } from '@/test/select';
 
 import { Attendance } from './attendance';
 import { attendanceRate, programDefaults } from './form-utils';
-import type { Program } from './hooks';
-import { ConnectListPage, ConnectNewPage } from './pages';
+import type { Program, ProgramInput } from './hooks';
+import { ConnectDetailPage, ConnectListPage, ConnectNewPage } from './pages';
 import { ProgramForm } from './program-form';
 
 const mock = vi.hoisted(() => ({
@@ -20,6 +20,7 @@ const mock = vi.hoisted(() => ({
   participation: vi.fn(),
   matches: vi.fn(),
   create: vi.fn(),
+  update: vi.fn(),
   programMembers: vi.fn(),
   updateMember: vi.fn(),
 }));
@@ -42,7 +43,7 @@ vi.mock('@/common/api/client', () => ({
       getZoom: vi.fn(),
       createProgram: mock.create,
       listProgramMembers: mock.programMembers,
-      updateProgram: vi.fn(),
+      updateProgram: mock.update,
       deleteProgram: vi.fn(),
       runProgram: vi.fn(),
       updateProgramMember: mock.updateMember,
@@ -65,14 +66,14 @@ vi.mock('@/common/api/client', () => ({
   },
 }));
 
-function view(component = <ConnectListPage />) {
+function view(component = <ConnectListPage />, path = '/') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>{component}</MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>{component}</MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -295,6 +296,57 @@ it('keeps the selected values and disables choices while saving a coffee chat', 
   );
   await act(async () => resolveSave({ data: { id: 9 } }));
 });
+
+it.each([
+  ['Pause', true],
+  ['Resume', false],
+] as const)(
+  'preserves %s and unsaved edits when saving coffee chat settings',
+  async (action, enabled) => {
+    mock.admin = true;
+    let program = {
+      ...programDefaults(),
+      id: 2,
+      channel_id: 'C1',
+      created_at: null,
+      team_id: 'T1',
+      enabled,
+    } as Program;
+    mock.modules.mockResolvedValue({
+      data: [
+        { name: 'connect', available: true, active: true, missing_scopes: [] },
+      ],
+    });
+    mock.programs.mockImplementation(async () => ({ data: [{ ...program }] }));
+    mock.update.mockImplementation(async (_params, body: ProgramInput) => {
+      program = { ...program, ...body } as Program;
+      return { data: { ...program } };
+    });
+    const user = userEvent.setup();
+    view(
+      <Routes>
+        <Route
+          path="/dashboard/connect/:programId"
+          element={<ConnectDetailPage />}
+        />
+      </Routes>,
+      '/dashboard/connect/2',
+    );
+    const name = await screen.findByRole('textbox', { name: 'Name' });
+    await user.clear(name);
+    await user.type(name, 'Updated coffee chat');
+    await user.click(screen.getByRole('button', { name: action }));
+    await screen.findByRole('button', {
+      name: enabled ? 'Resume' : 'Pause',
+    });
+    expect(name).toHaveValue('Updated coffee chat');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(mock.update).toHaveBeenCalledTimes(2));
+    expect(program.name).toBe('Updated coffee chat');
+    expect(program.enabled).toBe(!enabled);
+    expect(mock.update.mock.calls[1][1]).not.toHaveProperty('enabled');
+  },
+);
 
 it('changes member participation through the status popup and blocks edits while pending', async () => {
   mock.admin = true;

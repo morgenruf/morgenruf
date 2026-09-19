@@ -45,6 +45,7 @@ import {
   standupDefaults,
   validTimezone,
   weekdays,
+  workspaceSettingFields,
 } from './form-utils';
 import {
   useStandupHealth,
@@ -120,9 +121,11 @@ const tabs = ['Basics', 'Schedule', 'Summary', 'Advanced'] as const;
 
 function StandupEditor({
   standup,
+  workspace,
   close,
 }: {
   standup?: Standup;
+  workspace?: Standup;
   close: () => void;
 }) {
   const id = useId();
@@ -131,13 +134,13 @@ function StandupEditor({
   const [memberSearch, setMemberSearch] = useState('');
 
   const form = useForm<StandupInput>({
-    defaultValues: standupDefaults(standup),
+    defaultValues: standupDefaults(standup, workspace),
   });
   const {
     register,
     setValue,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = form;
 
   const values = useWatch({ control: form.control });
@@ -172,9 +175,20 @@ function StandupEditor({
       }
 
       try {
+        const payload = {
+          ...body,
+          questions: body.questions.filter((q) => q.trim()),
+        };
+        // Creating a schedule must not reset shared settings, including when
+        // no existing schedule is available to expose the workspace values.
+        if (!standup) {
+          for (const field of workspaceSettingFields) {
+            if (!dirtyFields[field]) delete payload[field];
+          }
+        }
         await save.mutateAsync({
           id: standup?.id,
-          body: { ...body, questions: body.questions.filter((q) => q.trim()) },
+          body: payload,
         });
         toast.success(standup ? 'Standup updated' : 'Standup created');
         close();
@@ -1011,10 +1025,11 @@ export function StandupsPage() {
           })}
         </div>
       )}
-      {editable && (creating || editing) && (
+      {editable && query.data && (creating || editing) && (
         <StandupEditor
           key={editing?.id ?? 'new'}
           standup={editing}
+          workspace={editing ?? query.data[0]}
           close={close}
         />
       )}
