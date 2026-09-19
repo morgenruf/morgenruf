@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import json
 import logging
@@ -25,6 +26,7 @@ from flask import (
 import src.core.db as db
 from src.core.oauth import verify_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
+from src.core.scopes import SCOPE_STRING
 from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
 
@@ -34,7 +36,7 @@ dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
 
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
-_SCOPES = "channels:read,commands,groups:read,chat:write,im:history,im:read,im:write,users:read,users:read.email,emoji:read,mpim:write,mpim:history,users.profile:read"
+_SCOPES = SCOPE_STRING
 
 
 def _is_safe_webhook_url(url: str) -> bool:
@@ -476,6 +478,121 @@ def api_delete_standup(standup_id: str):
     except Exception as exc:
         logger.error("api_delete_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/email/subscribe", methods=["GET", "POST"])
+def email_subscribe():
+    """Record an express opt-in to product update emails.
+
+    The link is in the welcome email, nothing is pre-ticked, and until it is
+    pressed the only email anybody gets is about their own install. The record
+    is the proof Canadian law asks for, so it keeps when and from where.
+    """
+    from src.core import mailer  # noqa: PLC0415
+
+    email = (request.args.get("e") or "").strip()
+    token = (request.args.get("t") or "").strip()
+    if not email or not hmac.compare_digest(token, mailer.unsubscribe_token(email)):
+        return _unsubscribe_page(
+            "That link is not valid",
+            "It may have been truncated by your mail client. Write to "
+            "support@morgenruf.dev and it will be handled by a person.",
+        ), 400
+    try:
+        db.grant_email_consent(email, source="welcome-email", ip=request.headers.get("CF-Connecting-IP", ""))
+        mailer.sync_contact(email)
+    except Exception as exc:
+        logger.error("Could not record consent: %s", exc)
+        return _unsubscribe_page(
+            "Something went wrong", "Write to support@morgenruf.dev and it will be done by hand."
+        ), 500
+    return _unsubscribe_page(
+        "You are on the list",
+        "About one email a month, when something ships. Every one of them has "
+        "an unsubscribe link, and pressing it stops them immediately.",
+    )
+
+
+@dashboard_bp.route("/email/unsubscribe", methods=["GET", "POST"])
+def email_unsubscribe():
+    """Stop emailing this address. No login, one click, works from the header.
+
+    Mail clients hit this with POST via List-Unsubscribe-Post, and people click
+    it with GET from the footer. Both do the same thing.
+    """
+    from src.core.mailer import unsubscribe_token  # noqa: PLC0415
+
+    email = (request.args.get("e") or "").strip()
+    token = (request.args.get("t") or "").strip()
+    if not email or not hmac.compare_digest(token, unsubscribe_token(email)):
+        return _unsubscribe_page(
+            "That link is not valid",
+            "It may have been truncated by your mail client. Write to "
+            "support@morgenruf.dev and it will be handled by a person.",
+        ), 400
+    try:
+        db.suppress_email(email)
+        db.revoke_email_consent(email)
+        from src.core import mailer as _mailer  # noqa: PLC0415
+
+        _mailer.unsync_contact(email)
+    except Exception as exc:
+        logger.error("unsubscribe failed for one address: %s", exc)
+        return _unsubscribe_page(
+            "Something went wrong", "Write to support@morgenruf.dev and it will be done by hand."
+        ), 500
+    return _unsubscribe_page(
+        "Unsubscribed",
+        "No more email from Morgenruf to this address. The Slack app itself is unaffected and keeps working.",
+    )
+
+
+@dashboard_bp.route("/webhooks/resend", methods=["POST"])
+def resend_webhook():
+    """Resend telling us a message bounced or was marked as spam.
+
+    Public by necessity: Resend has no session with us. The Svix signature is
+    the authentication, and an unverified delivery is dropped without being
+    parsed.
+
+    Always answers 200 once the signature checks out, including for events we
+    ignore. A non-2xx makes Resend retry, and retrying an event nobody handles
+    is just noise arriving repeatedly.
+    """
+    from src.core import inbound_hooks  # noqa: PLC0415
+
+    body = request.get_data()
+    ok = inbound_hooks.verify(
+        body,
+        request.headers.get("svix-id", ""),
+        request.headers.get("svix-timestamp", ""),
+        request.headers.get("svix-signature", ""),
+    )
+    if not ok:
+        logger.warning("Rejected an unverified Resend webhook delivery")
+        return "", 401
+
+    payload = inbound_hooks.parse(body)
+    if payload is None:
+        return "", 400
+
+    inbound_hooks.suppress_after(payload)
+    inbound_hooks.handle(payload)
+    return "", 200
+
+
+def _unsubscribe_page(heading: str, body: str) -> str:
+    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>{heading} — Morgenruf</title></head>
+<body style="margin:0;background:#FFFDF8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+             display:flex;align-items:center;justify-content:center;min-height:100vh;">
+<div style="max-width:440px;padding:32px;text-align:center;">
+  <img src="https://morgenruf.dev/logo-mark.png" width="56" height="56" alt="" style="border-radius:12px"/>
+  <h1 style="font-size:24px;color:#191B2A;margin:18px 0 10px;">{heading}</h1>
+  <p style="font-size:15.5px;color:#5A5E74;line-height:1.6;margin:0 0 22px;">{body}</p>
+  <a href="https://morgenruf.dev" style="color:#E0322E;font-weight:600;text-decoration:none;">morgenruf.dev</a>
+</div></body></html>"""
 
 
 # ---------------------------------------------------------------------------

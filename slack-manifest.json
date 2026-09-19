@@ -14,7 +14,46 @@
     "bot_user": {
       "display_name": "Morgenruf",
       "always_online": true
-    }
+    },
+    "slash_commands": [
+      {
+        "command": "/morgenruf",
+        "description": "Morgenruf commands and help",
+        "should_escape": false
+      },
+      {
+        "command": "/morgenruf-standup",
+        "description": "Start your daily standup now",
+        "should_escape": false
+      },
+      {
+        "command": "/morgenruf-skip",
+        "description": "Skip today's standup",
+        "should_escape": false
+      },
+      {
+        "command": "/morgenruf-kudos",
+        "description": "Give a shoutout to a teammate",
+        "usage_hint": "@teammate [message]",
+        "should_escape": false
+      },
+      {
+        "command": "/standup",
+        "description": "Start your daily standup now (alias)",
+        "should_escape": false
+      },
+      {
+        "command": "/skip",
+        "description": "Skip today's standup (alias)",
+        "should_escape": false
+      },
+      {
+        "command": "/kudos",
+        "description": "Give a shoutout to a teammate (alias)",
+        "usage_hint": "@teammate [message]",
+        "should_escape": false
+      }
+    ]
   },
   "oauth_config": {
     "redirect_urls": [
@@ -22,24 +61,21 @@
     ],
     "scopes": {
       "bot": [
+        "commands",
+        "app_mentions:read",
         "chat:write",
-        "chat:write.public",
+        "channels:read",
+        "groups:read",
+        "im:write",
         "im:history",
         "im:read",
-        "im:write",
-        "channels:read",
-        "channels:join",
-        "channels:history",
-        "groups:read",
-        "reactions:write",
-        "users:read",
-        "users:read.email",
-        "emoji:read",
-        "team:read",
-        "app_mentions:read",
         "mpim:write",
         "mpim:history",
-        "users.profile:read"
+        "users:read",
+        "users:read.email",
+        "users.profile:read",
+        "emoji:read",
+        "team:read"
       ]
     },
     "pkce_enabled": false

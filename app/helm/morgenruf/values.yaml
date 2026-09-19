@@ -106,6 +106,16 @@ flaskSecretKey: ""   # openssl rand -hex 32
 # ---------------------------------------------------------------------------
 resend:
   apiKey: ""
+  # Optional. With an audience id, people who opt in from the welcome email are
+  # added to that Resend audience. Leave it blank and consent is still recorded
+  # in your own database, which is the copy that matters; nothing is sent
+  # anywhere. A self-hosted install should leave this empty.
+  audienceId: ""
+
+  # The signing secret for a Resend webhook endpoint pointing at
+  # /webhooks/resend. Starts with whsec_. Blank means every delivery is
+  # rejected, so the endpoint is closed until you configure it.
+  webhookSecret: ""
 
 # ---------------------------------------------------------------------------
 # Redis — backs morgenruf's active standup DM session store.
@@ -168,10 +178,15 @@ zoom:
 #
 # logLevel: set to DEBUG for verbose logs, including Flask debug output.
 # opsEmail: where the bot emails when a scheduled job fails. Blank disables it.
+# alertWebhook: a Slack incoming-webhook URL in the operator's own workspace.
+#   Posts a line when a workspace installs the app and when one removes it.
+#   Blank disables it. Treated as a secret because anyone holding the URL can
+#   post to that channel.
 # ---------------------------------------------------------------------------
 ops:
   logLevel: ""
   email: ""
+  alertWebhook: ""
 
 sentry:
   dsn: ""

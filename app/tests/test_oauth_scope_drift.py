@@ -1,135 +1,78 @@
-"""The scopes we ask for must agree across every place they are written down.
+"""The scopes must agree everywhere they are written down.
 
-There are three: the install URL built in oauth.py, the copy of it in
-dashboard.py, and the Slack app manifest. They have drifted before, and the
-symptom is not a test failure but an install that Slack rejects, or a feature
-that silently never works because the token lacks a scope nobody noticed was
-missing.
+They used to live in three hand-kept copies: the install URL in oauth.py, a
+second copy in dashboard.py, and the two manifests. They drifted twice, and the
+symptom was never a failing test: it was coffee chats installing and staying
+dark because the token lacked scopes nobody noticed were missing.
+
+There is now one source, src/core/scopes.py, and everything else is generated
+from it. These tests assert that, and that each module's declared requirements
+are inside it.
 """
 
 from __future__ import annotations
 
 import json
 import pathlib
-import re
+
+import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-# Slack grants this from declaring slash commands rather than from the oauth
-# scope list, so it is legitimately absent from the manifest's bot scopes.
-IMPLIED_BY_FEATURES = {"commands"}
+from src.core.scopes import BOT_SCOPES, SCOPE_STRING  # noqa: E402
 
 
-def _oauth_scopes() -> list[str]:
-    src = (ROOT / "app/src/core/oauth.py").read_text()
-    block = re.search(r"_SCOPES = \[(.*?)\]", src, re.S).group(1)
-    return re.findall(r'"([^"]+)"', block)
+def _yaml_manifest_scopes() -> list[str]:
+    return yaml.safe_load((ROOT / "slack-manifest.yaml").read_text())["oauth_config"]["scopes"]["bot"]
 
 
-def _dashboard_scopes() -> list[str]:
-    """Read the comma-separated list, however the formatter has wrapped it."""
-    src = (ROOT / "app/src/core/dashboard.py").read_text()
-    block = re.search(r"_SCOPES = \(?\s*(.*?)\s*\)?\n\n", src, re.S).group(1)
-    return "".join(re.findall(r'"([^"]*)"', block)).split(",")
-
-
-def _manifest_scopes() -> set[str]:
-    data = json.loads((ROOT / "slack-manifest.json").read_text())
-    return set(data["oauth_config"]["scopes"]["bot"])
-
-
-def test_the_two_install_url_scope_lists_agree():
-    assert sorted(_oauth_scopes()) == sorted(_dashboard_scopes())
-
-
-def test_every_scope_we_request_is_declared_in_the_manifest():
-    """Requesting a scope the app does not declare makes Slack refuse the install."""
-    requested = set(_oauth_scopes()) - IMPLIED_BY_FEATURES
-    missing = sorted(requested - _manifest_scopes())
-    assert not missing, f"requested but not in the manifest: {missing}"
-
-
-def _yaml_scopes() -> set[str]:
-    import yaml
-
-    y = yaml.safe_load((ROOT / "slack-manifest.yaml").read_text())
-    return set(y["oauth_config"]["scopes"]["bot"])
-
-
-# The two manifests disagree, and have since before this guard existed. Which
-# one was uploaded to Slack is not recorded anywhere, so this pins the known
-# difference rather than guessing: if it changes in either direction, someone
-# has edited one manifest and not the other and should be told.
-KNOWN_JSON_ONLY = {"app_mentions:read", "channels:join", "chat:write.public"}
-
-
-def test_the_manifests_differ_only_in_the_way_they_already_did():
-    json_only = _manifest_scopes() - _yaml_scopes()
-    yaml_only = _yaml_scopes() - _manifest_scopes()
-    assert yaml_only == set(), f"yaml declares scopes the json does not: {sorted(yaml_only)}"
-    assert json_only == KNOWN_JSON_ONLY, (
-        "the manifests drifted further apart; reconcile them and update "
-        f"KNOWN_JSON_ONLY. json-only is now {sorted(json_only)}"
-    )
-
-
-def test_every_requested_scope_is_in_both_manifests():
-    """Whichever manifest was uploaded, an install must not ask for more than it declares."""
-    requested = set(_oauth_scopes()) - IMPLIED_BY_FEATURES
-    assert not sorted(requested - _manifest_scopes()), "missing from slack-manifest.json"
-    assert not sorted(requested - _yaml_scopes()), "missing from slack-manifest.yaml"
-
-
-def test_emoji_read_is_present_so_the_branded_token_can_be_confirmed():
-    assert "emoji:read" in _oauth_scopes()
-    assert "emoji:read" in _manifest_scopes()
+def _json_manifest_scopes() -> list[str]:
+    return json.loads((ROOT / "slack-manifest.json").read_text())["oauth_config"]["scopes"]["bot"]
 
 
 def test_no_scope_is_listed_twice():
-    for name, scopes in (("oauth", _oauth_scopes()), ("dashboard", _dashboard_scopes())):
-        assert len(scopes) == len(set(scopes)), f"{name} repeats a scope"
+    assert len(BOT_SCOPES) == len(set(BOT_SCOPES))
 
 
-# ── the invariant that was missing ───────────────────────────────────────────
-# A module declaring required_scopes it never requests can never activate. The
-# dashboard shows "needs more Slack access", the re-authorise button sends the
-# user through OAuth asking for the same scopes as before, and they land back
-# on the same screen. Connect shipped in that state: mpim:write, mpim:history
-# and users.profile:read appeared nowhere except its own declaration.
+def test_both_manifests_match_the_source_of_truth():
+    assert sorted(_yaml_manifest_scopes()) == sorted(BOT_SCOPES)
+    assert sorted(_json_manifest_scopes()) == sorted(BOT_SCOPES)
 
 
-def _module_required_scopes() -> dict[str, set[str]]:
-    import re as _re
+def test_the_manifests_match_each_other():
+    """They carried three scopes the YAML did not, for months."""
+    assert sorted(_json_manifest_scopes()) == sorted(_yaml_manifest_scopes())
 
-    out: dict[str, set[str]] = {}
-    for init in (ROOT / "app/src/modules").glob("*/__init__.py"):
-        src = init.read_text()
-        name = _re.search(r'name="([^"]+)"', src)
-        scopes = _re.search(r"required_scopes=\(([^)]*)\)", src, _re.S)
-        if not name or not scopes:
-            continue
-        out[name.group(1)] = set(_re.findall(r'"([^"]+)"', scopes.group(1)))
-    return out
+
+def test_the_install_url_is_generated_not_copied():
+    src = (ROOT / "app/src/core/oauth.py").read_text()
+    assert "from src.core.scopes import BOT_SCOPES" in src
+    dash = (ROOT / "app/src/core/dashboard.py").read_text()
+    assert "SCOPE_STRING" in dash
 
 
 def test_every_module_scope_is_actually_requested_at_install():
-    requested = set(_oauth_scopes())
-    for module, needed in _module_required_scopes().items():
-        missing = sorted(needed - requested)
-        assert not missing, (
-            f"module {module!r} requires {missing}, which the install URL never asks for, "
-            "so the module can never activate and re-authorising cannot help"
-        )
+    """A module that needs a scope nobody asks for is a feature that never runs."""
+    from src.modules import REGISTRY
+
+    missing = {}
+    for spec in REGISTRY:
+        absent = [s for s in spec.required_scopes if s not in BOT_SCOPES]
+        if absent:
+            missing[spec.name] = absent
+    assert not missing, f"modules needing scopes the install never asks for: {missing}"
 
 
-def test_every_module_scope_is_declared_in_both_manifests():
-    for module, needed in _module_required_scopes().items():
-        assert not sorted(needed - _manifest_scopes()), f"{module}: missing from slack-manifest.json"
-        assert not sorted(needed - _yaml_scopes()), f"{module}: missing from slack-manifest.yaml"
+def test_subscribed_events_have_the_scope_that_delivers_them():
+    """app_mention is subscribed in the manifest; without app_mentions:read it
+    never arrives. That exact pair was wrong until the marketplace audit."""
+    manifest = yaml.safe_load((ROOT / "slack-manifest.yaml").read_text())
+    events = manifest["settings"]["event_subscriptions"]["bot_events"]
+    needs = {"app_mention": "app_mentions:read", "message.im": "im:history"}
+    for event, scope in needs.items():
+        if event in events:
+            assert scope in BOT_SCOPES, f"{event} is subscribed but {scope} is not requested"
 
 
-def test_the_guard_can_see_connects_scopes():
-    """Guards that silently parse nothing pass for the wrong reason."""
-    found = _module_required_scopes()
-    assert "connect" in found, f"parsed modules: {sorted(found)}"
-    assert "mpim:write" in found["connect"]
+def test_the_scope_string_is_the_same_list():
+    assert sorted(SCOPE_STRING.split(",")) == sorted(BOT_SCOPES)

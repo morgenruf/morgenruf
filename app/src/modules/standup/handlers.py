@@ -780,6 +780,14 @@ def register_handlers(app: App) -> None:
         if not team_id:
             logger.warning("tokens_revoked received with no team_id: %s", event)
             return
+
+        # Before the delete, not after: the address and the history this email
+        # needs are in the rows about to be removed.
+        from src.core.alerts import departed  # noqa: PLC0415
+        from src.core.mailer import farewell  # noqa: PLC0415
+
+        departed(team_id)
+        farewell(team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
             logger.info("tokens_revoked: deleted installation and all data for team %s", team_id)
@@ -795,6 +803,14 @@ def register_handlers(app: App) -> None:
         if not team_id:
             logger.warning("app_uninstalled received with no team_id: %s", event)
             return
+
+        # Before the delete, not after: the address and the history this email
+        # needs are in the rows about to be removed.
+        from src.core.alerts import departed  # noqa: PLC0415
+        from src.core.mailer import farewell  # noqa: PLC0415
+
+        departed(team_id)
+        farewell(team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
             logger.info("app_uninstalled: deleted installation and all data for team %s", team_id)
@@ -1459,6 +1475,7 @@ def register_handlers(app: App) -> None:
         _complete_standup(user_id, session, client)
 
     @app.command("/standup")
+    @app.command("/morgenruf-standup")
     def handle_standup_command(ack, body, client):  # noqa: ANN001
         """Slash command to start a standup session."""
         ack()
@@ -1467,6 +1484,7 @@ def register_handlers(app: App) -> None:
         _start_standup_session(user_id, team_id, client)
 
     @app.command("/skip")
+    @app.command("/morgenruf-skip")
     def handle_skip_command(ack, body, client):  # noqa: ANN001
         """Slash command to skip today's standup."""
         ack()
@@ -1483,6 +1501,7 @@ def register_handlers(app: App) -> None:
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
     @app.command("/help")
+    @app.command("/morgenruf")
     def handle_help_command(ack, body, client):  # noqa: ANN001
         """Slash command to show available commands and help."""
         ack()

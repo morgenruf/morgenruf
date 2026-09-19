@@ -1910,3 +1910,153 @@ def can_administer(team_id: str, user_id: str, module: str | None = None) -> boo
     if not module:
         return False
     return module in module_admin_grants(team_id, user_id)
+
+
+# ── Email suppression and install follow-ups ────────────────────────────────
+
+
+def email_is_suppressed(email: str) -> bool:
+    """Whether this address has asked not to be emailed."""
+    if not email:
+        return True
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM email_suppressions WHERE email = %s", (email.lower(),))
+            return cur.fetchone() is not None
+
+
+def suppress_email(email: str, reason: str = "unsubscribed") -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO email_suppressions (email, reason) VALUES (%s, %s)
+                ON CONFLICT (email) DO UPDATE SET reason = EXCLUDED.reason
+                """,
+                (email.lower(), reason),
+            )
+
+
+def install_email_sent(team_id: str, kind: str) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM install_emails WHERE team_id = %s AND kind = %s", (team_id, kind))
+            return cur.fetchone() is not None
+
+
+def record_install_email(team_id: str, kind: str, to_email: str = "") -> None:
+    """Remember that this workspace has had this message, so it cannot go twice."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO install_emails (team_id, kind, to_email) VALUES (%s, %s, %s)
+                ON CONFLICT (team_id, kind) DO NOTHING
+                """,
+                (team_id, kind, to_email or None),
+            )
+
+
+def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
+    """Installed at least `days` ago, still live, and not yet followed up.
+
+    Returns enough to choose which of the two messages to send: a workspace
+    with no schedule has never run a standup, which is the case worth asking
+    about.
+    """
+    sql = """
+        SELECT i.team_id, i.team_name, i.installed_by_user_id,
+               (SELECT COUNT(*) FROM standup_schedules s
+                 WHERE s.team_id = i.team_id AND s.active) AS schedules,
+               (SELECT COUNT(*) FROM standups st WHERE st.team_id = i.team_id) AS standups,
+               (SELECT COUNT(DISTINCT user_id) FROM standups st
+                 WHERE st.team_id = i.team_id) AS people
+        FROM installations i
+        WHERE i.active
+          AND i.installed_at < NOW() - make_interval(days => %s)
+          AND NOT EXISTS (
+              SELECT 1 FROM install_emails e
+               WHERE e.team_id = i.team_id AND e.kind LIKE 'followup%%')
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (days,))
+            return [dict(r) for r in cur.fetchall()]
+
+
+# ── Consent to be emailed about the product ─────────────────────────────────
+
+
+def grant_email_consent(email: str, team_id: str = "", source: str = "welcome-email", ip: str = "") -> None:
+    """Record an express opt-in. The row is the proof, so it keeps the details."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO email_consents (email, team_id, source, ip, granted_at, revoked_at)
+                VALUES (%s, %s, %s, %s, NOW(), NULL)
+                ON CONFLICT (email) DO UPDATE
+                   SET granted_at = NOW(), revoked_at = NULL,
+                       source = EXCLUDED.source, ip = EXCLUDED.ip
+                """,
+                (email.lower(), team_id or None, source, ip or None),
+            )
+
+
+def revoke_email_consent(email: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE email_consents SET revoked_at = NOW() WHERE email = %s AND revoked_at IS NULL",
+                (email.lower(),),
+            )
+
+
+def has_email_consent(email: str) -> bool:
+    if not email:
+        return False
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM email_consents WHERE email = %s AND revoked_at IS NULL",
+                (email.lower(),),
+            )
+            return cur.fetchone() is not None
+
+
+def consented_contacts(unsynced_only: bool = False) -> list[dict]:
+    """Everyone who has opted in, for pushing to the contact list."""
+    sql = """
+        SELECT email, team_id, granted_at, synced_at FROM email_consents
+         WHERE revoked_at IS NULL
+    """
+    if unsynced_only:
+        sql += " AND synced_at IS NULL"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
+def mark_contact_synced(email: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE email_consents SET synced_at = NOW() WHERE email = %s", (email.lower(),))
+
+
+def count_standups(team_id: str) -> int:
+    """How many standups a workspace ever filed. Used on the way out."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM standups WHERE team_id = %s", (team_id,))
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+def count_installations() -> int:
+    """How many workspaces have the app right now. Used in the install alert."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM installations WHERE active")
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
