@@ -7,6 +7,22 @@ image:
   pullPolicy: Always
   tag: "latest"
 
+# Frontend serves the browser application and proxies API/integration requests.
+# Set image.tag to the same immutable release as image.tag above.
+frontend:
+  replicaCount: 1
+  image:
+    repository: morgenruf/morgenruf-frontend
+    tag: "latest"
+    pullPolicy: Always
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
 service:
   type: ClusterIP
   port: 3000

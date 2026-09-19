@@ -25,7 +25,7 @@ services:
   # does not migrate on start, so without this the schema is never created.
   # Mirrors the migrate initContainer in the Helm chart.
   migrate:
-    image: morgenruf/morgenruf:latest
+    image: morgenruf/morgenruf:${MORGENRUF_VERSION:-latest}
     command: ["python", "src/migrate.py"]
     environment:
       DATABASE_URL: postgresql://morgenruf:${DB_PASSWORD:-morgenruf}@db:5432/morgenruf
@@ -35,10 +35,10 @@ services:
     restart: "no"
 
   app:
-    image: morgenruf/morgenruf:latest
+    image: morgenruf/morgenruf:${MORGENRUF_VERSION:-latest}
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     environment:
       DATABASE_URL: postgresql://morgenruf:${DB_PASSWORD:-morgenruf}@db:5432/morgenruf
       SLACK_CLIENT_ID: ${SLACK_CLIENT_ID}
@@ -46,6 +46,7 @@ services:
       SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
       FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       PORT: "3000"
     depends_on:
@@ -53,6 +54,17 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  frontend:
+    image: morgenruf/morgenruf-frontend:${MORGENRUF_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "3000:8080"
+    environment:
+      BACKEND_URL: http://app:3000
+    depends_on:
+      app:
+        condition: service_started
 
 volumes:
   postgres_data:

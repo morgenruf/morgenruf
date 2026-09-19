@@ -52,6 +52,8 @@ spec:
               drop: ["ALL"]
             readOnlyRootFilesystem: false
           env:
+            - name: SESSION_COOKIE_SECURE
+              value: "true"
             - name: PORT
               value: "3000"
             - name: SLACK_CLIENT_ID
