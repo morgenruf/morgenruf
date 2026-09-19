@@ -12,18 +12,19 @@ import re
 import secrets
 from functools import wraps
 
+from flask import Blueprint as FlaskBlueprint
 from flask import (
-    Blueprint,
     Response,
     jsonify,
     redirect,
-    render_template,
     request,
     session,
-    url_for,
 )
+from flask_smorest import Blueprint
 
 import src.core.db as db
+from src.core import api_schemas as schemas
+from src.core.api import api_errors, csrf_token
 from src.core.oauth import verify_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
 from src.core.scopes import SCOPE_STRING
@@ -32,7 +33,8 @@ from src.core.url_guard import is_safe_webhook_url
 
 logger = logging.getLogger(__name__)
 
-dashboard_bp = Blueprint("dashboard", __name__, template_folder="templates")
+dashboard_bp = Blueprint("dashboard", __name__)
+browser_bp = FlaskBlueprint("browser", __name__)
 
 _APP_URL = os.environ.get("APP_URL", "http://localhost:3000")
 _CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
@@ -58,7 +60,7 @@ def _login_required(f):
         if not session.get("team_id"):
             if request.path.startswith("/dashboard/api/"):
                 return jsonify({"error": "Unauthorized"}), 401
-            return redirect(url_for("dashboard.login"))
+            return redirect("/dashboard/login")
         return f(*args, **kwargs)
 
     return wrapper
@@ -130,7 +132,7 @@ def _get_bot_token() -> str | None:
 # ---------------------------------------------------------------------------
 
 
-@dashboard_bp.route("/dashboard")
+@browser_bp.route("/dashboard")
 def dashboard():
     # Accept one-time login token from OAuth redirect to bootstrap session
     token = request.args.get("t")
@@ -140,45 +142,25 @@ def dashboard():
             team_id, user_id = result
             session["team_id"] = team_id
             session["user_id"] = user_id
+            session.pop("csrf_token", None)
             try:
                 inst = db.get_installation(team_id)
                 session["team_name"] = inst["team_name"] if inst else team_id
             except Exception:
                 session["team_name"] = team_id
-            return redirect(url_for("dashboard.dashboard"))
+            return redirect("/dashboard/", code=303)
+        return redirect("/dashboard/login?error=invalid-link", code=303)
 
     if not session.get("team_id"):
-        return redirect(url_for("dashboard.login"))
+        return redirect("/dashboard/login")
 
-    team_id = session["team_id"]
-    try:
-        inst = db.get_installation(team_id)
-        team_name = inst["team_name"] if inst else team_id
-    except Exception:
-        team_name = team_id
-    # The MCP setup panel used to hardcode the hosted endpoint, so every
-    # self-hosted install told its users to point their assistant at our
-    # SaaS. APP_URL is what the deployment already sets for OAuth.
-    return render_template(
-        "dashboard.html",
-        team_name=team_name,
-        team_id=team_id,
-        mcp_endpoint=f"{_APP_URL.rstrip('/')}/mcp",
-    )
+    return redirect("/dashboard/", code=303)
 
 
-@dashboard_bp.route("/dashboard/login")
-def login():
-    if session.get("team_id"):
-        return redirect(url_for("dashboard.dashboard"))
-    # Use /install which generates a proper HMAC state
-    return redirect(url_for("oauth.install"))
-
-
-@dashboard_bp.route("/dashboard/logout")
+@browser_bp.route("/dashboard/logout")
 def logout():
     session.clear()
-    return redirect(url_for("dashboard.login"))
+    return redirect("/dashboard/login")
 
 
 # ---------------------------------------------------------------------------
@@ -367,6 +349,9 @@ def _split_workspace_fields(data: dict) -> dict:
 
 @dashboard_bp.route("/dashboard/api/standups", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listStandups", tags=["Standups"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Standup(many=True))
 def api_list_standups():
     team_id = session["team_id"]
     try:
@@ -375,17 +360,21 @@ def api_list_standups():
         # workspace settings always came back as their defaults, which is why
         # choosing Anthropic and reloading snapped the dropdown to OpenAI.
         ws = _workspace_settings(team_id)
-        return jsonify([_schedule_to_standup(r, ws) for r in rows])
+        return [_schedule_to_standup(r, ws) for r in rows]
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
-        return jsonify([])
+        return []
 
 
 @dashboard_bp.route("/dashboard/api/standups", methods=["POST"])
 @_admin_required("standup")
-def api_create_standup():
+@dashboard_bp.doc(operationId="createStandup", tags=["Standups"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.StandupInput, error_status_code=400)
+@dashboard_bp.response(201, schemas.Standup)
+def api_create_standup(data):
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
+
     invalid = schedule_payload_error(data)
     if invalid:
         return jsonify({"error": invalid}), 400
@@ -409,18 +398,38 @@ def api_create_standup():
             post_to_thread=bool(data.get("post_to_thread", False)),
             notify_on_report=bool(data.get("notify_on_report", True)),
             post_summary=_post_summary_default(data),
+            **{
+                key: data[key]
+                for key in (
+                    "report_channel",
+                    "report_time",
+                    "digest_email",
+                    "digest_enabled",
+                    "nudge_missing",
+                    "nudge_minutes_before",
+                    "group_by",
+                )
+                if key in data
+            },
         )
-        return jsonify(_schedule_to_standup(row)), 201
+        ws_fields = _split_workspace_fields(data)
+        if ws_fields:
+            db.upsert_workspace_config(team_id, **ws_fields)
+        return _schedule_to_standup(row, _workspace_settings(team_id)), 201
     except Exception as exc:
         logger.error("api_create_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
-@dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["PUT"])
+@dashboard_bp.route("/dashboard/api/standups/<int:standup_id>", methods=["PUT"])
 @_admin_required("standup")
-def api_update_standup(standup_id: str):
+@dashboard_bp.doc(operationId="updateStandup", tags=["Standups"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.StandupInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.Standup)
+def api_update_standup(data, standup_id: str):
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
+
     invalid = schedule_payload_error(data)
     if invalid:
         return jsonify({"error": invalid}), 400
@@ -456,31 +465,36 @@ def api_update_standup(standup_id: str):
         if "post_summary" in data:
             kwargs["post_summary"] = bool(data["post_summary"])
         row = db.update_standup_schedule(team_id, int(standup_id), **kwargs)
+        if row is None:
+            return jsonify(error="Standup not found"), 404
 
         # The workspace-level half of the same form.
         ws_fields = _split_workspace_fields(data)
         if ws_fields:
             db.upsert_workspace_config(team_id, **ws_fields)
 
-        return jsonify(_schedule_to_standup(row, _workspace_settings(team_id)))
+        return _schedule_to_standup(row, _workspace_settings(team_id))
     except Exception as exc:
         logger.error("api_update_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
-@dashboard_bp.route("/dashboard/api/standups/<standup_id>", methods=["DELETE"])
+@dashboard_bp.route("/dashboard/api/standups/<int:standup_id>", methods=["DELETE"])
 @_admin_required("standup")
+@dashboard_bp.doc(operationId="deleteStandup", tags=["Standups"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Ok)
 def api_delete_standup(standup_id: str):
     team_id = session["team_id"]
     try:
         db.delete_standup_schedule(team_id, int(standup_id))
-        return jsonify({"ok": True})
+        return {"ok": True}
     except Exception as exc:
         logger.error("api_delete_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
-@dashboard_bp.route("/email/subscribe", methods=["GET", "POST"])
+@browser_bp.route("/email/subscribe", methods=["GET", "POST"])
 def email_subscribe():
     """Record an express opt-in to product update emails.
 
@@ -493,27 +507,17 @@ def email_subscribe():
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
     if not email or not hmac.compare_digest(token, mailer.unsubscribe_token(email)):
-        return _unsubscribe_page(
-            "That link is not valid",
-            "It may have been truncated by your mail client. Write to "
-            "support@morgenruf.dev and it will be handled by a person.",
-        ), 400
+        return _email_result("invalid", 400)
     try:
         db.grant_email_consent(email, source="welcome-email", ip=request.headers.get("CF-Connecting-IP", ""))
         mailer.sync_contact(email)
     except Exception as exc:
         logger.error("Could not record consent: %s", exc)
-        return _unsubscribe_page(
-            "Something went wrong", "Write to support@morgenruf.dev and it will be done by hand."
-        ), 500
-    return _unsubscribe_page(
-        "You are on the list",
-        "About one email a month, when something ships. Every one of them has "
-        "an unsubscribe link, and pressing it stops them immediately.",
-    )
+        return _email_result("error", 500)
+    return _email_result("subscribed")
 
 
-@dashboard_bp.route("/email/unsubscribe", methods=["GET", "POST"])
+@browser_bp.route("/email/unsubscribe", methods=["GET", "POST"])
 def email_unsubscribe():
     """Stop emailing this address. No login, one click, works from the header.
 
@@ -525,11 +529,7 @@ def email_unsubscribe():
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
     if not email or not hmac.compare_digest(token, unsubscribe_token(email)):
-        return _unsubscribe_page(
-            "That link is not valid",
-            "It may have been truncated by your mail client. Write to "
-            "support@morgenruf.dev and it will be handled by a person.",
-        ), 400
+        return _email_result("invalid", 400)
     try:
         db.suppress_email(email)
         db.revoke_email_consent(email)
@@ -538,16 +538,11 @@ def email_unsubscribe():
         _mailer.unsync_contact(email)
     except Exception as exc:
         logger.error("unsubscribe failed for one address: %s", exc)
-        return _unsubscribe_page(
-            "Something went wrong", "Write to support@morgenruf.dev and it will be done by hand."
-        ), 500
-    return _unsubscribe_page(
-        "Unsubscribed",
-        "No more email from Morgenruf to this address. The Slack app itself is unaffected and keeps working.",
-    )
+        return _email_result("error", 500)
+    return _email_result("unsubscribed")
 
 
-@dashboard_bp.route("/webhooks/resend", methods=["POST"])
+@browser_bp.route("/webhooks/resend", methods=["POST"])
 def resend_webhook():
     """Resend telling us a message bounced or was marked as spam.
 
@@ -581,18 +576,12 @@ def resend_webhook():
     return "", 200
 
 
-def _unsubscribe_page(heading: str, body: str) -> str:
-    return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{heading} — Morgenruf</title></head>
-<body style="margin:0;background:#FFFDF8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-             display:flex;align-items:center;justify-content:center;min-height:100vh;">
-<div style="max-width:440px;padding:32px;text-align:center;">
-  <img src="https://morgenruf.dev/logo-mark.png" width="56" height="56" alt="" style="border-radius:12px"/>
-  <h1 style="font-size:24px;color:#191B2A;margin:18px 0 10px;">{heading}</h1>
-  <p style="font-size:15.5px;color:#5A5E74;line-height:1.6;margin:0 0 22px;">{body}</p>
-  <a href="https://morgenruf.dev" style="color:#E0322E;font-weight:600;text-decoration:none;">morgenruf.dev</a>
-</div></body></html>"""
+def _email_result(status: str, status_code: int = 200):
+    # Mail clients use POST for one-click unsubscribe and do not render pages.
+    if request.method == "POST":
+        body = {"status": status} if status_code < 400 else {"error": status}
+        return jsonify(body), status_code
+    return redirect(f"/email/result?status={status}", code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -602,6 +591,9 @@ def _unsubscribe_page(heading: str, body: str) -> str:
 
 @dashboard_bp.route("/dashboard/api/me", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="getSession", tags=["Session"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Session)
 def api_me():
     team_id = session["team_id"]
     user_id = session.get("user_id", "")
@@ -613,26 +605,30 @@ def api_me():
         modules = sorted(db.module_admin_grants(team_id, user_id))
     except Exception:
         modules = []
-    return jsonify(
-        {
-            "team_id": team_id,
-            "user_id": user_id,
-            "team_name": session.get("team_name", ""),
-            "role": role,
-            # Features this person administers without being a workspace admin.
-            # An admin administers all of them, which the page derives from the
-            # role rather than from a list that would go stale.
-            "module_admin": modules,
-        }
-    )
+    return {
+        "team_id": team_id,
+        "user_id": user_id,
+        "team_name": session.get("team_name", ""),
+        "role": role,
+        # Features this person administers without being a workspace admin.
+        # An admin administers all of them, which the page derives from the
+        # role rather than from a list that would go stale.
+        "module_admin": modules,
+        "mcp_endpoint": f"{os.environ.get('APP_URL', _APP_URL).rstrip('/')}/mcp",
+        "csrf_token": csrf_token(),
+    }
 
 
 @dashboard_bp.route("/dashboard/api/members/<user_id>/role", methods=["PUT"])
 @_login_required
 @_admin_required
-def api_set_member_role(user_id: str):
+@dashboard_bp.doc(operationId="updateMemberRole", tags=["Members"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.RoleInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.MemberRole)
+def api_set_member_role(data, user_id: str):
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
+
     role = data.get("role", "member")
 
     # Demoting the last admin leaves nobody who can promote anyone, and every
@@ -646,16 +642,32 @@ def api_set_member_role(user_id: str):
             logger.warning("api_set_member_role admin count failed: %s", exc)
     try:
         db.set_member_role(team_id, user_id, role)
-        return jsonify({"ok": True, "user_id": user_id, "role": role})
+        return {"ok": True, "user_id": user_id, "role": role}
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
 
-@dashboard_bp.route("/dashboard/api/members/<user_id>/modules/<module>", methods=["PUT", "DELETE"])
+@dashboard_bp.route("/dashboard/api/members/<user_id>/modules/<module>", methods=["PUT"])
 @_admin_required
+@dashboard_bp.doc(operationId="grantModuleAdmin", tags=["Members"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.ModuleGrant)
 def api_set_module_admin(user_id: str, module: str):
+    return _set_module_admin(user_id, module)
+
+
+@dashboard_bp.route("/dashboard/api/members/<user_id>/modules/<module>", methods=["DELETE"])
+@_admin_required
+@dashboard_bp.doc(operationId="revokeModuleAdmin", tags=["Members"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.ModuleGrant)
+def api_revoke_module_admin(user_id: str, module: str):
+    return _set_module_admin(user_id, module)
+
+
+def _set_module_admin(user_id: str, module: str):
     """Give one person charge of one feature, or take it back.
 
     This is how a team lead runs the standups and someone else runs a feature
@@ -677,7 +689,7 @@ def api_set_module_admin(user_id: str, module: str):
             db.revoke_module_admin(team_id, user_id, module)
         else:
             db.grant_module_admin(team_id, user_id, module, session.get("user_id", ""))
-        return jsonify({"ok": True, "user_id": user_id, "module": module, "granted": request.method == "PUT"})
+        return {"ok": True, "user_id": user_id, "module": module, "granted": request.method == "PUT"}
     except Exception as exc:
         logger.error("api_set_module_admin: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -690,11 +702,15 @@ def api_set_module_admin(user_id: str, module: str):
 
 @dashboard_bp.route("/dashboard/api/members", methods=["GET"])
 @_login_required
-def api_members():
+@dashboard_bp.doc(operationId="listMembers", tags=["Members"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.MemberQuery, location="query", error_status_code=400)
+@dashboard_bp.response(200, schemas.Member(many=True))
+def api_members(query):
     team_id = session["team_id"]
     token = _get_bot_token()
     if not token:
-        return jsonify([])
+        return []
 
     # Roles, and who the bot actually holds a row for. This endpoint lists
     # everyone in the Slack workspace, which is right for the participant
@@ -716,7 +732,7 @@ def api_members():
         logger.warning("Unexpected error in api_members loading module grants: %s", e)
         grants = {}
 
-    channel_id = request.args.get("channel_id")
+    channel_id = query.get("channel_id")
 
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
@@ -768,41 +784,43 @@ def api_members():
                     "tracked": uid in tracked,
                 }
             )
-        return jsonify(members)
+        return members
     except Exception as exc:
         logger.error("api_members error: %s", exc)
         # Fall back to DB members
         try:
             rows = db.get_active_members(team_id)
-            return jsonify(
-                [
-                    {
-                        "id": r["user_id"],
-                        "name": r.get("real_name", ""),
-                        # Stored on the last roster sync, so the page still
-                        # shows faces and handles when Slack is unreachable.
-                        "display_name": r.get("display_name") or "",
-                        "avatar": r.get("avatar_url") or "",
-                        "email": r.get("email", ""),
-                        "tz": r.get("tz", "UTC"),
-                        "role": r.get("role", "member"),
-                        "module_admin": sorted(grants.get(r["user_id"], ())),
-                        "tracked": True,
-                    }
-                    for r in rows
-                ]
-            )
+            return [
+                {
+                    "id": r["user_id"],
+                    "name": r.get("real_name", ""),
+                    # Stored on the last roster sync, so the page still
+                    # shows faces and handles when Slack is unreachable.
+                    "display_name": r.get("display_name") or "",
+                    "avatar": r.get("avatar_url") or "",
+                    "email": r.get("email", ""),
+                    "tz": r.get("tz", "UTC"),
+                    "role": r.get("role", "member"),
+                    "module_admin": sorted(grants.get(r["user_id"], ())),
+                    "tracked": True,
+                }
+                for r in rows
+            ]
         except Exception:
-            return jsonify([])
+            return []
 
 
 @dashboard_bp.route("/dashboard/api/members/invite", methods=["POST"])
 @_login_required
 @_admin_required
-def api_invite_admin():
+@dashboard_bp.doc(operationId="inviteMember", tags=["Members"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.InviteMemberInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.MemberRole)
+def api_invite_admin(data):
     """Look up a Slack user by name/email and grant them admin role."""
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
+
     user_id = data.get("user_id", "").strip()
     role = data.get("role", "admin")
     if not user_id:
@@ -825,9 +843,7 @@ def api_invite_admin():
             tz=u.get("tz", "UTC"),
         )
         db.set_member_role(team_id, user_id, role)
-        return jsonify(
-            {"ok": True, "user_id": user_id, "role": role, "name": profile.get("real_name") or u.get("name", "")}
-        )
+        return {"ok": True, "user_id": user_id, "role": role, "name": profile.get("real_name") or u.get("name", "")}
     except Exception as exc:
         logger.error("api_invite_admin error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -840,11 +856,14 @@ def api_invite_admin():
 
 @dashboard_bp.route("/dashboard/api/channels", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listChannels", tags=["Workspace"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Channel(many=True))
 def api_channels():
     token = _get_bot_token()
     if not token:
         logger.warning("api_channels: no bot token found for team %s", session.get("team_id"))
-        return jsonify([])
+        return []
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
 
@@ -861,10 +880,10 @@ def api_channels():
             cursor = result.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
-        return jsonify(sorted(channels, key=lambda c: c["name"]))
+        return sorted(channels, key=lambda c: c["name"])
     except Exception as exc:
         logger.error("api_channels error: %s", exc)
-        return jsonify([])
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -895,30 +914,31 @@ def _participation_summary(overview: dict) -> dict:
 
 @dashboard_bp.route("/dashboard/api/stats", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="getStats", tags=["Analytics"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Stats)
 def api_stats():
     team_id = session["team_id"]
     try:
         stats = db.get_dashboard_stats(team_id)
-        return jsonify(stats)
+        return stats
     except Exception as exc:
         logger.warning("api_stats error: %s", exc)
-        return jsonify(
-            {
-                "completion_rate": 0,
-                "active_members": 0,
-                "total_responses": 0,
-                "responses_this_week": 0,
-                "total_members": 0,
-                "enrolled_members": 0,
-                "unenrolled_members": 0,
-                "on_vacation_members": 0,
-                "expected_responses": 0,
-                "completed_responses": 0,
-                "missed_responses": 0,
-                "days": 7,
-                "schedules": [],
-            }
-        )
+        return {
+            "completion_rate": 0,
+            "active_members": 0,
+            "total_responses": 0,
+            "responses_this_week": 0,
+            "total_members": 0,
+            "enrolled_members": 0,
+            "unenrolled_members": 0,
+            "on_vacation_members": 0,
+            "expected_responses": 0,
+            "completed_responses": 0,
+            "missed_responses": 0,
+            "days": 7,
+            "schedules": [],
+        }
 
 
 # Channel names the bot is not a member of, resolved once per process.
@@ -1019,12 +1039,16 @@ def _attach_questions(team_id: str, standups: list[dict]) -> None:
 
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
 @_login_required
-def api_reports():
+@dashboard_bp.doc(operationId="getReports", tags=["Reports"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.ReportQuery, location="query", error_status_code=400)
+@dashboard_bp.response(200, schemas.Reports)
+def api_reports(query):
     """Return standup history with participation stats, filterable by date/member."""
     team_id = session["team_id"]
-    date_from = request.args.get("date_from")
-    date_to = request.args.get("date_to")
-    user_id_filter = request.args.get("user_id")
+    date_from = query.get("date_from")
+    date_to = query.get("date_to")
+    user_id_filter = query.get("user_id")
     try:
         standups = db.get_standups(
             team_id,
@@ -1073,27 +1097,23 @@ def api_reports():
                 }
             )
 
-        return jsonify(
-            {
-                "standups": standups,
-                "channel_names": channel_names,
-                "participation": member_summary,
-                "total_days": total_days,
-                "summary": _participation_summary(overview),
-                "schedules": overview.get("schedules") or [],
-            }
-        )
+        return {
+            "standups": standups,
+            "channel_names": channel_names,
+            "participation": member_summary,
+            "total_days": total_days,
+            "summary": _participation_summary(overview),
+            "schedules": overview.get("schedules") or [],
+        }
     except Exception as exc:
         logger.error("api_reports error: %s", exc)
-        return jsonify(
-            {
-                "standups": [],
-                "participation": [],
-                "total_days": 7,
-                "summary": _participation_summary({}),
-                "schedules": [],
-            }
-        )
+        return {
+            "standups": [],
+            "participation": [],
+            "total_days": 7,
+            "summary": _participation_summary({}),
+            "schedules": [],
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -1159,28 +1179,38 @@ def _clean_events(raw) -> tuple[list[str] | None, str | None]:
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listWebhooks", tags=["Webhooks"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Webhook(many=True))
 def api_list_webhooks():
     team_id = session["team_id"]
     try:
         hooks = db.get_webhooks(team_id)
-        return jsonify([_public_webhook(h) for h in hooks])
+        return [_public_webhook(h) for h in hooks]
     except Exception as exc:
         logger.warning("api_list_webhooks error: %s", exc)
-        return jsonify([])
+        return []
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/events", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="getWebhookEvents", tags=["Webhooks"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.WebhookEvents)
 def api_webhook_events():
     """List the event names a webhook can subscribe to."""
-    return jsonify({"events": list(db.WEBHOOK_EVENTS), "default": list(db.DEFAULT_WEBHOOK_EVENTS)})
+    return {"events": list(db.WEBHOOK_EVENTS), "default": list(db.DEFAULT_WEBHOOK_EVENTS)}
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["POST"])
 @_admin_required
-def api_add_webhook():
+@dashboard_bp.doc(operationId="createWebhook", tags=["Webhooks"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.WebhookInput, error_status_code=400)
+@dashboard_bp.response(201, schemas.Webhook)
+def api_add_webhook(data):
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
+
     url_val = data.get("url", "").strip()
     if not url_val:
         return jsonify({"error": "url is required"}), 400
@@ -1196,7 +1226,7 @@ def api_add_webhook():
         # The only time the raw secret is ever returned. Store it now or rotate.
         body["secret"] = secret
         body["secret_shown_once"] = True
-        return jsonify(body), 201
+        return body, 201
     except Exception as exc:
         logger.error("api_add_webhook error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -1204,10 +1234,13 @@ def api_add_webhook():
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["PATCH"])
 @_admin_required
-def api_update_webhook(hook_id: str):
+@dashboard_bp.doc(operationId="updateWebhook", tags=["Webhooks"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.WebhookInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.Webhook)
+def api_update_webhook(data, hook_id: str):
     """Update a webhook's URL and/or its event subscription."""
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
 
     url_val = data.get("url")
     if url_val is not None:
@@ -1227,7 +1260,7 @@ def api_update_webhook(hook_id: str):
         hook = db.update_webhook(team_id, int(hook_id), url=url_val, events=events)
         if not hook:
             return jsonify({"error": "Webhook not found"}), 404
-        return jsonify(_public_webhook(hook))
+        return _public_webhook(hook)
     except ValueError:
         return jsonify({"error": "Invalid webhook id"}), 400
     except Exception as exc:
@@ -1237,6 +1270,11 @@ def api_update_webhook(hook_id: str):
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/rotate", methods=["POST"])
 @_admin_required
+@dashboard_bp.doc(
+    operationId="rotateWebhookSecret", tags=["Webhooks"], security=[{"sessionCookie": [], "csrfHeader": []}]
+)
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Webhook)
 def api_rotate_webhook_secret(hook_id: str):
     """Issue a new signing secret and return it once.
 
@@ -1254,7 +1292,7 @@ def api_rotate_webhook_secret(hook_id: str):
         body = _public_webhook(hook)
         body["secret"] = secret
         body["secret_shown_once"] = True
-        return jsonify(body)
+        return body
     except ValueError:
         return jsonify({"error": "Invalid webhook id"}), 400
     except Exception as exc:
@@ -1264,6 +1302,9 @@ def api_rotate_webhook_secret(hook_id: str):
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/test", methods=["POST"])
 @_admin_required
+@dashboard_bp.doc(operationId="testWebhook", tags=["Webhooks"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.WebhookTest)
 def api_test_webhook(hook_id: str):
     """Send a synthetic event through the real signing and logging path."""
     team_id = session["team_id"]
@@ -1287,7 +1328,7 @@ def api_test_webhook(hook_id: str):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         result = deliver_webhook(hook, event_type, payload, team_id=team_id)
-        return jsonify(result)
+        return result
     except ValueError:
         return jsonify({"error": "Invalid webhook id"}), 400
     except Exception as exc:
@@ -1297,11 +1338,15 @@ def api_test_webhook(hook_id: str):
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/deliveries", methods=["GET"])
 @_login_required
-def api_webhook_deliveries(hook_id: str | None = None):
+@dashboard_bp.doc(operationId="listWebhookDeliveries", tags=["Webhooks"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.LimitQuery, location="query", error_status_code=400)
+@dashboard_bp.response(200, schemas.WebhookDelivery(many=True))
+def api_webhook_deliveries(query, hook_id: str | None = None):
     """Recent delivery attempts, newest first, for the team or one webhook."""
     team_id = session["team_id"]
     try:
-        limit = int(request.args.get("limit", 20))
+        limit = int(query.get("limit", 20))
     except (TypeError, ValueError):
         limit = 20
     try:
@@ -1312,19 +1357,22 @@ def api_webhook_deliveries(hook_id: str | None = None):
         rows = db.get_webhook_deliveries(team_id, webhook_id=webhook_id, limit=limit)
         for row in rows:
             row["created_at"] = _iso(row.get("created_at"))
-        return jsonify(rows)
+        return rows
     except Exception as exc:
         logger.warning("api_webhook_deliveries error: %s", exc)
-        return jsonify([])
+        return []
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>", methods=["DELETE"])
 @_admin_required
+@dashboard_bp.doc(operationId="deleteWebhook", tags=["Webhooks"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Ok)
 def api_delete_webhook(hook_id: str):
     team_id = session["team_id"]
     try:
         db.delete_webhook(team_id, int(hook_id))
-        return jsonify({"ok": True})
+        return {"ok": True}
     except Exception as exc:
         logger.error("api_delete_webhook error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -1337,7 +1385,11 @@ def api_delete_webhook(hook_id: str):
 
 @dashboard_bp.route("/dashboard/api/analytics", methods=["GET"])
 @_login_required
-def api_analytics():
+@dashboard_bp.doc(operationId="getAnalytics", tags=["Analytics"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.DaysQuery, location="query", error_status_code=400)
+@dashboard_bp.response(200, schemas.Analytics)
+def api_analytics(query):
     """Per-member participation for the last N days.
 
     Members in no active schedule stay in the list with `enrolled` false and an
@@ -1345,7 +1397,7 @@ def api_analytics():
     a misleading "0 of 7".
     """
     team_id = session["team_id"]
-    days = int(request.args.get("days", 7))
+    days = int(query.get("days", 7))
     try:
         overview = db.get_participation_overview(team_id, days)
         stats = overview["members"]
@@ -1368,28 +1420,38 @@ def api_analytics():
         # the per-member ratios, which weights a member with one expected
         # standup the same as one with ten and produced a different headline for
         # the same window (#85).
-        return jsonify(
-            {
-                "members": stats,
-                "days": overview["days"],
-                # The dates the grid draws columns for. This endpoint builds its
-                # payload from an explicit key list, so anything added to
-                # compute_participation has to be named here too or the client
-                # silently gets nothing.
-                "window_days": overview.get("window_days") or [],
-                "expected": overview["expected"],
-                "completed": overview["completed"],
-                "missed": overview["missed"],
-                "completion_rate": overview["completion_rate"],
-                "enrolled_members": overview["enrolled_members"],
-                "unenrolled_members": overview["unenrolled_members"],
-                "on_vacation_members": overview["on_vacation_members"],
-                "schedules": overview["schedules"],
-            }
-        )
+        return {
+            "members": stats,
+            "days": overview["days"],
+            # The dates the grid draws columns for. This endpoint builds its
+            # payload from an explicit key list, so anything added to
+            # compute_participation has to be named here too or the client
+            # silently gets nothing.
+            "window_days": overview.get("window_days") or [],
+            "expected": overview["expected"],
+            "completed": overview["completed"],
+            "missed": overview["missed"],
+            "completion_rate": overview["completion_rate"],
+            "enrolled_members": overview["enrolled_members"],
+            "unenrolled_members": overview["unenrolled_members"],
+            "on_vacation_members": overview["on_vacation_members"],
+            "schedules": overview["schedules"],
+        }
     except Exception as exc:
         logger.error("api_analytics error: %s", exc)
-        return jsonify({"members": [], "schedules": []})
+        return {
+            "members": [],
+            "schedules": [],
+            "window_days": [],
+            "days": days,
+            "expected": 0,
+            "completed": 0,
+            "missed": 0,
+            "completion_rate": 0,
+            "enrolled_members": 0,
+            "unenrolled_members": 0,
+            "on_vacation_members": 0,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -1397,10 +1459,14 @@ def api_analytics():
 # ---------------------------------------------------------------------------
 @dashboard_bp.route("/dashboard/api/export/csv", methods=["GET"])
 @_login_required
-def api_export_csv():
+@dashboard_bp.doc(operationId="exportCsv", tags=["Reports"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.ExportQuery, location="query", error_status_code=400)
+@dashboard_bp.response(200, {"type": "string", "format": "binary"}, content_type="text/csv")
+def api_export_csv(query):
     team_id = session["team_id"]
-    from_date = request.args.get("from")
-    to_date = request.args.get("to")
+    from_date = query.get("from")
+    to_date = query.get("to")
     try:
         rows = db.export_standups(team_id, from_date, to_date)
     except Exception as exc:
@@ -1445,10 +1511,13 @@ def api_export_csv():
 
 @dashboard_bp.route("/dashboard/api/templates", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listTemplates", tags=["Standups"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.StandupTemplate(many=True))
 def api_templates():
     from src.modules.standup.templates_library import TEMPLATES  # noqa: PLC0415
 
-    return jsonify(TEMPLATES)
+    return TEMPLATES
 
 
 # ── Workflow Rules API ──────────────────────────────────────────────────────
@@ -1456,23 +1525,30 @@ def api_templates():
 
 @dashboard_bp.route("/dashboard/api/rules", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listRules", tags=["Automation"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Rule(many=True))
 def api_list_rules():
     team_id = session["team_id"]
     try:
         from src.modules.standup.workflow import get_rules  # noqa: PLC0415
 
         rules = get_rules(team_id)
-        return jsonify(rules)
+        return rules
     except Exception as exc:
         logger.error("api_list_rules: %s", exc)
-        return jsonify([])
+        return []
 
 
 @dashboard_bp.route("/dashboard/api/rules", methods=["POST"])
 @_admin_required("standup")
-def api_create_rule():
+@dashboard_bp.doc(operationId="createRule", tags=["Automation"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.RuleInput, error_status_code=400)
+@dashboard_bp.response(201, schemas.CreatedId)
+def api_create_rule(data):
     team_id = session["team_id"]
-    data = request.get_json(force=True) or {}
+
     try:
         from src.modules.standup.workflow import save_rule  # noqa: PLC0415
 
@@ -1487,7 +1563,7 @@ def api_create_rule():
         )
         if rule_id is None:
             return jsonify({"error": "Could not save rule"}), 500
-        return jsonify({"id": rule_id}), 201
+        return {"id": rule_id}, 201
     except Exception as exc:
         logger.error("api_create_rule: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -1495,13 +1571,16 @@ def api_create_rule():
 
 @dashboard_bp.route("/dashboard/api/rules/<int:rule_id>", methods=["DELETE"])
 @_admin_required("standup")
+@dashboard_bp.doc(operationId="deleteRule", tags=["Automation"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Ok)
 def api_delete_rule(rule_id: int):
     team_id = session["team_id"]
     try:
         from src.modules.standup.workflow import delete_rule  # noqa: PLC0415
 
         delete_rule(rule_id, team_id)
-        return jsonify({"ok": True})
+        return {"ok": True}
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -1509,35 +1588,56 @@ def api_delete_rule(rule_id: int):
 # ── Public Feed ─────────────────────────────────────────────────────────────
 
 
-@dashboard_bp.route("/feed/<token>")
+@dashboard_bp.route("/api/public/feed/<token>", methods=["GET"])
+@dashboard_bp.doc(operationId="getFeed", tags=["Public"], security=[])
+@dashboard_bp.alt_response(404, schema=schemas.Error)
+@dashboard_bp.response(200, schemas.PublicFeed)
 def public_feed(token: str):
-    from datetime import date  # noqa: PLC0415
+    from datetime import date
 
     config = db.get_workspace_by_feed_token(token)
     if not config or not config.get("feed_public"):
-        return "<h2>Feed not found or not public.</h2>", 404
-    team_id = config["team_id"]
-    standups = db.get_standups(team_id, days=1)
-    today = date.today().strftime("%A, %B %-d, %Y")
-    return render_template("feed.html", standups=standups, config=config, today=today)
+        return jsonify(error="Feed not found or not public"), 404
+    return {
+        "title": config.get("standup_name") or "Team Standup",
+        "date": date.today().isoformat(),
+        "standups": db.get_standups(config["team_id"], days=1),
+    }
+
+
+@dashboard_bp.route("/dashboard/api/logout", methods=["POST"])
+@_login_required
+@dashboard_bp.doc(operationId="logout", tags=["Session"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@dashboard_bp.alt_response(401, schema=schemas.Error)
+@dashboard_bp.alt_response(403, schema=schemas.Error)
+@dashboard_bp.response(200, schemas.Ok)
+def api_logout():
+    session.clear()
+    return {"ok": True}
 
 
 @dashboard_bp.route("/dashboard/api/feed-token", methods=["POST"])
 @_admin_required
+@dashboard_bp.doc(operationId="createFeedToken", tags=["Workspace"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.FeedToken)
 def api_generate_feed_token():
     team_id = session["team_id"]
     token = secrets.token_urlsafe(24)
     db.upsert_workspace_config(team_id, feed_token=token, feed_public=True)
     app_url = os.environ.get("APP_URL", "")
-    return jsonify({"token": token, "url": f"{app_url}/feed/{token}"})
+    return {"token": token, "url": f"{app_url}/feed/{token}"}
 
 
 @dashboard_bp.route("/dashboard/api/feed-token", methods=["DELETE"])
 @_admin_required
+@dashboard_bp.doc(operationId="deleteFeedToken", tags=["Workspace"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Ok)
 def api_disable_feed():
     team_id = session["team_id"]
     db.upsert_workspace_config(team_id, feed_public=False)
-    return jsonify({"ok": True})
+    return {"ok": True}
 
 
 # ── MCP API Key management ───────────────────────────────────────────────────
@@ -1545,27 +1645,37 @@ def api_disable_feed():
 
 @dashboard_bp.route("/dashboard/api/mcp/keys", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listKeys", tags=["Mcp"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.McpKeys)
 def api_get_mcp_keys():
     team_id = session["team_id"]
     keys = db.get_mcp_keys(team_id)
-    return jsonify({"keys": keys})
+    return {"keys": keys}
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys", methods=["POST"])
 @_admin_required
-def api_create_mcp_key():
+@dashboard_bp.doc(operationId="createKey", tags=["Mcp"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.McpKeyInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.McpKeyCreated)
+def api_create_mcp_key(data):
     team_id = session["team_id"]
-    name = request.json.get("name", "Default") if request.json else "Default"
+    name = data.get("name", "Default")
     key = db.generate_mcp_key(team_id, name)
-    return jsonify({"key": key, "message": "Save this key — it won't be shown again!"})
+    return {"key": key, "message": "Save this key — it won't be shown again!"}
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys/<int:key_id>", methods=["DELETE"])
 @_admin_required
+@dashboard_bp.doc(operationId="revokeKey", tags=["Mcp"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.Ok)
 def api_revoke_mcp_key(key_id: int):
     team_id = session["team_id"]
     db.revoke_mcp_key(key_id, team_id)
-    return jsonify({"ok": True})
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -1575,6 +1685,9 @@ def api_revoke_mcp_key(key_id: int):
 
 @dashboard_bp.route("/dashboard/api/modules", methods=["GET"])
 @_login_required
+@dashboard_bp.doc(operationId="listModules", tags=["Workspace"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.WorkspaceModule(many=True))
 def api_list_modules():
     """Every registered module, with whether it is active for this workspace.
 
@@ -1589,27 +1702,29 @@ def api_list_modules():
     settings = db.module_settings(team_id)
     allowlist = deploy_allowlist()
     active = {m.name for m in active_modules(REGISTRY, granted, settings, allowlist)}
-    return jsonify(
-        [
-            {
-                "name": spec.name,
-                "active": spec.name in active,
-                "enabled": settings.get(spec.name, spec.default_enabled),
-                "required_scopes": list(spec.required_scopes),
-                "missing_scopes": sorted(set(spec.required_scopes) - set(granted)),
-                "available": allowlist is None or spec.name in allowlist,
-                # Whether the Members page may offer this as a grant.
-                "delegable": bool(getattr(spec, "delegable", False)),
-                "nav": [{"label": n.label, "path": n.path} for n in spec.nav],
-            }
-            for spec in REGISTRY
-        ]
-    )
+    return [
+        {
+            "name": spec.name,
+            "active": spec.name in active,
+            "enabled": settings.get(spec.name, spec.default_enabled),
+            "required_scopes": list(spec.required_scopes),
+            "missing_scopes": sorted(set(spec.required_scopes) - set(granted)),
+            "available": allowlist is None or spec.name in allowlist,
+            # Whether the Members page may offer this as a grant.
+            "delegable": bool(getattr(spec, "delegable", False)),
+            "nav": [{"label": n.label, "path": n.path} for n in spec.nav],
+        }
+        for spec in REGISTRY
+    ]
 
 
 @dashboard_bp.route("/dashboard/api/modules/<name>", methods=["POST"])
 @_admin_required
-def api_set_module(name: str):
+@dashboard_bp.doc(operationId="updateModule", tags=["Workspace"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp, conflict=schemas.ModuleScopeError)
+@dashboard_bp.arguments(schemas.ModuleInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.ModuleUpdated)
+def api_set_module(data, name: str):
     """Enable or disable one module for this workspace.
 
     Enabling a module whose scopes are not granted returns 409 rather than
@@ -1622,7 +1737,7 @@ def api_set_module(name: str):
     spec = next((s for s in REGISTRY if s.name == name), None)
     if spec is None:
         return jsonify({"error": "unknown module"}), 404
-    enabled = bool((request.get_json(silent=True) or {}).get("enabled"))
+    enabled = bool(data.get("enabled"))
     if enabled and not db.has_scopes(team_id, spec.required_scopes):
         return jsonify(
             {
@@ -1636,4 +1751,4 @@ def api_set_module(name: str):
     from src.core.analytics import capture  # noqa: PLC0415
 
     capture("module_enabled" if enabled else "module_disabled", team_id, module=name)
-    return jsonify({"module": name, "enabled": enabled})
+    return {"module": name, "enabled": enabled}

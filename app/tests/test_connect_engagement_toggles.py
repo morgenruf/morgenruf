@@ -29,17 +29,6 @@ class TestStorageExists:
         for col in ("suggest_times", "use_icebreaker", "post_stats"):
             assert f'"{col}"' in block, f"{col} would be dropped by the allowlist"
 
-    def test_the_form_sends_them(self):
-        markup = (APP / "src/core/templates/dashboard.html").read_text()
-        body = markup[markup.index("async function saveConnectSettings") :][:1400]
-        for col in ("suggest_times", "use_icebreaker", "post_stats"):
-            assert col in body, f"{col} is never sent, so the toggle does nothing"
-
-    def test_the_form_loads_them_defaulting_on(self):
-        markup = (APP / "src/core/templates/dashboard.html").read_text()
-        assert "p.suggest_times !== false" in markup
-        assert "p.use_icebreaker !== false" in markup
-
 
 class TestTheMessageActuallyChanges:
     def _msg(self, **kw):

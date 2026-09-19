@@ -8,35 +8,40 @@ import os
 import re
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
+from threading import Lock
 from typing import Any, Generator
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
 _pool = None
+_pool_lock = Lock()
 
 try:
     import psycopg2
     import psycopg2.extras
     from psycopg2.pool import ThreadedConnectionPool
-
-    _DATABASE_URL = os.environ.get("DATABASE_URL", "")
-    if _DATABASE_URL:
-        _pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=_DATABASE_URL)
-        logger.info("PostgreSQL connection pool initialised")
-    else:
-        logger.warning("DATABASE_URL not set — database features disabled")
 except ImportError:
-    logger.warning("psycopg2 not installed — database features disabled")
-except Exception as exc:  # noqa: BLE001
-    logger.warning("Could not initialise DB pool: %s", exc)
+    ThreadedConnectionPool = None
+
+
+def initialize_pool():
+    """Open PostgreSQL only on first use, never while importing HTTP routes."""
+    global _pool
+    if _pool is not None:
+        return _pool
+    with _pool_lock:
+        if _pool is None:
+            database_url = os.environ.get("DATABASE_URL", "")
+            if not database_url or ThreadedConnectionPool is None:
+                raise RuntimeError("Database pool not initialised")
+            _pool = ThreadedConnectionPool(minconn=1, maxconn=10, dsn=database_url)
+    return _pool
 
 
 def get_conn():
-    """Borrow a connection from the pool."""
-    if _pool is None:
-        raise RuntimeError("Database pool not initialised")
-    return _pool.getconn()
+    """Borrow a connection, lazily creating the pool."""
+    return initialize_pool().getconn()
 
 
 def release_conn(conn) -> None:
