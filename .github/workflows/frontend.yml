@@ -1,0 +1,36 @@
+name: Frontend and API contract
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: pip
+      - run: pip install -r app/requirements.txt
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm api:check
+      - run: pnpm --filter @morgenruf/frontend lint
+      - run: pnpm --filter @morgenruf/frontend typecheck
+      - run: pnpm --filter @morgenruf/frontend test
+      - run: pnpm --filter @morgenruf/frontend build
+      - run: pnpm --filter @morgenruf/frontend exec playwright install --with-deps chromium
+      - run: pnpm --filter @morgenruf/frontend test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: frontend/playwright-report/
+          retention-days: 7

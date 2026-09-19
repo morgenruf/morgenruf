@@ -46,26 +46,10 @@ def read_link_token(token: str) -> tuple[str, str] | None:
     return (team_id, user_id) if team_id and user_id else None
 
 
-def _page(title: str, body: str, ok: bool = True) -> str:
-    """A plain page, because this is the one place a Slack user leaves Slack.
+def _result(status: str):
+    from flask import redirect
 
-    No dashboard chrome: they arrived from a button and are about to go back.
-    """
-    colour = "#1a7f5a" if ok else "#a1343c"
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{title}</title>
-<style>
-  body {{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-          background:#12141a; color:#e8eaed;
-          font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }}
-  .card {{ max-width:30rem; padding:2rem; background:#1a1d26; border:1px solid #2a2e3a;
-           border-radius:12px; text-align:center; }}
-  h1 {{ margin:0 0 .5rem; font-size:1.25rem; color:{colour}; }}
-  p {{ margin:0; color:#a8adb8; }}
-</style></head>
-<body><div class="card"><h1>{title}</h1><p>{body}</p></div></body></html>"""
+    return redirect(f"/connect/zoom/result?status={status}", code=303)
 
 
 def register_zoom_routes(bp) -> None:
@@ -77,14 +61,10 @@ def register_zoom_routes(bp) -> None:
     @bp.route("/connect/zoom/start")
     def zoom_start():  # noqa: ANN202
         if not zoom.configured():
-            return _page("Zoom is not set up", "This Morgenruf deployment has no Zoom credentials.", ok=False), 503
+            return _result("unavailable")
         who = read_link_token(request.args.get("t", ""))
         if not who:
-            return _page(
-                "That link has expired",
-                "Open the coffee chat message in Slack and press the button again.",
-                ok=False,
-            ), 400
+            return _result("expired")
         team_id, user_id = who
         # The state is signed the same way, so the callback can trust who came
         # back without keeping server-side state for a redirect that may never
@@ -96,17 +76,17 @@ def register_zoom_routes(bp) -> None:
         import src.modules.connect.db as cdb
 
         if request.args.get("error"):
-            return _page("Zoom was not connected", "You declined the request. Nothing has changed.", ok=False)
+            return _result("denied")
 
         who = read_link_token(request.args.get("state", ""))
         code = request.args.get("code", "")
         if not who or not code:
-            return _page("That did not work", "Please start again from Slack.", ok=False), 400
+            return _result("invalid")
 
         team_id, user_id = who
         payload = zoom.exchange_code(code)
         if not payload or not payload.get("refresh_token"):
-            return _page("Zoom refused the connection", "Please try again from Slack.", ok=False), 502
+            return _result("error")
 
         zoom.store_from_token_response(team_id, user_id, payload)
         # Best effort: naming the account is a nicety, not a reason to fail.
@@ -117,8 +97,4 @@ def register_zoom_routes(bp) -> None:
         except Exception:
             logger.info("zoom: linked but could not read the account name")
 
-        return _page(
-            "Zoom connected",
-            "You can close this tab. Your next coffee chat will come with a meeting once you and "
-            "the other person agree a time.",
-        )
+        return _result("connected")

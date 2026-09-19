@@ -11,7 +11,6 @@ from datetime import datetime
 from datetime import timezone as tz
 
 from flask import Blueprint, jsonify, redirect, request, session
-from markupsafe import escape
 from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
@@ -93,7 +92,7 @@ def oauth_callback():
     incoming_state = request.args.get("state", "")
     if incoming_state and not _verify_state(incoming_state):
         logger.warning("OAuth state validation failed: %r", incoming_state)
-        return "Invalid state parameter", 400
+        return redirect("/auth/result?status=invalid", code=303)
     if not incoming_state:
         logger.warning("OAuth callback received without state — proceeding (direct install flow)")
 
@@ -102,11 +101,11 @@ def oauth_callback():
 
     if error:
         logger.warning("OAuth flow returned error: %s", error)
-        return f"<h3>Installation cancelled: {escape(error)}</h3>", 400
+        return redirect("/auth/result?status=denied", code=303)
 
     if not code:
         logger.warning("OAuth callback received with no code")
-        return "<h3>Missing authorisation code</h3>", 400
+        return redirect("/auth/result?status=error", code=303)
 
     client = WebClient()
     try:
@@ -118,7 +117,7 @@ def oauth_callback():
         )
     except Exception as exc:
         logger.error("oauth_v2_access failed: %s", exc)
-        return "<h3>OAuth exchange failed — please try again</h3>", 500
+        return redirect("/auth/result?status=error", code=303)
 
     team_id: str = resp["team"]["id"]
     team_name: str = resp["team"]["name"]
@@ -193,6 +192,7 @@ def oauth_callback():
 
     logger.info("Installation complete for team %s (%s)", team_id, team_name)
     # Set session and pass team_id in URL as fallback for proxies that drop cookies
+    session.clear()
     session["team_id"] = team_id
     session["team_name"] = team_name
     session["user_id"] = authed_user_id

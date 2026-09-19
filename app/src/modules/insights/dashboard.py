@@ -14,11 +14,14 @@ logger = logging.getLogger(__name__)
 def register_routes(flask_app) -> None:
     from datetime import datetime, timezone
 
-    from flask import Blueprint, jsonify, request, session
+    from flask import session
+    from flask_smorest import Blueprint
 
     import src.modules.insights.db as idb
+    from src.core.api import api_errors, register_api_blueprint
     from src.core.dashboard import _login_required
     from src.core.roster import eligible_members
+    from src.modules.insights import schemas
     from src.modules.insights.rules import find_blocker_runs
     from src.modules.insights.today import awaiting, blocked_from, expected_today, next_chat_date
 
@@ -29,10 +32,14 @@ def register_routes(flask_app) -> None:
 
     @bp.route("/dashboard/api/insights", methods=["GET"])
     @_login_required
-    def api_insights():
+    @bp.doc(operationId="getInsights", tags=["Insights"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.arguments(schemas.InsightsQuery, location="query", error_status_code=400)
+    @bp.response(200, schemas.Insights)
+    def api_insights(query):
         team_id = session["team_id"]
-        days = max(7, min(90, int(request.args.get("days", 30))))
-        min_days = max(2, min(10, int(request.args.get("min_blocker_days", 3))))
+        days = max(7, min(90, int(query.get("days", 30))))
+        min_days = max(2, min(10, int(query.get("min_blocker_days", 3))))
 
         unrecognised = idb.unrecognised_contributors(team_id, days=days)
         for row in unrecognised:
@@ -54,17 +61,19 @@ def register_routes(flask_app) -> None:
                 )
         stuck.sort(key=lambda r: (-r["days"], r["user_id"]))
 
-        return jsonify(
-            {
-                "window_days": days,
-                "unrecognised": unrecognised,
-                "stuck": stuck,
-            }
-        )
+        return {
+            "window_days": days,
+            "unrecognised": unrecognised,
+            "stuck": stuck,
+        }
 
     @bp.route("/dashboard/api/today", methods=["GET"])
     @_login_required
-    def api_today():
+    @bp.doc(operationId="getToday", tags=["Insights"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.arguments(schemas.TodayQuery, location="query", error_status_code=400)
+    @bp.response(200, schemas.Today)
+    def api_today(query):
         """One morning, in one request.
 
         Every piece is optional on purpose. A workspace with no schedules, no
@@ -97,7 +106,7 @@ def register_routes(flask_app) -> None:
         ]
 
         try:
-            kudos_limit = max(1, min(20, int(request.args.get("kudos", 5))))
+            kudos_limit = max(1, min(20, int(query.get("kudos", 5))))
         except (TypeError, ValueError):
             kudos_limit = 5
         kudos = idb.recent_kudos(team_id, limit=kudos_limit)
@@ -120,23 +129,21 @@ def register_routes(flask_app) -> None:
                 "overdue": days_away < 0,
             }
 
-        return jsonify(
-            {
-                "date": now.date().isoformat(),
-                "counts": {
-                    # Answered counts people, not rows, so it stays comparable with
-                    # expected when someone files two standups in one day.
-                    "expected": len(expected),
-                    "answered": len([u for u in answered if u]),
-                    "awaiting": len(waiting),
-                    "blocked": len(blocked),
-                },
-                "responses": responses,
-                "awaiting": waiting,
-                "blocked": blocked,
-                "kudos": kudos,
-                "next_chat": next_chat,
-            }
-        )
+        return {
+            "date": now.date().isoformat(),
+            "counts": {
+                # Answered counts people, not rows, so it stays comparable with
+                # expected when someone files two standups in one day.
+                "expected": len(expected),
+                "answered": len([u for u in answered if u]),
+                "awaiting": len(waiting),
+                "blocked": len(blocked),
+            },
+            "responses": responses,
+            "awaiting": waiting,
+            "blocked": blocked,
+            "kudos": kudos,
+            "next_chat": next_chat,
+        }
 
-    flask_app.register_blueprint(bp)
+    register_api_blueprint(flask_app, bp)

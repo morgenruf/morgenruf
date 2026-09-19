@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock
 
@@ -53,10 +52,11 @@ else:
 
 @pytest.fixture()
 def app():
-    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
+    flask_app = Flask(__name__)
     flask_app.config["TESTING"] = True
     flask_app.config["SECRET_KEY"] = "test-secret"
     flask_app.register_blueprint(dashboard.dashboard_bp)
+    flask_app.register_blueprint(dashboard.browser_bp)
     return flask_app
 
 

@@ -8,7 +8,6 @@ like a deliberate choice.
 
 from __future__ import annotations
 
-import os
 import sys
 from unittest.mock import MagicMock
 
@@ -88,28 +87,6 @@ class TestNoSilentUtcDefault:
 
     def test_the_timezone_field_stays_required(self):
         assert _tz_block().get("optional") is not True
-
-
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
-
-
-class TestDashboardPickerOffersEveryZone:
-    """#121 — the dashboard dropdown carried the same 63-zone shortlist. It at
-    least accepted a fully typed zone, but it could not suggest one, so the
-    zones the Slack modal dropped were also the ones it could not offer."""
-
-    def _template(self):
-        with open(TEMPLATE_PATH, encoding="utf-8") as fh:
-            return fh.read()
-
-    def test_the_zone_list_is_seeded_from_the_browser_tz_database(self):
-        markup = self._template()
-        assert "supportedValuesOf" in markup, (
-            "seed ALL_TIMEZONES from Intl.supportedValuesOf('timeZone') so every zone is suggestable"
-        )
-
-    def test_the_curated_labels_are_still_used_where_they_exist(self):
-        assert "America/Chicago (CT)" in self._template()
 
 
 class TestAliasesRankFirst:

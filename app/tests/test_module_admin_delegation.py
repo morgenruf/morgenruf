@@ -11,7 +11,6 @@ nothing that worked before changed.
 
 from __future__ import annotations
 
-import os
 import pathlib
 import re
 import sys
@@ -46,10 +45,11 @@ APP = pathlib.Path(__file__).resolve().parent.parent
 
 def _client(monkeypatch, role="member", grants=(), user_id="U_LEAD"):
     grants = set(grants)
-    flask_app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "../src/core/templates"))
+    flask_app = Flask(__name__)
     flask_app.config["TESTING"] = True
     flask_app.config["SECRET_KEY"] = "test-secret"
     flask_app.register_blueprint(dashboard.dashboard_bp)
+    flask_app.register_blueprint(dashboard.browser_bp)
 
     db = MagicMock()
     db.get_member_role.return_value = role
@@ -69,6 +69,7 @@ def _client(monkeypatch, role="member", grants=(), user_id="U_LEAD"):
         "participants": [],
         "schedule_days": "mon,tue",
     }
+    db.create_standup_schedule.return_value = dict(db.update_standup_schedule.return_value)
     db.get_workspace_config.return_value = {}
     monkeypatch.setattr(dashboard, "db", db)
 
@@ -209,11 +210,6 @@ class TestOnlyDelegableFeaturesAreOffered:
         delegable = {s.name for s in REGISTRY if getattr(s, "delegable", False)}
         assert delegable == gated, f"flagged {sorted(delegable)}, gated {sorted(gated)}"
 
-    def test_the_page_filters_on_it(self):
-        markup = (APP / "src/core/templates/dashboard.html").read_text()
-        fn = markup[markup.index("async function loadGrantable") :][:600]
-        assert "m.delegable" in fn
-
 
 class TestThePageKnowsWhoCanDoWhat:
     def test_me_reports_the_grants(self, monkeypatch):
@@ -238,24 +234,13 @@ class TestThePageKnowsWhoCanDoWhat:
         fallback = src[src.index("# Fall back to DB members") :][:900]
         assert '"module_admin": sorted(grants.get(r["user_id"], ()))' in fallback
 
-    def test_the_members_page_offers_them(self):
-        markup = (APP / "src/core/templates/dashboard.html").read_text()
-        assert "toggleModuleAdmin" in markup
-        # A toggle, so it says what it is: pressed state, and one request at a
-        # time rather than two opposite ones racing on a slow link.
-        assert "aria-pressed" in markup
-        assert "aria-busy" in markup
-        # "Runs" over three switched-off chips would read as a claim.
-        assert "Put in charge of" in markup
-        assert "'/members/' + userId + '/modules/' + module" in markup
-        # And an admin's card says why it has no switches.
-        assert "Runs every feature" in markup
-
 
 class TestEveryModuleRouteNamesItsFeature:
     """A module route gated workspace-wide cannot be delegated at all."""
 
-    ROUTE = re.compile(r'@\w+\.route\(\s*["\']([^"\']+)["\']([^)]*)\)\s*((?:@[\w_]+(?:\([^)]*\))?\s*)*)def\s+(\w+)')
+    from tests.support import RouteDeclarations
+
+    ROUTE = RouteDeclarations()
     MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 
     @pytest.mark.parametrize("module", ["connect", "kudos"])

@@ -31,8 +31,7 @@ APP = os.environ.get("APP_URL", "https://api.morgenruf.dev").rstrip("/")
 # message under CASL. The day-seven message asks a question, which makes it
 # commercial rather than transactional, so this is not decoration. Taken from
 # CloudDrove's own contact page rather than invented.
-POSTAL = ("CloudDrove &middot; 18 King Street East, Suite 1400, "
-          "Toronto, Ontario M5C 1C4, Canada \U0001F1E8\U0001F1E6")
+POSTAL = "CloudDrove &middot; 18 King Street East, Suite 1400, Toronto, Ontario M5C 1C4, Canada \U0001f1e8\U0001f1e6"
 
 
 def unsubscribe_token(email: str) -> str:
@@ -337,14 +336,16 @@ def optin_block(email: str) -> str:
     in writing with a date. One link, no pre-ticked box, and nothing is sent
     about features until it is pressed.
     """
-    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:26px 0 0;">'
-            f'<tr><td style="border-top:1px solid {LINE};padding-top:18px;">'
-            f'<p style="margin:0 0 6px;font-size:14.5px;font-weight:700;color:{TEXT};">Want to hear when something ships?</p>'
-            f'<p style="margin:0 0 10px;font-size:14px;color:{MUTED};line-height:1.55;">'
-            f'New features, roughly monthly, never more. You are not subscribed to anything yet.</p>'
-            f'<a href="{subscribe_url(email)}" style="font-size:14.5px;font-weight:700;color:{ROOSTER};">'
-            f'Yes, email me product updates &rarr;</a>'
-            f'</td></tr></table>')
+    return (
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:26px 0 0;">'
+        f'<tr><td style="border-top:1px solid {LINE};padding-top:18px;">'
+        f'<p style="margin:0 0 6px;font-size:14.5px;font-weight:700;color:{TEXT};">Want to hear when something ships?</p>'
+        f'<p style="margin:0 0 10px;font-size:14px;color:{MUTED};line-height:1.55;">'
+        f"New features, roughly monthly, never more. You are not subscribed to anything yet.</p>"
+        f'<a href="{subscribe_url(email)}" style="font-size:14.5px;font-weight:700;color:{ROOSTER};">'
+        f"Yes, email me product updates &rarr;</a>"
+        f"</td></tr></table>"
+    )
 
 
 def sync_contact(email: str, team_id: str = "") -> bool:
@@ -399,10 +400,12 @@ def uninstall_html(team_name: str, email: str, days_installed: int, standups: in
     asks one question. It does not try to win them back, because an app that
     argues on the way out is the reason people do not reply.
     """
-    used = (f"It ran {standups} standups over {days_installed} days."
-            if standups else
-            f"It was installed for {days_installed} days and never ran a standup, "
-            f"which is the part worth understanding.")
+    used = (
+        f"It ran {standups} standups over {days_installed} days."
+        if standups
+        else f"It was installed for {days_installed} days and never ran a standup, "
+        f"which is the part worth understanding."
+    )
     body = f"""
 <p style="margin:0 0 6px;font-size:23px;font-weight:700;color:{TEXT};letter-spacing:-0.02em;">
   Morgenruf has been removed from {team_name}</p>
@@ -457,7 +460,11 @@ def farewell(team_id: str) -> None:
         except Exception:
             standups = 0
 
-        send(email, f"Morgenruf removed from {team_name}. Your data is deleted.",
-             uninstall_html(team_name, email, days, standups), kind="farewell")
+        send(
+            email,
+            f"Morgenruf removed from {team_name}. Your data is deleted.",
+            uninstall_html(team_name, email, days, standups),
+            kind="farewell",
+        )
     except Exception as exc:
         logger.warning("Could not send the farewell email: %s", exc)

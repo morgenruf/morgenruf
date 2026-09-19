@@ -11,7 +11,24 @@ services:
     image: morgenruf/morgenruf:local
     build:
       context: .
+    # Keep the scheduler and database pool in the serving process. The default
+    # entrypoint starts them before Gunicorn forks, sharing Postgres sockets
+    # between processes. This local server has no debugger or reloader.
+    command:
+      - python
+      - -c
+      - |
+        from src.main import create_app
+        _, app = create_app()
+        app.run(host="0.0.0.0", port=3000, debug=False, use_reloader=False)
+    environment:
+      SESSION_COOKIE_SECURE: "false"
+  frontend:
+    image: morgenruf/morgenruf-frontend:local
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
     # Compose merges list values, so without !override this would bind both
     # 3000 (from the base file) and 3006.
     ports: !override
-      - "3006:3000"
+      - "3006:8080"
