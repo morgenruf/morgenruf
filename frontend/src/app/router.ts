@@ -128,47 +128,45 @@ export const router = createBrowserRouter([
             .default,
         }),
       },
-      ...(['members', 'kudos', 'automation', 'webhooks', 'mcp'] as const).map(
-        (feature) => ({
-          path: feature,
-          handle: {
-            title:
-              feature === 'mcp'
-                ? 'MCP'
-                : feature[0].toUpperCase() + feature.slice(1),
-          },
-          lazy:
-            feature === 'members'
-              ? async () => ({
-                  Component: (
-                    await import('@/modules/members/pages/members-page')
-                  ).default,
-                })
-              : feature === 'kudos'
-                ? async () => ({
-                    Component: (
-                      await import('@/modules/kudos/pages/kudos-page')
-                    ).default,
-                  })
-                : feature === 'automation'
-                  ? async () => ({
-                      Component: (
-                        await import('@/modules/automation/pages/automation-page')
-                      ).default,
-                    })
-                  : feature === 'webhooks'
-                    ? async () => ({
-                        Component: (
-                          await import('@/modules/webhooks/pages/webhooks-page')
-                        ).default,
-                      })
-                    : async () => ({
-                        Component: (
-                          await import('@/modules/mcp/pages/mcp-page')
-                        ).default,
-                      }),
+      {
+        path: 'members',
+        handle: { title: 'Members' },
+        lazy: async () => ({
+          Component: (await import('@/modules/members/pages/members-page'))
+            .default,
         }),
-      ),
+      },
+      {
+        path: 'kudos',
+        handle: { title: 'Kudos' },
+        lazy: async () => ({
+          Component: (await import('@/modules/kudos/pages/kudos-page')).default,
+        }),
+      },
+      {
+        path: 'automation',
+        handle: { title: 'Automation' },
+        lazy: async () => ({
+          Component: (
+            await import('@/modules/automation/pages/automation-page')
+          ).default,
+        }),
+      },
+      {
+        path: 'webhooks',
+        handle: { title: 'Webhooks' },
+        lazy: async () => ({
+          Component: (await import('@/modules/webhooks/pages/webhooks-page'))
+            .default,
+        }),
+      },
+      {
+        path: 'mcp',
+        handle: { title: 'MCP' },
+        lazy: async () => ({
+          Component: (await import('@/modules/mcp/pages/mcp-page')).default,
+        }),
+      },
     ],
   },
   {
