@@ -1,4 +1,4 @@
-FROM node:24-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /workspace
 # Node 25 dropped the bundled corepack, so install it rather than relying on the
 # base image. The pnpm version still comes from packageManager in package.json.
