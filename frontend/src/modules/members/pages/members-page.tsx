@@ -10,6 +10,7 @@ import {
 } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
+import { Person, PersonAvatar } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
@@ -282,26 +283,13 @@ export default function MembersPage() {
                     <Card key={member.id}>
                       <CardContent className="space-y-4 pt-5">
                         <div className="flex items-center gap-3">
-                          <div className="flex size-11 shrink-0 items-center justify-center relative overflow-hidden rounded-full bg-primary/10 font-semibold text-primary">
-                            {name
-                              .split(/\s+/)
-                              .map((word) => word[0])
-                              .slice(0, 2)
-                              .join('')}
-                            {member.avatar && (
-                              <img
-                                src={member.avatar}
-                                alt=""
-                                className="absolute inset-0 size-full object-cover"
-                                loading="lazy"
-                                onError={(event) => {
-                                  event.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
-                          </div>
+                          <PersonAvatar
+                            name={name}
+                            avatar={member.avatar}
+                            size="large"
+                          />
                           <div className="min-w-0">
-                            <h2 className="truncate font-medium">{name}</h2>
+                            <h2 className="break-words font-medium">{name}</h2>
                             <p className="truncate text-xs text-muted-foreground">
                               @{member.display_name || member.id}
                             </p>
@@ -451,12 +439,15 @@ export default function MembersPage() {
                       key={member.id}
                       variant={inviteId === member.id ? 'secondary' : 'outline'}
                       aria-pressed={inviteId === member.id}
-                      className="h-auto w-full justify-between py-3"
+                      className="h-auto w-full flex-wrap justify-between py-3 text-left whitespace-normal"
                       disabled={invite.isPending || member.role === 'admin'}
                       onClick={() => setInviteId(member.id)}
                     >
-                      <span>{member.name || member.id}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <Person
+                        {...inviteMembers.person(member.id)}
+                        size="compact"
+                      />
+                      <span className="break-all text-xs text-muted-foreground">
                         {member.role === 'admin'
                           ? 'Already admin'
                           : member.email}

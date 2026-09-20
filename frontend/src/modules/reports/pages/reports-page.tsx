@@ -203,13 +203,29 @@ export default function ReportsPage() {
                 value={userId}
                 onValueChange={(value) => filter('user_id', value ?? '')}
               >
-                <SelectTrigger id="report-member" className="w-full">
-                  <SelectValue />
+                <SelectTrigger
+                  id="report-member"
+                  className="min-h-9 w-full data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none"
+                >
+                  <SelectValue className="min-w-0">
+                    {userId ? (
+                      <Person {...members.person(userId)} size="compact" />
+                    ) : (
+                      'All members'
+                    )}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {memberOptions.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
-                      {item.label}
+                      {item.value ? (
+                        <Person
+                          {...members.person(item.value)}
+                          size="compact"
+                        />
+                      ) : (
+                        item.label
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -274,16 +290,7 @@ export default function ReportsPage() {
                               <TableRow key={row.user_id}>
                                 <TableCell>
                                   <Person
-                                    name={
-                                      names[row.user_id] ||
-                                      row.name ||
-                                      row.user_id
-                                    }
-                                    avatar={
-                                      members.data?.find(
-                                        (member) => member.id === row.user_id,
-                                      )?.avatar
-                                    }
+                                    {...members.person(row.user_id, row.name)}
                                   />
                                 </TableCell>
                                 {!row.expected ? (
@@ -363,17 +370,10 @@ export default function ReportsPage() {
                             >
                               <div className="flex flex-wrap items-center gap-3">
                                 <Person
-                                  name={
-                                    names[row.user_id] ||
-                                    row.real_name ||
-                                    row.user_name ||
-                                    row.user_id
-                                  }
-                                  avatar={
-                                    members.data?.find(
-                                      (member) => member.id === row.user_id,
-                                    )?.avatar
-                                  }
+                                  {...members.person(
+                                    row.user_id,
+                                    row.real_name || row.user_name,
+                                  )}
                                   detail={
                                     row.submitted_at
                                       ? formatDate(row.submitted_at, {

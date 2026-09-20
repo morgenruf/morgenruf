@@ -2,6 +2,7 @@ import { useParams } from 'react-router';
 
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { SlackText } from '@/common/components/slack-text';
 import { ThemeToggle } from '@/common/components/theme-toggle';
 import {
@@ -51,7 +52,9 @@ export default function FeedPage() {
                 query.data.standups.map((row, index) => (
                   <Card key={`${row.user_id}-${index}`}>
                     <CardHeader>
-                      <CardTitle>{row.user_name || row.user_id}</CardTitle>
+                      <CardTitle>
+                        <Person name={row.user_name || row.user_id} />
+                      </CardTitle>
                       {row.submitted_at && (
                         <p className="text-xs text-muted-foreground">
                           Submitted{' '}

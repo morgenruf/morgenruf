@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { AlertCircle, Inbox } from 'lucide-react';
+import { AlertCircle, Inbox, type LucideIcon } from 'lucide-react';
 
 import { errorMessage } from '@/common/api/errors';
+import { cn } from '@/common/lib/utils';
 
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -87,17 +88,37 @@ export function StatCard({
   label,
   value,
   description,
+  icon: Icon,
+  tone = 'primary',
 }: {
   label: string;
   value: ReactNode;
   description?: ReactNode;
+  icon?: LucideIcon;
+  tone?: 'neutral' | 'primary' | 'success' | 'warning' | 'destructive';
 }) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle className="text-xs font-medium text-muted-foreground">
           {label}
         </CardTitle>
+        {Icon && (
+          <span
+            className={cn(
+              'grid size-8 shrink-0 place-items-center rounded-lg',
+              {
+                'bg-muted text-muted-foreground': tone === 'neutral',
+                'bg-primary/10 text-primary': tone === 'primary',
+                'bg-success/10 text-success': tone === 'success',
+                'bg-warning/10 text-warning': tone === 'warning',
+                'bg-destructive/10 text-destructive': tone === 'destructive',
+              },
+            )}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
+        )}
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-semibold tabular-nums">{value}</div>

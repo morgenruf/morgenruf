@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,7 @@ const mock = vi.hoisted(() => ({
   rounds: vi.fn(),
   participation: vi.fn(),
   matches: vi.fn(),
+  members: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   programMembers: vi.fn(),
@@ -56,12 +57,7 @@ vi.mock('@/common/api/client', () => ({
       updateModule: vi.fn(),
     },
     members: {
-      listMembers: vi.fn().mockResolvedValue({
-        data: [
-          { id: 'U1', name: 'Mina' },
-          { id: 'U2', name: 'Sam' },
-        ],
-      }),
+      listMembers: mock.members,
     },
   },
 }));
@@ -82,6 +78,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   mock.admin = false;
+  mock.members.mockResolvedValue({
+    data: [
+      { id: 'U1', name: 'Mina', avatar: 'https://example.com/mina.jpg' },
+      { id: 'U2', name: '', display_name: 'Sam' },
+    ],
+  });
   mock.create.mockResolvedValue({ data: { id: 9 } });
   mock.programMembers.mockResolvedValue({
     data: [
@@ -180,9 +182,66 @@ describe('coffee chats', () => {
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    expect(await screen.findByText('Mina · Sam')).toBeInTheDocument();
+    expect(await screen.findByText('Mina')).toBeInTheDocument();
+    expect(screen.getByText('Sam')).toBeInTheDocument();
+    expect(
+      screen
+        .getByText('Mina')
+        .closest('span.inline-flex')
+        ?.querySelector('img'),
+    ).toHaveAttribute('src', 'https://example.com/mina.jpg');
     expect(mock.matches).toHaveBeenCalledWith(
       { roundId: 3 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    await user.click(screen.getByRole('button', { expanded: true }));
+    expect(screen.queryByText('Mina')).not.toBeInTheDocument();
+  });
+
+  it('keeps pairings and participation readable if the member directory fails', async () => {
+    mock.members.mockRejectedValue(new Error('Directory unavailable'));
+    mock.participation.mockResolvedValue({
+      data: [
+        {
+          user_id: 'U2',
+          paired: 2,
+          met: 0,
+          missed: 0,
+          no_reply: 2,
+          last_met: null,
+        },
+        {
+          user_id: 'U1',
+          paired: 2,
+          met: 1,
+          missed: 0,
+          no_reply: 1,
+          last_met: null,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    view(<Attendance programId={2} />);
+
+    expect(
+      await screen.findByText(
+        'Names are temporarily unavailable; Slack IDs are shown.',
+      ),
+    ).toBeInTheDocument();
+    const rows = within(
+      screen.getByRole('table', {
+        name: 'Participation over the last 6 rounds',
+      }),
+    ).getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('U2');
+    expect(rows[2]).toHaveTextContent('U1');
+    await user.click(screen.getByRole('button', { expanded: false }));
+    expect(await screen.findAllByText('U1')).toHaveLength(2);
+    expect(screen.getAllByText('U2')).toHaveLength(2);
+    expect(screen.getByText('No answered outcomes yet')).toBeInTheDocument();
+    expect(mock.participation).toHaveBeenCalledWith(
+      { programId: 2, rounds: 6 },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });

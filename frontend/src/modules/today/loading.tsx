@@ -12,7 +12,11 @@ export function TodaySkeleton() {
   return (
     <SkeletonRegion label="Loading today…">
       <div className="space-y-6">
-        <SkeletonStats count={3} className="sm:grid-cols-3 lg:grid-cols-3" />
+        <SkeletonStats
+          icons
+          count={3}
+          className="sm:grid-cols-3 lg:grid-cols-3"
+        />
         <div className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
           <SkeletonCard>
             <SkeletonPeople rows={5} />

@@ -20,6 +20,7 @@ import {
 } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
@@ -381,18 +382,18 @@ function StandupEditor({
                   <div className="grid max-h-52 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2">
                     {resources.members.data
                       ?.filter((member) =>
-                        `${member.name} ${member.id}`
+                        `${member.name} ${member.display_name} ${member.id}`
                           .toLowerCase()
                           .includes(memberSearch.toLowerCase()),
                       )
                       .map((member) => (
                         <label
                           key={member.id}
-                          className="flex items-center gap-2 text-sm"
+                          className="flex min-w-0 items-center gap-2 text-sm"
                         >
                           <input
                             type="checkbox"
-                            className="size-4 accent-primary"
+                            className="size-4 shrink-0 accent-primary"
                             checked={participants.includes(member.id)}
                             onChange={(event) =>
                               setValue(
@@ -406,7 +407,10 @@ function StandupEditor({
                               )
                             }
                           />
-                          {member.name || member.id}
+                          <Person
+                            {...resources.members.person(member.id)}
+                            size="compact"
+                          />
                         </label>
                       ))}
                   </div>

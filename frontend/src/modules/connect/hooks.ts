@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/common/api/client';
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
 export type Program = Awaited<
@@ -87,12 +88,7 @@ export function useAttendance(id: number) {
     enabled: !!session && !!id,
   });
 
-  const members = useQuery({
-    queryKey: ['workspace', session?.team_id, 'members', ''],
-    queryFn: ({ signal }) =>
-      api.members.listMembers({}, { signal }).then((r) => r.data),
-    enabled: !!session && !!id,
-  });
+  const members = useMemberDirectory({ enabled: !!id });
 
   return { rounds, participation, members };
 }

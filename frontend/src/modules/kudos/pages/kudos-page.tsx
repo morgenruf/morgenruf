@@ -3,8 +3,10 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { SlackText } from '@/common/components/slack-text';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -45,6 +47,7 @@ export default function KudosPage() {
     : 30;
 
   const { feed, receivers, givers, config, save, canEdit } = useKudos(days);
+  const directory = useMemberDirectory();
 
   const form = useForm<KudosConfigInput>({
     resetOptions: { keepDirtyValues: true },
@@ -132,11 +135,14 @@ export default function KudosPage() {
                       key={person.to_user}
                       className="flex items-center gap-3 py-3 text-sm"
                     >
-                      <span className="w-6 text-muted-foreground">
+                      <span className="w-6 shrink-0 text-muted-foreground">
                         {index + 1}
                       </span>
-                      <span className="flex-1">@{person.to_user}</span>
-                      <span className="rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">
+                      <Person
+                        className="flex-1"
+                        {...directory.person(person.to_user)}
+                      />
+                      <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">
                         {person.received}
                       </span>
                     </li>
@@ -171,11 +177,14 @@ export default function KudosPage() {
                       key={person.user_id}
                       className="flex items-center gap-3 py-3 text-sm"
                     >
-                      <span className="w-6 text-muted-foreground">
+                      <span className="w-6 shrink-0 text-muted-foreground">
                         {index + 1}
                       </span>
-                      <span className="flex-1">@{person.user_id}</span>
-                      <span className="rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">
+                      <Person
+                        className="flex-1"
+                        {...directory.person(person.user_id)}
+                      />
+                      <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 font-medium text-primary">
                         {person.given}
                       </span>
                     </li>
@@ -203,15 +212,20 @@ export default function KudosPage() {
               {feed.data.map((item) => (
                 <Card key={item.id}>
                   <CardContent className="space-y-2 pt-4">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Heart className="size-4 text-primary" />
-                      <span className="font-medium">
-                        @{item.from_name || item.from_user}
-                      </span>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <Heart
+                        className="size-4 shrink-0 text-primary"
+                        aria-hidden="true"
+                      />
+                      <Person
+                        size="compact"
+                        {...directory.person(item.from_user, item.from_name)}
+                      />
                       <span className="text-muted-foreground">thanked</span>
-                      <span className="font-medium">
-                        @{item.to_name || item.to_user}
-                      </span>
+                      <Person
+                        size="compact"
+                        {...directory.person(item.to_user, item.to_name)}
+                      />
                       <span className="ml-auto text-xs text-muted-foreground">
                         {relativeTime(item.created_at)}
                       </span>

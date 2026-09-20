@@ -20,6 +20,7 @@ import {
 } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -175,24 +176,15 @@ function ProgramMembers({ programId }: { programId: number }) {
                 .map((person) => (
                   <tr key={person.user_id} className="border-b last:border-0">
                     <td className="py-3 pr-3">
-                      <div className="flex items-center gap-2">
-                        {person.avatar && (
-                          <img
-                            src={person.avatar}
-                            alt=""
-                            className="size-7 rounded-full"
-                            loading="lazy"
-                          />
-                        )}
-                        <div>
-                          {person.name}
-                          <p className="text-xs text-muted-foreground">
-                            {person.eligible
-                              ? ''
-                              : 'Not on the eligible roster'}
-                          </p>
-                        </div>
-                      </div>
+                      <Person
+                        name={person.name || person.user_id}
+                        avatar={person.avatar}
+                        detail={
+                          person.eligible
+                            ? undefined
+                            : 'Not on the eligible roster'
+                        }
+                      />
                     </td>
                     <td className="py-3 pr-3 tabular-nums">{person.paired}</td>
                     <td className="py-3">
@@ -222,7 +214,7 @@ function ProgramMembers({ programId }: { programId: number }) {
                           }
                         >
                           <SelectTrigger
-                            aria-label={`Status for ${person.name}`}
+                            aria-label={`Status for ${person.name || person.user_id}`}
                             className="w-full"
                           >
                             <SelectValue />

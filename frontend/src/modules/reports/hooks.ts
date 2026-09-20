@@ -6,6 +6,7 @@ import type {
   GetReportsParams,
 } from '@/common/api/generated/data-contracts';
 import { queryKeys } from '@/common/api/query-keys';
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
 export function useReports(filters: GetReportsParams, enabled = true) {
@@ -18,11 +19,7 @@ export function useReports(filters: GetReportsParams, enabled = true) {
     enabled,
   });
 
-  const members = useQuery({
-    queryKey: queryKeys.feature(session?.team_id, 'members'),
-    queryFn: async ({ signal }) =>
-      (await api.members.listMembers({}, { signal })).data,
-  });
+  const members = useMemberDirectory();
 
   return { reports, members };
 }

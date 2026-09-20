@@ -1,8 +1,18 @@
 import { useState } from 'react';
+import {
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  Coffee,
+  Heart,
+  MessagesSquare,
+} from 'lucide-react';
 import { Link } from 'react-router';
 
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, StatCard } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { SlackText } from '@/common/components/slack-text';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -24,6 +34,7 @@ export default function TodayPage() {
   const [allBlocked, setAllBlocked] = useState(false);
 
   const query = useToday();
+  const directory = useMemberDirectory();
   const data = query.data;
 
   return (
@@ -52,20 +63,28 @@ export default function TodayPage() {
               <div className="grid gap-4 sm:grid-cols-3">
                 <StatCard
                   label="Answered"
+                  icon={CircleCheck}
+                  tone="success"
                   value={answeredSummary(data.counts).value}
                   description={answeredSummary(data.counts).description}
                 />
                 <StatCard
                   label="Still to answer"
+                  icon={Clock}
+                  tone={data.counts.awaiting ? 'warning' : 'neutral'}
                   value={data.counts.awaiting}
                   description={
                     data.counts.awaiting
                       ? 'Waiting on them'
-                      : 'Everyone has replied'
+                      : data.counts.expected
+                        ? 'Everyone has replied'
+                        : 'Nobody is scheduled today'
                   }
                 />
                 <StatCard
                   label="Blocked"
+                  icon={CircleAlert}
+                  tone={data.counts.blocked ? 'destructive' : 'neutral'}
                   value={
                     <span
                       className={data.counts.blocked ? 'text-destructive' : ''}
@@ -81,7 +100,11 @@ export default function TodayPage() {
               {data.blocked.length > 0 && (
                 <Card className="ring-destructive/30">
                   <CardHeader>
-                    <CardTitle className="text-destructive">
+                    <CardTitle className="flex items-center gap-2 text-destructive">
+                      <CircleAlert
+                        className="size-4 shrink-0"
+                        aria-hidden="true"
+                      />
                       Blocked right now
                     </CardTitle>
                   </CardHeader>
@@ -89,9 +112,9 @@ export default function TodayPage() {
                     {(allBlocked ? data.blocked : data.blocked.slice(0, 6)).map(
                       (row, index) => (
                         <div key={`${row.user_id}-${index}`} className="py-3">
-                          <div className="font-medium">
-                            {row.real_name || row.user_id}
-                          </div>
+                          <Person
+                            {...directory.person(row.user_id, row.real_name)}
+                          />
                           <div className="mt-1 text-sm text-muted-foreground">
                             <SlackText text={row.blockers} />
                           </div>
@@ -112,7 +135,13 @@ export default function TodayPage() {
               <div className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
                 <Card>
                   <CardHeader>
-                    <CardTitle>This morning</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <MessagesSquare
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                      Today’s responses
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {!data.responses.length ? (
@@ -128,9 +157,12 @@ export default function TodayPage() {
                         ).map((row, index) => (
                           <div key={`${row.user_id}-${index}`} className="py-3">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium">
-                                {row.real_name || row.user_id}
-                              </span>
+                              <Person
+                                {...directory.person(
+                                  row.user_id,
+                                  row.real_name,
+                                )}
+                              />
                               {row.has_blockers && (
                                 <Badge variant="destructive">Blocked</Badge>
                               )}
@@ -165,8 +197,18 @@ export default function TodayPage() {
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                           {data.awaiting.map((row) => (
-                            <Badge variant="secondary" key={row.user_id}>
-                              {row.real_name || row.user_id}
+                            <Badge
+                              variant="secondary"
+                              key={row.user_id}
+                              className="h-auto max-w-full whitespace-normal"
+                            >
+                              <Person
+                                size="compact"
+                                {...directory.person(
+                                  row.user_id,
+                                  row.real_name,
+                                )}
+                              />
                             </Badge>
                           ))}
                         </div>
@@ -177,19 +219,35 @@ export default function TodayPage() {
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Recent recognition</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        <Heart
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        Recent recognition
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
                       {data.kudos.length ? (
                         <div className="divide-y">
                           {data.kudos.map((row) => (
                             <div key={row.id} className="py-3">
-                              <p className="text-sm">
-                                <strong>
-                                  {row.from_name || row.from_user}
-                                </strong>{' '}
+                              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                <Person
+                                  size="compact"
+                                  {...directory.person(
+                                    row.from_user,
+                                    row.from_name,
+                                  )}
+                                />
                                 thanked{' '}
-                                <strong>{row.to_name || row.to_user}</strong>
+                                <Person
+                                  size="compact"
+                                  {...directory.person(
+                                    row.to_user,
+                                    row.to_name,
+                                  )}
+                                />
                               </p>
                               <p className="mt-1 text-sm text-muted-foreground">
                                 <SlackText text={row.message} />
@@ -209,10 +267,12 @@ export default function TodayPage() {
                     <Card>
                       <CardHeader>
                         <CardTitle
-                          className={
-                            data.next_chat.overdue ? 'text-warning' : ''
-                          }
+                          className={`flex items-center gap-2 ${data.next_chat.overdue ? 'text-warning' : ''}`}
                         >
+                          <Coffee
+                            className="size-4 shrink-0"
+                            aria-hidden="true"
+                          />
                           {data.next_chat.overdue
                             ? 'Coffee chat overdue'
                             : 'Next coffee chat'}

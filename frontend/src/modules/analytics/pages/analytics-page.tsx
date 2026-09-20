@@ -9,6 +9,7 @@ import {
   YAxis,
 } from 'recharts';
 
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import {
@@ -17,6 +18,7 @@ import {
   PageHeader,
   StatCard,
 } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -56,6 +58,7 @@ export default function AnalyticsPage() {
   const includeUnenrolled = params.get('unenrolled') === 'true';
 
   const query = useAnalytics(days);
+  const directory = useMemberDirectory();
   const data = query.data;
   const view = data ? analyticsView(data, scheduleId, includeUnenrolled) : null;
 
@@ -330,9 +333,12 @@ export default function AnalyticsPage() {
                             {view.visible.map((member) => (
                               <TableRow key={member.user_id}>
                                 <TableCell>
-                                  <div className="font-medium">
-                                    {member.real_name || member.user_id}
-                                  </div>
+                                  <Person
+                                    {...directory.person(
+                                      member.user_id,
+                                      member.real_name,
+                                    )}
+                                  />
                                   {member.on_vacation && (
                                     <Badge variant="secondary" className="mt-1">
                                       On vacation

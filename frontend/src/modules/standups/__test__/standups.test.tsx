@@ -122,6 +122,34 @@ beforeEach(() => {
 });
 
 describe('standup management', () => {
+  it('keeps participant names accessible and selectable beside their avatars', async () => {
+    mock.members.mockResolvedValue({
+      data: [
+        {
+          id: 'U1',
+          display_name: 'Mina',
+          avatar: 'https://example.com/mina.png',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    view('/dashboard/standups?edit=7');
+    const participant = await screen.findByRole('checkbox', { name: 'Mina' });
+    expect(participant.closest('label')?.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/mina.png',
+    );
+    await user.click(participant);
+    expect(participant).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Save standup' }));
+    await waitFor(() =>
+      expect(mock.update).toHaveBeenCalledWith(
+        { standupId: 7 },
+        expect.objectContaining({ participants: ['U1'] }),
+      ),
+    );
+  });
+
   it('shows whole-channel enrollment and hides mutations for read-only members', async () => {
     mock.editable = false;
 

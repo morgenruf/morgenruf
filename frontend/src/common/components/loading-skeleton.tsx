@@ -42,14 +42,14 @@ export function SkeletonRegion({
 export function SkeletonPage({
   title,
   children,
-  className
+  className,
 }: {
   title: string;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className={cn("page", className)}>
+    <div className={cn('page', className)}>
       <PageHeader
         title={title}
         description={<Skeleton className="mt-2 h-4 w-72 max-w-full" />}
@@ -95,16 +95,19 @@ export function SkeletonCard({
 export function SkeletonStats({
   count = 4,
   className,
+  icons = false,
 }: {
   count?: number;
   className?: string;
+  icons?: boolean;
 }) {
   return (
     <div className={cn('grid gap-4 sm:grid-cols-2 lg:grid-cols-4', className)}>
       {Array.from({ length: count }, (_, index) => (
         <Card key={index}>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <Skeleton className="h-3 w-24" />
+            {icons && <Skeleton className="size-8 shrink-0 rounded-lg" />}
           </CardHeader>
           <CardContent className="space-y-2">
             <Skeleton className="h-8 w-20" />

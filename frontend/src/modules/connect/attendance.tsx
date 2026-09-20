@@ -1,16 +1,14 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useId, useState } from 'react';
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+  CalendarCheck,
+  ChevronDown,
+  ChevronRight,
+  Coffee,
+  MessageCircle,
+  TrendingUp,
+} from 'lucide-react';
 
+import type { useMemberDirectory } from '@/common/api/use-member-directory';
 import {
   SkeletonPeople,
   SkeletonRegion,
@@ -18,6 +16,7 @@ import {
 } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, StatCard } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -28,16 +27,22 @@ import {
   CardTitle,
 } from '@/common/components/ui/card';
 
-import { attendanceLabels, attendanceRate } from './form-utils';
+import { AttendanceChart } from './attendance-chart';
+import {
+  attendanceColors,
+  attendanceLabels,
+  attendanceOutcomes,
+  attendanceRate,
+} from './form-utils';
 import { useAttendance, useRoundMatches } from './hooks';
 import { AttendanceSkeleton } from './loading';
 
 function RoundMatches({
   roundId,
-  names,
+  person,
 }: {
   roundId: number;
-  names: Map<string, string>;
+  person: ReturnType<typeof useMemberDirectory>['person'];
 }) {
   const query = useRoundMatches(roundId);
 
@@ -63,11 +68,11 @@ function RoundMatches({
               key={match.id}
               className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm"
             >
-              <span>
-                {match.members
-                  .map((userId) => names.get(userId) ?? userId)
-                  .join(' · ')}
-              </span>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                {match.members.map((userId) => (
+                  <Person key={userId} {...person(userId)} size="compact" />
+                ))}
+              </div>
               <span className="flex flex-wrap gap-2">
                 {match.agreed_at && (
                   <Badge variant="outline">
@@ -76,7 +81,8 @@ function RoundMatches({
                 )}
                 {match.has_zoom && <Badge variant="outline">Zoom</Badge>}
                 <Badge
-                  variant={match.status === 'met' ? 'default' : 'secondary'}
+                  variant="secondary"
+                  className={attendanceColors[match.status]}
                 >
                   {attendanceLabels[match.status] ?? match.status}
                 </Badge>
@@ -100,6 +106,7 @@ function RoundMatches({
 
 export function Attendance({ programId }: { programId: number }) {
   const { rounds, participation, members } = useAttendance(programId);
+  const id = useId();
 
   const [open, setOpen] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -131,117 +138,73 @@ export function Attendance({ programId }: { programId: number }) {
     );
     const rate = attendanceRate(totals.met, totals.missed);
 
-    const names = new Map(
-      members.data?.map((person) => [person.id, person.name || person.id]),
-    );
     const people = showAll
       ? participation.data
       : participation.data?.slice(0, 12);
 
     return (
       <section aria-label="Coffee chat attendance" className="space-y-5">
+        <p className="text-xs text-muted-foreground">
+          Summary of the latest available rounds, up to 10.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Answered pairings that met"
             value={rate == null ? 'No outcomes yet' : `${rate}%`}
-            description={`${totals.matches} introductions across ${rounds.data.length} rounds`}
+            description={`${totals.matches} ${totals.matches === 1 ? 'introduction' : 'introductions'} across ${rounds.data.length} ${rounds.data.length === 1 ? 'round' : 'rounds'}`}
+            icon={TrendingUp}
+            tone="primary"
           />
           <StatCard
             label="Met"
             value={totals.met}
-            description={`${totals.missed} did not meet`}
+            description={
+              <span className={totals.missed ? 'text-warning' : undefined}>
+                {totals.missed} did not meet
+              </span>
+            }
+            icon={Coffee}
+            tone="success"
           />
           <StatCard
             label="No reply"
             value={totals.no_reply}
             description="Unknown, rather than a miss"
+            icon={MessageCircle}
+            tone="neutral"
           />
           <StatCard
             label="Agreed a time"
             value={totals.agreed}
-            description={`${totals.undelivered} introductions not delivered`}
+            description={
+              <span
+                className={totals.undelivered ? 'text-destructive' : undefined}
+              >
+                {totals.undelivered} introductions not delivered
+              </span>
+            }
+            icon={CalendarCheck}
+            tone="primary"
           />
         </div>
+        <AttendanceChart rounds={rounds.data} />
         <div className="grid gap-5 xl:grid-cols-2">
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
-              <CardTitle>By round</CardTitle>
+              <CardTitle>Pairings</CardTitle>
               <CardDescription>
                 Open a round to see who was paired and whether they met.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {rounds.data.length > 1 && rate != null && (
-                <div
-                  className="mb-5 h-56"
-                  aria-label="Attendance outcomes by round"
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[...rounds.data].reverse()}
-                      margin={{ left: -20, right: 0 }}
-                    >
-                      <CartesianGrid vertical={false} stroke="var(--border)" />
-                      <XAxis
-                        dataKey="scheduled_for"
-                        tickFormatter={(value) =>
-                          value
-                            ? new Date(value).toLocaleDateString(undefined, {
-                                day: 'numeric',
-                                month: 'short',
-                              })
-                            : '—'
-                        }
-                        tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 8,
-                          border: '1px solid var(--border)',
-                          backgroundColor: 'var(--popover)',
-                          color: 'var(--popover-foreground)',
-                        }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Bar
-                        dataKey="met"
-                        name="Met"
-                        stackId="attendance"
-                        fill="var(--chart-2)"
-                      />
-                      <Bar
-                        dataKey="missed"
-                        name="Did not meet"
-                        stackId="attendance"
-                        fill="var(--chart-3)"
-                      />
-                      <Bar
-                        dataKey="no_reply"
-                        name="No reply"
-                        stackId="attendance"
-                        fill="var(--muted-foreground)"
-                      />
-                      <Bar
-                        dataKey="undelivered"
-                        name="Not delivered"
-                        stackId="attendance"
-                        fill="var(--chart-4)"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
               <div className="divide-y rounded-lg border">
                 {rounds.data.map((round) => (
                   <div key={round.id}>
                     <button
                       type="button"
-                      className="flex w-full items-start gap-2 px-3 py-4 text-left hover:bg-muted/50"
+                      className="flex w-full items-start gap-2 rounded-lg px-3 py-4 text-left hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       aria-expanded={open === round.id}
+                      aria-controls={`${id}-round-${round.id}`}
                       onClick={() =>
                         setOpen(open === round.id ? null : round.id)
                       }
@@ -264,17 +227,14 @@ export function Attendance({ programId }: { programId: number }) {
                             : ''}
                         </span>
                         <span className="mt-2 flex flex-wrap gap-1">
-                          {(
-                            [
-                              'met',
-                              'missed',
-                              'no_reply',
-                              'undelivered',
-                            ] as const
-                          ).map(
+                          {attendanceOutcomes.map(
                             (status) =>
                               round[status] > 0 && (
-                                <Badge key={status} variant="secondary">
+                                <Badge
+                                  key={status}
+                                  variant="secondary"
+                                  className={attendanceColors[status]}
+                                >
                                   {round[status]}{' '}
                                   {attendanceLabels[status].toLowerCase()}
                                 </Badge>
@@ -283,15 +243,23 @@ export function Attendance({ programId }: { programId: number }) {
                         </span>
                       </span>
                     </button>
-                    {open === round.id && (
-                      <RoundMatches roundId={round.id} names={names} />
-                    )}
+                    <div
+                      id={`${id}-round-${round.id}`}
+                      hidden={open !== round.id}
+                    >
+                      {open === round.id && (
+                        <RoundMatches
+                          roundId={round.id}
+                          person={members.person}
+                        />
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>By person</CardTitle>
               <CardDescription>
@@ -302,7 +270,7 @@ export function Attendance({ programId }: { programId: number }) {
               <LoadingTransition pending={participation.isPending}>
                 {participation.isPending ? (
                   <SkeletonRegion label="Loading participation…">
-                    <SkeletonTable columns={3} />
+                    <SkeletonTable columns={5} />
                   </SkeletonRegion>
                 ) : participation.error ? (
                   <ErrorState
@@ -315,12 +283,17 @@ export function Attendance({ programId }: { programId: number }) {
                   <>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
+                        <caption className="sr-only">
+                          Participation over the last 6 rounds
+                        </caption>
                         <thead>
                           <tr className="border-b text-left text-xs text-muted-foreground">
                             <th className="py-3 font-medium">Person</th>
                             <th className="px-2 py-3 font-medium">Paired</th>
                             <th className="px-2 py-3 font-medium">Met</th>
-                            <th className="px-2 py-3 font-medium">Missed</th>
+                            <th className="px-2 py-3 font-medium">
+                              Did not meet
+                            </th>
                             <th className="px-2 py-3 font-medium">No reply</th>
                           </tr>
                         </thead>
@@ -330,27 +303,26 @@ export function Attendance({ programId }: { programId: number }) {
                               key={person.user_id}
                               className="border-b last:border-0"
                             >
-                              <td className="py-3">
-                                {names.get(person.user_id) ?? person.user_id}
-                                {person.last_met && (
-                                  <p className="text-xs text-muted-foreground">
-                                    Last met{' '}
-                                    {new Date(
-                                      person.last_met,
-                                    ).toLocaleDateString()}
-                                  </p>
-                                )}
+                              <td className="py-3 pr-3">
+                                <Person
+                                  {...members.person(person.user_id)}
+                                  detail={
+                                    person.last_met
+                                      ? `Last met ${new Date(person.last_met).toLocaleDateString()}`
+                                      : undefined
+                                  }
+                                />
                               </td>
                               <td className="px-2 py-3 tabular-nums">
                                 {person.paired}
                               </td>
-                              <td className="px-2 py-3 tabular-nums">
+                              <td className="px-2 py-3 tabular-nums text-success">
                                 {person.met}
                               </td>
-                              <td className="px-2 py-3 tabular-nums">
+                              <td className="px-2 py-3 tabular-nums text-warning">
                                 {person.missed}
                               </td>
-                              <td className="px-2 py-3 tabular-nums">
+                              <td className="px-2 py-3 tabular-nums text-muted-foreground">
                                 {person.no_reply}
                               </td>
                             </tr>

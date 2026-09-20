@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/common/api/client';
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
 export type Standup = Awaited<
@@ -34,14 +35,7 @@ export function useStandupResources(channelId = '') {
     enabled: !!workspace,
   });
 
-  const members = useQuery({
-    queryKey: ['workspace', workspace, 'members', channelId],
-    queryFn: ({ signal }) =>
-      api.members
-        .listMembers({ channel_id: channelId || undefined }, { signal })
-        .then((r) => r.data),
-    enabled: !!workspace,
-  });
+  const members = useMemberDirectory({ channel: channelId });
 
   const templates = useQuery({
     queryKey: ['workspace', workspace, 'templates'],

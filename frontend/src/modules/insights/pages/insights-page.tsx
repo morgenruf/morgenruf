@@ -50,12 +50,7 @@ export default function InsightsPage() {
                         >
                           <div className="mr-auto">
                             <Person
-                              name={row.real_name || row.user_id}
-                              avatar={
-                                members.data?.find(
-                                  (member) => member.id === row.user_id,
-                                )?.avatar
-                              }
+                              {...members.person(row.user_id, row.real_name)}
                             />
                           </div>
                           <Badge variant="secondary">
@@ -91,14 +86,9 @@ export default function InsightsPage() {
                     <div className="divide-y">
                       {query.data.stuck.map((row, index) => (
                         <div key={`${row.user_id}-${index}`} className="py-4">
-                          <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
                             <Person
-                              name={row.real_name || row.user_id}
-                              avatar={
-                                members.data?.find(
-                                  (member) => member.id === row.user_id,
-                                )?.avatar
-                              }
+                              {...members.person(row.user_id, row.real_name)}
                             />
                             <Badge variant="destructive">{row.days} days</Badge>
                           </div>

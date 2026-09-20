@@ -1,6 +1,5 @@
 import {
   SkeletonCard,
-  SkeletonChart,
   SkeletonFields,
   SkeletonPage,
   SkeletonPeople,
@@ -16,16 +15,18 @@ export function AttendanceSkeleton() {
   return (
     <SkeletonRegion label="Loading attendance…">
       <div className="space-y-6">
-        <SkeletonStats />
+        <Skeleton className="h-4 w-64 max-w-full" />
+        <SkeletonStats icons />
+        <SkeletonCard>
+          <Skeleton className="h-64 w-full rounded-lg sm:h-72" />
+          <Skeleton className="mt-4 h-12 w-full rounded-lg" />
+        </SkeletonCard>
         <div className="grid gap-5 xl:grid-cols-2">
           <SkeletonCard>
-            <div className="space-y-5">
-              <SkeletonChart className="h-56" />
-              <SkeletonPeople rows={3} />
-            </div>
+            <SkeletonPeople rows={3} />
           </SkeletonCard>
           <SkeletonCard>
-            <SkeletonTable columns={3} />
+            <SkeletonTable columns={5} />
           </SkeletonCard>
         </div>
       </div>
