@@ -20,7 +20,6 @@ import {
 } from '@/common/components/page';
 import { Person } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
-import { Button } from '@/common/components/ui/button';
 import {
   Card,
   CardContent,
@@ -45,6 +44,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/common/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/common/components/ui/tabs';
 import { formatDate, relativeTime } from '@/common/lib/format';
 
 import { analyticsView, rateTone } from '../analytics-utils';
@@ -87,19 +87,18 @@ export default function AnalyticsPage() {
         title="Analytics"
         description="Participation, blockers, and standup health."
         actions={
-          <div className="flex gap-1 rounded-md border p-1">
-            {[7, 30].map((value) => (
-              <Button
-                size="sm"
-                key={value}
-                variant={days === value ? 'secondary' : 'ghost'}
-                onClick={() => filter('days', String(value))}
-                aria-pressed={days === value}
-              >
-                {value} days
-              </Button>
-            ))}
-          </div>
+          <Tabs
+            value={days}
+            onValueChange={(value) => filter('days', String(value))}
+          >
+            <TabsList aria-label="Analytics time range">
+              {[7, 30].map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {value} days
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         }
       />
       <div className="flex flex-wrap items-center gap-4">

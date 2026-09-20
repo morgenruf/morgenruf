@@ -104,7 +104,7 @@ for (const mobile of [false, true]) {
     await expect(participants.locator('..')).not.toHaveAttribute(
       'data-has-overflow-y',
     );
-    await dialog.getByRole('tab', { name: 'Schedule' }).click();
+    await dialog.getByRole('tab', { name: 'Questions' }).click();
     await dialog.getByRole('button', { name: 'Use a template' }).click();
     const templates = dialog.getByRole('region', {
       name: 'Question templates',
@@ -127,7 +127,7 @@ for (const mobile of [false, true]) {
     await expect(dialog.getByLabel('Question 1', { exact: true })).toHaveValue(
       'Question from template 23',
     );
-    await dialog.getByRole('tab', { name: 'Advanced' }).click();
+    await dialog.getByRole('tab', { name: 'Workspace' }).click();
     await body.focus();
     await page.keyboard.press('End');
     await expect

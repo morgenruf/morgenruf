@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Standup } from '@/common/api/generated/data-contracts';
@@ -15,6 +15,7 @@ const mock = vi.hoisted(() => ({
   list: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
+  remove: vi.fn(),
   channels: vi.fn(),
   members: vi.fn(),
   templates: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('@/common/api/client', () => ({
       listStandups: mock.list,
       createStandup: mock.create,
       updateStandup: mock.update,
-      deleteStandup: vi.fn(),
+      deleteStandup: mock.remove,
       listTemplates: mock.templates,
     },
     workspace: { listChannels: mock.channels },
@@ -83,6 +84,11 @@ const standup: Standup = {
   next_run: '',
 };
 
+function Location() {
+  const location = useLocation();
+  return <output data-testid="location">{location.search}</output>;
+}
+
 function view(path = '/dashboard/standups') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -92,6 +98,7 @@ function view(path = '/dashboard/standups') {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <StandupsPage />
+        <Location />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -119,6 +126,7 @@ beforeEach(() => {
   mock.analytics.mockResolvedValue({ data: { schedules: [] } });
   mock.create.mockResolvedValue({ data: standup });
   mock.update.mockResolvedValue({ data: standup });
+  mock.remove.mockResolvedValue({ data: {} });
 });
 
 describe('standup management', () => {
@@ -257,7 +265,7 @@ describe('standup management', () => {
     expect(
       screen.getByRole('button', { name: 'Select all participants' }),
     ).toBeDisabled();
-    await user.click(screen.getByRole('tab', { name: 'Schedule' }));
+    await user.click(screen.getByRole('tab', { name: 'Questions' }));
     await user.click(screen.getByRole('button', { name: 'Use a template' }));
     expect(
       await screen.findByText('No question templates available.'),
@@ -272,7 +280,7 @@ describe('standup management', () => {
     expect(await screen.findByText('Design daily')).toBeInTheDocument();
     expect(screen.getByText('Everyone in the channel')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Edit' }),
+      screen.queryByRole('button', { name: /^Edit/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'New standup' }),
@@ -288,7 +296,7 @@ describe('standup management', () => {
       screen.getByRole('combobox', { name: 'Channel' }),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('tab', { name: 'Schedule' }));
+    await user.click(screen.getByRole('tab', { name: 'Questions' }));
     await user.click(screen.getByRole('button', { name: 'Use a template' }));
     await user.click(
       await screen.findByRole('button', { name: /Retrospective/ }),
@@ -296,12 +304,14 @@ describe('standup management', () => {
 
     expect(screen.getByLabelText('Question 1')).toHaveValue('What worked?');
 
-    await user.click(screen.getByRole('tab', { name: 'Summary' }));
+    await user.click(screen.getByRole('tab', { name: 'Delivery' }));
     await user.type(
       screen.getByLabelText(/Daily email to/),
       'lead@example.com',
     );
-    await user.click(screen.getByLabelText('Send that email daily'));
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Send that email daily' }),
+    );
 
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     await user.click(screen.getByRole('button', { name: 'Save standup' }));
@@ -392,10 +402,10 @@ const workspaceSettings = {
 };
 
 it.each([
-  ['Summary', 'Daily email to', 'bad-address', 'lead@example.com'],
-  ['Advanced', 'Jira base URL', 'bad-url', 'https://team.atlassian.net'],
+  ['Delivery', 'Daily email to', 'bad-address', 'lead@example.com'],
+  ['Workspace', 'Jira base URL', 'bad-url', 'https://team.atlassian.net'],
   [
-    'Summary',
+    'Delivery',
     'Remind missing participants before report (minutes)',
     '21',
     '25',
@@ -442,7 +452,7 @@ it('loads shared settings before opening a new standup and leaves them unchanged
   );
   await screen.findByRole('dialog');
   await chooseOption(user, 'Channel', '#design');
-  await user.click(screen.getByRole('tab', { name: 'Advanced' }));
+  await user.click(screen.getByRole('tab', { name: 'Workspace' }));
   expect(
     screen.getByRole('combobox', { name: 'Edit window' }),
   ).toHaveTextContent('4 hours');
@@ -457,7 +467,7 @@ it('loads shared settings before opening a new standup and leaves them unchanged
     screen.getByRole('combobox', { name: 'AI provider' }),
   ).toHaveTextContent('Anthropic');
   expect(
-    screen.getByLabelText('Enable AI-generated daily summary'),
+    screen.getByRole('checkbox', { name: 'Enable AI-generated daily summary' }),
   ).toBeChecked();
   await user.click(screen.getByRole('button', { name: 'Save standup' }));
   await waitFor(() => expect(mock.create).toHaveBeenCalled());
@@ -486,10 +496,12 @@ it('saves deliberate shared-setting changes while creating a standup, including 
   view('/dashboard/standups?new=true');
   await screen.findByRole('dialog');
   await chooseOption(user, 'Channel', '#design');
-  await user.click(screen.getByRole('tab', { name: 'Advanced' }));
+  await user.click(screen.getByRole('tab', { name: 'Workspace' }));
   await chooseOption(user, 'Edit window', 'Until report time');
   await chooseOption(user, 'AI provider', 'OpenAI');
-  await user.click(screen.getByLabelText('Enable AI-generated daily summary'));
+  await user.click(
+    screen.getByRole('checkbox', { name: 'Enable AI-generated daily summary' }),
+  );
   await user.clear(screen.getByLabelText('Jira base URL'));
   await user.click(screen.getByRole('button', { name: 'Save standup' }));
   await waitFor(() =>
@@ -530,13 +542,13 @@ it.each([
       }),
     ).toHaveTextContent('30 minutes');
     await chooseOption(user, 'Remind participants before standup', label);
-    await user.click(screen.getByRole('tab', { name: 'Summary' }));
+    await user.click(screen.getByRole('tab', { name: 'Delivery' }));
     expect(
       screen.getByRole('combobox', { name: 'Report channel' }),
     ).toHaveTextContent('#design');
     await chooseOption(user, 'Report channel', 'Same as standup channel');
-    await user.click(screen.getByRole('tab', { name: 'Advanced' }));
     await chooseOption(user, 'Group report by', 'Question');
+    await user.click(screen.getByRole('tab', { name: 'Workspace' }));
     await chooseOption(user, 'Edit window', '4 hours');
     await chooseOption(user, 'AI provider', 'Anthropic');
     await user.click(screen.getByRole('button', { name: 'Save standup' }));
@@ -612,4 +624,304 @@ describe('standup loading transitions', () => {
       await refresh;
     });
   });
+});
+
+describe('standup overview', () => {
+  const second = {
+    ...standup,
+    id: 8,
+    name: 'Platform sync',
+    channel_id: 'C2',
+    schedule_time: '08:00',
+    active: false,
+  };
+
+  it('combines name/channel search with status, keeps chronological order, and preserves filters around dialogs', async () => {
+    mock.list.mockResolvedValue({ data: [standup, second] });
+    mock.channels.mockResolvedValue({
+      data: [
+        { id: 'C1', name: 'design' },
+        { id: 'C2', name: 'platform' },
+      ],
+    });
+    const user = userEvent.setup();
+    view();
+    const list = await screen.findByRole('list', { name: 'Standup schedules' });
+    expect(
+      within(list)
+        .getAllByRole('heading')
+        .map((node) => node.textContent),
+    ).toEqual(['Platform sync', 'Design daily']);
+    await user.type(
+      screen.getByRole('textbox', { name: 'Search standups' }),
+      '#PLATFORM',
+    );
+    await user.click(screen.getByRole('tab', { name: 'Paused 1' }));
+    expect(within(list).getAllByRole('heading')).toHaveLength(1);
+    await user.click(
+      screen.getByRole('button', { name: 'Edit Platform sync' }),
+    );
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      'q=%23PLATFORM&status=paused&edit=8',
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '?q=%23PLATFORM&status=paused',
+    );
+    expect(screen.getByTestId('location')).not.toHaveTextContent('edit=');
+    await user.click(screen.getByRole('button', { name: 'New standup' }));
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      'status=paused&new=true',
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('tab', { name: 'Active 1' }));
+    expect(screen.getByText('No matching standups')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Your first standup starts here'),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByTestId('location')).toBeEmptyDOMElement();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(2);
+  });
+
+  it.each([
+    [85, 20, 'Healthy', '85%'],
+    [50, 20, 'Slipping', '50%'],
+    [0, 20, 'Needs a look', '0%'],
+    [0, 0, 'No participation data', null],
+    [null, 20, 'No participation data', null],
+  ])(
+    'renders rate %s with %s expected responses honestly',
+    async (rate, expected, label, percent) => {
+      mock.analytics.mockResolvedValue({
+        data: {
+          schedules: [
+            {
+              schedule_id: 7,
+              completed: 0,
+              expected,
+              completion_rate: rate,
+              series: [null, 20, 40, null, 60, 80],
+            },
+          ],
+        },
+      });
+      view();
+      const list = await screen.findByRole('list', {
+        name: 'Standup schedules',
+      });
+      expect(await within(list).findByText(label)).toBeInTheDocument();
+      if (percent) {
+        expect(within(list).getByText(percent)).toBeInTheDocument();
+        expect(
+          within(list).queryByText('No participation data'),
+        ).not.toBeInTheDocument();
+      } else {
+        expect(within(list).queryByText('0%')).not.toBeInTheDocument();
+        expect(
+          within(list).getByText('Stats appear after scheduled check-ins.'),
+        ).toBeInTheDocument();
+      }
+    },
+  );
+
+  it('keeps schedules available when participation fails and supports retry', async () => {
+    mock.analytics.mockRejectedValueOnce(new Error('Analytics unavailable'));
+    const user = userEvent.setup();
+    view();
+    await screen.findByRole('button', { name: 'Retry participation' });
+    expect(
+      screen.getByRole('heading', { name: 'Design daily' }),
+    ).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Retry participation' }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Retry participation' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText('No participation data'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Stats appear after scheduled check-ins.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows registration errors and omits next run for paused schedules', async () => {
+    mock.list.mockResolvedValue({
+      data: [
+        {
+          ...standup,
+          registration_error: 'Timezone is unavailable',
+          next_run: '2026-09-21T09:00:00Z',
+        },
+        { ...second, next_run: '2026-09-21T09:00:00Z' },
+      ],
+    });
+    view();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This standup never runs. Timezone is unavailable',
+    );
+    expect(screen.getByText('Schedule paused')).toBeInTheDocument();
+    expect(screen.queryByText(/^Next:/)).not.toBeInTheDocument();
+  });
+
+  it.each([true, false])(
+    'changes active=%s from the menu and blocks duplicate actions',
+    async (active) => {
+      mock.list.mockResolvedValue({ data: [{ ...standup, active }] });
+      const response = deferred<{ data: Standup }>();
+      mock.update.mockReturnValue(response.promise);
+      const user = userEvent.setup();
+      view();
+      await user.click(
+        await screen.findByRole('button', { name: 'Actions for Design daily' }),
+      );
+      await user.click(
+        await screen.findByRole('menuitem', {
+          name: active ? 'Pause' : 'Resume',
+        }),
+      );
+      await waitFor(() =>
+        expect(mock.update).toHaveBeenCalledWith(
+          { standupId: 7 },
+          { active: !active },
+        ),
+      );
+      expect(
+        screen.getByRole('button', { name: 'Actions for Design daily' }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Edit Design daily' }),
+      ).toBeDisabled();
+      await act(async () =>
+        response.resolve({ data: { ...standup, active: !active } }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Actions for Design daily' }),
+        ).toBeEnabled(),
+      );
+    },
+  );
+
+  it('requires delete confirmation, retains errors, and protects a pending deletion', async () => {
+    const user = userEvent.setup();
+    view();
+    (
+      await screen.findByRole('button', { name: 'Actions for Design daily' })
+    ).focus();
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    expect(screen.getByRole('alertdialog')).toHaveAccessibleName(
+      'Delete Design daily?',
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mock.remove).not.toHaveBeenCalled();
+    screen.getByRole('button', { name: 'Actions for Design daily' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    mock.remove.mockRejectedValueOnce(
+      new Error('Could not delete this standup'),
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete standup' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not delete this standup',
+    );
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    const response = deferred<{ data: object }>();
+    mock.remove.mockReturnValueOnce(response.promise);
+    await user.click(screen.getByRole('button', { name: 'Delete standup' }));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    mock.list.mockResolvedValue({ data: [] });
+    await act(async () => response.resolve({ data: {} }));
+    expect(
+      await screen.findByText('Your first standup starts here'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+});
+
+it('opens and focuses the tab for a server field error', async () => {
+  mock.update.mockRejectedValue({
+    error: { details: { report_time: ['Choose a later report time.'] } },
+  });
+  const user = userEvent.setup();
+  view('/dashboard/standups?edit=7');
+  await screen.findByRole('dialog');
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  expect(
+    await screen.findByText('Choose a later report time.'),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: 'Delivery' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByLabelText('Report time')).toHaveFocus();
+  expect(screen.getByLabelText('Report time')).toHaveAccessibleDescription(
+    'Choose a later report time.',
+  );
+});
+
+it('focuses empty questions and keeps edits while navigating tabs with the keyboard', async () => {
+  const user = userEvent.setup();
+  view('/dashboard/standups?edit=7');
+  await screen.findByRole('dialog');
+  await user.click(screen.getByRole('tab', { name: 'Questions' }));
+  await user.clear(screen.getByLabelText('Question 1'));
+  await user.click(screen.getByRole('tab', { name: 'Basics' }));
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  expect(screen.getByRole('tab', { name: 'Questions' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  expect(screen.getByLabelText('Question 1')).toHaveFocus();
+  expect(screen.getByText('Add at least one question.')).toBeVisible();
+  await user.type(screen.getByLabelText('Question 1'), 'What changed?');
+  await user.click(screen.getByRole('tab', { name: 'Questions' }));
+  await user.keyboard('{End}');
+  expect(screen.getByRole('tab', { name: 'Workspace' })).toHaveFocus();
+  await user.keyboard('{ArrowRight}');
+  expect(screen.getByRole('tab', { name: 'Basics' })).toHaveFocus();
+  await user.click(screen.getByRole('tab', { name: 'Questions' }));
+  expect(screen.getByLabelText('Question 1')).toHaveValue('What changed?');
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  await waitFor(() => expect(mock.update).toHaveBeenCalledOnce());
+});
+
+it('recovers from empty weekday and question selections without losing the form', async () => {
+  const user = userEvent.setup();
+  view('/dashboard/standups?edit=7');
+  await screen.findByRole('dialog');
+  await user.click(screen.getByRole('tab', { name: 'Schedule' }));
+  await user.click(screen.getByRole('button', { name: 'Mon' }));
+  await user.click(screen.getByRole('button', { name: 'Wed' }));
+  await user.click(screen.getByRole('tab', { name: 'Basics' }));
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  expect(screen.getByRole('button', { name: 'Mon' })).toHaveFocus();
+  expect(screen.getByText('Choose at least one day.')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Tue' }));
+  await user.click(screen.getByRole('tab', { name: 'Questions' }));
+  await user.click(screen.getByRole('button', { name: 'Remove question 1' }));
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  expect(screen.getByRole('button', { name: 'Add question' })).toHaveFocus();
+  await user.click(screen.getByRole('button', { name: 'Use a template' }));
+  await user.click(
+    await screen.findByRole('button', { name: /Retrospective/ }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Save standup' }));
+  await waitFor(() =>
+    expect(mock.update).toHaveBeenCalledWith(
+      { standupId: 7 },
+      expect.objectContaining({
+        schedule_days: ['tue'],
+        questions: ['What worked?'],
+      }),
+    ),
+  );
 });
