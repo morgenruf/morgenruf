@@ -102,10 +102,16 @@ function WebhookCard({
         <div className="flex flex-wrap gap-2">
           {canEdit && (
             <>
-              <Button variant="outline" onClick={edit} disabled={busy}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={edit}
+                disabled={busy}
+              >
                 <Pencil /> Edit
               </Button>
               <Button
+                size="sm"
                 variant="outline"
                 disabled={test.isPending || busy}
                 onClick={() => test.mutate()}
@@ -113,12 +119,18 @@ function WebhookCard({
                 <Send />
                 {test.isPending ? 'Sending…' : 'Send test event'}
               </Button>
-              <Button variant="outline" disabled={busy} onClick={rotate}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={rotate}
+              >
                 <RefreshCw /> Rotate secret
               </Button>
             </>
           )}
           <Button
+            size="sm"
             variant="outline"
             aria-expanded={expanded}
             onClick={() => setExpanded(!expanded)}
@@ -127,7 +139,12 @@ function WebhookCard({
             {expanded ? 'Hide deliveries' : 'Deliveries'}
           </Button>
           {canEdit && (
-            <Button variant="destructive" disabled={busy} onClick={remove}>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={busy}
+              onClick={remove}
+            >
               <Trash2 /> Delete
             </Button>
           )}

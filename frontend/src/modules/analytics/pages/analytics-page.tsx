@@ -85,6 +85,7 @@ export default function AnalyticsPage() {
           <div className="flex gap-1 rounded-md border p-1">
             {[7, 30].map((value) => (
               <Button
+                size="sm"
                 key={value}
                 variant={days === value ? 'secondary' : 'ghost'}
                 onClick={() => filter('days', String(value))}
@@ -98,13 +99,16 @@ export default function AnalyticsPage() {
       />
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <Label htmlFor="analytics-schedule">Standup</Label>
           <Select
             items={scheduleOptions}
             value={scheduleId}
             onValueChange={(value) => filter('schedule', value ?? '')}
           >
-            <SelectTrigger id="analytics-schedule" className="w-56">
+            <SelectTrigger
+              id="analytics-schedule"
+              aria-label="Standup"
+              className="w-56"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

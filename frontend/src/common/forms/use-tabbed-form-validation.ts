@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type FormEvent } from 'react';
+import { useLayoutEffect, useState, type SyntheticEvent } from 'react';
 import type { FieldValues, Path, UseFormSetError } from 'react-hook-form';
 
 type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -26,7 +26,7 @@ export function useTabbedFormValidation<
     invalid?.field.focus();
   }, [invalid]);
 
-  return (event: FormEvent<HTMLFormElement>) => {
+  return (event: SyntheticEvent<HTMLFormElement>) => {
     // Native validation still blocks submission; replace its focus/bubble with
     // the form's visible error message and focus after the panel has rendered.
     event.preventDefault();

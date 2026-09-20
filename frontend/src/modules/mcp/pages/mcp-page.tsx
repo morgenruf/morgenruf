@@ -184,6 +184,7 @@ export default function McpPage() {
                       <td className="p-3">
                         {canEdit && key.active && (
                           <Button
+                            size="sm"
                             variant="destructive"
                             disabled={revoke.isPending}
                             onClick={() => setDeleting(key.id)}
@@ -241,6 +242,7 @@ export default function McpPage() {
             <code>{config}</code>
           </pre>
           <Button
+            size="sm"
             variant="outline"
             onClick={() =>
               void navigator.clipboard.writeText(config).then(
@@ -281,7 +283,11 @@ export default function McpPage() {
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
-            <Button type="submit" disabled={create.isPending}>
+            <Button
+              type="submit"
+              disabled={create.isPending}
+              className="w-full"
+            >
               <KeyRound />
               {create.isPending ? 'Generating…' : 'Generate key'}
             </Button>

@@ -1,10 +1,11 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
   CalendarDays,
   Coffee,
   Play,
   Plus,
+  Trash,
   Users,
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -21,6 +22,16 @@ import {
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/common/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -119,30 +130,56 @@ function ProgramActions({ program }: { program: Program }) {
   const { canAdminister } = usePermissions();
   const { save, remove, run } = useConnectMutations();
   const navigate = useNavigate();
+  const [runOpen, setRunOpen] = useState(false);
 
   if (!canAdminister('connect')) return null;
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={run.isPending}
-        onClick={() => {
-          if (
-            window.confirm(
-              'Send introductions now? Everyone in the channel will receive a group DM.',
-            )
-          )
-            run.mutate(program.id, {
-              onSuccess: () => toast.success('Introductions sent'),
-              onError: (error) => toast.error(errorMessage(error)),
-            });
+      <Dialog
+        open={runOpen}
+        onOpenChange={(open) => {
+          if (!run.isPending) setRunOpen(open);
         }}
       >
-        <Play className="size-3.5" />
-        {run.isPending ? 'Starting…' : 'Run a round'}
-      </Button>
+        <DialogTrigger
+          render={<Button size="sm" variant="outline" />}
+          disabled={run.isPending}
+        >
+          <Play className="size-3.5" />
+          Run a round
+        </DialogTrigger>
+        <DialogContent showCloseButton={!run.isPending}>
+          <DialogHeader>
+            <DialogTitle>Send introductions now?</DialogTitle>
+            <DialogDescription>
+              Everyone in the channel will receive a group DM.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              render={<Button variant="outline" />}
+              disabled={run.isPending}
+            >
+              Cancel
+            </DialogClose>
+            <Button
+              disabled={run.isPending}
+              onClick={() =>
+                run.mutate(program.id, {
+                  onSuccess: () => {
+                    setRunOpen(false);
+                    toast.success('Introductions sent');
+                  },
+                  onError: (error) => toast.error(errorMessage(error)),
+                })
+              }
+            >
+              {run.isPending ? 'Starting…' : 'Run a round'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Button
         size="sm"
         variant="outline"
@@ -165,8 +202,8 @@ function ProgramActions({ program }: { program: Program }) {
         {program.enabled ? 'Pause' : 'Resume'}
       </Button>
       <Button
-        size="sm"
-        variant="ghost"
+        size="icon-sm"
+        variant="destructiveGhost"
         disabled={remove.isPending}
         onClick={() => {
           if (
@@ -183,7 +220,8 @@ function ProgramActions({ program }: { program: Program }) {
             });
         }}
       >
-        Delete
+        <Trash />
+        <span className="sr-only">Delete</span>
       </Button>
     </div>
   );
