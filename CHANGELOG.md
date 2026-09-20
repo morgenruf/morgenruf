@@ -5,6 +5,29 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.7] - 2026-09-20
+
+### Added
+- **The dashboard ships as its own service.** The browser application moved to a
+  React build served by its own `morgenruf-frontend` image, which proxies API
+  and integration requests to the backend. Pin both `image.tag` and
+  `frontend.image.tag` to the same release and upgrade them together. The
+  `morgenruf` service keeps its name and port and now fronts the frontend, so
+  an existing ingress or tunnel needs no change and starts serving the new
+  dashboard on upgrade. The backend moved to `morgenruf-backend` for anything
+  that addresses it directly.
+
+### Fixed
+- **Each kudos leaderboard announces itself.** The Most recognized and Most
+  encouraging columns both labelled their loading state "Loading leaderboard…",
+  which put two identical live regions on the page and made screen readers
+  announce it twice. Each column now carries its own label.
+
+### Changed
+- Dependency updates: gunicorn 26.2.0, slack-sdk 3.44.1, sentry-sdk 2.69.2,
+  PyJWT 2.14.0, pytz 2026.3.post1, and the frontend image now builds on
+  Node 25.
+
 ## [1.8.6] - 2026-09-20
 
 ### Added

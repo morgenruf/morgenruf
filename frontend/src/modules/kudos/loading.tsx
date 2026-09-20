@@ -9,9 +9,16 @@ import {
 import { Card, CardContent } from '@/common/components/ui/card';
 import { Skeleton } from '@/common/components/ui/skeleton';
 
-export function KudosLeaderboardSkeleton() {
+// The kudos page shows two leaderboards side by side, so each one needs its own
+// label. Sharing one would put two identical live regions on the page, which
+// screen readers announce twice and which matches ambiguously in tests.
+export function KudosLeaderboardSkeleton({
+  label = 'Loading leaderboard…',
+}: {
+  label?: string;
+}) {
   return (
-    <SkeletonRegion label="Loading leaderboard…">
+    <SkeletonRegion label={label}>
       <SkeletonPeople rows={5} />
     </SkeletonRegion>
   );
@@ -58,7 +65,7 @@ export function KudosPageSkeleton() {
             <KudosLeaderboardSkeleton />
           </SkeletonCard>
           <SkeletonCard>
-            <KudosLeaderboardSkeleton />
+            <KudosLeaderboardSkeleton label="Loading most encouraging…" />
           </SkeletonCard>
         </div>
         <KudosFeedSkeleton />

@@ -78,7 +78,7 @@ beforeEach(() => {
 });
 
 it('requires a confirmation to rotate and keeps the returned secret out of cached results', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const client = view();
 
   await user.click(
@@ -117,7 +117,7 @@ it('requires a confirmation to rotate and keeps the returned secret out of cache
 
 it('allows read-only delivery inspection without workspace administration actions', async () => {
   mock.admin = false;
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
 
   view();
   await screen.findByText('https://example.com/hook');

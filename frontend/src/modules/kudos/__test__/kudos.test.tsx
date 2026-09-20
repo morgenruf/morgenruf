@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 it('previews the chosen token and disabled allowance, preserving unsaved edits during refetch', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -93,7 +93,7 @@ it('previews the chosen token and disabled allowance, preserving unsaved edits d
 });
 
 it('shows the selected period on load and requests numeric days after changing it', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(
     <QueryClientProvider
       client={

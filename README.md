@@ -285,7 +285,7 @@ docker pull morgenruf/morgenruf-frontend:latest
 
 Docker Compose and the Helm chart configure both services. For production, pin both images to the same immutable release: set `MORGENRUF_VERSION` in Compose, or set both `image.tag` and `frontend.image.tag` in Helm. Keep `APP_URL` set to the public frontend origin. Existing Slack and Zoom callback paths are unchanged.
 
-Upgrade both services together. To roll back, restore both image tags (or use `helm rollback`) together; this frontend migration does not change the database schema. Existing backend service names remain available internally, while ingress and tunnels must target the frontend service. CI first stages both images under `build-<commit SHA>` tags, scans and signs their digests, and promotes matching release tags only after both builds and the backend, frontend, API contract, and browser checks pass. Staging tags are for the release pipeline; deploy the matching version or `sha-` tags.
+Upgrade both services together. To roll back, restore both image tags (or use `helm rollback`) together; this frontend migration does not change the database schema. The `morgenruf` service keeps its name and port and now points at the frontend, which serves the dashboard and proxies every backend route it does not handle itself, so an existing ingress or tunnel needs no change. The backend is reachable directly on `morgenruf-backend` for anything that wants it. CI first stages both images under `build-<commit SHA>` tags, scans and signs their digests, and promotes matching release tags only after both builds and the backend, frontend, API contract, and browser checks pass. Staging tags are for the release pipeline; deploy the matching version or `sha-` tags.
 
 ### GitHub Actions / CI
 
