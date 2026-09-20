@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import { SecretPanel } from './secret-panel';
+import { SecretPanel } from '../secret-panel';
 
 function Example() {
   const [secret, setSecret] = useState<string | null>('one-time-test-secret');

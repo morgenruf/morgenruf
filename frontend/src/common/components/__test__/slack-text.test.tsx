@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { SlackText } from './slack-text';
+import { SlackText } from '../slack-text';
 
 describe('Slack text rendering', () => {
   it('resolves member/channel references and supports safe external links', () => {

@@ -8,7 +8,7 @@ import type { Standup } from '@/common/api/generated/data-contracts';
 import { deferred } from '@/test/deferred';
 import { chooseOption } from '@/test/select';
 
-import { StandupsPage } from './pages';
+import { StandupsPage } from '../pages';
 
 const mock = vi.hoisted(() => ({
   editable: true,

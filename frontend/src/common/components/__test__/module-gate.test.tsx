@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceModule } from '@/common/api/generated/data-contracts';
 
-import { ModuleGate } from './module-gate';
+import { ModuleGate } from '../module-gate';
 
 const state = vi.hoisted(() => ({
   modules: [] as WorkspaceModule[],

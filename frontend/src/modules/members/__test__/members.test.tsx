@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chooseOption } from '@/test/select';
 
-import MembersPage from './pages/members-page';
+import MembersPage from '../pages/members-page';
 
 const mock = vi.hoisted(() => ({
   admin: true,

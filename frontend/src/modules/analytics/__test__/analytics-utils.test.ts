@@ -5,7 +5,7 @@ import type {
   ParticipationMember,
 } from '@/common/api/generated/data-contracts';
 
-import { analyticsView, completionSeries } from './analytics-utils';
+import { analyticsView, completionSeries } from '../analytics-utils';
 
 function member(
   user_id: string,

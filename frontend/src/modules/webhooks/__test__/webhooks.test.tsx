@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 
-import WebhooksPage from './pages/webhooks-page';
+import WebhooksPage from '../pages/webhooks-page';
 
 const mock = vi.hoisted(() => ({
   admin: true,

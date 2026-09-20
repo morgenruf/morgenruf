@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { api, clearSession } from './client';
-import type { SessionInfo } from './generated/data-contracts';
-import { queryClient } from './query-client';
+import { api, clearSession } from '../client';
+import type { SessionInfo } from '../generated/data-contracts';
+import { queryClient } from '../query-client';
 
 const session = (team_id = 'T1'): SessionInfo => ({
   team_id,

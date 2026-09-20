@@ -7,7 +7,7 @@ import {
   backendExactPaths,
   backendNamespacePrefixes,
   backendProxyPatterns,
-} from '../../config/backend-routes';
+} from '../../../config/backend-routes';
 
 const matchesBackend = (url: string) =>
   backendProxyPatterns.some((pattern) =>
@@ -19,7 +19,7 @@ const matchesBackend = (url: string) =>
 describe('development and production routing parity', () => {
   it('uses the same backend exact routes and namespaces as Nginx', () => {
     const nginx = readFileSync(
-      new URL('../../nginx.conf.template', import.meta.url),
+      new URL('../../../nginx.conf.template', import.meta.url),
       'utf8',
     );
     const locations = [

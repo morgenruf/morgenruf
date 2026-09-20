@@ -23,5 +23,5 @@
     "types": ["vite/client", "vitest/globals"]
   },
   "include": ["src"],
-  "exclude": ["src/test/*.test.ts"]
+  "exclude": ["src/test/__test__/*.test.ts"]
 }

@@ -10,8 +10,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 import { deferred } from '@/test/deferred';
 
-import { DashboardHydrateFallback, DashboardLayout } from './dashboard-layout';
-import { dashboardRoutes } from './dashboard-routes';
+import { DashboardHydrateFallback, DashboardLayout } from '../dashboard-layout';
+import { dashboardRoutes } from '../dashboard-routes';
 
 const state = vi.hoisted(() => ({
   sessionPending: false,

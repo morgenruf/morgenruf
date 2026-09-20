@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isLegacyDashboardHash, legacyDashboardPath } from './routes';
+import { isLegacyDashboardHash, legacyDashboardPath } from '../routes';
 
 describe('legacy dashboard bookmarks', () => {
   it('keeps valid existing section links', () => {

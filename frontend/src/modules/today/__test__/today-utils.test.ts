@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { answeredSummary } from './today-utils';
+import { answeredSummary } from '../today-utils';
 
 describe('Today unscheduled answers', () => {
   it('avoids a zero denominator for weekend or unscheduled submissions', () => {

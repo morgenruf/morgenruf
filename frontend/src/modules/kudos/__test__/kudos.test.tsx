@@ -7,7 +7,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { deferred } from '@/test/deferred';
 import { chooseOption } from '@/test/select';
 
-import KudosPage from './pages/kudos-page';
+import KudosPage from '../pages/kudos-page';
 
 const mock = vi.hoisted(() => ({
   config: vi.fn(),

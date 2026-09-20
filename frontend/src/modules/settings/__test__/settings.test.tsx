@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SettingsPage } from './pages';
+import { SettingsPage } from '../pages';
 
 const mock = vi.hoisted(() => ({
   isAdmin: false,

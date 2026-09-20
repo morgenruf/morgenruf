@@ -6,11 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chooseOption } from '@/test/select';
 
-import { Attendance } from './attendance';
-import { attendanceRate, programDefaults } from './form-utils';
-import type { Program, ProgramInput } from './hooks';
-import { ConnectDetailPage, ConnectListPage, ConnectNewPage } from './pages';
-import { ProgramForm } from './program-form';
+import { Attendance } from '../attendance';
+import { attendanceRate, programDefaults } from '../form-utils';
+import type { Program, ProgramInput } from '../hooks';
+import { ConnectDetailPage, ConnectListPage, ConnectNewPage } from '../pages';
+import { ProgramForm } from '../program-form';
 
 const mock = vi.hoisted(() => ({
   admin: false,

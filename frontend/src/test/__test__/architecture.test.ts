@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
-import boundaries from '../../eslint/architecture.mjs';
+import boundaries from '../../../eslint/architecture.mjs';
 
 function check(file: string, code: string) {
   return new Linter().verify(
@@ -16,7 +16,7 @@ function check(file: string, code: string) {
         rules: { 'architecture/boundaries': 'error' },
       },
     ],
-    { filename: fileURLToPath(new URL(`../${file}`, import.meta.url)) },
+    { filename: fileURLToPath(new URL(`../../${file}`, import.meta.url)) },
   );
 }
 

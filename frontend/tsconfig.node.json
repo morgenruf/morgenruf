@@ -16,6 +16,6 @@
     "vite.config.ts",
     "vitest.config.ts",
     "config/**/*.ts",
-    "src/test/*.test.ts"
+    "src/test/__test__/*.test.ts"
   ]
 }

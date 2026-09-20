@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it, vi } from 'vitest';
 
-import { buildMcpConfig } from './config';
-import McpPage from './pages/mcp-page';
+import { buildMcpConfig } from '../config';
+import McpPage from '../pages/mcp-page';
 
 vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { expect, it, vi } from 'vitest';
 
-import ReportsPage from './pages/reports-page';
+import ReportsPage from '../pages/reports-page';
 
 const reports = vi.hoisted(() => vi.fn());
 vi.mock('@/common/auth/use-session', () => ({

@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 import { chooseOption } from '@/test/select';
 
-import AutomationPage from './pages/automation-page';
+import AutomationPage from '../pages/automation-page';
 
 const mock = vi.hoisted(() => ({ create: vi.fn() }));
 

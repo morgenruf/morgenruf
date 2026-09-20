@@ -22,6 +22,16 @@ When opening the repository root in VS Code, install the recommended **Prettier 
 
 Routes compose feature pages and supply navigation metadata. Use URL search parameters for shareable filters, React state for transient UI, and React Hook Form for editing. Avoid storing API data in a second state container. The workspace's permissions and module availability come from the backend; frontend controls reflect them, while API authorization remains authoritative.
 
+## Unit test organization
+
+Place frontend unit tests in a `__test__` subfolder of the directory that owns them, using the exact singular folder name and retaining the `.test.ts` or `.test.tsx` filename. Create the folder only where tests exist. For example:
+
+- `src/common/components/__test__/secret-panel.test.tsx`
+- `src/common/api/__test__/client.test.ts`
+- `src/modules/analytics/__test__/analytics-utils.test.ts`
+
+Shared test setup and helpers stay in `src/test`; shared infrastructure test suites live in `src/test/__test__`. Playwright tests stay in `e2e`. Run unit tests with `pnpm test` or use `pnpm test:watch` from `frontend/` during development.
+
 ## API and query conventions
 
 Backend schemas generate `app/openapi.json`, which generates `src/common/api/generated`. Run `pnpm api:generate` after backend contract edits. Never hand-edit those artifacts or create duplicate request/response interfaces. Import generated types or infer them from generated client methods.
