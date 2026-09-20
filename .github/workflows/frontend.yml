@@ -28,7 +28,7 @@ jobs:
       - run: pnpm --filter @morgenruf/frontend build
       - run: pnpm --filter @morgenruf/frontend exec playwright install --with-deps chromium
       - run: pnpm --filter @morgenruf/frontend test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-test-results
