@@ -25,6 +25,7 @@ import {
   CardTitle,
 } from '@/common/components/ui/card';
 import { Input } from '@/common/components/ui/input';
+import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
 
 import { useSettings, useSettingsMutations } from './hooks';
@@ -205,29 +206,25 @@ export function SettingsPage() {
                           )}
                         </div>
                         {isAdmin && !item.missing_scopes?.length ? (
-                          <Button
-                            role="switch"
-                            aria-checked={item.active}
+                          <Switch
+                            checked={item.active}
                             aria-label={`${featureNames[item.name] ?? item.name} enabled`}
-                            variant={item.active ? 'default' : 'outline'}
-                            size="sm"
+                            className="mt-0.5"
                             disabled={module.isPending}
-                            onClick={() =>
+                            onCheckedChange={(enabled) =>
                               module.mutate(
-                                { name: item.name, enabled: !item.active },
+                                { name: item.name, enabled },
                                 {
                                   onSuccess: () =>
                                     toast.success(
-                                      `${featureNames[item.name] ?? item.name} ${item.active ? 'disabled' : 'enabled'}`,
+                                      `${featureNames[item.name] ?? item.name} ${enabled ? 'enabled' : 'disabled'}`,
                                     ),
                                   onError: (error) =>
                                     toast.error(errorMessage(error)),
                                 },
                               )
                             }
-                          >
-                            {item.active ? 'On' : 'Off'}
-                          </Button>
+                          />
                         ) : (
                           <Badge variant="secondary">
                             {item.missing_scopes?.length
@@ -246,7 +243,7 @@ export function SettingsPage() {
         </Card>
         <LoadingTransition
           pending={standups.isPending}
-          className="[&>[data-slot=card]]:h-full"
+          className="*:data-[slot=card]:h-full"
         >
           {standups.isPending ? (
             <StandupSettingsSkeleton />
@@ -354,28 +351,23 @@ export function SettingsPage() {
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm">Enable public feed</span>
                         {isAdmin ? (
-                          <Button
-                            role="switch"
-                            aria-checked={!!first.feed_public}
+                          <Switch
+                            checked={!!first.feed_public}
                             aria-label="Public standup feed enabled"
-                            size="sm"
-                            variant={first.feed_public ? 'default' : 'outline'}
                             disabled={feed.isPending}
-                            onClick={() =>
-                              feed.mutate(!first.feed_public, {
+                            onCheckedChange={(enabled) =>
+                              feed.mutate(enabled, {
                                 onSuccess: () =>
                                   toast.success(
-                                    first.feed_public
-                                      ? 'Public feed disabled'
-                                      : 'Public feed enabled',
+                                    enabled
+                                      ? 'Public feed enabled'
+                                      : 'Public feed disabled',
                                   ),
                                 onError: (error) =>
                                   toast.error(errorMessage(error)),
                               })
                             }
-                          >
-                            {first.feed_public ? 'On' : 'Off'}
-                          </Button>
+                          />
                         ) : (
                           <Badge variant="secondary">
                             {first.feed_public ? 'On' : 'Off'}
