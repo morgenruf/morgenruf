@@ -16,6 +16,7 @@ morgenruf-prod-values.yaml
 
 node_modules/
 frontend/dist/
+frontend/.vite/
 *.tsbuildinfo
 coverage/
 frontend/.env.local
