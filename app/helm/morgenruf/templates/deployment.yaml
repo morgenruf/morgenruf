@@ -125,6 +125,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: RESEND_WEBHOOK_SECRET
+            - name: POSTHOG_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: POSTHOG_API_KEY
+            - name: POSTHOG_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: POSTHOG_HOST
             - name: SENTRY_DSN
               valueFrom:
                 secretKeyRef:

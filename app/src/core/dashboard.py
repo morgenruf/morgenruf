@@ -1632,4 +1632,8 @@ def api_set_module(name: str):
             }
         ), 409
     db.set_module_enabled(team_id, name, enabled)
+
+    from src.core.analytics import capture  # noqa: PLC0415
+
+    capture("module_enabled" if enabled else "module_disabled", team_id, module=name)
     return jsonify({"module": name, "enabled": enabled})
