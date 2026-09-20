@@ -273,8 +273,9 @@ export function LoadingField({
   children: ReactNode;
   className?: string;
 }) {
+  // Selects render invisible input siblings that must not add field spacing.
   return (
-    <LoadingTransition pending={pending} className={className}>
+    <LoadingTransition pending={pending} className={cn('space-y-0', className)}>
       {pending ? (
         <div className="space-y-2">
           {fieldLabel && (

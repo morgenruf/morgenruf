@@ -1,3 +1,4 @@
+import { CircleAlert, CircleCheck, UserMinus, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
@@ -18,7 +19,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/common/components/ui/card';
-import { Checkbox } from '@/common/components/ui/checkbox';
 import { Label } from '@/common/components/ui/label';
 import {
   Select,
@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/common/components/ui/select';
+import { Switch } from '@/common/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -75,32 +76,25 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="page page-wide">
+    <div className="page [&>header>h1]:shrink-0">
       <PageHeader
         title="Analytics"
         reserveActionSpace
         description="Participation, blockers, and standup health."
-        actions={
-          <Tabs
-            value={days}
-            onValueChange={(value) => filter('days', String(value))}
-          >
-            <TabsList aria-label="Analytics time range">
-              {[7, 30].map((value) => (
-                <TabsTrigger key={value} value={value}>
-                  {value} days
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        }
       />
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
+      <div
+        role="group"
+        aria-label="Analytics filters"
+        className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center"
+      >
+        <div className="w-full min-w-0 sm:w-56">
+          <Label htmlFor="analytics-schedule" className="sr-only">
+            Standup
+          </Label>
           <LoadingField
             pending={query.isPending}
             label="Loading standup filter…"
-            className="w-56"
+            className="space-y-0"
           >
             <Select
               items={scheduleOptions}
@@ -110,29 +104,56 @@ export default function AnalyticsPage() {
               <SelectTrigger
                 id="analytics-schedule"
                 aria-label="Standup"
-                className="w-56"
+                className="w-full min-w-0 *:data-[slot=select-value]:block"
               >
-                <SelectValue />
+                <SelectValue className="min-w-0 truncate" />
               </SelectTrigger>
               <SelectContent>
                 {scheduleOptions.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
+                  <SelectItem
+                    key={item.value}
+                    value={item.value}
+                    className="pr-7"
+                  >
+                    <span className="wrap-anywhere whitespace-normal">
+                      {item.label}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </LoadingField>
         </div>
-        <Label className="flex items-center gap-2">
-          <Checkbox
+        <div className="w-full min-w-0 sm:w-40">
+          <Label id="analytics-time-range-label" className="sr-only">
+            Time range
+          </Label>
+          <Tabs
+            value={days}
+            onValueChange={(value) => filter('days', String(value))}
+          >
+            <TabsList
+              aria-labelledby="analytics-time-range-label"
+              className="h-9 w-full group-data-horizontal/tabs:h-9"
+            >
+              {[7, 30].map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {value} days
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+        <div className="flex h-9 shrink-0 items-center gap-3 sm:ml-auto">
+          <Label htmlFor="analytics-unenrolled">Include unenrolled</Label>
+          <Switch
+            id="analytics-unenrolled"
             checked={includeUnenrolled}
             onCheckedChange={(checked) =>
               filter('unenrolled', checked ? 'true' : '')
             }
           />
-          Include unenrolled
-        </Label>
+        </div>
       </div>
       <LoadingTransition pending={query.isPending}>
         {query.isPending ? (
@@ -153,6 +174,16 @@ export default function AnalyticsPage() {
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard
                       label="Completion rate"
+                      icon={CircleCheck}
+                      tone={
+                        !view.expected
+                          ? 'neutral'
+                          : view.rate >= 70
+                            ? 'success'
+                            : view.rate >= 40
+                              ? 'warning'
+                              : 'destructive'
+                      }
                       value={
                         <span
                           className={rateTone(view.expected ? view.rate : null)}
@@ -164,11 +195,21 @@ export default function AnalyticsPage() {
                     />
                     <StatCard
                       label="Responding members"
+                      icon={Users}
+                      tone="primary"
                       value={`${view.enrolled.filter((member) => member.responses > 0).length} / ${view.enrolled.length}`}
                       description={`In the last ${days} days`}
                     />
                     <StatCard
                       label="Days with blockers"
+                      icon={CircleAlert}
+                      tone={
+                        view.visible.some(
+                          (member) => member.days_with_blockers > 0,
+                        )
+                          ? 'warning'
+                          : 'neutral'
+                      }
                       value={view.visible.reduce(
                         (count, member) => count + member.days_with_blockers,
                         0,
@@ -177,6 +218,8 @@ export default function AnalyticsPage() {
                     />
                     <StatCard
                       label="Not enrolled"
+                      icon={UserMinus}
+                      tone="neutral"
                       value={view.unenrolled.length}
                       description="Members in no active standup"
                     />
@@ -368,7 +411,7 @@ export default function AnalyticsPage() {
                   {!includeUnenrolled && view.unenrolled.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       {view.unenrolled.length} members in no standup are hidden.
-                      Select “Include unenrolled” to show them.
+                      Turn on “Include unenrolled” to show them.
                     </p>
                   )}
                 </>

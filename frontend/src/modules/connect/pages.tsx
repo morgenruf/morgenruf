@@ -480,9 +480,18 @@ export function ConnectDetailPage() {
   );
 }
 
-function AttendancePageContent() {
+export function ConnectAttendancePage() {
   const query = useConnect();
   const [params, setParams] = useSearchParams();
+  const programOptions =
+    query.data?.map((program) => ({
+      value: program.id,
+      label: program.name,
+    })) ?? [];
+  const selected =
+    query.data?.find(
+      (program) => String(program.id) === params.get('program'),
+    ) ?? query.data?.[0];
 
   function renderContent() {
     if (query.isPending) return <ConnectAttendanceSkeleton />;
@@ -490,7 +499,7 @@ function AttendancePageContent() {
     if (query.error)
       return <ErrorState error={query.error} retry={() => query.refetch()} />;
 
-    if (!query.data?.length)
+    if (!selected)
       return (
         <EmptyState
           title="Create a coffee chat first"
@@ -498,58 +507,41 @@ function AttendancePageContent() {
         />
       );
 
-    const programOptions = query.data.map((program) => ({
-      value: program.id,
-      label: program.name,
-    }));
-    const selected =
-      query.data.find(
-        (program) => String(program.id) === params.get('program'),
-      ) ?? query.data[0];
-
-    return (
-      <div className="space-y-6">
-        <label className="grid max-w-sm gap-2 text-sm font-medium">
-          Coffee chat
-          <Select
-            items={programOptions}
-            value={selected.id}
-            onValueChange={(value) => {
-              if (value !== null) setParams({ program: String(value) });
-            }}
-          >
-            <SelectTrigger aria-label="Coffee chat" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {programOptions.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
-        <Attendance key={selected.id} programId={selected.id} />
-      </div>
-    );
+    return <Attendance key={selected.id} programId={selected.id} />;
   }
-  return (
-    <LoadingTransition pending={query.isPending}>
-      {renderContent()}
-    </LoadingTransition>
-  );
-}
 
-export function ConnectAttendancePage() {
   return (
     <div className="page">
       <PageHeader
         title="Coffee chat attendance"
-        description="Who was introduced, who met, and where a nudge might help."
+        reserveActionSpace
+        actions={
+          selected && (
+            <Select
+              items={programOptions}
+              value={selected.id}
+              onValueChange={(value) => {
+                if (value !== null) setParams({ program: String(value) });
+              }}
+            >
+              <SelectTrigger aria-label="Coffee chat" className="w-40 sm:w-64">
+                <SelectValue className="min-w-0 truncate" />
+              </SelectTrigger>
+              <SelectContent>
+                {programOptions.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        }
       />
       <ConnectGate loadingFallback={<ConnectAttendanceSkeleton />}>
-        <AttendancePageContent />
+        <LoadingTransition pending={query.isPending}>
+          {renderContent()}
+        </LoadingTransition>
       </ConnectGate>
     </div>
   );

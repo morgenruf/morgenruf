@@ -9,6 +9,7 @@ import {
   SkeletonTable,
   SkeletonText,
 } from '@/common/components/loading-skeleton';
+import { PageHeader } from '@/common/components/page';
 import { Skeleton } from '@/common/components/ui/skeleton';
 
 export function AttendanceSkeleton() {
@@ -88,16 +89,7 @@ export function ConnectDetailSkeleton() {
 }
 
 export function ConnectAttendanceSkeleton() {
-  return (
-    <SkeletonRegion label="Loading attendance…">
-      <div className="space-y-6">
-        <div className="max-w-sm">
-          <SkeletonFields count={1} />
-        </div>
-        <AttendanceSkeleton />
-      </div>
-    </SkeletonRegion>
-  );
+  return <AttendanceSkeleton />;
 }
 
 export function ConnectListPageSkeleton() {
@@ -124,8 +116,13 @@ export function ConnectDetailPageSkeleton() {
 }
 export function ConnectAttendancePageSkeleton() {
   return (
-    <SkeletonPage title="Coffee chat attendance">
+    <div className="page">
+      <PageHeader
+        title="Coffee chat attendance"
+        reserveActionSpace
+        actions={<Skeleton className="h-9 w-40 sm:w-64" />}
+      />
       <ConnectAttendanceSkeleton />
-    </SkeletonPage>
+    </div>
   );
 }
