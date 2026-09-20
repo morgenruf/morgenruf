@@ -38,11 +38,8 @@ import { cn } from '@/common/lib/utils';
 
 import { healthLabel } from './form-utils';
 import { useStandupMutations, type Standup } from './hooks';
-import {
-  nextRunLabel,
-  scheduleDays,
-  sparklineSegments,
-} from './overview-utils';
+import { nextRunLabel, scheduleDays } from './overview-utils';
+import { ParticipationSparkline } from './participation-sparkline';
 
 function Participation({
   metrics,
@@ -94,33 +91,10 @@ function Participation({
         <span className={cn('text-xs font-medium', tone)}>
           {healthLabel(rate)}
         </span>
-        <svg
-          viewBox="0 0 112 32"
-          className={cn('h-7 w-20 shrink-0', tone)}
-          aria-hidden="true"
-        >
-          {sparklineSegments(metrics.series ?? []).map((segment, index) =>
-            segment.length === 1 ? (
-              <circle
-                key={index}
-                cx={segment[0].x}
-                cy={segment[0].y}
-                r="2"
-                fill="currentColor"
-              />
-            ) : (
-              <polyline
-                key={index}
-                points={segment.map(({ x, y }) => `${x},${y}`).join(' ')}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ),
-          )}
-        </svg>
+        <ParticipationSparkline
+          series={metrics.series ?? []}
+          tone={rate >= 75 ? 'success' : rate >= 40 ? 'warning' : 'destructive'}
+        />
       </div>
       <p className="text-xs text-muted-foreground">
         {metrics.completed} of {metrics.expected} filed · last 14 days

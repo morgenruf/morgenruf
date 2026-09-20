@@ -1,13 +1,4 @@
 import { useSearchParams } from 'react-router';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { LoadingField } from '@/common/components/loading-skeleton';
@@ -48,6 +39,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/common/components/ui/tabs';
 import { formatDate, relativeTime } from '@/common/lib/format';
 
 import { analyticsView, rateTone } from '../analytics-utils';
+import { CompletionChart } from '../completion-chart';
+import { DailyTrendChart } from '../daily-trend-chart';
 import { useAnalytics } from '../hooks';
 import { AnalyticsSkeleton } from '../loading';
 
@@ -196,89 +189,7 @@ export default function AnalyticsPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div
-                        className="h-64 w-full"
-                        aria-label="Completion percentage by day"
-                      >
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={view.series}
-                            margin={{ top: 10, right: 12, bottom: 0, left: 0 }}
-                          >
-                            <defs>
-                              <linearGradient
-                                id="completion-fill"
-                                x1="0"
-                                y1="0"
-                                x2="0"
-                                y2="1"
-                              >
-                                <stop
-                                  offset="0%"
-                                  stopColor="var(--primary)"
-                                  stopOpacity={0.25}
-                                />
-                                <stop
-                                  offset="100%"
-                                  stopColor="var(--primary)"
-                                  stopOpacity={0.02}
-                                />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid
-                              vertical={false}
-                              stroke="var(--border)"
-                            />
-                            <XAxis
-                              dataKey="date"
-                              tickFormatter={(date) =>
-                                formatDate(date, {
-                                  day: 'numeric',
-                                  month: 'short',
-                                })
-                              }
-                              tick={{
-                                fill: 'var(--muted-foreground)',
-                                fontSize: 11,
-                              }}
-                              minTickGap={24}
-                            />
-                            <YAxis
-                              domain={[0, 100]}
-                              unit="%"
-                              tick={{
-                                fill: 'var(--muted-foreground)',
-                                fontSize: 11,
-                              }}
-                              width={44}
-                            />
-                            <Tooltip
-                              labelFormatter={(label) =>
-                                formatDate(String(label))
-                              }
-                              formatter={(value) => [
-                                value === null ? 'Not scheduled' : `${value}%`,
-                                'Completion',
-                              ]}
-                              contentStyle={{
-                                background: 'var(--popover)',
-                                color: 'var(--popover-foreground)',
-                                border: '1px solid var(--border)',
-                                borderRadius: 8,
-                              }}
-                            />
-                            <Area
-                              type="monotone"
-                              dataKey="rate"
-                              stroke="var(--primary)"
-                              fill="url(#completion-fill)"
-                              strokeWidth={2}
-                              connectNulls={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
+                      <CompletionChart data={view.series} />
                       <details className="mt-3 text-xs text-muted-foreground">
                         <summary className="cursor-pointer">
                           View chart data
@@ -440,21 +351,11 @@ export default function AnalyticsPage() {
                                     {schedule.completed} / {schedule.expected}
                                   </TableCell>
                                   <TableCell>
-                                    <div className="flex h-8 min-w-32 items-end gap-0.5">
-                                      {schedule.series.map((rate, index) => (
-                                        <span
-                                          key={index}
-                                          title={`${formatDate(data.window_days[index])}: ${rate === null ? 'Not scheduled' : `${rate}%`}`}
-                                          className={`min-w-1 flex-1 rounded-sm ${rate === null ? 'bg-muted' : rate >= 70 ? 'bg-success/70' : rate >= 40 ? 'bg-warning/70' : 'bg-destructive/70'}`}
-                                          style={{
-                                            height:
-                                              rate === null
-                                                ? '2px'
-                                                : `${Math.max(5, Math.min(rate, 100))}%`,
-                                          }}
-                                        />
-                                      ))}
-                                    </div>
+                                    <DailyTrendChart
+                                      series={schedule.series}
+                                      dates={data.window_days}
+                                      name={schedule.name}
+                                    />
                                   </TableCell>
                                 </TableRow>
                               ))}

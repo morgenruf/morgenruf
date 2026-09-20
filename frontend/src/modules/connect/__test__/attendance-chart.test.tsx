@@ -1,23 +1,13 @@
-import { cloneElement, type ReactElement } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { ConnectRound } from '@/common/api/generated/data-contracts';
 
 import { AttendanceChart } from '../attendance-chart';
 import { attendanceTrend, roundDate } from '../attendance-utils';
 
-// jsdom has no layout engine; supply chart dimensions while exercising Recharts itself.
-vi.mock('recharts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('recharts')>()),
-  ResponsiveContainer: ({ children }: { children: ReactElement }) =>
-    cloneElement(children as ReactElement<{ width: number; height: number }>, {
-      width: 800,
-      height: 280,
-    }),
-}));
-
+// EvilCharts supplies initial dimensions, so these tests exercise real Recharts.
 function round(values: Partial<ConnectRound> = {}): ConnectRound {
   return {
     id: 1,
@@ -79,7 +69,9 @@ describe('attendance chart', () => {
         name: /Meeting rate by round, from 0 to 100 percent/,
       }),
     ).toBeInTheDocument();
-    expect(container.querySelectorAll('.recharts-line-dot')).toHaveLength(1);
+    expect(
+      container.querySelectorAll('.recharts-line-dots [data-chart-dot]'),
+    ).toHaveLength(1);
     expect(screen.getByText('0%')).toBeInTheDocument();
     expect(screen.getByText('100%')).toBeInTheDocument();
     fireEvent.focus(screen.getByRole('application'));
@@ -117,7 +109,9 @@ describe('attendance chart', () => {
       }),
     ];
     const { container } = render(<AttendanceChart rounds={rounds} />);
-    expect(container.querySelectorAll('.recharts-line-dot')).toHaveLength(2);
+    expect(
+      container.querySelectorAll('.recharts-line-dots [data-chart-dot]'),
+    ).toHaveLength(2);
     expect(
       container
         .querySelector('.recharts-line-curve')
@@ -142,5 +136,19 @@ describe('attendance chart', () => {
     const table = screen.getByRole('table');
     expect(within(table).getByText('No answered outcomes')).toBeInTheDocument();
     expect(within(table).getByText('4')).toBeInTheDocument();
+  });
+
+  it('plots a genuine zero rate and keeps it distinct from an unanswered round', async () => {
+    const { container } = render(
+      <AttendanceChart rounds={[round({ met: 0, missed: 4 })]} />,
+    );
+    expect(
+      container.querySelectorAll('.recharts-line-dots [data-chart-dot]'),
+    ).toHaveLength(1);
+    fireEvent.focus(screen.getByRole('application'));
+    expect(await screen.findByText('Meeting rate: 0%')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No answered outcomes yet'),
+    ).not.toBeInTheDocument();
   });
 });

@@ -15,4 +15,4 @@ from tests.browser_fixtures import create_test_app  # noqa: E402
 app = create_test_app()
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=3008, debug=False, use_reloader=False)
+    app.run(host="127.0.0.1", port=int(os.environ.get("MORGENRUF_E2E_BACKEND_PORT", "3008")), debug=False, use_reloader=False)

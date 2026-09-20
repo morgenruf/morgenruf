@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const backend = 'http://127.0.0.1:3008';
+import { backend } from './environment';
 
 async function expectNoDocumentOverflow(page: Page) {
   expect(

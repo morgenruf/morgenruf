@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
-const backend = 'http://127.0.0.1:3008';
+import { backend } from './environment';
 
 async function signIn(context: BrowserContext, role = 'admin') {
   const response = await context.request.post(

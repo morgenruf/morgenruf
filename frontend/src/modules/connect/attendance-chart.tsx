@@ -1,14 +1,10 @@
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-
 import type { ConnectRound } from '@/common/api/generated/data-contracts';
+import { healthColors } from '@/common/components/evilcharts/chart-palette';
+import { EvilLineChart } from '@/common/components/evilcharts/charts/recharts-line-chart';
+import {
+  ChartTooltip,
+  ChartTooltipSurface,
+} from '@/common/components/evilcharts/ui/recharts-tooltip';
 import {
   Card,
   CardContent,
@@ -25,6 +21,10 @@ import {
   attendanceOutcomes,
 } from './form-utils';
 
+const config = {
+  rate: { label: 'Meeting rate', colors: healthColors('success') },
+};
+
 function RoundTooltip({
   active,
   round,
@@ -35,7 +35,7 @@ function RoundTooltip({
   if (!active || !round) return null;
 
   return (
-    <div className="min-w-48 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-md">
+    <ChartTooltipSurface className="min-w-48 p-3">
       <p className="font-medium">{roundDate(round.scheduled_for)}</p>
       <p className="mt-1 text-muted-foreground">
         Meeting rate:{' '}
@@ -56,7 +56,7 @@ function RoundTooltip({
           </div>
         ))}
       </dl>
-    </div>
+    </ChartTooltipSurface>
   );
 }
 
@@ -80,65 +80,53 @@ export function AttendanceChart({ rounds }: { rounds: ConnectRound[] }) {
             role="group"
             aria-label="Meeting rate by round, from 0 to 100 percent. Exact values are available in View chart data below."
           >
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <LineChart
-                data={data}
-                margin={{ top: 12, right: 12, bottom: 4, left: 0 }}
-                accessibilityLayer
-              >
-                <CartesianGrid vertical={false} stroke="var(--border)" />
-                <XAxis
-                  dataKey="id"
-                  padding={{ left: 18, right: 18 }}
-                  tickFormatter={(id) =>
-                    roundDate(
-                      data.find((round) => round.id === id)?.scheduled_for ??
-                        '',
-                      true,
-                    )
-                  }
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={24}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  ticks={[0, 25, 50, 75, 100]}
-                  tickFormatter={(value) => `${value}%`}
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={42}
-                />
-                <Tooltip
-                  filterNull={false}
-                  content={({ active, label }) => (
-                    <RoundTooltip
-                      active={active}
-                      round={data.find((round) => round.id === Number(label))}
-                    />
-                  )}
-                  cursor={{ stroke: 'var(--border)' }}
-                />
-                <Line
-                  type="linear"
-                  dataKey="rate"
-                  name="Meeting rate"
-                  stroke="var(--success)"
-                  strokeWidth={2}
-                  dot={{
-                    r: 4,
-                    fill: 'var(--success)',
-                    strokeWidth: 2,
-                    stroke: 'var(--card)',
-                  }}
-                  activeDot={{ r: 6 }}
-                  connectNulls={false}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <EvilLineChart
+              config={config}
+              className="h-full w-full min-w-0 aspect-auto"
+              data={data}
+              chartProps={{
+                margin: { top: 12, right: 12, bottom: 4, left: 0 },
+              }}
+            >
+              <EvilLineChart.Grid vertical={false} stroke="var(--border)" />
+              <EvilLineChart.XAxis
+                dataKey="id"
+                padding={{ left: 18, right: 18 }}
+                tickFormatter={(id) =>
+                  roundDate(
+                    data.find((round) => round.id === id)?.scheduled_for ?? '',
+                    true,
+                  )
+                }
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={24}
+              />
+              <EvilLineChart.YAxis
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                tickFormatter={(value) => `${value}%`}
+                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                width={42}
+              />
+              <ChartTooltip
+                filterNull={false}
+                content={({ active, label }) => (
+                  <RoundTooltip
+                    active={active}
+                    round={data.find((round) => round.id === Number(label))}
+                  />
+                )}
+                cursor={{ stroke: 'var(--border)' }}
+              />
+              <EvilLineChart.Line dataKey="rate" glowing connectNulls={false}>
+                <EvilLineChart.Dot variant="border" />
+                <EvilLineChart.ActiveDot variant="colored-border" />
+              </EvilLineChart.Line>
+            </EvilLineChart>
           </div>
         ) : (
           <div className="grid min-h-48 place-content-center rounded-lg bg-muted/30 px-5 text-center">

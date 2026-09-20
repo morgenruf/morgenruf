@@ -1,21 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  nextRunLabel,
-  scheduleDays,
-  sparklineSegments,
-} from '../overview-utils';
+import { nextRunLabel, scheduleDays } from '../overview-utils';
 
 describe('standup display helpers', () => {
-  it('keeps missing days as sparkline gaps and zero completion as data', () => {
-    const segments = sparklineSegments([0, 50, null, 100, null, 20, 30]);
-    expect(segments.map((segment) => segment.length)).toEqual([2, 1, 2]);
-    expect(segments[0][0].y).toBe(29);
-    expect(segments[1][0].y).toBe(3);
-    expect(segments[1][0].x).toBeGreaterThan(segments[0][1].x);
-    expect(sparklineSegments([null, null])).toEqual([]);
-  });
-
   it('orders weekdays and summarizes common schedules', () => {
     expect(scheduleDays(['fri', 'mon', 'wed'])).toBe('Mon, Wed, Fri');
     expect(scheduleDays(['mon', 'tue', 'wed', 'thu', 'fri'])).toBe('Mon–Fri');

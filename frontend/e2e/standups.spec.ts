@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const backend = 'http://127.0.0.1:3008';
+import { backend } from './environment';
 
 test.beforeEach(async ({ request, context }) => {
   expect((await request.post(`${backend}/__test__/reset`)).ok()).toBe(true);

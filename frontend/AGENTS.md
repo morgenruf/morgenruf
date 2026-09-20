@@ -1,5 +1,10 @@
 # Frontend conventions
 
+## Charts
+
+- Use the local EvilCharts components under `src/common/components/evilcharts` for all charts, including compact trends and sparklines. Keep direct Recharts rendering inside that shared implementation.
+- Use semantic theme tokens, respect reduced motion, preserve missing values as gaps, and retain keyboard access and exact-value alternatives for interactive charts.
+
 ## Unit tests
 
 - Place every frontend unit test directly inside a `__test__` subfolder of its owning directory. Use the exact singular name `__test__` and keep filenames ending in `.test.ts` or `.test.tsx`.

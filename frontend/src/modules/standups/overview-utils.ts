@@ -29,21 +29,3 @@ export function nextRunLabel(value: string, timezone: string) {
     return null;
   }
 }
-
-/** Each missing day starts a new segment instead of joining across the gap. */
-export function sparklineSegments(series: (number | null)[]) {
-  const segments: { x: number; y: number }[][] = [];
-  let segment: { x: number; y: number }[] = [];
-  series.forEach((value, index) => {
-    if (value == null || !Number.isFinite(value)) {
-      segment = [];
-      return;
-    }
-    if (!segment.length) segments.push(segment);
-    segment.push({
-      x: 3 + (index / Math.max(1, series.length - 1)) * 106,
-      y: 29 - (Math.min(100, Math.max(0, value)) / 100) * 26,
-    });
-  });
-  return segments;
-}
