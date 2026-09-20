@@ -82,7 +82,7 @@ beforeEach(() => {
 
 describe('workspace settings permissions', () => {
   it('lets a standup admin manage digests without publishing the feed or toggling modules', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     view();
 
@@ -105,7 +105,7 @@ describe('workspace settings permissions', () => {
 
   it('invalidates workspace settings after a workspace admin publishes the feed', async () => {
     mock.isAdmin = true;
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const client = view();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     await user.click(

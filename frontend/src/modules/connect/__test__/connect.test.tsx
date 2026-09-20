@@ -171,7 +171,7 @@ describe('coffee chats', () => {
   });
 
   it('treats unknown outcomes as unknown and expands pairings', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     view(<Attendance programId={2} />);
 
@@ -216,7 +216,7 @@ it('associates exact field labels without incorporating select options into thei
 
 it('requires a coffee chat channel and submits numeric choices across tabs', async () => {
   mock.admin = true;
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view(<ProgramForm />);
   await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
   expect(await screen.findByText('Choose a channel.')).toBeInTheDocument();
@@ -263,7 +263,7 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
 }, 15_000);
 
 it('disables coffee chat choices for read-only members', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view(<ProgramForm />);
   const channel = await screen.findByRole('combobox', {
     name: 'Draw people from',
@@ -277,7 +277,7 @@ it('disables coffee chat choices for read-only members', async () => {
 
 it('reveals an invalid meeting link on its tab and allows saving after correction', async () => {
   mock.admin = true;
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view(<ProgramForm />);
   await chooseOption(user, 'Draw people from', '#engineering');
   await user.click(screen.getByRole('tab', { name: 'Meeting' }));
@@ -311,7 +311,7 @@ it('keeps the selected values and disables choices while saving a coffee chat', 
       resolveSave = resolve;
     }),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view(<ProgramForm />);
   await chooseOption(user, 'Draw people from', '#engineering');
   await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
@@ -354,7 +354,7 @@ it.each([
       program = { ...program, ...body } as Program;
       return { data: { ...program } };
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     view(
       <Routes>
         <Route
@@ -388,7 +388,7 @@ it('changes member participation through the status popup and blocks edits while
       resolveUpdate = resolve;
     }),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const program = {
     ...programDefaults(),
     id: 2,

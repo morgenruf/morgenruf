@@ -51,7 +51,7 @@ it('marks revoked keys and does not offer to revoke them again', async () => {
   expect(
     screen.queryByRole('button', { name: 'Revoke' }),
   ).not.toBeInTheDocument();
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const assistant = screen.getByRole('combobox', { name: 'Assistant' });
   expect(assistant).toHaveTextContent('Claude Desktop');
   await user.click(assistant);

@@ -152,7 +152,7 @@ export default function KudosPage() {
           </CardHeader>
           <CardContent>
             {givers.isPending ? (
-              <KudosLeaderboardSkeleton />
+              <KudosLeaderboardSkeleton label="Loading most encouraging…" />
             ) : givers.isError ? (
               <ErrorState
                 error={givers.error}
