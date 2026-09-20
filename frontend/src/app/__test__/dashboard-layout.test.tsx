@@ -1,14 +1,22 @@
 import { useState, type ComponentType } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   createMemoryRouter,
   RouterProvider,
   type RouteObject,
 } from 'react-router';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { deferred } from '@/test/deferred';
+import { mockViewport } from '@/test/match-media';
 
 import { DashboardHydrateFallback, DashboardLayout } from '../dashboard-layout';
 import { dashboardRoutes } from '../dashboard-routes';
@@ -16,6 +24,10 @@ import { dashboardRoutes } from '../dashboard-routes';
 const state = vi.hoisted(() => ({
   sessionPending: false,
   modulesPending: false,
+  canAdminister: true,
+  modules: [
+    { name: 'standup', available: true, active: true, missing_scopes: [] },
+  ],
 }));
 vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({
@@ -25,15 +37,16 @@ vi.mock('@/common/auth/use-session', () => ({
       : { team_id: 'T1', user_id: 'U1', team_name: 'Test workspace' },
     error: null,
   }),
-  usePermissions: () => ({ isAdmin: true, canAdminister: () => true }),
+  usePermissions: () => ({
+    isAdmin: state.canAdminister,
+    canAdminister: () => state.canAdminister,
+  }),
 }));
 vi.mock('@/common/api/use-workspace-modules', () => ({
   useWorkspaceModules: () => ({
     isPending: state.modulesPending,
     error: null,
-    data: [
-      { name: 'standup', available: true, active: true, missing_scopes: [] },
-    ],
+    data: state.modules,
   }),
 }));
 
@@ -78,10 +91,19 @@ function view(
   return { router, ...result };
 }
 
+let resizeViewport: ReturnType<typeof mockViewport>;
+
 beforeEach(() => {
+  resizeViewport = mockViewport();
   state.sessionPending = false;
   state.modulesPending = false;
+  state.canAdminister = true;
+  state.modules = [
+    { name: 'standup', available: true, active: true, missing_scopes: [] },
+  ];
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 it('uses the requested page inside the shell during cold lazy loading', async () => {
   const page = deferred<{ Component: ComponentType }>();
@@ -127,6 +149,8 @@ it('shows the latest destination skeleton and preserves the collapsed shell thro
     screen.getByRole('button', { name: 'Collapse sidebar' }),
   );
   const shell = screen.getByRole('button', { name: 'Expand sidebar' });
+  const main = screen.getByRole('main');
+  main.scrollTop = 300;
   let first!: Promise<void>;
   act(() => {
     first = router.navigate('/dashboard/members');
@@ -156,6 +180,8 @@ it('shows the latest destination skeleton and preserves the collapsed shell thro
     await second;
   });
   expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBe(shell);
+  expect(screen.getByRole('main')).toBe(main);
+  expect(main.scrollTop).toBe(0);
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
@@ -166,6 +192,8 @@ it('preserves form state and focus during search-only navigation', async () => {
     members: { loader: () => (delay ? loader.promise : null) },
   });
   const input = await screen.findByRole('textbox');
+  const main = screen.getByRole('main');
+  main.scrollTop = 300;
   await userEvent.type(input, 'Keep this draft');
   delay = true;
   let navigation!: Promise<void>;
@@ -181,4 +209,112 @@ it('preserves form state and focus during search-only navigation', async () => {
     await navigation;
   });
   expect(screen.getByRole('textbox')).toBe(input);
+  expect(screen.getByRole('main')).toBe(main);
+  expect(main.scrollTop).toBe(300);
+});
+
+it('toggles the sidebar with its button and both keyboard shortcuts', async () => {
+  view('/dashboard/members');
+  const collapse = screen.getByRole('button', { name: 'Collapse sidebar' });
+  expect(collapse).toHaveAttribute('aria-expanded', 'true');
+  await userEvent.click(collapse);
+  const expand = screen.getByRole('button', { name: 'Expand sidebar' });
+  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+  expect(
+    screen.getByRole('button', { name: 'Collapse sidebar' }),
+  ).toBeInTheDocument();
+  fireEvent.keyDown(window, { key: 'b', metaKey: true });
+  expect(
+    screen.getByRole('button', { name: 'Expand sidebar' }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+});
+
+it('filters unavailable modules and marks the current navigation link', () => {
+  state.modules.push({
+    name: 'kudos',
+    available: false,
+    active: false,
+    missing_scopes: [],
+  });
+  view('/dashboard/members');
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'Main navigation' }),
+  );
+  expect(
+    navigation.queryByRole('link', { name: 'Kudos' }),
+  ).not.toBeInTheDocument();
+  expect(
+    navigation.queryByRole('link', { name: 'Coffee chats' }),
+  ).not.toBeInTheDocument();
+  expect(
+    navigation.getByRole('link', { name: 'Standups' }),
+  ).toBeInTheDocument();
+  const members = navigation.getByRole('link', { name: 'Members' });
+  expect(members).toHaveAttribute('aria-current', 'page');
+  expect(members).toHaveAttribute('data-active');
+  expect(navigation.getByRole('link', { name: 'Reports' })).not.toHaveAttribute(
+    'data-active',
+  );
+});
+
+it.each([true, false])(
+  'keeps exact submenu matching with admin permission %s',
+  (canAdminister) => {
+    state.canAdminister = canAdminister;
+    state.modules.push({
+      name: 'connect',
+      available: true,
+      active: true,
+      missing_scopes: [],
+    });
+    view('/dashboard/connect/attendance');
+    const navigation = within(
+      screen.getByRole('navigation', { name: 'Main navigation' }),
+    );
+    expect(
+      navigation.getByRole('link', { name: 'Coffee chats' }),
+    ).toHaveAttribute('data-active');
+    expect(
+      navigation.getByRole('link', { name: 'Attendance' }),
+    ).toHaveAttribute('aria-current', 'page');
+    expect(
+      navigation.getByRole('link', { name: 'Attendance' }),
+    ).toHaveAttribute('data-active');
+    expect(
+      navigation.getByRole('link', { name: 'All coffee chats' }),
+    ).not.toHaveAttribute('aria-current');
+    expect(
+      navigation.getByRole('link', { name: 'All coffee chats' }),
+    ).not.toHaveAttribute('data-active');
+    expect(!!navigation.queryByRole('link', { name: 'New coffee chat' })).toBe(
+      canAdminister,
+    );
+  },
+);
+
+it('opens mobile navigation after a viewport change and closes it after selecting a route', async () => {
+  view('/dashboard/standups');
+  act(() => resizeViewport(390));
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Open navigation' }),
+  );
+  const dialog = within(await screen.findByRole('dialog'));
+  expect(
+    dialog.getByRole('button', { name: 'Close navigation' }),
+  ).toBeInTheDocument();
+  expect(dialog.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  await userEvent.click(dialog.getByRole('link', { name: 'Members' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  );
+  expect(
+    screen.getByRole('navigation', { name: 'Breadcrumb' }),
+  ).toHaveTextContent('Members');
+  act(() => resizeViewport(1024));
+  expect(
+    screen.getByRole('button', { name: 'Collapse sidebar' }),
+  ).toBeInTheDocument();
 });

@@ -323,10 +323,70 @@ test('public feed and integration result pages need no session', async ({
   await expect(page).toHaveURL(/\/email\/result\?status=invalid/);
 });
 
+test('shadcn sidebar sizing, tooltips, keyboard controls, and collapsed sign-out', async ({
+  page,
+  context,
+}, testInfo) => {
+  await signIn(context);
+  await page.goto('/dashboard/members');
+  const sidebar = page.locator('[data-slot="sidebar-container"]');
+  const members = page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Members', exact: true });
+
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(
+      (value) => localStorage.setItem('morgenruf-theme', value),
+      theme,
+    );
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Collapse sidebar' }),
+    ).toBeVisible();
+    await expect(sidebar).toHaveCSS('width', '256px');
+    await expect(members).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('main')).toHaveCount(1);
+    await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
+    await page.screenshot({
+      animations: 'disabled',
+      path: testInfo.outputPath(`sidebar-expanded-${theme}.png`),
+    });
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await expect(sidebar).toHaveCSS('width', '48px');
+    await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+    await members.hover();
+    const tooltip = page.locator('[data-slot="tooltip-content"]');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText('Members');
+    await page.screenshot({
+      animations: 'disabled',
+      path: testInfo.outputPath(`sidebar-collapsed-${theme}.png`),
+    });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await members.focus();
+    await page.keyboard.press('Control+b');
+    await expect(
+      page.getByRole('button', { name: 'Collapse sidebar' }),
+    ).toBeVisible();
+    await expect(members).toBeFocused();
+    await page.keyboard.press('Meta+b');
+    await expect(
+      page.getByRole('button', { name: 'Expand sidebar' }),
+    ).toBeVisible();
+  }
+
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/login/);
+});
+
 test('mobile navigation and stored dark appearance work without overflow', async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   await signIn(context);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() =>
@@ -336,9 +396,28 @@ test('mobile navigation and stored dark appearance work without overflow', async
   await page.goto('/dashboard/standups');
   await expect(page.locator('html')).toHaveClass(/dark/);
 
-  await page
-    .getByRole('button', { name: 'Open navigation', exact: true })
-    .click();
+  const trigger = page.getByRole('button', {
+    name: 'Open navigation',
+    exact: true,
+  });
+  await trigger.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS('width', '288px');
+  await expect(dialog.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await expect(dialog).toHaveCSS('opacity', '1');
+  await page.screenshot({
+    animations: 'disabled',
+    path: testInfo.outputPath('mobile-sidebar-dark.png'),
+  });
+  await dialog.getByRole('button', { name: 'Close navigation' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
   await page
     .getByRole('dialog')
     .getByRole('link', { name: 'Members', exact: true })
@@ -347,6 +426,8 @@ test('mobile navigation and stored dark appearance work without overflow', async
   await expect(
     page.getByRole('heading', { name: 'Members', exact: true }),
   ).toBeVisible();
+
+  await expect(trigger).toBeFocused();
 
   expect(
     await page.evaluate(
@@ -376,6 +457,17 @@ test('mobile navigation and stored dark appearance work without overflow', async
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  await page.getByRole('button', { name: 'Choose appearance' }).click();
+  await page.getByRole('menuitem', { name: 'Light', exact: true }).click();
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await trigger.click();
+  await expect(dialog).toHaveCSS('opacity', '1');
+  await page.screenshot({
+    animations: 'disabled',
+    path: testInfo.outputPath('mobile-sidebar-light.png'),
+  });
+  await dialog.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\/login/);
 });
 
 for (const filter of [

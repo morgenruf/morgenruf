@@ -32,6 +32,7 @@ export default tseslint.config(
             'buttonVariants',
             'badgeVariants',
             'tabsListVariants',
+            'useSidebar',
           ],
         },
       ],
