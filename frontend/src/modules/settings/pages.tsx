@@ -287,7 +287,7 @@ export function SettingsPage() {
                     Next run: {new Date(first.next_run).toLocaleString()}
                   </p>
                 ) : (
-                  <Badge variant="secondary">
+                  <Badge variant="secondary" className="me-2">
                     {first.active ? 'No next run scheduled' : 'Paused'}
                   </Badge>
                 )}
