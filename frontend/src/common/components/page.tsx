@@ -17,18 +17,19 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {description && (
-          <div className="mt-1 text-sm text-muted-foreground">
-            {description}
-          </div>
-        )}
-      </div>
-      {actions && (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
-      )}
+    <header className="flex items-center justify-between gap-4">
+      <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight">
+        {title}
+      </h1>
+      {actions ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {actions}
+        </div>
+      ) : description ? (
+        <div className="min-w-0 text-right text-sm text-muted-foreground">
+          {description}
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -100,7 +101,7 @@ export function StatCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <CardTitle className="text-xs font-medium text-muted-foreground">
+        <CardTitle className="text-baes font-medium text-muted-foreground">
           {label}
         </CardTitle>
         {Icon && (

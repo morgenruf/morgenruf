@@ -73,7 +73,7 @@ function Field({
   const id = useId();
 
   return (
-    <div className="grid gap-2 text-sm font-medium">
+    <div className="flex flex-col gap-2 text-sm font-medium">
       <label htmlFor={id}>{label}</label>
       {Children.map(children, (child, index) =>
         index === 0 &&

@@ -93,7 +93,7 @@ function DigestSettings({ standup }: { standup: Standup }) {
             }
           })}
         >
-          <label className="grid gap-2 text-sm font-medium">
+          <label className="flex flex-col gap-2 text-sm font-medium">
             Manager email
             <Input
               type="email"

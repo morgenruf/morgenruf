@@ -37,7 +37,7 @@ export function TodayPageSkeleton() {
   return (
     <div className="page">
       <TodayPageHeader
-        description={<Skeleton className="mt-2 h-4 w-72 max-w-full" />}
+        description={<Skeleton className="h-4 w-72 max-w-full" />}
       />
       <TodaySkeleton />
     </div>
