@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-09-20
+
 ### Added
 - **Product analytics, off unless an operator switches them on.** `POSTHOG_API_KEY`
   turns on workspace-level counting: installs, uninstalls, standups posted,
