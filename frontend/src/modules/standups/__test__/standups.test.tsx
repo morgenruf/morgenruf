@@ -138,7 +138,7 @@ describe('standup management', () => {
   });
 
   it('uses a template and sends summary fields through the generated client', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const client = view('/dashboard/standups?edit=7');
 
     await screen.findByRole('dialog');
@@ -186,7 +186,7 @@ describe('standup management', () => {
     mock.update.mockRejectedValue({
       error: { error: 'The channel is unavailable.' },
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     view('/dashboard/standups?edit=7');
     await screen.findByRole('dialog');
@@ -214,7 +214,7 @@ describe('standup management', () => {
 });
 
 it('requires a channel and focuses its trigger when validation fails', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view();
   await screen.findByText('Design daily');
   await user.click(screen.getByRole('button', { name: 'New standup' }));
@@ -261,7 +261,7 @@ it.each([
 ])(
   'reveals and focuses the invalid %s field %s before saving',
   async (tab, label, invalid, valid) => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     view('/dashboard/standups?edit=7');
     await screen.findByRole('dialog');
     await user.click(screen.getByRole('tab', { name: tab }));
@@ -292,7 +292,7 @@ it('loads shared settings before opening a new standup and leaves them unchanged
       resolveStandups = resolve;
     }),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view('/dashboard/standups?new=true');
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   await act(async () =>
@@ -327,7 +327,7 @@ it('loads shared settings before opening a new standup and leaves them unchanged
 
 it('does not overwrite shared settings when creating the first remaining standup', async () => {
   mock.list.mockResolvedValue({ data: [] });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view('/dashboard/standups?new=true');
   await screen.findByRole('dialog');
   await chooseOption(user, 'Channel', '#design');
@@ -340,7 +340,7 @@ it('does not overwrite shared settings when creating the first remaining standup
 
 it('saves deliberate shared-setting changes while creating a standup, including cleared values', async () => {
   mock.list.mockResolvedValue({ data: [{ ...standup, ...workspaceSettings }] });
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view('/dashboard/standups?new=true');
   await screen.findByRole('dialog');
   await chooseOption(user, 'Channel', '#design');
@@ -373,7 +373,7 @@ it.each([
     mock.list.mockResolvedValue({
       data: [{ ...standup, reminder_minutes: 30, report_channel: 'C1' }],
     });
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     view('/dashboard/standups?edit=7');
     await screen.findByRole('dialog');
     await waitFor(() =>

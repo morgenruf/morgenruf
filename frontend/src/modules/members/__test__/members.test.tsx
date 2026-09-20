@@ -106,7 +106,7 @@ describe('member management', () => {
   });
 
   it('searches the workspace for invitations even when a channel filter is active and requires a chosen member', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
 
     view('/dashboard/members?channel=C1');
     await screen.findByText('Mina');
@@ -154,7 +154,7 @@ it('loads selected channel labels and clears filters without losing other choice
       data: query.channel_id ? [mina] : [mina, { ...sam, tracked: false }],
     }),
   );
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   view('/dashboard/members?channel=C1&role=admin');
   await waitFor(() =>
     expect(

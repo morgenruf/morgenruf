@@ -1,6 +1,8 @@
 FROM node:24-alpine AS build
 WORKDIR /workspace
-RUN corepack enable
+# Node 25 dropped the bundled corepack, so install it rather than relying on the
+# base image. The pnpm version still comes from packageManager in package.json.
+RUN npm install -g --force corepack@0.36.0 && corepack enable
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY frontend/package.json frontend/package.json
 RUN pnpm install --frozen-lockfile

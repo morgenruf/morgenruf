@@ -37,7 +37,7 @@ beforeEach(() => {
 });
 
 it('keeps the low participation default and clears a channel target when changing action', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
 
   render(
     <QueryClientProvider
@@ -84,7 +84,7 @@ it('keeps the low participation default and clears a channel target when changin
 });
 
 it('updates trigger-dependent fields and resets selects when reopening from a template', async () => {
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(
     <QueryClientProvider
       client={
