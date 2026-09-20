@@ -248,9 +248,10 @@ class TestTheFarewell:
         """Called after the delete, it has no address and no history to use."""
         import pathlib
 
-        src = pathlib.Path("src/modules/standup/handlers.py").read_text()
+        app_root = pathlib.Path(__file__).resolve().parents[1]
+        src = (app_root / "src/modules/standup/handlers.py").read_text()
         for handler in ("tokens_revoked", "app_uninstalled"):
-            block = src[src.index(f'@app.event("{handler}")'):]
+            block = src[src.index(f'@app.event("{handler}")') :]
             block = block[: block.index("deleted = db.delete_installation")]
             assert "farewell(team_id)" in block, f"{handler} deletes before it asks"
 
