@@ -92,14 +92,18 @@ export default function ReportsPage() {
   }, [dateFrom, dateTo, userId]);
 
   function filter(name: string, value: string) {
-    setParams((current) => {
-      const next = new URLSearchParams(current);
+    // Keep controlled inputs in sync before another edit reads the URL filters.
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
 
-      if (value) next.set(name, value);
-      else next.delete(name);
+        if (value) next.set(name, value);
+        else next.delete(name);
 
-      return next;
-    });
+        return next;
+      },
+      { flushSync: true },
+    );
   }
 
   function preset(days: number) {
@@ -110,13 +114,16 @@ export default function ReportsPage() {
     const iso = (date: Date) =>
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-    setParams((current) => {
-      const next = new URLSearchParams(current);
-      next.set('date_from', iso(start));
-      next.set('date_to', iso(end));
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.set('date_from', iso(start));
+        next.set('date_to', iso(end));
 
-      return next;
-    });
+        return next;
+      },
+      { flushSync: true },
+    );
   }
 
   async function exportCsv() {
@@ -240,7 +247,11 @@ export default function ReportsPage() {
             <Button variant="outline" size="sm" onClick={() => preset(30)}>
               Last 30 days
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setParams({})}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setParams({}, { flushSync: true })}
+            >
               Reset filters
             </Button>
             <span className="ml-auto text-xs text-muted-foreground">
