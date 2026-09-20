@@ -11,8 +11,11 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 - **The dashboard ships as its own service.** The browser application moved to a
   React build served by its own `morgenruf-frontend` image, which proxies API
   and integration requests to the backend. Pin both `image.tag` and
-  `frontend.image.tag` to the same release and upgrade them together. Ingress
-  and tunnels must now point at the frontend service rather than the backend.
+  `frontend.image.tag` to the same release and upgrade them together. The
+  `morgenruf` service keeps its name and port and now fronts the frontend, so
+  an existing ingress or tunnel needs no change and starts serving the new
+  dashboard on upgrade. The backend moved to `morgenruf-backend` for anything
+  that addresses it directly.
 
 ### Fixed
 - **Each kudos leaderboard announces itself.** The Most recognized and Most

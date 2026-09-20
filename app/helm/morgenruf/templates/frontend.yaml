@@ -37,7 +37,7 @@ spec:
               containerPort: 8080
           env:
             - name: BACKEND_URL
-              value: "http://{{ include "morgenruf.fullname" . }}:{{ .Values.service.port }}"
+              value: "http://{{ include "morgenruf.fullname" . }}-backend:{{ .Values.service.port }}"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
