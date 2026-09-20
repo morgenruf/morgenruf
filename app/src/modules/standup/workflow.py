@@ -17,8 +17,6 @@ def get_rules(team_id: str) -> list[dict]:
     try:
         import src.core.db as db  # noqa: PLC0415
 
-        if db._pool is None:
-            return []
         sql = """
             SELECT id, team_id, name, trigger, condition_value,
                    action, action_target, action_message, active, created_at
@@ -51,8 +49,6 @@ def save_rule(
     try:
         import src.core.db as db  # noqa: PLC0415
 
-        if db._pool is None:
-            return None
         sql = """
             INSERT INTO workflow_rules
                 (team_id, name, trigger, condition_value, action, action_target, action_message)
@@ -75,8 +71,6 @@ def delete_rule(rule_id: int, team_id: str) -> None:
     try:
         import src.core.db as db  # noqa: PLC0415
 
-        if db._pool is None:
-            return
         sql = "UPDATE workflow_rules SET active = FALSE WHERE id = %s AND team_id = %s"
         with db.db_conn() as conn:
             with conn.cursor() as cur:

@@ -1,0 +1,161 @@
+@import '@fontsource-variable/geist';
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  color-scheme: light;
+  --background: #faf9f6;
+  --foreground: #292c42;
+  --card: #ffffff;
+  --card-foreground: #292c42;
+  --popover: #ffffff;
+  --popover-foreground: #292c42;
+  --primary: #4b54e0;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f6;
+  --secondary-foreground: #292c42;
+  --muted: #f0efeb;
+  --muted-foreground: #55596b;
+  --accent: #eeeffc;
+  --accent-foreground: #363db0;
+  --destructive: #c62b3d;
+  --border: #e8e6e1;
+  --input: #d8d5ce;
+  --ring: #4b54e0;
+  --radius: 0.625rem;
+  --sidebar: #f3f2ef;
+  --sidebar-foreground: #292c42;
+  --sidebar-accent: #e8e9f9;
+  --sidebar-accent-foreground: #363db0;
+  --sidebar-border: #e8e6e1;
+  --chart-1: #5030d0;
+  --chart-2: #007fac;
+  --chart-3: #ae7605;
+  --chart-4: #e03131;
+  --chart-5: #12907a;
+  --success: #127145;
+  --warning: #9a5b00;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #14161b;
+  --foreground: #ebeaf2;
+  --card: #1c1f27;
+  --card-foreground: #ebeaf2;
+  --popover: #1c1f27;
+  --popover-foreground: #ebeaf2;
+  --primary: #a4a9ff;
+  --primary-foreground: #20234c;
+  --secondary: #292d39;
+  --secondary-foreground: #ebeaf2;
+  --muted: #252833;
+  --muted-foreground: #adb1c1;
+  --accent: #303455;
+  --accent-foreground: #c6c9ff;
+  --destructive: #ff8795;
+  --border: #343744;
+  --input: #454958;
+  --ring: #a4a9ff;
+  --sidebar: #191c23;
+  --sidebar-foreground: #ebeaf2;
+  --sidebar-accent: #303455;
+  --sidebar-accent-foreground: #c6c9ff;
+  --sidebar-border: #343744;
+  --chart-1: #b39bff;
+  --chart-2: #53c6f1;
+  --chart-3: #f0bd54;
+  --chart-4: #ff8795;
+  --chart-5: #55c8ae;
+  --success: #7cdeb0;
+  --warning: #f0bd54;
+}
+
+@theme inline {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply m-0 min-w-80 bg-background font-sans text-sm text-foreground antialiased;
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+@layer utilities {
+  .page {
+    @apply mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10;
+  }
+
+  .page-wide {
+    @apply max-w-7xl;
+  }
+
+  .form-grid {
+    @apply grid gap-4 sm:grid-cols-2;
+  }
+
+  .field {
+    @apply space-y-2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

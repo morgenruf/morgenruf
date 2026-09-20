@@ -36,7 +36,6 @@ if _prior_session_store is not None:
 else:
     sys.modules.pop("src.core.session_store", None)
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "../src/core/templates/dashboard.html")
 # Migrations live in core and in each module, so scan every shipped directory
 # rather than one path. Using the real discovery function keeps this test
 # honest if migrations move between modules again.
@@ -130,13 +129,6 @@ class TestModalSubmissionPersistsTheToggle:
 
     def test_unchecked_saves_false(self):
         assert self._submit([]).kwargs["post_summary"] is False
-
-
-class TestDashboardExposesTheToggle:
-    def test_template_has_a_post_summary_control(self):
-        with open(TEMPLATE_PATH, encoding="utf-8") as fh:
-            markup = fh.read()
-        assert "post_summary" in markup, "the dashboard standup editor must expose the summary toggle"
 
 
 class TestNewSchedulesDefaultToPosting:

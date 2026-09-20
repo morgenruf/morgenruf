@@ -1,0 +1,21 @@
+# Tilt's dedicated local database. Loopback binding and a separate volume keep
+# this independent from the self-hosted app/docker-compose.yml installation.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: morgenruf
+      POSTGRES_PASSWORD: morgenruf
+      POSTGRES_DB: morgenruf
+    ports:
+      - "127.0.0.1:${MORGENRUF_DEV_DB_PORT:-5436}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U morgenruf -d morgenruf"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  postgres_data:

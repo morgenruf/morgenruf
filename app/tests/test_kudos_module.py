@@ -88,9 +88,12 @@ def test_kudos_registers_its_own_slack_listeners():
 def test_kudos_owns_its_http_routes():
     """Core must not import a module, so the kudos API lives in the module."""
     assert MODULE.register_routes is not None
-    flask_app = MagicMock()
+    from flask import Flask
+
+    flask_app = Flask(__name__)
     MODULE.register_routes(flask_app)
-    flask_app.register_blueprint.assert_called_once()
+    assert "kudos" in flask_app.blueprints
+    assert "/dashboard/api/kudos" in {rule.rule for rule in flask_app.url_map.iter_rules()}
 
 
 def test_core_dashboard_does_not_reference_kudos():

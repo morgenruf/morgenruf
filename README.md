@@ -22,10 +22,7 @@ An open-source alternative to Donut, Geekbot, Standuply and HeyTaco, in one app 
 
 ## Why self-host your standup bot
 
-Standup tools charge per person per month to send a message and collect a reply.
-Pairing tools charge again for the introductions. Recognition tools charge a
-third time. Morgenruf does all three on your own infrastructure, for nothing,
-and the data never leaves it.
+Standup tools charge per person per month to send a message and collect a reply. Pairing tools charge again for the introductions. Recognition tools charge a third time. Morgenruf does all three on your own infrastructure, for nothing, and the data never leaves it.
 
 | | Morgenruf | Hosted SaaS |
 |---|---|---|
@@ -37,9 +34,7 @@ and the data never leaves it.
 | AI assistant access | MCP server included | not offered |
 | Leaving | it is already yours | export and migrate |
 
-This table sticks to what is structural, because feature-by-feature comparisons
-age badly. If a hosted tool does something you need and Morgenruf does not,
-[open an issue](https://github.com/morgenruf/morgenruf/issues/new/choose).
+This table sticks to what is structural, because feature-by-feature comparisons age badly. If a hosted tool does something you need and Morgenruf does not, [open an issue](https://github.com/morgenruf/morgenruf/issues/new/choose).
 
 ## What you get
 
@@ -65,9 +60,7 @@ Press a chip to put the team lead in charge of standups and someone in HR in cha
 
 ## Modules
 
-Morgenruf ships as four modules over one deployment and one database. Each one
-is independent: it owns its own migrations, Slack handlers, dashboard routes and
-scheduled jobs, and can be switched off without touching the others.
+Morgenruf ships as four modules over one deployment and one database. Each one is independent: it owns its own migrations, Slack handlers, dashboard routes and scheduled jobs, and can be switched off without touching the others.
 
 | Module | What it does | On by default |
 |---|---|---|
@@ -78,73 +71,38 @@ scheduled jobs, and can be switched off without touching the others.
 
 A module is only live when all four gates pass, checked in order:
 
-1. **Deploy allowlist** — `MORGENRUF_MODULES=standup,kudos` ships a build with the
-   others present but dark. Unset means no restriction.
-2. **Granted scopes** — Coffee chats needs `mpim:write`, `mpim:history` and
-   `users.profile:read`. A workspace that installed before those scopes existed
-   stays dark until it re-authorises, rather than erroring at runtime.
+1. **Deploy allowlist** — `MORGENRUF_MODULES=standup,kudos` ships a build with the others present but dark. Unset means no restriction.
+2. **Granted scopes** — Coffee chats needs `mpim:write`, `mpim:history` and `users.profile:read`. A workspace that installed before those scopes existed stays dark until it re-authorises, rather than erroring at runtime.
 3. **Workspace toggle** — per-workspace, from the dashboard.
 4. **Module default** — what a workspace that has never chosen gets.
 
 ### Coffee chats
 
-Pick a channel and a cadence. Everyone in it is paired and introduced in a group
-DM; when the count is odd, one group of three forms so nobody sits out. Matching
-is history-aware, so the same two people are not put together twice running.
+Pick a channel and a cadence. Everyone in it is paired and introduced in a group DM; when the count is odd, one group of three forms so nobody sits out. Matching is history-aware, so the same two people are not put together twice running.
 
-**The introduction carries the meeting, not just the names.** A programme can
-hold a room everyone uses and a chat length, and where two people's working days
-overlap it proposes hours that suit both, each one a click away from their
-calendar. The wording is careful on purpose:
+**The introduction carries the meeting, not just the names.** A programme can hold a room everyone uses and a chat length, and where two people's working days overlap it proposes hours that suit both, each one a click away from their calendar. The wording is careful on purpose:
 
-> These fit everyone's working hours. Nobody has checked your calendars, so pick
-> whichever is actually free.
+> These fit everyone's working hours. Nobody has checked your calendars, so pick whichever is actually free.
 
-Without calendar access we can say an hour suits their timezones, never that
-they are free. Implying otherwise would be worse than offering nothing.
+Without calendar access we can say an hour suits their timezones, never that they are free. Implying otherwise would be worse than offering nothing.
 
-**Agreeing a time.** The pair is offered hours that suit both of them and votes
-with a button. When both pick the same one, that is the meeting. With Zoom
-connected, the meeting is created at that hour and the link goes back into the
-conversation; without it, the programme's own room is used, or none at all.
-Linking Zoom is per person, from the message itself, and revoking it affects
-nobody else.
+**Agreeing a time.** The pair is offered hours that suit both of them and votes with a button. When both pick the same one, that is the meeting. With Zoom connected, the meeting is created at that hour and the link goes back into the conversation; without it, the programme's own room is used, or none at all. Linking Zoom is per person, from the message itself, and revoking it affects nobody else.
 
-Group size runs from 2 to 8. A remainder of two or more forms its own group
-rather than being folded into a larger one, so ten people in fours are 4, 4 and
-2, not 5 and 5. Anyone can ask for a different match, once per round.
+Group size runs from 2 to 8. A remainder of two or more forms its own group rather than being folded into a larger one, so ten people in fours are 4, 4 and 2, not 5 and 5. Anyone can ask for a different match, once per round.
 
-Three days later the bot nudges pairs that have not met, and closes the round on
-day six by asking whether they did. That answer is reported four ways rather
-than two: **met**, **did not meet**, **no reply**, and **not delivered**. The
-last is a delivery failure on our side, not people failing to show up, and
-folding it into "did not meet" would blame them for our bug.
+Three days later the bot nudges pairs that have not met, and closes the round on day six by asking whether they did. That answer is reported four ways rather than two: **met**, **did not meet**, **no reply**, and **not delivered**. The last is a delivery failure on our side, not people failing to show up, and folding it into "did not meet" would blame them for our bug.
 
-**Run now** starts a round without waiting for the cadence, so a programme can be
-tried the day it is set up. **Snooze** takes someone out for a fortnight from the
-Slack App Home, which is where they will think to look.
+**Run now** starts a round without waiting for the cadence, so a programme can be tried the day it is set up. **Snooze** takes someone out for a fortnight from the Slack App Home, which is where they will think to look.
 
-**Match on working hours** is a per-programme switch, off by default and worth
-leaving off unless you know it applies. A nine-to-five in Toronto and one in
-Kolkata share no hours at all, so turning it on for a team spread that widely
-stops matching them entirely.
+**Match on working hours** is a per-programme switch, off by default and worth leaving off unless you know it applies. A nine-to-five in Toronto and one in Kolkata share no hours at all, so turning it on for a team spread that widely stops matching them entirely.
 
 ### Kudos
 
-`kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a
-daily allowance that resets at midnight *in their own timezone*, and unused ones
-do not carry over — that is what makes people spend them.
+`kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over — that is what makes people spend them.
 
-**Using the Morgenruf icon as your kudos token:** download it from **Kudos → The
-token your team gives**, add it in Slack under **Customize workspace → Add custom
-emoji** with the name `morgenruf`, and the bot picks it up within a day on its
-own. It falls back if the emoji is ever removed, so a workspace never ends up
-posting `:morgenruf:` as literal text.
+**Using the Morgenruf icon as your kudos token:** download it from **Kudos → The token your team gives**, add it in Slack under **Customize workspace → Add custom emoji** with the name `morgenruf`, and the bot picks it up within a day on its own. It falls back if the emoji is ever removed, so a workspace never ends up posting `:morgenruf:` as literal text.
 
-Setting the token by hand switches that off and keeps whatever you choose.
-Changing the daily allowance does not: the settings form submits every field, and
-treating any save as a token choice used to opt workspaces out of the emoji they
-had just imported.
+Setting the token by hand switches that off and keeps whatever you choose. Changing the daily allowance does not: the settings form submits every field, and treating any save as a token choice used to opt workspaces out of the emoji they had just imported.
 
 ### The smaller things
 
@@ -165,11 +123,7 @@ had just imported.
 
 ## Quick Start
 
-**1. Create the Slack app.** [api.slack.com/apps](https://api.slack.com/apps) →
-**Create New App** → *From manifest*, and paste
-[`slack-manifest.yaml`](./slack-manifest.yaml). Add `https://<your-domain>/oauth/callback`
-under **OAuth & Permissions**, then copy the client id, client secret and signing
-secret.
+**1. Create the Slack app.** [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → *From manifest*, and paste [`slack-manifest.yaml`](./slack-manifest.yaml). Add `https://<your-domain>/oauth/callback` under **OAuth & Permissions**, then copy the client id, client secret and signing secret.
 
 **2. Run it.** Pick whichever of these you already have.
 
@@ -190,8 +144,7 @@ helm upgrade --install morgenruf morgenruf/morgenruf \
   --set app.url="https://api.your-domain.com"
 ```
 
-`flaskSecretKey` signs dashboard sessions, so generate a real one rather than
-leaving it blank. Details and every value in [**Kubernetes Deployment**](#kubernetes-deployment).
+`flaskSecretKey` signs dashboard sessions, so generate a real one rather than leaving it blank. Details and every value in [**Kubernetes Deployment**](#kubernetes-deployment).
 
 </details>
 
@@ -205,28 +158,38 @@ cp .env.example .env     # Slack credentials and APP_URL go in here
 docker compose up -d
 ```
 
-Slack has to reach you over HTTPS, so expose it with a tunnel while you try it:
-`cloudflared tunnel --url http://localhost:3000`, then set that URL as `APP_URL`.
-Full walkthrough in [**Docker and Mac quickstart**](#docker-and-mac-quickstart).
+Slack has to reach you over HTTPS, so expose it with a tunnel while you try it: `cloudflared tunnel --url http://localhost:3000`, then set that URL as `APP_URL`. Full walkthrough in [**Docker and Mac quickstart**](#docker-and-mac-quickstart).
 
 </details>
 
 <details>
 <summary><b>From source</b></summary>
 
+For development, install Tilt, uv, Node.js 24, pnpm, and Docker, then start the complete stack from the repository root:
+
+```bash
+tilt up
+```
+
+Open <http://localhost:3006/dashboard/>. Tilt handles dependencies, a dedicated local Postgres database, migrations, Flask restarts, and Vite hot reload. Add Slack credentials in `app/.env` when you need login or bot features. See [Development setup](CONTRIBUTING.md#development-setup) for tunnels, port overrides, and shutdown. If Yaoki or another project already uses Tilt port 10350, run `tilt up --port 10351`.
+
+For Slack development, configure a [stable HTTPS URL with a named Cloudflare tunnel](CONTRIBUTING.md#stable-https-url-for-slack-development). Tilt can start the tunnel automatically, and its hostname stays the same across restarts so Slack's OAuth and request URLs stay valid.
+
+To build the production containers from the current checkout instead, use the local Compose configuration:
+
 ```bash
 cd app
 cp .env.example .env
-pip install -r src/requirements.txt
-python src/main.py
+# Set DB_PASSWORD and FLASK_SECRET_KEY to generated secrets in .env.
+# Set APP_URL=http://localhost:3006 for the local port.
+docker compose -p morgenruf -f docker-compose.yml -f docker-compose.local.yml up -d --build
 ```
 
-Migrations run on start, so an empty Postgres is enough.
+The database is included, and the separate migration service applies the schema before the backend starts. The frontend gateway opens the application at `http://localhost:3006/dashboard/`. See [Development setup](CONTRIBUTING.md#development-setup) for the Python environment, tests, and local service commands.
 
 </details>
 
-**3. Install it into Slack.** Open `https://<your-domain>/` and authorise. The
-person who installs it is the first admin.
+**3. Install it into Slack.** Open `https://<your-domain>/` and authorise. The person who installs it is the first admin.
 
 ---
 
@@ -242,14 +205,9 @@ Two roles, plus a grant per feature.
 | Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
 | Reading any page | yes | yes | yes |
 
-A workspace admin hands a feature over from **Members**: each card carries a chip
-per feature, pressed to give it and pressed again to take it back. The team lead
-runs the standups, someone in HR runs coffee chats and kudos, and neither of them
-can mint an API key or publish the workspace's standups at a public URL.
+A workspace admin hands a feature over from **Members**: each card carries a chip per feature, pressed to give it and pressed again to take it back. The team lead runs the standups, someone in HR runs coffee chats and kudos, and neither of them can mint an API key or publish the workspace's standups at a public URL.
 
-The person who installed the app always counts as an admin, whatever the members
-table says, so a workspace cannot lock itself out. Demoting the last admin is
-refused for the same reason.
+The person who installed the app always counts as an admin, whatever the members table says, so a workspace cannot lock itself out. Demoting the last admin is refused for the same reason.
 
 ---
 
@@ -293,22 +251,15 @@ Then posts a formatted summary to the configured channel:
 | `kudos @teammate <reason>` | Give someone recognition (also `/kudos`) |
 | `help` | Show available commands |
 
-Coffee chat replies are buttons rather than typed commands — **We met**, **Not
-this time**, **Skip this round** and **Pause** appear on the messages the bot
-sends, so nothing there can collide with `skip`.
+Coffee chat replies are buttons rather than typed commands — **We met**, **Not this time**, **Skip this round** and **Pause** appear on the messages the bot sends, so nothing there can collide with `skip`.
 
 ---
 
 ## MCP Server
 
-Morgenruf exposes its data to AI assistants over MCP, so you can ask questions
-in plain language instead of reading dashboards. Generate a key in the
-dashboard under **MCP**, then point your client at `https://api.morgenruf.dev/mcp`
-with an `Authorization: Bearer <key>` header.
+Morgenruf exposes its data to AI assistants over MCP, so you can ask questions in plain language instead of reading dashboards. Generate a key in the dashboard under **MCP**, then point your client at `https://api.morgenruf.dev/mcp` with an `Authorization: Bearer <key>` header.
 
-**`tools/list` is per-workspace.** Only modules that pass all four activation
-gates advertise their tools, so an assistant is never offered a tool for a
-feature the workspace has switched off.
+**`tools/list` is per-workspace.** Only modules that pass all four activation gates advertise their tools, so an assistant is never offered a tool for a feature the workspace has switched off.
 
 | Area | Tools |
 |---|---|
@@ -317,27 +268,28 @@ feature the workspace has switched off.
 | Coffee chats | `list_coffee_chat_programs`, `get_coffee_chat_rounds`, `get_coffee_chat_attendance`, `get_coffee_chat_pairs` |
 | Insights | `get_stuck_blockers`, `get_unrecognised_contributors` |
 
-Questions these make answerable: *"who has been blocked on the same thing for
-days?"*, *"who answers standup every day and has never been thanked?"*, *"which
-coffee chat pairings never actually happened?"*
+Questions these make answerable: *"who has been blocked on the same thing for days?"*, *"who answers standup every day and has never been thanked?"*, *"which coffee chat pairings never actually happened?"*
 
 Full reference: [docs.morgenruf.dev/mcp.html](https://docs.morgenruf.dev/mcp.html)
 
 ---
 
-## Docker Image
+## Docker Images
 
-Available on DockerHub: [`morgenruf/morgenruf`](https://hub.docker.com/r/morgenruf/morgenruf)
+The Flask backend and React frontend run as separate services behind one public origin. The frontend image serves static Vite assets and proxies authentication, APIs, and integration callbacks to the backend.
 
 ```bash
 docker pull morgenruf/morgenruf:latest
+docker pull morgenruf/morgenruf-frontend:latest
 ```
 
-Also mirrored at `ghcr.io/morgenruf/morgenruf:latest`
+Docker Compose and the Helm chart configure both services. For production, pin both images to the same immutable release: set `MORGENRUF_VERSION` in Compose, or set both `image.tag` and `frontend.image.tag` in Helm. Keep `APP_URL` set to the public frontend origin. Existing Slack and Zoom callback paths are unchanged.
+
+Upgrade both services together. To roll back, restore both image tags (or use `helm rollback`) together; this frontend migration does not change the database schema. Existing backend service names remain available internally, while ingress and tunnels must target the frontend service. CI first stages both images under `build-<commit SHA>` tags, scans and signs their digests, and promotes matching release tags only after both builds and the backend, frontend, API contract, and browser checks pass. Staging tags are for the release pipeline; deploy the matching version or `sha-` tags.
 
 ### GitHub Actions / CI
 
-The image is automatically built and pushed on every push to `main` and on version tags (`v*`) via `.github/workflows/docker-publish.yml`.
+Both images are built and pushed on every push to `main` and on version tags (`v*`) via `.github/workflows/docker.yaml`. Frontend CI checks TypeScript, lint, unit and browser tests, the production build, and generated API drift.
 
 If you fork this repo, add the following secrets under **Settings → Secrets and variables → Actions**:
 
@@ -381,7 +333,7 @@ brew install cloudflare/cloudflare/cloudflared
 cloudflared tunnel --url http://localhost:3000
 # Copy the https://xxxx.trycloudflare.com URL
 # Set APP_URL=https://xxxx.trycloudflare.com in .env
-# docker compose restart app
+# docker compose up -d app
 ```
 
 **ngrok:**
@@ -415,24 +367,15 @@ docker compose up -d --restart-policy always
 
 ## Kubernetes Deployment
 
-> **On the bundled database.** `postgresql.enabled=true` runs a single
-> StatefulSet using the official `postgres` image, which is what this project's
-> own production deployment uses. It replaced a Bitnami subchart whose images
-> were withdrawn from Docker Hub, so any chart before **0.9.0** fails on that
-> path with `ErrImagePull`. It is there for trials; anything with real data
-> behind it should use `externalDatabase.url`.
+> **On the bundled database.** `postgresql.enabled=true` runs a single StatefulSet using the official `postgres` image, which is what this project's own production deployment uses. It replaced a Bitnami subchart whose images were withdrawn from Docker Hub, so any chart before **0.9.0** fails on that path with `ErrImagePull`. It is there for trials; anything with real data behind it should use `externalDatabase.url`.
 >
-> The password is required when the bundled database is enabled. Generate one
-> with `openssl rand -hex 16` and keep it in your values file: changing it later
-> will not change the password already initialised inside the volume.
+> The password is required when the bundled database is enabled. Generate one with `openssl rand -hex 16` and keep it in your values file: changing it later will not change the password already initialised inside the volume.
 
 Morgenruf ships a production-ready Helm chart at `app/helm/morgenruf/`.
 
 ### Database (recommended: external PostgreSQL)
 
-> **We recommend using an external PostgreSQL instance** rather than the bundled sub-chart.
-> The bundled sub-chart is convenient for testing but adds operational complexity in production.
-> Bitnami images were also removed from Docker Hub, which can cause pull failures.
+> **We recommend using an external PostgreSQL instance** rather than the bundled sub-chart. The bundled sub-chart is convenient for testing but adds operational complexity in production. Bitnami images were also removed from Docker Hub, which can cause pull failures.
 
 **Good options:**
 - [CloudNativePG](https://cloudnative-pg.io/) operator (k8s-native)
@@ -477,7 +420,7 @@ If you use Cloudflare Tunnel instead of an ingress controller:
 
 # Then add a Public Hostname in Cloudflare Zero Trust dashboard:
 # Hostname: api.your-domain.com
-# Service:  http://morgenruf.morgenruf.svc.cluster.local:3000
+# Service:  http://morgenruf-frontend.morgenruf.svc.cluster.local:8080
 ```
 
 ### Gateway API (HTTPRoute)
@@ -533,10 +476,7 @@ httpRoute:
     namespace: morgenruf
 ```
 
-> ⚠️ **Common mistake:** `slack.clientSecret` and `slack.signingSecret` are **different values**.  
-> Both are found on your Slack app's **Basic Information** page.  
-> — Client Secret: 32 hex chars (e.g. `346a428c78b0d8c84b70e74d12a58ab5`)  
-> — Signing Secret: 32 hex chars, listed separately under "App Credentials"
+> ⚠️ **Common mistake:** `slack.clientSecret` and `slack.signingSecret` are **different values**. Both are found on your Slack app's **Basic Information** page. — Client Secret: 32 hex chars (e.g. `346a428c78b0d8c84b70e74d12a58ab5`) — Signing Secret: 32 hex chars, listed separately under "App Credentials"
 
 ---
 
@@ -581,37 +521,22 @@ app/helm/morgenruf/
 
 ## Zoom meetings (optional)
 
-Each person connects their own Zoom account from the Morgenruf tab in Slack.
-After that, a coffee chat gets a real meeting **scheduled for the time the pair
-agree**, hosted on the account of whoever in the pairing has connected.
+Each person connects their own Zoom account from the Morgenruf tab in Slack. After that, a coffee chat gets a real meeting **scheduled for the time the pair agree**, hosted on the account of whoever in the pairing has connected.
 
-Leave the two variables unset and the feature is absent rather than broken: no
-button appears and nothing fails.
+Leave the two variables unset and the feature is absent rather than broken: no button appears and nothing fails.
 
-1. Create a **user-managed** OAuth app at
-   <https://marketplace.zoom.us/develop/create>.
+1. Create a **user-managed** OAuth app at <https://marketplace.zoom.us/develop/create>.
 2. Set its redirect URL to `<APP_URL>/connect/zoom/callback`.
 3. Give it the scopes `meeting:write:meeting` and `user:read:user`.
-4. Set `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`, or `zoom.clientId` and
-   `zoom.clientSecret` in the Helm chart.
+4. Set `ZOOM_CLIENT_ID` and `ZOOM_CLIENT_SECRET`, or `zoom.clientId` and `zoom.clientSecret` in the Helm chart.
 
 Both must be set. With only one, the feature stays off rather than half on.
 
-**Distribution.** An unpublished Zoom app can only be installed by users inside
-your own Zoom account, which is enough to try it. Letting other workspaces
-connect requires publishing the app on the Zoom Marketplace, which goes through
-their review.
+**Distribution.** An unpublished Zoom app can only be installed by users inside your own Zoom account, which is enough to try it. Letting other workspaces connect requires publishing the app on the Zoom Marketplace, which goes through their review.
 
-Anyone can disconnect their own account from the same Morgenruf tab. Zoom
-refresh tokens also expire after 90 days unused, and the tab says "reconnect"
-rather than showing an unlinked state, so a link that aged out is
-distinguishable from one that was never made.
+Anyone can disconnect their own account from the same Morgenruf tab. Zoom refresh tokens also expire after 90 days unused, and the tab says "reconnect" rather than showing an unlinked state, so a link that aged out is distinguishable from one that was never made.
 
-The dashboard shows Zoom's own mark next to the setting, from
-[Simple Icons](https://simpleicons.org) (CC0), as it does for Slack, Google Meet
-and Microsoft Teams. It marks the integration, never Morgenruf itself: Zoom's
-Partner Brand Guide governs use of the mark, and their app review keeps another
-company's logo off your app icon.
+The dashboard shows Zoom's own mark next to the setting, from [Simple Icons](https://simpleicons.org) (CC0), as it does for Slack, Google Meet and Microsoft Teams. It marks the integration, never Morgenruf itself: Zoom's Partner Brand Guide governs use of the mark, and their app review keeps another company's logo off your app icon.
 
 ---
 
@@ -650,77 +575,47 @@ Morgenruf supports Google Chat via the Chat REST API and a service account.
 
 ### Is Morgenruf really free?
 
-Yes, and for any number of people. It is MIT licensed and there is no hosted
-tier to upsell you: you run it, so you pay for the server and the database and
-nothing else. There is no per-seat pricing to grow into.
+Yes, and for any number of people. It is MIT licensed and there is no hosted tier to upsell you: you run it, so you pay for the server and the database and nothing else. There is no per-seat pricing to grow into.
 
 ### Can I run it without Kubernetes?
 
-Yes. Docker Compose is a `cp .env.example .env` and a `docker compose up -d`
-away, and it runs happily on a spare Mac mini or a small VPS. The Helm chart is
-there for people who already have a cluster, not as the only route.
+Yes. Docker Compose is a `cp .env.example .env` and a `docker compose up -d` away, and it runs happily on a spare Mac mini or a small VPS. The Helm chart is there for people who already have a cluster, not as the only route.
 
 ### Where is my standup data stored?
 
-In your own Postgres, and nowhere else. No telemetry is sent anywhere. The only
-outbound calls are to Slack, to whichever AI provider you configure for
-summaries (optional, off by default), and to Resend if you turn on digest email.
+In your own Postgres, and nowhere else. No telemetry is sent anywhere. The only outbound calls are to Slack, to whichever AI provider you configure for summaries (optional, off by default), and to Resend if you turn on digest email.
 
 ### Is this a Donut alternative? A Geekbot alternative?
 
-It covers what teams use those for: Geekbot and Standuply for async standups,
-Donut for random coffee chats and introductions, HeyTaco for kudos. Running one
-app rather than three is most of the point, along with owning the data. It is
-not a clone of any of them, and if something you rely on is missing, say so in
-an issue.
+It covers what teams use those for: Geekbot and Standuply for async standups, Donut for random coffee chats and introductions, HeyTaco for kudos. Running one app rather than three is most of the point, along with owning the data. It is not a clone of any of them, and if something you rely on is missing, say so in an issue.
 
 ### Does it work with Microsoft Teams or Google Chat?
 
-Google Chat is in beta: standups collected and posted, `/standup` and `/kudos`
-commands. Microsoft Teams is not supported as a platform; a Teams meeting link
-can be used as a coffee chat room, which is a different thing. Slack is the
-first-class platform.
+Google Chat is in beta: standups collected and posted, `/standup` and `/kudos` commands. Microsoft Teams is not supported as a platform; a Teams meeting link can be used as a coffee chat room, which is a different thing. Slack is the first-class platform.
 
 ### What Slack permissions does it need?
 
-The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list.
-Coffee chats need three extra scopes (`mpim:write`, `mpim:history`,
-`users.profile:read`), and a workspace that installed before those existed keeps
-the feature dark until it re-authorises rather than failing at runtime.
+The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list. Coffee chats need three extra scopes (`mpim:write`, `mpim:history`, `users.profile:read`), and a workspace that installed before those existed keeps the feature dark until it re-authorises rather than failing at runtime.
 
 ### Can I let someone run standups without making them an admin?
 
-Yes, that is what the per-feature grants are for. See
-[**Who can change what**](#who-can-change-what).
+Yes, that is what the per-feature grants are for. See [**Who can change what**](#who-can-change-what).
 
 ### Does it need a public URL?
 
-Slack needs to reach it over HTTPS. A Cloudflare tunnel is enough, including for
-a machine with no open ports and no ingress controller, and that path is
-documented.
+Slack needs to reach it over HTTPS. A Cloudflare tunnel is enough, including for a machine with no open ports and no ingress controller, and that path is documented.
 
 ### Will it work for a team of five? Of five hundred?
 
-Both. Delivery is per-person and resumable, so a large channel is a queue rather
-than a burst, and a restart mid-round picks up where it stopped instead of
-messaging everyone twice.
+Both. Delivery is per-person and resumable, so a large channel is a queue rather than a burst, and a restart mid-round picks up where it stopped instead of messaging everyone twice.
 
 ---
 
 ## Built in Canada, over coffee
 
-Morgenruf was written over a weekend at a Tim Hortons in Kitchener, Ontario,
-which is also where the name comes from: *Morgenruf* is German for *morning
-call*, and Kitchener was Berlin, Ontario until 1916. The rooster in the logo is
-holding a double-double.
+Morgenruf was written over a weekend at a Tim Hortons in Kitchener, Ontario, which is also where the name comes from: *Morgenruf* is German for *morning call*, and Kitchener was Berlin, Ontario until 1916. The rooster in the logo is holding a double-double.
 
-Canadian open source, MIT licensed, no venture funding, no per-seat pricing and
-no hosted tier waiting to charge you once your team grows. Built and maintained
-by [Anmol Nagpal](https://github.com/anmolnagpal) at
-[CloudDrove](https://clouddrove.com) in Waterloo Region, with
-[commercial support](#commercial-support) for teams who would rather not run it
-themselves. If you are also building open-source developer tools in Canada,
-[say hello](https://github.com/morgenruf/morgenruf/discussions).
+Canadian open source, MIT licensed, no venture funding, no per-seat pricing and no hosted tier waiting to charge you once your team grows. Built and maintained by [Anmol Nagpal](https://github.com/anmolnagpal) at [CloudDrove](https://clouddrove.com) in Waterloo Region, with [commercial support](#commercial-support) for teams who would rather not run it themselves. If you are also building open-source developer tools in Canada, [say hello](https://github.com/morgenruf/morgenruf/discussions).
 
 ---
 
@@ -730,9 +625,12 @@ themselves. If you are also building open-source developer tools in Canada,
 morgenruf/
 ├── app/
 │   ├── src/            ← Python bot (Flask + slack-bolt)
-│   ├── migrations/     ← SQL migration files (auto-applied on start)
+│   ├── openapi.json    ← Generated browser API contract
 │   ├── helm/morgenruf/ ← Production Helm chart
 │   └── Dockerfile
+├── frontend/           ← React + Vite application, shared UI, feature modules
+├── scripts/            ← API generation and drift checks
+├── pnpm-workspace.yaml ← Frontend workspace commands
 ├── brand/              ← Logo & brand assets
 ├── slack-manifest.yaml ← Slack app manifest
 ├── CHANGELOG.md
@@ -743,12 +641,7 @@ morgenruf/
 
 ## What's next
 
-Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discussions)
-and in the [release notes](https://github.com/morgenruf/morgenruf/releases). Watch
-the repo if you want them as they happen. Nothing below is built yet, and the
-order follows what people ask for, so
-[saying you want one](https://github.com/morgenruf/morgenruf/discussions/new?category=ideas)
-moves it.
+Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discussions) and in the [release notes](https://github.com/morgenruf/morgenruf/releases). Watch the repo if you want them as they happen. Nothing below is built yet, and the order follows what people ask for, so [saying you want one](https://github.com/morgenruf/morgenruf/discussions/new?category=ideas) moves it.
 
 | Coming | What it is | State |
 |---|---|---|
@@ -759,24 +652,17 @@ moves it.
 | **Public REST API** | Read and write what the dashboard can, for teams that want to script it. The MCP server already covers reading | Planned |
 | **Onboarding journeys** | A sequence of messages over someone's first fortnight, with the manager nudged at the right points | Planned |
 
-Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking:
-[ROADMAP.md](ROADMAP.md).
+Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking: [ROADMAP.md](ROADMAP.md).
 
 ---
 
 ## Commercial support
 
-Morgenruf is MIT licensed and free to self-host, with no paid tier and nothing
-held back from this repository. That does not change.
+Morgenruf is MIT licensed and free to self-host, with no paid tier and nothing held back from this repository. That does not change.
 
-It is built and maintained by [Anmol Nagpal](https://github.com/anmolnagpal) at
-[CloudDrove](https://clouddrove.com), a DevOps consultancy that runs Kubernetes
-for other people for a living, which is why the Helm chart and the migration
-story are the parts that get the most care.
+It is built and maintained by [Anmol Nagpal](https://github.com/anmolnagpal) at [CloudDrove](https://clouddrove.com), a DevOps consultancy that runs Kubernetes for other people for a living, which is why the Helm chart and the migration story are the parts that get the most care.
 
-If you would rather not run it yourself, CloudDrove can: installation, a managed
-cluster, upgrades, and someone to call. Write to
-[hello@clouddrove.com](mailto:hello@clouddrove.com).
+If you would rather not run it yourself, CloudDrove can: installation, a managed cluster, upgrades, and someone to call. Write to [hello@clouddrove.com](mailto:hello@clouddrove.com).
 
 | | Self-hosted | With CloudDrove |
 |---|---|---|
@@ -787,8 +673,7 @@ cluster, upgrades, and someone to call. Write to
 | Support | GitHub issues and discussions, best effort | contracted response |
 | Your data | your database | your cloud account, your database |
 
-Paid support funds the work but never gates it: a bug is a bug, and it gets
-fixed for everybody.
+Paid support funds the work but never gates it: a bug is a bug, and it gets fixed for everybody.
 
 ---
 

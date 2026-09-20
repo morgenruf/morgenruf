@@ -26,13 +26,10 @@ from flask import Flask, jsonify, request
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
-from werkzeug.middleware.proxy_fix import ProxyFix
 
-from src.core.dashboard import dashboard_bp
 from src.core.dm_router import DMContext, route_dm
 from src.core.installation_store import PostgresInstallationStore
 from src.core.modules import active_modules, deploy_allowlist
-from src.core.oauth import oauth_bp
 from src.core.scheduler import build_scheduler
 from src.modules import REGISTRY
 
@@ -183,15 +180,10 @@ def create_app() -> tuple[App, Flask]:
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
-    flask_app = Flask(__name__)
-    # Trust Cloudflare/reverse-proxy headers so Flask knows the request is HTTPS
-    flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    from src.http_app import create_http_app
+
+    flask_app = create_http_app(modules=[])
     flask_app.secret_key = _resolve_secret_key()
-    flask_app.config["SESSION_COOKIE_SECURE"] = True
-    flask_app.config["SESSION_COOKIE_HTTPONLY"] = True
-    flask_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    flask_app.register_blueprint(oauth_bp)
-    flask_app.register_blueprint(dashboard_bp)
     registered = register_modules(flask_app, slack_app, _enabled_modules())
     logger.info("Modules registered: %s", ", ".join(registered) or "none")
 

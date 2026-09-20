@@ -27,9 +27,9 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "morgenruf.fullname" $ }}
+                name: {{ include "morgenruf.fullname" $ }}-frontend
                 port:
-                  number: {{ $.Values.service.port }}
+                  number: 8080
           {{- end }}
     {{- end }}
 {{- end }}

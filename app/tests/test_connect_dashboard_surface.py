@@ -12,12 +12,7 @@ import pathlib
 import re
 
 APP = pathlib.Path(__file__).resolve().parent.parent
-TEMPLATE = APP / "src/core/templates/dashboard.html"
 CONNECT = APP / "src/modules/connect"
-
-
-def template() -> str:
-    return TEMPLATE.read_text()
 
 
 def api_source() -> str:
@@ -29,14 +24,6 @@ class TestAgreedTimesAreVisible:
 
     def test_the_api_returns_it(self):
         assert "agreed_at" in api_source()
-
-    def test_a_pairing_shows_the_time_it_settled_on(self):
-        assert "m.agreed_at" in template()
-
-    def test_the_headline_counts_them(self):
-        markup = template()
-        assert "agreed a time" in markup
-        assert "acc.agreed" in markup
 
     def test_the_round_query_counts_them(self):
         sql = (CONNECT / "db.py").read_text()
@@ -53,16 +40,6 @@ class TestZoomIsVisibleAndRevocable:
         src = api_source()
         assert '"configured": False' in src
         assert "needs_reconnect" in src
-
-    def test_the_page_reads_it(self):
-        markup = template()
-        assert "'/connect/zoom'" in markup
-        assert "zoomStatusRow" in markup
-
-    def test_nothing_is_shown_when_zoom_is_not_configured(self):
-        markup = template()
-        row = markup[markup.index("function zoomStatusRow") :][:600]
-        assert "!z.configured" in row
 
     def test_a_person_can_disconnect_their_own_account(self):
         """The one that matters: connecting must be undoable by the person who
@@ -108,9 +85,6 @@ class TestRematchRequestsAreVisible:
     def test_the_round_query_counts_them(self):
         assert "connect_rematch_requests q WHERE q.round_id" in (CONNECT / "db.py").read_text()
 
-    def test_the_round_row_shows_them(self):
-        assert "asked for a new match" in template()
-
 
 class TestNoNewStorageIsOrphaned:
     """A table nothing can reach is a feature nobody has.
@@ -142,7 +116,7 @@ class TestNoNewStorageIsOrphaned:
     def _callers_outside_db(self, names: set[str]) -> dict[str, list[str]]:
         callers: dict[str, list[str]] = {n: [] for n in names}
         targets = [p for p in CONNECT.rglob("*.py") if p.name != "db.py"]
-        targets += [TEMPLATE, APP / "src/core/scheduler.py"]
+        targets += [APP / "src/core/scheduler.py"]
         for path in targets:
             text = path.read_text()
             for n in names:
@@ -164,9 +138,7 @@ class TestNoNewStorageIsOrphaned:
         # These do travel by name, in API payloads and in the markup.
         for column in ("agreed_slot_utc", "zoom_join_url"):
             hits = [
-                path.name
-                for path in list(CONNECT.rglob("*.py")) + [TEMPLATE]
-                if path.name != "db.py" and column in path.read_text()
+                path.name for path in list(CONNECT.rglob("*.py")) if path.name != "db.py" and column in path.read_text()
             ]
             assert hits, f"{column} is stored and never read"
 
@@ -215,7 +187,7 @@ class TestNoColumnIsWrittenAndNeverRead:
         """
         hits = []
         for path in list(CONNECT.rglob("*.py")) + [APP / "src/core/scheduler.py"]:
-            if path.name == "db.py" or path.parts[-2] == "tests":
+            if path.name in {"db.py", "schemas.py"} or path.parts[-2] == "tests":
                 continue
             if column in path.read_text():
                 hits.append(path.name)

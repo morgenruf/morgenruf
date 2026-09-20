@@ -12,12 +12,16 @@ logger = logging.getLogger(__name__)
 
 
 def register_routes(flask_app) -> None:
-    from flask import Blueprint, jsonify, request, session
+    from flask import Blueprint as FlaskBlueprint
+    from flask import jsonify, session
+    from flask_smorest import Blueprint
 
     import src.core.db as db
     import src.modules.connect.db as cdb
+    from src.core.api import api_errors, register_api_blueprint
     from src.core.dashboard import _admin_required, _login_required
     from src.core.roster import eligible_members
+    from src.modules.connect import schemas
     from src.modules.connect.rounds import match_status
 
     bp = Blueprint("connect", __name__)
@@ -27,17 +31,22 @@ def register_routes(flask_app) -> None:
     # token instead of relying on a session.
     from src.modules.connect.zoom_routes import register_zoom_routes  # noqa: PLC0415
 
-    register_zoom_routes(bp)
+    zoom_bp = FlaskBlueprint("connect_zoom", __name__)
+    register_zoom_routes(zoom_bp)
+    flask_app.register_blueprint(zoom_bp)
 
     @bp.route("/dashboard/api/connect/programs", methods=["GET"])
     @_login_required
+    @bp.doc(operationId="listPrograms", tags=["Connect"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.Program(many=True))
     def list_programs():
         team_id = session["team_id"]
         try:
             programs = cdb.get_programs(team_id)
         except Exception as exc:
             logger.warning("connect list_programs: %s", exc)
-            return jsonify([])
+            return []
         for p in programs:
             p["created_at"] = p["created_at"].isoformat() if p.get("created_at") else None
             p["last_round"] = p["last_round"].isoformat() if p.get("last_round") else None
@@ -63,13 +72,17 @@ def register_routes(flask_app) -> None:
                 # number is simply unknown rather than wrong.
                 logger.info("connect: could not size the pool for %s: %s", p["id"], exc)
                 p["pool_size"] = None
-        return jsonify(programs)
+        return programs
 
     @bp.route("/dashboard/api/connect/programs", methods=["POST"])
     @_admin_required("connect")
-    def create_program():
+    @bp.doc(operationId="createProgram", tags=["Connect"], security=[{"sessionCookie": [], "csrfHeader": []}])
+    @api_errors(bp)
+    @bp.arguments(schemas.ProgramInput, error_status_code=400)
+    @bp.response(200, schemas.Program)
+    def create_program(data):
         team_id = session["team_id"]
-        data = request.get_json(silent=True) or {}
+
         channel_id = (data.get("channel_id") or "").strip()
         if not channel_id:
             return jsonify({"error": "Pick a channel to draw people from"}), 400
@@ -89,19 +102,39 @@ def register_routes(flask_app) -> None:
             minute=int(data.get("minute", 0)),
             timezone=(data.get("timezone") or "UTC").strip(),
         )
+        extra = {
+            key: data[key]
+            for key in (
+                "enabled",
+                "match_working_hours",
+                "meeting_minutes",
+                "meeting_link",
+                "suggest_times",
+                "use_icebreaker",
+                "post_stats",
+                "group_size",
+                "strict_group_size",
+                "intro_tone",
+                "video_mode",
+                "next_round_date",
+            )
+            if key in data
+        }
+        if extra:
+            program = cdb.update_program(team_id, program["id"], **extra)
         program["created_at"] = program["created_at"].isoformat() if program.get("created_at") else None
-        return jsonify(program)
+        return program
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["POST"])
     @_admin_required("connect")
-    def update_program(program_id: int):
+    @bp.doc(operationId="updateProgram", tags=["Connect"], security=[{"sessionCookie": [], "csrfHeader": []}])
+    @api_errors(bp)
+    @bp.arguments(schemas.ProgramInput, error_status_code=400)
+    @bp.response(200, schemas.Program)
+    def update_program(data, program_id: int):
         """Change a programme. A body with only `enabled` keeps the old toggle
         behaviour, so the switch on the card still works unchanged."""
         team_id = session["team_id"]
-        data = request.get_json(silent=True) or {}
-        if set(data) == {"enabled"}:
-            cdb.set_program_enabled(team_id, program_id, bool(data["enabled"]))
-            return jsonify({"id": program_id, "enabled": bool(data["enabled"])})
 
         if not cdb.owns_program(team_id, program_id):
             return jsonify({"error": "not found"}), 404
@@ -140,22 +173,43 @@ def register_routes(flask_app) -> None:
         if "enabled" in data:
             fields["enabled"] = bool(data["enabled"])
 
+        for key in ("suggest_times", "use_icebreaker", "post_stats", "strict_group_size"):
+            if key in data:
+                fields[key] = bool(data[key])
+        for key in ("group_size", "intro_tone", "video_mode"):
+            if key in data:
+                fields[key] = data[key]
+        if "next_round_date" in data:
+            from datetime import date
+
+            raw_date = data["next_round_date"]
+            try:
+                fields["next_round_date"] = date.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+            except ValueError:
+                return jsonify(error="next_round_date must be an ISO date"), 400
+
         program = cdb.update_program(team_id, program_id, **fields)
         if not program:
             return jsonify({"error": "not found"}), 404
         program["created_at"] = program["created_at"].isoformat() if program.get("created_at") else None
-        return jsonify(program)
+        return program
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>", methods=["DELETE"])
     @_admin_required("connect")
+    @bp.doc(operationId="deleteProgram", tags=["Connect"], security=[{"sessionCookie": [], "csrfHeader": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.DeletedProgram)
     def delete_program(program_id: int):
         team_id = session["team_id"]
         if not cdb.delete_program(team_id, program_id):
             return jsonify({"error": "not found"}), 404
-        return jsonify({"deleted": program_id})
+        return {"deleted": program_id}
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/run", methods=["POST"])
     @_admin_required("connect")
+    @bp.doc(operationId="runProgram", tags=["Connect"], security=[{"sessionCookie": [], "csrfHeader": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.RunStarted)
     def run_now(program_id: int):
         """Start a round immediately, rather than waiting for the cadence.
 
@@ -173,24 +227,30 @@ def register_routes(flask_app) -> None:
             logger.exception("connect run_now failed for %s", program_id)
             return jsonify({"error": str(exc)}), 500
         rounds = cdb.recent_rounds(team_id, program_id, 1)
-        return jsonify({"started": True, "round": rounds[0]["id"] if rounds else None})
+        return {"started": True, "round": rounds[0]["id"] if rounds else None}
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/rounds", methods=["GET"])
     @_login_required
+    @bp.doc(operationId="listRounds", tags=["Connect"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.Round(many=True))
     def list_rounds(program_id: int):
         team_id = session["team_id"]
         try:
             rounds = cdb.recent_rounds(team_id, program_id)
         except Exception as exc:
             logger.warning("connect list_rounds: %s", exc)
-            return jsonify([])
+            return []
         for r in rounds:
             r["scheduled_for"] = r["scheduled_for"].isoformat() if r.get("scheduled_for") else None
             r["created_at"] = r["created_at"].isoformat() if r.get("created_at") else None
-        return jsonify(rounds)
+        return rounds
 
     @bp.route("/dashboard/api/connect/rounds/<int:round_id>/matches", methods=["GET"])
     @_login_required
+    @bp.doc(operationId="listMatches", tags=["Connect"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.Match(many=True))
     def list_round_matches(round_id: int):
         """Who was put with whom, and whether it happened."""
         team_id = session["team_id"]
@@ -198,7 +258,7 @@ def register_routes(flask_app) -> None:
             matches = cdb.round_matches(team_id, round_id)
         except Exception as exc:
             logger.warning("connect list_round_matches: %s", exc)
-            return jsonify([])
+            return []
         out = []
         for m in matches:
             delivered = m.get("delivered_at")
@@ -217,10 +277,13 @@ def register_routes(flask_app) -> None:
                     "has_zoom": bool(m.get("zoom_join_url")),
                 }
             )
-        return jsonify(out)
+        return out
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/members", methods=["GET"])
     @_login_required
+    @bp.doc(operationId="listProgramMembers", tags=["Connect"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.ProgramMember(many=True))
     def list_program_members(program_id: int):
         """Who is in this programme and how each of them stands.
 
@@ -232,14 +295,14 @@ def register_routes(flask_app) -> None:
         team_id = session["team_id"]
         program = cdb.get_program(program_id)
         if not program or program.get("team_id") != team_id:
-            return jsonify([]), 404
+            return jsonify(error="Program not found"), 404
         try:
             states = cdb.member_states(team_id, program_id)
             paired = cdb.pair_counts(team_id, program_id)
             roster = {m.user_id: m for m in eligible_members(team_id)}
         except Exception as exc:
             logger.warning("connect list_program_members: %s", exc)
-            return jsonify([])
+            return []
 
         # The channel decides who is in the programme, so it is the source of
         # truth for the list. Without Slack reachable we still show everyone we
@@ -277,18 +340,21 @@ def register_routes(flask_app) -> None:
                 }
             )
         out.sort(key=lambda r: (r["state"] != "in", r["name"].lower()))
-        return jsonify(out)
+        return out
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/members/<user_id>", methods=["POST"])
     @_admin_required("connect")
-    def set_program_member(program_id: int, user_id: str):
+    @bp.doc(operationId="updateProgramMember", tags=["Connect"], security=[{"sessionCookie": [], "csrfHeader": []}])
+    @api_errors(bp)
+    @bp.arguments(schemas.MemberInput, error_status_code=400)
+    @bp.response(200, schemas.MemberState)
+    def set_program_member(data, program_id: int, user_id: str):
         """Put somebody in, take them out, or snooze them until a date."""
         team_id = session["team_id"]
         program = cdb.get_program(program_id)
         if not program or program.get("team_id") != team_id:
             return jsonify({"error": "Not found"}), 404
 
-        data = request.get_json(force=True) or {}
         state = str(data.get("state") or "").strip()
         try:
             if state == "in":
@@ -305,10 +371,13 @@ def register_routes(flask_app) -> None:
         except Exception as exc:
             logger.warning("connect set_program_member: %s", exc)
             return jsonify({"error": "Could not save"}), 500
-        return jsonify(cdb.personal_state(team_id, program_id, user_id) | {"user_id": user_id})
+        return cdb.personal_state(team_id, program_id, user_id) | {"user_id": user_id}
 
     @bp.route("/dashboard/api/connect/zoom", methods=["GET"])
     @_login_required
+    @bp.doc(operationId="getZoom", tags=["Connect"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.response(200, schemas.ZoomSummary)
     def zoom_summary():
         """Whether Zoom is available here, and how many people have connected.
 
@@ -320,20 +389,24 @@ def register_routes(flask_app) -> None:
 
         team_id = session["team_id"]
         if not zoom_mod.configured():
-            return jsonify({"configured": False, "linked": 0, "needs_reconnect": 0})
+            return {"configured": False, "linked": 0, "needs_reconnect": 0}
         try:
             summary = cdb.zoom_link_summary(team_id)
         except Exception as exc:
             logger.warning("connect zoom_summary: %s", exc)
             summary = {"linked": 0, "needs_reconnect": 0}
-        return jsonify({"configured": True, **summary})
+        return {"configured": True, **summary}
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/participation", methods=["GET"])
     @_login_required
-    def program_participation(program_id: int):
+    @bp.doc(operationId="listParticipation", tags=["Connect"], security=[{"sessionCookie": []}])
+    @api_errors(bp)
+    @bp.arguments(schemas.RoundsQuery, location="query", error_status_code=400)
+    @bp.response(200, schemas.Participation(many=True))
+    def program_participation(query, program_id: int):
         team_id = session["team_id"]
         try:
-            rounds = int(request.args.get("rounds", 6))
+            rounds = int(query.get("rounds", 6))
         except (TypeError, ValueError):
             rounds = 6
         rounds = max(1, min(rounds, 52))
@@ -341,9 +414,9 @@ def register_routes(flask_app) -> None:
             rows = cdb.participation(team_id, program_id, rounds)
         except Exception as exc:
             logger.warning("connect participation: %s", exc)
-            return jsonify([])
+            return []
         for r in rows:
             r["last_met"] = r["last_met"].isoformat() if r.get("last_met") else None
-        return jsonify(rows)
+        return rows
 
-    flask_app.register_blueprint(bp)
+    register_api_blueprint(flask_app, bp)

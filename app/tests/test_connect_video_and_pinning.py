@@ -86,13 +86,6 @@ class TestPinnedNextRound:
         src = (CONNECT / "jobs.py").read_text()
         assert "next_round_date=None" in src
 
-    def test_it_can_be_set_and_read_from_the_page(self):
-        markup = (CONNECT.parent.parent / "core/templates/dashboard.html").read_text()
-        assert 'id="cs-next-date"' in markup
-        assert "next_round_date:" in markup
-        api = (CONNECT / "dashboard.py").read_text()
-        assert 'p["next_round_date"]' in api
-
 
 class TestIncludeGuestsIsGone:
     """It had no feature behind it and needed roster data we do not collect."""

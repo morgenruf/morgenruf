@@ -13,3 +13,17 @@ dist/
 app/helm/morgenruf/charts/
 morgenruf-prod-values.yaml
 .superpowers/
+
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+coverage/
+frontend/.env.local
+
+frontend/playwright-report/
+frontend/test-results/
+
+# Local Tilt preferences and stable development session key.
+tilt_config.json
+.local/

@@ -1,0 +1,19 @@
+{
+  "singleQuote": true,
+  "semi": true,
+  "trailingComma": "all",
+  "proseWrap": "preserve",
+  "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+  "importOrder": [
+    "<BUILTIN_MODULES>",
+    "",
+    "^react(?:/.*)?$",
+    "^react-dom(?:/.*)?$",
+    "<THIRD_PARTY_MODULES>",
+    "",
+    "^@/",
+    "",
+    "^[.]"
+  ],
+  "importOrderTypeScriptVersion": "5.9.3"
+}
