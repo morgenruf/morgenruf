@@ -16,12 +16,15 @@ import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -410,54 +413,65 @@ export default function MembersPage() {
               access.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            aria-label="Find a member to invite"
-            placeholder="Search members…"
-            value={inviteSearch}
-            onChange={(event) => setInviteSearch(event.target.value)}
-          />
-          <LoadingTransition pending={inviteMembers.isPending}>
-            {inviteMembers.isPending ? (
-              <SkeletonRegion label="Loading members to invite…">
-                <SkeletonPeople rows={5} />
-              </SkeletonRegion>
-            ) : inviteMembers.isError ? (
-              <ErrorState
-                error={inviteMembers.error}
-                retry={() => void inviteMembers.refetch()}
-              />
-            ) : (
-              <div className="max-h-72 space-y-2 overflow-y-auto">
-                {inviteMembers.data
-                  ?.filter((member) =>
-                    `${member.name} ${member.display_name} ${member.email}`
-                      .toLowerCase()
-                      .includes(inviteSearch.toLowerCase()),
-                  )
-                  .map((member) => (
-                    <Button
-                      key={member.id}
-                      variant={inviteId === member.id ? 'secondary' : 'outline'}
-                      aria-pressed={inviteId === member.id}
-                      className="h-auto w-full flex-wrap justify-between py-3 text-left whitespace-normal"
-                      disabled={invite.isPending || member.role === 'admin'}
-                      onClick={() => setInviteId(member.id)}
-                    >
-                      <Person
-                        {...inviteMembers.person(member.id)}
-                        size="compact"
-                      />
-                      <span className="break-all text-xs text-muted-foreground">
-                        {member.role === 'admin'
-                          ? 'Already admin'
-                          : member.email}
-                      </span>
-                    </Button>
-                  ))}
-              </div>
-            )}
-          </LoadingTransition>
-          <div className="flex justify-end gap-2">
+          <DialogBody>
+            <Input
+              aria-label="Find a member to invite"
+              placeholder="Search members…"
+              value={inviteSearch}
+              onChange={(event) => setInviteSearch(event.target.value)}
+            />
+            <LoadingTransition pending={inviteMembers.isPending}>
+              {inviteMembers.isPending ? (
+                <SkeletonRegion label="Loading members to invite…">
+                  <SkeletonPeople rows={5} />
+                </SkeletonRegion>
+              ) : inviteMembers.isError ? (
+                <ErrorState
+                  error={inviteMembers.error}
+                  retry={() => void inviteMembers.refetch()}
+                />
+              ) : (
+                <ScrollArea
+                  className="max-h-72"
+                  contentClassName="space-y-2 p-1"
+                  viewportProps={{
+                    role: 'region',
+                    'aria-label': 'Members to invite',
+                  }}
+                >
+                  {inviteMembers.data
+                    ?.filter((member) =>
+                      `${member.name} ${member.display_name} ${member.email}`
+                        .toLowerCase()
+                        .includes(inviteSearch.toLowerCase()),
+                    )
+                    .map((member) => (
+                      <Button
+                        key={member.id}
+                        variant={
+                          inviteId === member.id ? 'secondary' : 'outline'
+                        }
+                        aria-pressed={inviteId === member.id}
+                        className="h-auto w-full flex-wrap justify-between py-3 text-left whitespace-normal"
+                        disabled={invite.isPending || member.role === 'admin'}
+                        onClick={() => setInviteId(member.id)}
+                      >
+                        <Person
+                          {...inviteMembers.person(member.id)}
+                          size="compact"
+                        />
+                        <span className="break-all text-xs text-muted-foreground">
+                          {member.role === 'admin'
+                            ? 'Already admin'
+                            : member.email}
+                        </span>
+                      </Button>
+                    ))}
+                </ScrollArea>
+              )}
+            </LoadingTransition>
+          </DialogBody>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setInviting(false)}>
               Cancel
             </Button>
@@ -478,7 +492,7 @@ export default function MembersPage() {
             >
               {invite.isPending ? 'Granting access…' : 'Grant admin access'}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

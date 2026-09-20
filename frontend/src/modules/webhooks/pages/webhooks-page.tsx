@@ -30,13 +30,16 @@ import {
 import { Checkbox } from '@/common/components/ui/checkbox';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
 import { Label } from '@/common/components/ui/label';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { formatDate } from '@/common/lib/format';
 
@@ -179,7 +182,7 @@ function WebhookCard({
               ) : !deliveries.data?.length ? (
                 <EmptyState title="No deliveries recorded yet" />
               ) : (
-                <div className="overflow-x-auto">
+                <ScrollArea orientation="horizontal" className="min-w-0">
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b text-muted-foreground">
@@ -225,7 +228,7 @@ function WebhookCard({
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </ScrollArea>
               )}
             </LoadingTransition>
           </section>
@@ -340,7 +343,7 @@ export default function WebhooksPage() {
             </DialogDescription>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="flex min-h-0 flex-col gap-4"
             onSubmit={form.handleSubmit((data) => {
               if (!data.events?.length) {
                 form.setError('events', {
@@ -364,52 +367,57 @@ export default function WebhooksPage() {
               );
             })}
           >
-            <div className="space-y-2">
-              <Label htmlFor="webhook-url">Destination URL</Label>
-              <Input
-                id="webhook-url"
-                type="url"
-                placeholder="https://example.com/webhook"
-                required
-                {...form.register('url', { required: true })}
-              />
-            </div>
-            <fieldset className="space-y-3">
-              <legend className="mb-2 text-sm font-medium">Send on</legend>
-              {catalog.data?.events.map((event) => (
-                <label key={event} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selected.includes(event)}
-                    onCheckedChange={(checked) =>
-                      form.setValue(
-                        'events',
-                        checked
-                          ? [...selected, event]
-                          : selected.filter((item) => item !== event),
-                        { shouldDirty: true },
-                      )
-                    }
-                  />
-                  {eventLabels[event] ?? event}
-                </label>
-              ))}
-              {form.formState.errors.events && (
+            <DialogBody>
+              <div className="space-y-2">
+                <Label htmlFor="webhook-url">Destination URL</Label>
+                <Input
+                  id="webhook-url"
+                  type="url"
+                  placeholder="https://example.com/webhook"
+                  required
+                  {...form.register('url', { required: true })}
+                />
+              </div>
+              <fieldset className="space-y-3">
+                <legend className="mb-2 text-sm font-medium">Send on</legend>
+                {catalog.data?.events.map((event) => (
+                  <label
+                    key={event}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      checked={selected.includes(event)}
+                      onCheckedChange={(checked) =>
+                        form.setValue(
+                          'events',
+                          checked
+                            ? [...selected, event]
+                            : selected.filter((item) => item !== event),
+                          { shouldDirty: true },
+                        )
+                      }
+                    />
+                    {eventLabels[event] ?? event}
+                  </label>
+                ))}
+                {form.formState.errors.events && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {form.formState.errors.events.message}
+                  </p>
+                )}
+              </fieldset>
+              {form.formState.errors.url && (
                 <p role="alert" className="text-sm text-destructive">
-                  {form.formState.errors.events.message}
+                  {form.formState.errors.url.message}
                 </p>
               )}
-            </fieldset>
-            {form.formState.errors.url && (
-              <p role="alert" className="text-sm text-destructive">
-                {form.formState.errors.url.message}
-              </p>
-            )}
-            {form.formState.errors.root?.server && (
-              <p role="alert" className="text-sm text-destructive">
-                {form.formState.errors.root.server.message}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
+              {form.formState.errors.root?.server && (
+                <p role="alert" className="text-sm text-destructive">
+                  {form.formState.errors.root.server.message}
+                </p>
+              )}
+            </DialogBody>
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -420,7 +428,7 @@ export default function WebhooksPage() {
               <Button type="submit" disabled={save.isPending}>
                 {save.isPending ? 'Saving…' : 'Save webhook'}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -452,7 +460,7 @@ export default function WebhooksPage() {
                 : 'Morgenruf will stop sending events to this destination.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmation(null)}>
               Cancel
             </Button>
@@ -483,7 +491,7 @@ export default function WebhooksPage() {
                 ? 'Rotate secret'
                 : 'Delete webhook'}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

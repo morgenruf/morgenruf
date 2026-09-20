@@ -139,7 +139,12 @@ describe('standup management', () => {
       'src',
       'https://example.com/mina.png',
     );
-    await user.click(participant);
+    await user.click(screen.getByText('Mina'));
+    expect(participant).toBeChecked();
+    participant.focus();
+    await user.keyboard(' ');
+    expect(participant).not.toBeChecked();
+    await user.keyboard(' ');
     expect(participant).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Save standup' }));
     await waitFor(() =>
@@ -148,6 +153,115 @@ describe('standup management', () => {
         expect.objectContaining({ participants: ['U1'] }),
       ),
     );
+  });
+
+  it('searches participant identities and adds results without losing hidden selections', async () => {
+    mock.members.mockResolvedValue({
+      data: [
+        {
+          id: 'U1',
+          name: 'Mina',
+          display_name: 'mina.design',
+          email: 'mina@example.com',
+        },
+        {
+          id: 'U2',
+          name: 'Arun',
+          display_name: 'arun.engineering',
+          email: 'arun@example.com',
+        },
+        {
+          id: 'U3',
+          name: 'Sam',
+          display_name: 'sam.engineering',
+          email: 'sam@example.com',
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    view('/dashboard/standups?edit=7');
+    await user.click(await screen.findByRole('checkbox', { name: 'Mina' }));
+    const search = screen.getByRole('textbox', { name: 'Search participants' });
+    await user.type(search, '  ENGINEERING  ');
+    expect(
+      screen.queryByRole('checkbox', { name: 'Mina' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Select results' }));
+    await user.click(screen.getByRole('button', { name: 'Select results' }));
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Clear participant search' }),
+    );
+    expect(search).toHaveFocus();
+    expect(screen.getByRole('checkbox', { name: 'Mina' })).toBeChecked();
+    for (const query of ['mINa', 'MINA@EXAMPLE.COM', 'u1']) {
+      await user.clear(search);
+      await user.type(search, query);
+      expect(screen.getByRole('checkbox', { name: 'Mina' })).toBeChecked();
+      expect(
+        screen.queryByRole('checkbox', { name: 'Arun' }),
+      ).not.toBeInTheDocument();
+    }
+    await user.clear(search);
+    await user.type(search, 'nobody-matches');
+    expect(
+      screen.getByText('No participants match your search.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Select results' }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Save standup' }));
+    await waitFor(() =>
+      expect(mock.update).toHaveBeenCalledWith(
+        { standupId: 7 },
+        expect.objectContaining({ participants: ['U1', 'U2', 'U3'] }),
+      ),
+    );
+  });
+
+  it('selects all participants and restores whole-channel enrollment', async () => {
+    mock.members.mockResolvedValue({
+      data: [
+        { id: 'U1', name: 'Mina' },
+        { id: 'U2', name: 'Arun' },
+      ],
+    });
+    const user = userEvent.setup();
+    view('/dashboard/standups?edit=7');
+    await screen.findByRole('checkbox', { name: 'Mina' });
+    await user.click(
+      screen.getByRole('button', { name: 'Select all participants' }),
+    );
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Arun' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Use whole channel' }));
+    expect(screen.getByRole('checkbox', { name: 'Mina' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Arun' })).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Save standup' }));
+    await waitFor(() =>
+      expect(mock.update).toHaveBeenCalledWith(
+        { standupId: 7 },
+        expect.objectContaining({ participants: [] }),
+      ),
+    );
+  });
+
+  it('explains empty participant and template lists', async () => {
+    mock.members.mockResolvedValue({ data: [] });
+    mock.templates.mockResolvedValue({ data: [] });
+    const user = userEvent.setup();
+    view('/dashboard/standups?edit=7');
+    expect(
+      await screen.findByText('No participants available.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Select all participants' }),
+    ).toBeDisabled();
+    await user.click(screen.getByRole('tab', { name: 'Schedule' }));
+    await user.click(screen.getByRole('button', { name: 'Use a template' }));
+    expect(
+      await screen.findByText('No question templates available.'),
+    ).toBeInTheDocument();
   });
 
   it('shows whole-channel enrollment and hides mutations for read-only members', async () => {

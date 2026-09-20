@@ -16,8 +16,10 @@ import {
 } from '@/common/components/ui/card';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
@@ -222,7 +224,7 @@ export default function AutomationPage() {
         </section>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>New automation rule</DialogTitle>
             <DialogDescription>
@@ -230,7 +232,7 @@ export default function AutomationPage() {
             </DialogDescription>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="flex min-h-0 flex-col gap-4"
             onSubmit={form.handleSubmit((data) =>
               create.mutate(
                 {
@@ -253,34 +255,98 @@ export default function AutomationPage() {
               ),
             )}
           >
-            <div className="space-y-2">
-              <Label htmlFor="rule-name">Rule name</Label>
-              <Input
-                id="rule-name"
-                required
-                {...form.register('name', { required: true })}
-              />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <DialogBody>
               <div className="space-y-2">
-                <Label htmlFor="rule-trigger">Trigger</Label>
+                <Label htmlFor="rule-name">Rule name</Label>
+                <Input
+                  id="rule-name"
+                  required
+                  {...form.register('name', { required: true })}
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="rule-trigger">Trigger</Label>
+                  <Controller
+                    control={form.control}
+                    name="trigger"
+                    render={({ field, fieldState }) => (
+                      <Select
+                        name={field.name}
+                        value={field.value}
+                        items={triggerOptions}
+                        disabled={!canEdit || create.isPending}
+                        onValueChange={(value) => {
+                          if (value !== null) {
+                            field.onChange(value);
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          id="rule-trigger"
+                          className="w-full"
+                          ref={field.ref}
+                          onBlur={field.onBlur}
+                          aria-invalid={fieldState.invalid}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {triggerOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+                {values.trigger === 'low_participation' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="rule-threshold">
+                      Participation threshold (%)
+                    </Label>
+                    <Input
+                      id="rule-threshold"
+                      type="number"
+                      min="0"
+                      max="100"
+                      required
+                      {...form.register('condition_value', {
+                        min: {
+                          value: 0,
+                          message: 'Use a threshold from 0 to 100.',
+                        },
+                        max: {
+                          value: 100,
+                          message: 'Use a threshold from 0 to 100.',
+                        },
+                      })}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rule-action">Action</Label>
                 <Controller
                   control={form.control}
-                  name="trigger"
+                  name="action"
                   render={({ field, fieldState }) => (
                     <Select
                       name={field.name}
                       value={field.value}
-                      items={triggerOptions}
+                      items={actionOptions}
                       disabled={!canEdit || create.isPending}
                       onValueChange={(value) => {
                         if (value !== null) {
                           field.onChange(value);
+                          form.setValue('action_target', '');
                         }
                       }}
                     >
                       <SelectTrigger
-                        id="rule-trigger"
+                        id="rule-action"
                         className="w-full"
                         ref={field.ref}
                         onBlur={field.onBlur}
@@ -289,7 +355,7 @@ export default function AutomationPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {triggerOptions.map((item) => (
+                        {actionOptions.map((item) => (
                           <SelectItem key={item.value} value={item.value}>
                             {item.label}
                           </SelectItem>
@@ -299,160 +365,98 @@ export default function AutomationPage() {
                   )}
                 />
               </div>
-              {values.trigger === 'low_participation' && (
-                <div className="space-y-2">
-                  <Label htmlFor="rule-threshold">
-                    Participation threshold (%)
-                  </Label>
-                  <Input
-                    id="rule-threshold"
-                    type="number"
-                    min="0"
-                    max="100"
-                    required
-                    {...form.register('condition_value', {
-                      min: {
-                        value: 0,
-                        message: 'Use a threshold from 0 to 100.',
-                      },
-                      max: {
-                        value: 100,
-                        message: 'Use a threshold from 0 to 100.',
-                      },
-                    })}
-                  />
-                </div>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rule-action">Action</Label>
-              <Controller
-                control={form.control}
-                name="action"
-                render={({ field, fieldState }) => (
-                  <Select
-                    name={field.name}
-                    value={field.value}
-                    items={actionOptions}
-                    disabled={!canEdit || create.isPending}
-                    onValueChange={(value) => {
-                      if (value !== null) {
-                        field.onChange(value);
-                        form.setValue('action_target', '');
-                      }
-                    }}
-                  >
-                    <SelectTrigger
-                      id="rule-action"
-                      className="w-full"
-                      ref={field.ref}
-                      onBlur={field.onBlur}
-                      aria-invalid={fieldState.invalid}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {actionOptions.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rule-target">
-                {values.action === 'fire_webhook'
-                  ? 'Webhook URL'
-                  : values.action === 'send_dm'
-                    ? 'Slack user ID'
-                    : 'Slack channel'}
-              </Label>
-              {values.action === 'post_to_channel' ? (
-                <Controller
-                  control={form.control}
-                  name="action_target"
-                  rules={{ required: 'Choose a channel.' }}
-                  render={({ field, fieldState }) => (
-                    <LoadingField
-                      pending={channels.isPending}
-                      label="Loading channels…"
-                    >
-                      <Select
-                        name={field.name}
-                        value={field.value}
-                        items={channelOptions}
-                        required
-                        disabled={!canEdit || create.isPending}
-                        onValueChange={(value) => {
-                          if (value !== null) {
-                            field.onChange(value);
-                          }
-                        }}
+              <div className="space-y-2">
+                <Label htmlFor="rule-target">
+                  {values.action === 'fire_webhook'
+                    ? 'Webhook URL'
+                    : values.action === 'send_dm'
+                      ? 'Slack user ID'
+                      : 'Slack channel'}
+                </Label>
+                {values.action === 'post_to_channel' ? (
+                  <Controller
+                    control={form.control}
+                    name="action_target"
+                    rules={{ required: 'Choose a channel.' }}
+                    render={({ field, fieldState }) => (
+                      <LoadingField
+                        pending={channels.isPending}
+                        label="Loading channels…"
                       >
-                        <SelectTrigger
-                          id="rule-target"
-                          className="w-full"
-                          ref={field.ref}
-                          onBlur={field.onBlur}
-                          aria-invalid={fieldState.invalid}
+                        <Select
+                          name={field.name}
+                          value={field.value}
+                          items={channelOptions}
+                          required
+                          disabled={!canEdit || create.isPending}
+                          onValueChange={(value) => {
+                            if (value !== null) {
+                              field.onChange(value);
+                            }
+                          }}
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {channelOptions.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </LoadingField>
-                  )}
+                          <SelectTrigger
+                            id="rule-target"
+                            className="w-full"
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {channelOptions.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </LoadingField>
+                    )}
+                  />
+                ) : (
+                  <Input
+                    id="rule-target"
+                    type={values.action === 'fire_webhook' ? 'url' : 'text'}
+                    required
+                    {...form.register('action_target', { required: true })}
+                  />
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rule-message">Message template</Label>
+                <Textarea
+                  id="rule-message"
+                  rows={4}
+                  {...form.register('action_message')}
                 />
-              ) : (
-                <Input
-                  id="rule-target"
-                  type={values.action === 'fire_webhook' ? 'url' : 'text'}
-                  required
-                  {...form.register('action_target', { required: true })}
-                />
+                <p className="text-xs text-muted-foreground">
+                  {
+                    'Supports {team}, {trigger}, {blockers}, and {participation}. Leave blank for the default message.'
+                  }
+                </p>
+              </div>
+              {Object.entries(form.formState.errors).map(
+                ([field, error]) =>
+                  field !== 'root' &&
+                  typeof error?.message === 'string' && (
+                    <p
+                      key={field}
+                      role="alert"
+                      className="text-sm text-destructive"
+                    >
+                      {field.replaceAll('_', ' ')}: {error.message}
+                    </p>
+                  ),
               )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rule-message">Message template</Label>
-              <Textarea
-                id="rule-message"
-                rows={4}
-                {...form.register('action_message')}
-              />
-              <p className="text-xs text-muted-foreground">
-                {
-                  'Supports {team}, {trigger}, {blockers}, and {participation}. Leave blank for the default message.'
-                }
-              </p>
-            </div>
-            {Object.entries(form.formState.errors).map(
-              ([field, error]) =>
-                field !== 'root' &&
-                typeof error?.message === 'string' && (
-                  <p
-                    key={field}
-                    role="alert"
-                    className="text-sm text-destructive"
-                  >
-                    {field.replaceAll('_', ' ')}: {error.message}
-                  </p>
-                ),
-            )}
-            {form.formState.errors.root?.server && (
-              <p role="alert" className="text-sm text-destructive">
-                {form.formState.errors.root.server.message}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
+              {form.formState.errors.root?.server && (
+                <p role="alert" className="text-sm text-destructive">
+                  {form.formState.errors.root.server.message}
+                </p>
+              )}
+            </DialogBody>
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -463,7 +467,7 @@ export default function AutomationPage() {
               <Button type="submit" disabled={create.isPending}>
                 {create.isPending ? 'Saving…' : 'Save rule'}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -480,7 +484,7 @@ export default function AutomationPage() {
               This automation will stop running.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
               Cancel
             </Button>
@@ -499,7 +503,7 @@ export default function AutomationPage() {
             >
               Delete rule
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

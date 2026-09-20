@@ -16,13 +16,16 @@ import {
 } from '@/common/components/ui/card';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
 import { Label } from '@/common/components/ui/label';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -146,7 +149,7 @@ export default function McpPage() {
                 description="Generate a key to connect an assistant."
               />
             ) : (
-              <div className="overflow-x-auto">
+              <ScrollArea orientation="horizontal" className="min-w-0">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
@@ -198,7 +201,7 @@ export default function McpPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScrollArea>
             )}
           </LoadingTransition>
         </CardContent>
@@ -240,9 +243,17 @@ export default function McpPage() {
                     ? '%APPDATA%\\Claude\\claude_desktop_config.json'
                     : '~/Library/Application Support/Claude/claude_desktop_config.json'}
           </p>
-          <pre className="overflow-x-auto rounded-lg border bg-muted p-4 text-xs">
-            <code>{config}</code>
-          </pre>
+          <ScrollArea
+            orientation="horizontal"
+            viewportProps={{
+              'aria-label': 'MCP configuration',
+              role: 'region',
+            }}
+          >
+            <pre className="w-max min-w-full rounded-lg border bg-muted p-4 text-xs">
+              <code>{config}</code>
+            </pre>
+          </ScrollArea>
           <Button
             size="sm"
             variant="outline"
@@ -266,7 +277,7 @@ export default function McpPage() {
             </DialogDescription>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="flex min-h-0 flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               create.mutate({
@@ -278,21 +289,25 @@ export default function McpPage() {
               });
             }}
           >
-            <Label htmlFor="key-name">Key name</Label>
-            <Input
-              id="key-name"
-              placeholder="My assistant"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <Button
-              type="submit"
-              disabled={create.isPending}
-              className="w-full"
-            >
-              <KeyRound />
-              {create.isPending ? 'Generating…' : 'Generate key'}
-            </Button>
+            <DialogBody>
+              <Label htmlFor="key-name">Key name</Label>
+              <Input
+                id="key-name"
+                placeholder="My assistant"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={create.isPending}
+                className="w-full"
+              >
+                <KeyRound />
+                {create.isPending ? 'Generating…' : 'Generate key'}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -317,7 +332,7 @@ export default function McpPage() {
               Assistants using this key will lose access immediately.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
               Cancel
             </Button>
@@ -336,7 +351,7 @@ export default function McpPage() {
             >
               Revoke key
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

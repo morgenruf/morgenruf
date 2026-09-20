@@ -4,8 +4,10 @@ import { toast } from 'sonner';
 import { Button } from './ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
@@ -35,13 +37,15 @@ export function SecretPanel({
             shown again.
           </DialogDescription>
         </DialogHeader>
-        <code
-          className="break-all rounded-md border bg-muted p-4 font-mono text-sm"
-          data-testid="one-time-secret"
-        >
-          {value}
-        </code>
-        <div className="flex justify-end gap-2">
+        <DialogBody>
+          <code
+            className="block break-all rounded-md border bg-muted p-4 font-mono text-sm"
+            data-testid="one-time-secret"
+          >
+            {value}
+          </code>
+        </DialogBody>
+        <DialogFooter>
           <Button
             variant="outline"
             onClick={() => {
@@ -58,7 +62,7 @@ export function SecretPanel({
             <Copy /> Copy
           </Button>
           <Button onClick={onDismiss}>Done</Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

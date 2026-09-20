@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
 import { LoadingTransition } from '@/common/components/loading-transition';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import { cn } from '@/common/lib/utils';
 
 import { PageHeader } from './page';
@@ -147,7 +148,7 @@ export function SkeletonTable({
   rows?: number;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <ScrollArea orientation="horizontal" className="min-w-0">
       <table className="w-full min-w-96">
         <thead>
           <tr>
@@ -172,7 +173,7 @@ export function SkeletonTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollArea>
   );
 }
 

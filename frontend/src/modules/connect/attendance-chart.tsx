@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/common/components/ui/card';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 
 import { attendanceTrend, roundDate } from './attendance-utils';
 import {
@@ -152,7 +153,10 @@ export function AttendanceChart({ rounds }: { rounds: ConnectRound[] }) {
           <summary className="cursor-pointer rounded-lg px-3 py-3 text-sm font-medium hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
             View chart data
           </summary>
-          <div className="overflow-x-auto border-t px-3">
+          <ScrollArea
+            orientation="horizontal"
+            className="min-w-0 border-t px-3"
+          >
             <table className="w-full text-sm">
               <caption className="sr-only">
                 Meeting rates and outcomes by round, oldest first
@@ -196,7 +200,7 @@ export function AttendanceChart({ rounds }: { rounds: ConnectRound[] }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollArea>
         </details>
       </CardContent>
     </Card>

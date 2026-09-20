@@ -26,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/common/components/ui/card';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 
 import { AttendanceChart } from './attendance-chart';
 import {
@@ -281,7 +282,7 @@ export function Attendance({ programId }: { programId: number }) {
                   <EmptyState title="Nobody has been paired yet" />
                 ) : (
                   <>
-                    <div className="overflow-x-auto">
+                    <ScrollArea orientation="horizontal" className="min-w-0">
                       <table className="w-full text-sm">
                         <caption className="sr-only">
                           Participation over the last 6 rounds
@@ -329,7 +330,7 @@ export function Attendance({ programId }: { programId: number }) {
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </ScrollArea>
                     {!showAll && participation.data.length > 12 && (
                       <Button
                         variant="ghost"

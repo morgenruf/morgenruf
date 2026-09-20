@@ -31,6 +31,7 @@ import {
   CardTitle,
 } from '@/common/components/ui/card';
 import { Input } from '@/common/components/ui/input';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -157,7 +158,7 @@ function ProgramMembers({ programId }: { programId: number }) {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <div className="overflow-x-auto">
+        <ScrollArea orientation="horizontal" className="min-w-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-muted-foreground">
@@ -246,7 +247,7 @@ function ProgramMembers({ programId }: { programId: number }) {
                 ))}
             </tbody>
           </table>
-        </div>
+        </ScrollArea>
       </div>
     );
   }
@@ -425,42 +426,49 @@ export function ProgramForm({ program }: { program?: Program }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div
-            role="tablist"
-            aria-label="Coffee chat settings"
-            className="mb-6 flex gap-1 overflow-x-auto border-b pb-3"
-          >
-            {tabs.map((name, index) => (
-              <Button
-                key={name}
-                id={`${id}-${name}`}
-                role="tab"
-                aria-selected={tab === name}
-                aria-controls={`${id}-panel-${name}`}
-                tabIndex={tab === name ? 0 : -1}
-                variant={tab === name ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setTab(name)}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-                    event.preventDefault();
+          <ScrollArea orientation="horizontal" className="shrink-0">
+            <div
+              role="tablist"
+              aria-label="Coffee chat settings"
+              className="mb-6 flex w-max min-w-full gap-1 border-b pb-3"
+            >
+              {tabs.map((name, index) => (
+                <Button
+                  key={name}
+                  id={`${id}-${name}`}
+                  role="tab"
+                  aria-selected={tab === name}
+                  aria-controls={`${id}-panel-${name}`}
+                  tabIndex={tab === name ? 0 : -1}
+                  variant={tab === name ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setTab(name)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'ArrowRight' ||
+                      event.key === 'ArrowLeft'
+                    ) {
+                      event.preventDefault();
 
-                    const next =
-                      tabs[
-                        (index +
-                          (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) %
-                          tabs.length
-                      ];
+                      const next =
+                        tabs[
+                          (index +
+                            (event.key === 'ArrowRight'
+                              ? 1
+                              : tabs.length - 1)) %
+                            tabs.length
+                        ];
 
-                    setTab(next);
-                    document.getElementById(`${id}-${next}`)?.focus();
-                  }
-                }}
-              >
-                {name}
-              </Button>
-            ))}
-          </div>
+                      setTab(next);
+                      document.getElementById(`${id}-${next}`)?.focus();
+                    }
+                  }}
+                >
+                  {name}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
           <form
             onSubmit={submit}
             onInvalidCapture={onInvalid}

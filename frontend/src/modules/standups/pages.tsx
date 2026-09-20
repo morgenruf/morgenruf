@@ -3,10 +3,19 @@ import {
   cloneElement,
   isValidElement,
   useId,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { AlarmClock, CalendarDays, Plus, Trash, Users, X } from 'lucide-react';
+import {
+  AlarmClock,
+  CalendarDays,
+  Plus,
+  Search,
+  Trash,
+  Users,
+  X,
+} from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
@@ -24,14 +33,24 @@ import { Person } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
+import { Checkbox } from '@/common/components/ui/checkbox';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/common/components/ui/input-group';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -137,6 +156,7 @@ function StandupEditor({
   const [tab, setTab] = useState<(typeof tabs)[number]>('Basics');
   const [templateGallery, setTemplateGallery] = useState(false);
   const [memberSearch, setMemberSearch] = useState('');
+  const memberSearchInput = useRef<HTMLInputElement>(null);
 
   const form = useForm<StandupInput>({
     defaultValues: standupDefaults(standup, workspace),
@@ -154,6 +174,15 @@ function StandupEditor({
   const { save } = useStandupMutations();
 
   const participants = values.participants ?? [];
+  const memberQuery = memberSearch.trim().toLowerCase();
+  const members = resources.members.data ?? [];
+  const matchingMembers = members.filter((member) =>
+    [member.name, member.display_name, member.email, member.id]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(memberQuery),
+  );
   const questions = values.questions ?? [];
   const days = values.schedule_days ?? [];
 
@@ -228,7 +257,7 @@ function StandupEditor({
         if (!open) close();
       }}
     >
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{standup ? 'Edit standup' : 'New standup'}</DialogTitle>
           <DialogDescription>
@@ -239,166 +268,222 @@ function StandupEditor({
         <form
           onSubmit={onSubmit}
           onInvalidCapture={onInvalid}
-          className="space-y-6"
+          className="flex min-h-0 flex-col gap-4"
         >
-          <div
-            role="tablist"
-            aria-label="Standup settings"
-            className="flex gap-1 overflow-x-auto border-b pb-3"
-          >
-            {tabs.map((name, index) => (
-              <Button
-                key={name}
-                id={`${id}-${name}`}
-                role="tab"
-                type="button"
-                aria-selected={tab === name}
-                aria-controls={`${id}-panel-${name}`}
-                tabIndex={tab === name ? 0 : -1}
-                variant={tab === name ? 'secondary' : 'ghost'}
-                onClick={() => setTab(name)}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-                    event.preventDefault();
+          <ScrollArea orientation="horizontal" className="shrink-0">
+            <div
+              role="tablist"
+              aria-label="Standup settings"
+              className="flex w-max min-w-full gap-1 border-b pb-3"
+            >
+              {tabs.map((name, index) => (
+                <Button
+                  key={name}
+                  id={`${id}-${name}`}
+                  role="tab"
+                  type="button"
+                  aria-selected={tab === name}
+                  aria-controls={`${id}-panel-${name}`}
+                  tabIndex={tab === name ? 0 : -1}
+                  variant={tab === name ? 'secondary' : 'ghost'}
+                  onClick={() => setTab(name)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'ArrowRight' ||
+                      event.key === 'ArrowLeft'
+                    ) {
+                      event.preventDefault();
 
-                    const next =
-                      tabs[
-                        (index + (event.key === 'ArrowRight' ? 1 : 3)) %
-                          tabs.length
-                      ];
+                      const next =
+                        tabs[
+                          (index + (event.key === 'ArrowRight' ? 1 : 3)) %
+                            tabs.length
+                        ];
 
-                    setTab(next);
-                    document.getElementById(`${id}-${next}`)?.focus();
-                  }
-                }}
-              >
-                {name}
-              </Button>
-            ))}
-          </div>
-          <section
-            role="tabpanel"
-            aria-labelledby={`${id}-Basics`}
-            id={`${id}-panel-Basics`}
-            data-tab="Basics"
-            hidden={tab !== 'Basics'}
-            className="space-y-5"
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Standup name">
-                <Input {...register('name', { required: 'Enter a name.' })} />
-              </Field>
-              <Controller
-                control={form.control}
-                name="channel_id"
-                rules={{ required: 'Choose a channel.' }}
-                render={({ field, fieldState }) => (
-                  <LoadingField
-                    pending={resources.channels.isPending}
-                    label="Loading channels…"
-                    fieldLabel="Channel"
+                      setTab(next);
+                      document.getElementById(`${id}-${next}`)?.focus();
+                    }
+                  }}
+                >
+                  {name}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+          <DialogBody>
+            <section
+              role="tabpanel"
+              aria-labelledby={`${id}-Basics`}
+              id={`${id}-panel-Basics`}
+              data-tab="Basics"
+              hidden={tab !== 'Basics'}
+              className="space-y-5"
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Standup name">
+                  <Input {...register('name', { required: 'Enter a name.' })} />
+                </Field>
+                <Controller
+                  control={form.control}
+                  name="channel_id"
+                  rules={{ required: 'Choose a channel.' }}
+                  render={({ field, fieldState }) => (
+                    <LoadingField
+                      pending={resources.channels.isPending}
+                      label="Loading channels…"
+                      fieldLabel="Channel"
+                    >
+                      <Select
+                        name={field.name}
+                        value={field.value}
+                        items={channelOptions}
+                        disabled={save.isPending}
+                        onValueChange={(value) => {
+                          if (value !== null) field.onChange(value);
+                        }}
+                      >
+                        <Field label="Channel">
+                          <SelectTrigger
+                            className="w-full"
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                        </Field>
+                        <SelectContent>
+                          {channelOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LoadingField>
+                  )}
+                />
+              </div>
+              {errors.channel_id && (
+                <p role="alert" className="text-sm text-destructive">
+                  {errors.channel_id.message}
+                </p>
+              )}
+              <fieldset className="space-y-3">
+                <legend className="mb-0 text-sm font-medium">
+                  Participants
+                </legend>
+                <p className="text-sm text-muted-foreground">
+                  Leave everyone unselected to include the whole channel.
+                </p>
+                <InputGroup className="h-9">
+                  <InputGroupAddon>
+                    <Search aria-hidden="true" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    ref={memberSearchInput}
+                    placeholder="Search participants…"
+                    aria-label="Search participants"
+                    value={memberSearch}
+                    onChange={(event) => setMemberSearch(event.target.value)}
+                  />
+                  {memberSearch && (
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        aria-label="Clear participant search"
+                        size="icon-xs"
+                        onClick={() => {
+                          setMemberSearch('');
+                          memberSearchInput.current?.focus();
+                        }}
+                      >
+                        <X aria-hidden="true" />
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  )}
+                </InputGroup>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      resources.members.isPending ||
+                      !!resources.members.error ||
+                      !matchingMembers.length
+                    }
+                    onClick={() =>
+                      setValue(
+                        'participants',
+                        [
+                          ...new Set([
+                            ...participants,
+                            ...matchingMembers.map((member) => member.id),
+                          ]),
+                        ],
+                        { shouldDirty: true },
+                      )
+                    }
                   >
-                    <Select
-                      name={field.name}
-                      value={field.value}
-                      items={channelOptions}
-                      disabled={save.isPending}
-                      onValueChange={(value) => {
-                        if (value !== null) field.onChange(value);
+                    {memberQuery ? 'Select results' : 'Select all participants'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setValue('participants', [], { shouldDirty: true })
+                    }
+                  >
+                    Use whole channel
+                  </Button>
+                  <p
+                    className="text-xs text-muted-foreground sm:ml-auto"
+                    role="status"
+                  >
+                    {participants.length
+                      ? `${participants.length} selected`
+                      : 'Everyone in the channel'}
+                  </p>
+                </div>
+                <LoadingTransition pending={resources.members.isPending}>
+                  {resources.members.isPending ? (
+                    <SkeletonRegion label="Loading participants…">
+                      <SkeletonPeople />
+                    </SkeletonRegion>
+                  ) : resources.members.error ? (
+                    <ErrorState
+                      error={resources.members.error}
+                      retry={() => resources.members.refetch()}
+                    />
+                  ) : (
+                    <ScrollArea
+                      className="max-h-52 rounded-lg border"
+                      contentClassName="grid gap-2 p-2 sm:grid-cols-2"
+                      viewportProps={{
+                        role: 'region',
+                        'aria-label': 'Participants',
                       }}
                     >
-                      <Field label="Channel">
-                        <SelectTrigger
-                          className="w-full"
-                          ref={field.ref}
-                          onBlur={field.onBlur}
-                          aria-invalid={fieldState.invalid}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                      </Field>
-                      <SelectContent>
-                        {channelOptions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </LoadingField>
-                )}
-              />
-            </div>
-            {errors.channel_id && (
-              <p role="alert" className="text-sm text-destructive">
-                {errors.channel_id.message}
-              </p>
-            )}
-            <fieldset className="space-y-3">
-              <legend className="mb-2 text-sm font-medium">Participants</legend>
-              <p className="text-sm text-muted-foreground">
-                Leave everyone unselected to include the whole channel.
-              </p>
-              <Input
-                placeholder="Search participants…"
-                aria-label="Search participants"
-                value={memberSearch}
-                onChange={(event) => setMemberSearch(event.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setValue(
-                      'participants',
-                      resources.members.data?.map((member) => member.id) ?? [],
-                    )
-                  }
-                >
-                  Select all
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setValue('participants', [])}
-                >
-                  Use whole channel
-                </Button>
-              </div>
-              <LoadingTransition pending={resources.members.isPending}>
-                {resources.members.isPending ? (
-                  <SkeletonRegion label="Loading participants…">
-                    <SkeletonPeople />
-                  </SkeletonRegion>
-                ) : resources.members.error ? (
-                  <ErrorState
-                    error={resources.members.error}
-                    retry={() => resources.members.refetch()}
-                  />
-                ) : (
-                  <div className="grid max-h-52 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2">
-                    {resources.members.data
-                      ?.filter((member) =>
-                        `${member.name} ${member.display_name} ${member.id}`
-                          .toLowerCase()
-                          .includes(memberSearch.toLowerCase()),
-                      )
-                      .map((member) => (
+                      {!matchingMembers.length && (
+                        <p className="px-3 py-5 text-center text-sm text-muted-foreground sm:col-span-2">
+                          {members.length
+                            ? 'No participants match your search.'
+                            : 'No participants available.'}
+                        </p>
+                      )}
+                      {matchingMembers.map((member) => (
                         <label
                           key={member.id}
-                          className="flex min-w-0 items-center gap-2 text-sm"
+                          className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/60 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/30 has-data-checked:border-primary has-data-checked:bg-primary/5"
                         >
-                          <input
-                            type="checkbox"
-                            className="size-4 shrink-0 accent-primary"
+                          <Checkbox
+                            className="after:inset-0"
                             checked={participants.includes(member.id)}
-                            onChange={(event) =>
+                            onCheckedChange={(checked) =>
                               setValue(
                                 'participants',
-                                event.target.checked
+                                checked
                                   ? [...participants, member.id]
                                   : participants.filter(
                                       (value) => value !== member.id,
@@ -413,221 +498,190 @@ function StandupEditor({
                           />
                         </label>
                       ))}
-                  </div>
-                )}
-              </LoadingTransition>
-              <p className="text-xs text-muted-foreground">
-                {participants.length
-                  ? `${participants.length} selected`
-                  : 'Everyone in the channel'}
-              </p>
-            </fieldset>
-          </section>
-          <section
-            role="tabpanel"
-            aria-labelledby={`${id}-Schedule`}
-            id={`${id}-panel-Schedule`}
-            data-tab="Schedule"
-            hidden={tab !== 'Schedule'}
-            className="space-y-5"
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Time">
-                <Input
-                  type="time"
-                  {...register('schedule_time', { required: 'Set a time.' })}
-                />
-              </Field>
-              <Field label="Timezone">
-                <Input list={`${id}-timezones`} {...register('schedule_tz')} />
-                <datalist id={`${id}-timezones`}>
-                  {['UTC', ...Intl.supportedValuesOf('timeZone')].map(
-                    (zone) => (
-                      <option key={zone}>{zone}</option>
-                    ),
+                    </ScrollArea>
                   )}
-                </datalist>
-              </Field>
-            </div>
-            {errors.schedule_tz && (
-              <p role="alert" className="text-sm text-destructive">
-                {errors.schedule_tz.message}
-              </p>
-            )}
-            <fieldset>
-              <legend className="mb-2 text-sm font-medium">Days</legend>
-              <div className="flex flex-wrap gap-2">
-                {weekdays.map((day) => (
-                  <Button
-                    key={day}
-                    type="button"
-                    size="sm"
-                    variant={days.includes(day) ? 'default' : 'outline'}
-                    aria-pressed={days.includes(day)}
-                    onClick={() =>
-                      setValue(
-                        'schedule_days',
-                        days.includes(day)
-                          ? days.filter((value) => value !== day)
-                          : [...days, day],
-                        { shouldDirty: true },
-                      )
-                    }
-                  >
-                    {day[0].toUpperCase() + day.slice(1)}
-                  </Button>
-                ))}
+                </LoadingTransition>
+              </fieldset>
+            </section>
+            <section
+              role="tabpanel"
+              aria-labelledby={`${id}-Schedule`}
+              id={`${id}-panel-Schedule`}
+              data-tab="Schedule"
+              hidden={tab !== 'Schedule'}
+              className="space-y-5"
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Time">
+                  <Input
+                    type="time"
+                    {...register('schedule_time', { required: 'Set a time.' })}
+                  />
+                </Field>
+                <Field label="Timezone">
+                  <Input
+                    list={`${id}-timezones`}
+                    {...register('schedule_tz')}
+                  />
+                  <datalist id={`${id}-timezones`}>
+                    {['UTC', ...Intl.supportedValuesOf('timeZone')].map(
+                      (zone) => (
+                        <option key={zone}>{zone}</option>
+                      ),
+                    )}
+                  </datalist>
+                </Field>
               </div>
-              {errors.schedule_days && (
-                <p role="alert" className="mt-2 text-sm text-destructive">
-                  {errors.schedule_days.message}
+              {errors.schedule_tz && (
+                <p role="alert" className="text-sm text-destructive">
+                  {errors.schedule_tz.message}
                 </p>
               )}
-            </fieldset>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">Questions</h3>
+              <fieldset>
+                <legend className="mb-2 text-sm font-medium">Days</legend>
+                <div className="flex flex-wrap gap-2">
+                  {weekdays.map((day) => (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={days.includes(day) ? 'default' : 'outline'}
+                      aria-pressed={days.includes(day)}
+                      onClick={() =>
+                        setValue(
+                          'schedule_days',
+                          days.includes(day)
+                            ? days.filter((value) => value !== day)
+                            : [...days, day],
+                          { shouldDirty: true },
+                        )
+                      }
+                    >
+                      {day[0].toUpperCase() + day.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+                {errors.schedule_days && (
+                  <p role="alert" className="mt-2 text-sm text-destructive">
+                    {errors.schedule_days.message}
+                  </p>
+                )}
+              </fieldset>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium">Questions</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTemplateGallery(!templateGallery)}
+                  >
+                    Use a template
+                  </Button>
+                </div>
+                {templateGallery && (
+                  <ScrollArea
+                    className="max-h-64"
+                    contentClassName="grid gap-2 p-1 sm:grid-cols-2"
+                    viewportProps={{
+                      role: 'region',
+                      'aria-label': 'Question templates',
+                    }}
+                  >
+                    {resources.templates.isPending && (
+                      <SkeletonRegion
+                        label="Loading question templates…"
+                        className="sm:col-span-2"
+                      >
+                        <SkeletonPeople rows={4} />
+                      </SkeletonRegion>
+                    )}
+                    {resources.templates.data?.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        className="rounded-lg border p-3 text-left hover:bg-muted"
+                        onClick={() => {
+                          setValue('questions', template.questions ?? [], {
+                            shouldDirty: true,
+                          });
+                          setTemplateGallery(false);
+                        }}
+                      >
+                        <span className="font-medium">
+                          {template.icon} {template.name}
+                        </span>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {template.description}
+                        </p>
+                      </button>
+                    ))}
+                    {resources.templates.error && (
+                      <ErrorState
+                        error={resources.templates.error}
+                        retry={() => resources.templates.refetch()}
+                      />
+                    )}
+                    {!resources.templates.isPending &&
+                      !resources.templates.error &&
+                      !resources.templates.data?.length && (
+                        <p className="p-3 text-sm text-muted-foreground sm:col-span-2">
+                          No question templates available.
+                        </p>
+                      )}
+                  </ScrollArea>
+                )}
+                {questions.map((_, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      aria-label={`Question ${index + 1}`}
+                      {...register(`questions.${index}`)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove question ${index + 1}`}
+                      onClick={() =>
+                        setValue(
+                          'questions',
+                          questions.filter((_, position) => position !== index),
+                        )
+                      }
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </div>
+                ))}
+                {errors.questions && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {errors.questions.message}
+                  </p>
+                )}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setTemplateGallery(!templateGallery)}
+                  onClick={() => setValue('questions', [...questions, ''])}
                 >
-                  Use a template
+                  <Plus className="size-4" />
+                  Add question
                 </Button>
               </div>
-              {templateGallery && (
-                <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
-                  {resources.templates.isPending && (
-                    <SkeletonRegion
-                      label="Loading question templates…"
-                      className="sm:col-span-2"
-                    >
-                      <SkeletonPeople rows={4} />
-                    </SkeletonRegion>
-                  )}
-                  {resources.templates.data?.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      className="rounded-lg border p-3 text-left hover:bg-muted"
-                      onClick={() => {
-                        setValue('questions', template.questions ?? [], {
-                          shouldDirty: true,
-                        });
-                        setTemplateGallery(false);
-                      }}
-                    >
-                      <span className="font-medium">
-                        {template.icon} {template.name}
-                      </span>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {template.description}
-                      </p>
-                    </button>
-                  ))}
-                  {resources.templates.error && (
-                    <ErrorState
-                      error={resources.templates.error}
-                      retry={() => resources.templates.refetch()}
-                    />
-                  )}
-                </div>
-              )}
-              {questions.map((_, index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    aria-label={`Question ${index + 1}`}
-                    {...register(`questions.${index}`)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove question ${index + 1}`}
-                    onClick={() =>
-                      setValue(
-                        'questions',
-                        questions.filter((_, position) => position !== index),
-                      )
-                    }
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
-              ))}
-              {errors.questions && (
-                <p role="alert" className="text-sm text-destructive">
-                  {errors.questions.message}
-                </p>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setValue('questions', [...questions, ''])}
-              >
-                <Plus className="size-4" />
-                Add question
-              </Button>
-            </div>
-            <Controller
-              control={form.control}
-              name="reminder_minutes"
-              render={({ field, fieldState }) => (
-                <Select
-                  name={field.name}
-                  value={field.value}
-                  items={reminderOptions}
-                  disabled={save.isPending}
-                  onValueChange={(value) => {
-                    if (value !== null) field.onChange(value);
-                  }}
-                >
-                  <Field label="Remind participants before standup">
-                    <SelectTrigger
-                      className="w-full"
-                      ref={field.ref}
-                      onBlur={field.onBlur}
-                      aria-invalid={fieldState.invalid}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                  </Field>
-                  <SelectContent>
-                    {reminderOptions.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </section>
-          <section
-            role="tabpanel"
-            aria-labelledby={`${id}-Summary`}
-            id={`${id}-panel-Summary`}
-            data-tab="Summary"
-            hidden={tab !== 'Summary'}
-            className="space-y-5"
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
               <Controller
                 control={form.control}
-                name="report_channel"
+                name="reminder_minutes"
                 render={({ field, fieldState }) => (
                   <Select
                     name={field.name}
                     value={field.value}
-                    items={reportChannelOptions}
+                    items={reminderOptions}
                     disabled={save.isPending}
                     onValueChange={(value) => {
                       if (value !== null) field.onChange(value);
                     }}
                   >
-                    <Field label="Report channel">
+                    <Field label="Remind participants before standup">
                       <SelectTrigger
                         className="w-full"
                         ref={field.ref}
@@ -638,7 +692,7 @@ function StandupEditor({
                       </SelectTrigger>
                     </Field>
                     <SelectContent>
-                      {reportChannelOptions.map((item) => (
+                      {reminderOptions.map((item) => (
                         <SelectItem key={item.value} value={item.value}>
                           {item.label}
                         </SelectItem>
@@ -647,120 +701,30 @@ function StandupEditor({
                   </Select>
                 )}
               />
-              <Field label="Report time">
-                <Input type="time" {...register('report_time')} />
-              </Field>
-              <Field
-                label="Daily email to"
-                help="This standup’s answers, sent after its reporting window."
-              >
-                <Input
-                  type="email"
-                  placeholder="lead@company.com"
-                  {...register('digest_email')}
-                />
-              </Field>
-              <Field label="Remind missing participants before report (minutes)">
-                <Input
-                  type="number"
-                  min={5}
-                  max={120}
-                  step={5}
-                  {...register('nudge_minutes_before', {
-                    valueAsNumber: true,
-                    min: 5,
-                    max: 120,
-                  })}
-                />
-              </Field>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" {...register('digest_enabled')} />
-              Send that email daily
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" {...register('nudge_missing')} />
-              Privately remind people who have not answered
-            </label>
-            <p className="text-xs text-muted-foreground">
-              People on leave and those who have skipped today are left alone.
-            </p>
-          </section>
-          <section
-            role="tabpanel"
-            aria-labelledby={`${id}-Advanced`}
-            id={`${id}-panel-Advanced`}
-            data-tab="Advanced"
-            hidden={tab !== 'Advanced'}
-            className="space-y-5"
-          >
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" {...register('post_to_thread')} />
-                Post answers as a Slack thread
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" {...register('post_summary')} />
-                Post a daily summary to the channel
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" {...register('notify_on_report')} />
-                Mention participants when the report posts
-              </label>
-            </div>
-            <Controller
-              control={form.control}
-              name="group_by"
-              render={({ field, fieldState }) => (
-                <Select
-                  name={field.name}
-                  value={field.value}
-                  items={groupOptions}
-                  disabled={save.isPending}
-                  onValueChange={(value) => {
-                    if (value !== null) field.onChange(value);
-                  }}
-                >
-                  <Field label="Group report by">
-                    <SelectTrigger
-                      className="w-full"
-                      ref={field.ref}
-                      onBlur={field.onBlur}
-                      aria-invalid={fieldState.invalid}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                  </Field>
-                  <SelectContent>
-                    {groupOptions.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <h3 className="mb-1 font-medium">Shared workspace settings</h3>
-              <p className="mb-4 text-xs text-muted-foreground">
-                These settings apply to every standup in this workspace.
-              </p>
+            </section>
+            <section
+              role="tabpanel"
+              aria-labelledby={`${id}-Summary`}
+              id={`${id}-panel-Summary`}
+              data-tab="Summary"
+              hidden={tab !== 'Summary'}
+              className="space-y-5"
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <Controller
                   control={form.control}
-                  name="edit_window"
+                  name="report_channel"
                   render={({ field, fieldState }) => (
                     <Select
                       name={field.name}
                       value={field.value}
-                      items={editWindowOptions}
+                      items={reportChannelOptions}
                       disabled={save.isPending}
                       onValueChange={(value) => {
                         if (value !== null) field.onChange(value);
                       }}
                     >
-                      <Field label="Edit window">
+                      <Field label="Report channel">
                         <SelectTrigger
                           className="w-full"
                           ref={field.ref}
@@ -771,7 +735,7 @@ function StandupEditor({
                         </SelectTrigger>
                       </Field>
                       <SelectContent>
-                        {editWindowOptions.map((item) => (
+                        {reportChannelOptions.map((item) => (
                           <SelectItem key={item.value} value={item.value}>
                             {item.label}
                           </SelectItem>
@@ -780,93 +744,233 @@ function StandupEditor({
                     </Select>
                   )}
                 />
-                <Field label="Jira base URL">
+                <Field label="Report time">
+                  <Input type="time" {...register('report_time')} />
+                </Field>
+                <Field
+                  label="Daily email to"
+                  help="This standup’s answers, sent after its reporting window."
+                >
                   <Input
-                    type="url"
-                    placeholder="https://yourteam.atlassian.net"
-                    {...register('jira_base_url')}
+                    type="email"
+                    placeholder="lead@company.com"
+                    {...register('digest_email')}
                   />
                 </Field>
-                <Field label="GitHub repository">
-                  <Input placeholder="org/repo" {...register('github_repo')} />
+                <Field label="Remind missing participants before report (minutes)">
+                  <Input
+                    type="number"
+                    min={5}
+                    max={120}
+                    step={5}
+                    {...register('nudge_minutes_before', {
+                      valueAsNumber: true,
+                      min: 5,
+                      max: 120,
+                    })}
+                  />
                 </Field>
-                <Field label="Linear team prefix">
-                  <Input placeholder="ENG" {...register('linear_team')} />
-                </Field>
-                <Controller
-                  control={form.control}
-                  name="ai_provider"
-                  render={({ field, fieldState }) => (
-                    <Select
-                      name={field.name}
-                      value={field.value}
-                      items={aiProviderOptions}
-                      disabled={save.isPending}
-                      onValueChange={(value) => {
-                        if (value !== null) field.onChange(value);
-                      }}
-                    >
-                      <Field label="AI provider">
-                        <SelectTrigger
-                          className="w-full"
-                          ref={field.ref}
-                          onBlur={field.onBlur}
-                          aria-invalid={fieldState.invalid}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                      </Field>
-                      <SelectContent>
-                        {aiProviderOptions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register('digest_enabled')} />
+                Send that email daily
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" {...register('nudge_missing')} />
+                Privately remind people who have not answered
+              </label>
+              <p className="text-xs text-muted-foreground">
+                People on leave and those who have skipped today are left alone.
+              </p>
+            </section>
+            <section
+              role="tabpanel"
+              aria-labelledby={`${id}-Advanced`}
+              id={`${id}-panel-Advanced`}
+              data-tab="Advanced"
+              hidden={tab !== 'Advanced'}
+              className="space-y-5"
+            >
+              <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" {...register('ai_summary_enabled')} />
-                  Enable AI-generated daily summary
+                  <input type="checkbox" {...register('post_to_thread')} />
+                  Post answers as a Slack thread
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" {...register('post_summary')} />
+                  Post a daily summary to the channel
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" {...register('notify_on_report')} />
+                  Mention participants when the report posts
                 </label>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                An API key for the chosen AI provider must be configured on the
-                server.
-              </p>
-            </div>
-          </section>
-          {Object.entries(errors)
-            .filter(([field]) => field !== 'root')
-            .map(
-              ([field, error]) =>
-                typeof error?.message === 'string' && (
-                  <p
-                    role="alert"
-                    key={field}
-                    className="text-sm text-destructive"
+              <Controller
+                control={form.control}
+                name="group_by"
+                render={({ field, fieldState }) => (
+                  <Select
+                    name={field.name}
+                    value={field.value}
+                    items={groupOptions}
+                    disabled={save.isPending}
+                    onValueChange={(value) => {
+                      if (value !== null) field.onChange(value);
+                    }}
                   >
-                    {field.replaceAll('_', ' ')}: {error.message}
-                  </p>
-                ),
+                    <Field label="Group report by">
+                      <SelectTrigger
+                        className="w-full"
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        aria-invalid={fieldState.invalid}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                    </Field>
+                    <SelectContent>
+                      {groupOptions.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <h3 className="mb-1 font-medium">Shared workspace settings</h3>
+                <p className="mb-4 text-xs text-muted-foreground">
+                  These settings apply to every standup in this workspace.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Controller
+                    control={form.control}
+                    name="edit_window"
+                    render={({ field, fieldState }) => (
+                      <Select
+                        name={field.name}
+                        value={field.value}
+                        items={editWindowOptions}
+                        disabled={save.isPending}
+                        onValueChange={(value) => {
+                          if (value !== null) field.onChange(value);
+                        }}
+                      >
+                        <Field label="Edit window">
+                          <SelectTrigger
+                            className="w-full"
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                        </Field>
+                        <SelectContent>
+                          {editWindowOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <Field label="Jira base URL">
+                    <Input
+                      type="url"
+                      placeholder="https://yourteam.atlassian.net"
+                      {...register('jira_base_url')}
+                    />
+                  </Field>
+                  <Field label="GitHub repository">
+                    <Input
+                      placeholder="org/repo"
+                      {...register('github_repo')}
+                    />
+                  </Field>
+                  <Field label="Linear team prefix">
+                    <Input placeholder="ENG" {...register('linear_team')} />
+                  </Field>
+                  <Controller
+                    control={form.control}
+                    name="ai_provider"
+                    render={({ field, fieldState }) => (
+                      <Select
+                        name={field.name}
+                        value={field.value}
+                        items={aiProviderOptions}
+                        disabled={save.isPending}
+                        onValueChange={(value) => {
+                          if (value !== null) field.onChange(value);
+                        }}
+                      >
+                        <Field label="AI provider">
+                          <SelectTrigger
+                            className="w-full"
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                        </Field>
+                        <SelectContent>
+                          {aiProviderOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      {...register('ai_summary_enabled')}
+                    />
+                    Enable AI-generated daily summary
+                  </label>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  An API key for the chosen AI provider must be configured on
+                  the server.
+                </p>
+              </div>
+            </section>
+            {Object.entries(errors)
+              .filter(([field]) => field !== 'root')
+              .map(
+                ([field, error]) =>
+                  typeof error?.message === 'string' && (
+                    <p
+                      role="alert"
+                      key={field}
+                      className="text-sm text-destructive"
+                    >
+                      {field.replaceAll('_', ' ')}: {error.message}
+                    </p>
+                  ),
+              )}
+            {errors.root && (
+              <p
+                role="alert"
+                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                {errors.root.message ?? errors.root.server?.message}
+              </p>
             )}
-          {errors.root && (
-            <p
-              role="alert"
-              className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
-            >
-              {errors.root.message ?? errors.root.server?.message}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 border-t pt-4">
+          </DialogBody>
+          <DialogFooter className="border-t pt-4">
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
               {save.isPending ? 'Saving…' : 'Save standup'}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
