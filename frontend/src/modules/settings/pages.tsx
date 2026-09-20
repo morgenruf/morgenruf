@@ -13,12 +13,7 @@ import { toast } from 'sonner';
 import { api } from '@/common/api/client';
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -32,6 +27,7 @@ import { Input } from '@/common/components/ui/input';
 import { applyApiErrors } from '@/common/forms/api-errors';
 
 import { useSettings, useSettingsMutations } from './hooks';
+import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
 
 type Standup = Awaited<
   ReturnType<typeof api.standups.listStandups>
@@ -174,7 +170,7 @@ export function SettingsPage() {
           </CardHeader>
           <CardContent>
             {modules.isPending ? (
-              <LoadingState />
+              <FeatureSettingsSkeleton />
             ) : modules.error ? (
               <ErrorState
                 error={modules.error}
@@ -246,7 +242,7 @@ export function SettingsPage() {
           </CardContent>
         </Card>
         {standups.isPending ? (
-          <LoadingState />
+          <StandupSettingsSkeleton />
         ) : standups.error ? (
           <ErrorState error={standups.error} retry={() => standups.refetch()} />
         ) : first ? (

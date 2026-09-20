@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { useWorkspaceModules } from '@/common/api/use-workspace-modules';
 import { usePermissions } from '@/common/auth/use-session';
 
-import { EmptyState, ErrorState, LoadingState } from './page';
+import { EmptyState, ErrorState } from './page';
 import { Button } from './ui/button';
 
 export function ModuleGate({
@@ -12,21 +12,18 @@ export function ModuleGate({
   label,
   children,
   requireActive = true,
+  loadingFallback,
 }: {
   module: string;
   label: string;
   children: ReactNode;
   requireActive?: boolean;
+  loadingFallback: ReactNode;
 }) {
   const query = useWorkspaceModules();
   const { isAdmin } = usePermissions();
 
-  if (query.isPending)
-    return (
-      <div className="page">
-        <LoadingState label={`Checking ${label.toLowerCase()} availability…`} />
-      </div>
-    );
+  if (query.isPending) return loadingFallback;
 
   if (query.error)
     return (

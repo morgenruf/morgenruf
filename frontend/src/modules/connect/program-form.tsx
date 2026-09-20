@@ -12,7 +12,13 @@ import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
-import { EmptyState, ErrorState, LoadingState } from '@/common/components/page';
+import {
+  LoadingField,
+  SkeletonRegion,
+  SkeletonTable,
+  SkeletonText,
+} from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -114,7 +120,12 @@ function ProgramMembers({ programId }: { programId: number }) {
 
   const [search, setSearch] = useState('');
 
-  if (query.isPending) return <LoadingState />;
+  if (query.isPending)
+    return (
+      <SkeletonRegion label="Loading coffee chat members…">
+        <SkeletonTable columns={4} />
+      </SkeletonRegion>
+    );
 
   if (query.error)
     return <ErrorState error={query.error} retry={() => query.refetch()} />;
@@ -476,36 +487,42 @@ export function ProgramForm({ program }: { program?: Program }) {
                   name="channel_id"
                   rules={{ required: 'Choose a channel.' }}
                   render={({ field, fieldState }) => (
-                    <Select
-                      name={field.name}
-                      value={field.value}
-                      items={channelOptions}
-                      disabled={!editable || save.isPending}
-                      onValueChange={(value) => {
-                        if (value !== null) field.onChange(value);
-                      }}
+                    <LoadingField
+                      pending={resources.channels.isPending}
+                      label="Loading channels…"
+                      fieldLabel="Draw people from"
                     >
-                      <Field
-                        label="Draw people from"
-                        help="Everyone eligible in this channel can be paired. People can opt out from Slack."
+                      <Select
+                        name={field.name}
+                        value={field.value}
+                        items={channelOptions}
+                        disabled={!editable || save.isPending}
+                        onValueChange={(value) => {
+                          if (value !== null) field.onChange(value);
+                        }}
                       >
-                        <SelectTrigger
-                          className="w-full"
-                          ref={field.ref}
-                          onBlur={field.onBlur}
-                          aria-invalid={fieldState.invalid}
+                        <Field
+                          label="Draw people from"
+                          help="Everyone eligible in this channel can be paired. People can opt out from Slack."
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                      </Field>
-                      <SelectContent>
-                        {channelOptions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          <SelectTrigger
+                            className="w-full"
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                        </Field>
+                        <SelectContent>
+                          {channelOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LoadingField>
                   )}
                 />
                 {form.formState.errors.channel_id && (
@@ -848,7 +865,9 @@ export function ProgramForm({ program }: { program?: Program }) {
                 {values.video_mode === 'zoom' && (
                   <div className="rounded-lg border p-4 text-sm">
                     {resources.zoom.isPending ? (
-                      'Checking Zoom configuration…'
+                      <SkeletonRegion label="Checking Zoom configuration…">
+                        <SkeletonText lines={2} />
+                      </SkeletonRegion>
                     ) : resources.zoom.error ? (
                       <ErrorState
                         error={resources.zoom.error}

@@ -14,11 +14,11 @@ import { toast } from 'sonner';
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+  LoadingField,
+  SkeletonPeople,
+  SkeletonRegion,
+} from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
@@ -37,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/common/components/ui/select';
+import { Skeleton } from '@/common/components/ui/skeleton';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { useTabbedFormValidation } from '@/common/forms/use-tabbed-form-validation';
 
@@ -56,6 +57,7 @@ import {
   type Standup,
   type StandupInput,
 } from './hooks';
+import { StandupsSkeleton } from './loading';
 
 function Field({
   label,
@@ -289,33 +291,39 @@ function StandupEditor({
                 name="channel_id"
                 rules={{ required: 'Choose a channel.' }}
                 render={({ field, fieldState }) => (
-                  <Select
-                    name={field.name}
-                    value={field.value}
-                    items={channelOptions}
-                    disabled={save.isPending}
-                    onValueChange={(value) => {
-                      if (value !== null) field.onChange(value);
-                    }}
+                  <LoadingField
+                    pending={resources.channels.isPending}
+                    label="Loading channels…"
+                    fieldLabel="Channel"
                   >
-                    <Field label="Channel">
-                      <SelectTrigger
-                        className="w-full"
-                        ref={field.ref}
-                        onBlur={field.onBlur}
-                        aria-invalid={fieldState.invalid}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                    </Field>
-                    <SelectContent>
-                      {channelOptions.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Select
+                      name={field.name}
+                      value={field.value}
+                      items={channelOptions}
+                      disabled={save.isPending}
+                      onValueChange={(value) => {
+                        if (value !== null) field.onChange(value);
+                      }}
+                    >
+                      <Field label="Channel">
+                        <SelectTrigger
+                          className="w-full"
+                          ref={field.ref}
+                          onBlur={field.onBlur}
+                          aria-invalid={fieldState.invalid}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                      </Field>
+                      <SelectContent>
+                        {channelOptions.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </LoadingField>
                 )}
               />
             </div>
@@ -359,7 +367,9 @@ function StandupEditor({
                 </Button>
               </div>
               {resources.members.isPending ? (
-                <LoadingState />
+                <SkeletonRegion label="Loading participants…">
+                  <SkeletonPeople />
+                </SkeletonRegion>
               ) : resources.members.error ? (
                 <ErrorState
                   error={resources.members.error}
@@ -481,6 +491,14 @@ function StandupEditor({
               </div>
               {templateGallery && (
                 <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {resources.templates.isPending && (
+                    <SkeletonRegion
+                      label="Loading question templates…"
+                      className="sm:col-span-2"
+                    >
+                      <SkeletonPeople rows={4} />
+                    </SkeletonRegion>
+                  )}
                   {resources.templates.data?.map((template) => (
                     <button
                       key={template.id}
@@ -885,7 +903,7 @@ export function StandupsPage() {
         }
       />
       {query.isPending ? (
-        <LoadingState />
+        <StandupsSkeleton />
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => query.refetch()} />
       ) : !query.data?.length ? (
@@ -961,20 +979,26 @@ export function StandupsPage() {
                             {new Date(standup.next_run).toLocaleString()}
                           </p>
                         )}
-                        {metrics && (
-                          <p className="text-xs">
-                            <span className="font-medium">
-                              {healthLabel(metrics.completion_rate)}
-                              {metrics.completion_rate != null
-                                ? ` · ${metrics.completion_rate}%`
-                                : ''}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {' '}
-                              · {metrics.completed} of {metrics.expected} filed
-                              in the last 14 days
-                            </span>
-                          </p>
+                        {health.isPending ? (
+                          <SkeletonRegion label="Loading participation summary…">
+                            <Skeleton className="h-3 w-64 max-w-full" />
+                          </SkeletonRegion>
+                        ) : (
+                          metrics && (
+                            <p className="text-xs">
+                              <span className="font-medium">
+                                {healthLabel(metrics.completion_rate)}
+                                {metrics.completion_rate != null
+                                  ? ` · ${metrics.completion_rate}%`
+                                  : ''}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {' '}
+                                · {metrics.completed} of {metrics.expected}{' '}
+                                filed in the last 14 days
+                              </span>
+                            </p>
+                          )
                         )}
                       </>
                     )}

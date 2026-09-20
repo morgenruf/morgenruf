@@ -6,12 +6,8 @@ import { toast } from 'sonner';
 import { errorMessage } from '@/common/api/errors';
 import type { StandupResponse } from '@/common/api/generated/data-contracts';
 import { useSession } from '@/common/auth/use-session';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { LoadingField } from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Person } from '@/common/components/person';
 import { SlackText } from '@/common/components/slack-text';
 import { Badge } from '@/common/components/ui/badge';
@@ -43,6 +39,7 @@ import {
 import { formatDate } from '@/common/lib/format';
 
 import { exportReports, useReports } from '../hooks';
+import { ReportsSkeleton } from '../loading';
 
 export default function ReportsPage() {
   const { data: session } = useSession();
@@ -196,22 +193,27 @@ export default function ReportsPage() {
           </div>
           <div className="field">
             <Label htmlFor="report-member">Member</Label>
-            <Select
-              items={memberOptions}
-              value={userId}
-              onValueChange={(value) => filter('user_id', value ?? '')}
+            <LoadingField
+              pending={members.isPending}
+              label="Loading member filter…"
             >
-              <SelectTrigger id="report-member" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {memberOptions.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select
+                items={memberOptions}
+                value={userId}
+                onValueChange={(value) => filter('user_id', value ?? '')}
+              >
+                <SelectTrigger id="report-member" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {memberOptions.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </LoadingField>
           </div>
           <div className="flex flex-wrap gap-2 sm:col-span-3">
             <Button variant="outline" size="sm" onClick={() => preset(7)}>
@@ -234,7 +236,7 @@ export default function ReportsPage() {
           The start date must be on or before the end date.
         </p>
       ) : reports.isPending ? (
-        <LoadingState />
+        <ReportsSkeleton />
       ) : reports.error ? (
         <ErrorState
           error={reports.error}

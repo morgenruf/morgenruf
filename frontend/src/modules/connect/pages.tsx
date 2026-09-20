@@ -13,12 +13,7 @@ import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
@@ -49,14 +44,26 @@ import {
   useConnectResources,
   type Program,
 } from './hooks';
+import {
+  ConnectAttendanceSkeleton,
+  ConnectDetailSkeleton,
+  ConnectListSkeleton,
+  ProgramFormSkeleton,
+} from './loading';
 import { ProgramForm } from './program-form';
 
-function ConnectGate({ children }: { children: ReactNode }) {
+function ConnectGate({
+  children,
+  loadingFallback,
+}: {
+  children: ReactNode;
+  loadingFallback: ReactNode;
+}) {
   const query = useConnectCapabilities();
   const { isAdmin } = usePermissions();
   const { enable } = useConnectMutations();
 
-  if (query.isPending) return <LoadingState />;
+  if (query.isPending) return loadingFallback;
 
   if (query.error)
     return <ErrorState error={query.error} retry={() => query.refetch()} />;
@@ -232,7 +239,7 @@ function ProgramList() {
   const { channels, zoom } = useConnectResources();
   const { canAdminister } = usePermissions();
 
-  if (query.isPending) return <LoadingState />;
+  if (query.isPending) return <ConnectListSkeleton />;
 
   if (query.error)
     return <ErrorState error={query.error} retry={() => query.refetch()} />;
@@ -359,7 +366,7 @@ export function ConnectListPage() {
           )
         }
       />
-      <ConnectGate>
+      <ConnectGate loadingFallback={<ConnectListSkeleton />}>
         <ProgramList />
       </ConnectGate>
     </div>
@@ -384,7 +391,7 @@ export function ConnectNewPage() {
           </Link>
         }
       />
-      <ConnectGate>
+      <ConnectGate loadingFallback={<ProgramFormSkeleton />}>
         {canAdminister('connect') ? (
           <ProgramForm />
         ) : (
@@ -402,7 +409,7 @@ function ProgramDetail() {
   const { programId } = useParams();
   const query = useConnect();
 
-  if (query.isPending) return <LoadingState />;
+  if (query.isPending) return <ConnectDetailSkeleton />;
 
   if (query.error)
     return <ErrorState error={query.error} retry={() => query.refetch()} />;
@@ -450,7 +457,7 @@ export function ConnectDetailPage() {
         <ArrowLeft className="size-4" />
         All coffee chats
       </Link>
-      <ConnectGate>
+      <ConnectGate loadingFallback={<ConnectDetailSkeleton />}>
         <ProgramDetail />
       </ConnectGate>
     </div>
@@ -461,7 +468,7 @@ function AttendancePageContent() {
   const query = useConnect();
   const [params, setParams] = useSearchParams();
 
-  if (query.isPending) return <LoadingState />;
+  if (query.isPending) return <ConnectAttendanceSkeleton />;
 
   if (query.error)
     return <ErrorState error={query.error} retry={() => query.refetch()} />;
@@ -518,7 +525,7 @@ export function ConnectAttendancePage() {
         title="Coffee chat attendance"
         description="Who was introduced, who met, and where a nudge might help."
       />
-      <ConnectGate>
+      <ConnectGate loadingFallback={<ConnectAttendanceSkeleton />}>
         <AttendancePageContent />
       </ConnectGate>
     </div>

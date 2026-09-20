@@ -4,11 +4,11 @@ import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
 import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+  LoadingField,
+  SkeletonPeople,
+  SkeletonRegion,
+} from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
@@ -27,8 +27,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/common/components/ui/select';
+import { Skeleton } from '@/common/components/ui/skeleton';
 
 import { useMembers } from '../hooks';
+import { MembersSkeleton } from '../loading';
 
 const moduleLabels: Record<string, string> = {
   standup: 'Standups',
@@ -169,22 +171,27 @@ export default function MembersPage() {
           value={params.get('q') ?? ''}
           onChange={(event) => filter('q', event.target.value)}
         />
-        <Select
-          items={channelOptions}
-          value={channel}
-          onValueChange={(value) => filter('channel', value ?? '')}
+        <LoadingField
+          pending={channels.isPending}
+          label="Loading channel filter…"
         >
-          <SelectTrigger aria-label="Filter by channel" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {channelOptions.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Select
+            items={channelOptions}
+            value={channel}
+            onValueChange={(value) => filter('channel', value ?? '')}
+          >
+            <SelectTrigger aria-label="Filter by channel" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {channelOptions.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </LoadingField>
         <Select
           items={roleOptions}
           value={params.get('role') ?? ''}
@@ -235,7 +242,7 @@ export default function MembersPage() {
         </Select>
       </div>
       {members.isPending ? (
-        <LoadingState />
+        <MembersSkeleton />
       ) : members.isError ? (
         <ErrorState
           error={members.error}
@@ -309,13 +316,19 @@ export default function MembersPage() {
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <p>{member.email || 'No email shared'}</p>
                         <p>{member.tz || 'UTC'}</p>
-                        <p>
-                          {count
-                            ? `${count} standup${count === 1 ? '' : 's'}`
-                            : member.tracked === false
-                              ? 'Not in Morgenruf'
-                              : 'No standups'}
-                        </p>
+                        {standups.isPending ? (
+                          <SkeletonRegion label="Loading standup enrollment…">
+                            <Skeleton className="h-4 w-24" />
+                          </SkeletonRegion>
+                        ) : (
+                          <p>
+                            {count
+                              ? `${count} standup${count === 1 ? '' : 's'}`
+                              : member.tracked === false
+                                ? 'Not in Morgenruf'
+                                : 'No standups'}
+                          </p>
+                        )}
                       </div>
                       {grantable.length > 0 && (
                         <div className="space-y-2 border-t pt-3">
@@ -409,7 +422,9 @@ export default function MembersPage() {
             onChange={(event) => setInviteSearch(event.target.value)}
           />
           {inviteMembers.isPending ? (
-            <LoadingState />
+            <SkeletonRegion label="Loading members to invite…">
+              <SkeletonPeople rows={5} />
+            </SkeletonRegion>
           ) : inviteMembers.isError ? (
             <ErrorState
               error={inviteMembers.error}

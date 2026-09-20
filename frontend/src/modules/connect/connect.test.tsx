@@ -220,7 +220,9 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
   view(<ProgramForm />);
   await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
   expect(await screen.findByText('Choose a channel.')).toBeInTheDocument();
-  const channel = screen.getByRole('combobox', { name: 'Draw people from' });
+  const channel = await screen.findByRole('combobox', {
+    name: 'Draw people from',
+  });
   expect(channel).toHaveAccessibleDescription(
     'Everyone eligible in this channel can be paired. People can opt out from Slack.',
   );
@@ -263,7 +265,9 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
 it('disables coffee chat choices for read-only members', async () => {
   const user = userEvent.setup();
   view(<ProgramForm />);
-  const channel = screen.getByRole('combobox', { name: 'Draw people from' });
+  const channel = await screen.findByRole('combobox', {
+    name: 'Draw people from',
+  });
   expect(channel).toBeDisabled();
   await user.click(channel);
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();

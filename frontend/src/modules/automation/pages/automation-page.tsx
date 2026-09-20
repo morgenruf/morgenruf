@@ -3,12 +3,8 @@ import { Plus, Trash2, Zap } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { LoadingField } from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Button } from '@/common/components/ui/button';
 import {
   Card,
@@ -37,6 +33,7 @@ import { Textarea } from '@/common/components/ui/textarea';
 import { applyApiErrors } from '@/common/forms/api-errors';
 
 import { useAutomation, type RuleInput } from '../hooks';
+import { AutomationSkeleton } from '../loading';
 
 const triggers: Record<string, string> = {
   blocker_detected: 'a blocker is reported',
@@ -152,7 +149,7 @@ export default function AutomationPage() {
         }
       />
       {rules.isPending ? (
-        <LoadingState />
+        <AutomationSkeleton />
       ) : rules.isError ? (
         <ErrorState error={rules.error} retry={() => void rules.refetch()} />
       ) : !rules.data?.length ? (
@@ -376,35 +373,40 @@ export default function AutomationPage() {
                   name="action_target"
                   rules={{ required: 'Choose a channel.' }}
                   render={({ field, fieldState }) => (
-                    <Select
-                      name={field.name}
-                      value={field.value}
-                      items={channelOptions}
-                      required
-                      disabled={!canEdit || create.isPending}
-                      onValueChange={(value) => {
-                        if (value !== null) {
-                          field.onChange(value);
-                        }
-                      }}
+                    <LoadingField
+                      pending={channels.isPending}
+                      label="Loading channels…"
                     >
-                      <SelectTrigger
-                        id="rule-target"
-                        className="w-full"
-                        ref={field.ref}
-                        onBlur={field.onBlur}
-                        aria-invalid={fieldState.invalid}
+                      <Select
+                        name={field.name}
+                        value={field.value}
+                        items={channelOptions}
+                        required
+                        disabled={!canEdit || create.isPending}
+                        onValueChange={(value) => {
+                          if (value !== null) {
+                            field.onChange(value);
+                          }
+                        }}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {channelOptions.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                        <SelectTrigger
+                          id="rule-target"
+                          className="w-full"
+                          ref={field.ref}
+                          onBlur={field.onBlur}
+                          aria-invalid={fieldState.invalid}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {channelOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LoadingField>
                   )}
                 />
               ) : (

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertCircle, Inbox, Loader2 } from 'lucide-react';
+import { AlertCircle, Inbox } from 'lucide-react';
 
 import { errorMessage } from '@/common/api/errors';
 
@@ -29,18 +29,6 @@ export function PageHeader({
         <div className="flex flex-wrap items-center gap-2">{actions}</div>
       )}
     </header>
-  );
-}
-
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div
-      role="status"
-      className="flex min-h-40 items-center justify-center gap-2 text-muted-foreground"
-    >
-      <Loader2 className="size-4 animate-spin" />
-      {label}
-    </div>
   );
 }
 

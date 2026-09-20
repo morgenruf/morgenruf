@@ -1,9 +1,4 @@
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Person } from '@/common/components/person';
 import { SlackText } from '@/common/components/slack-text';
 import { Badge } from '@/common/components/ui/badge';
@@ -17,6 +12,7 @@ import {
 import { formatDate, relativeTime } from '@/common/lib/format';
 
 import { useInsights } from '../hooks';
+import { InsightsSkeleton } from '../loading';
 
 export default function InsightsPage() {
   const { query, members } = useInsights();
@@ -28,7 +24,7 @@ export default function InsightsPage() {
         description="Patterns that deserve a closer look, across the last 30 days."
       />
       {query.isPending ? (
-        <LoadingState />
+        <InsightsSkeleton />
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : (

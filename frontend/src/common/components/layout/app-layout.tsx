@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   BarChart3,
   CalendarCheck,
@@ -20,13 +20,7 @@ import {
   Workflow,
   type LucideIcon,
 } from 'lucide-react';
-import {
-  Navigate,
-  NavLink,
-  Outlet,
-  useLocation,
-  useMatches,
-} from 'react-router';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router';
 import { toast } from 'sonner';
 
 import { api, clearSession } from '@/common/api/client';
@@ -34,7 +28,7 @@ import { errorMessage } from '@/common/api/errors';
 import { useWorkspaceModules } from '@/common/api/use-workspace-modules';
 import { usePermissions, useSession } from '@/common/auth/use-session';
 import { ModuleGate } from '@/common/components/module-gate';
-import { ErrorState, LoadingState } from '@/common/components/page';
+import { ErrorState } from '@/common/components/page';
 import { ThemeToggle } from '@/common/components/theme-toggle';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -48,6 +42,8 @@ import {
   legacyDashboardPath,
 } from '@/common/lib/routes';
 import { cn } from '@/common/lib/utils';
+
+import { AppShellSkeleton } from './app-shell-skeleton';
 
 type NavItem = {
   label: string;
@@ -111,7 +107,15 @@ const groups: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-export function AppLayout() {
+export function AppLayout({
+  loadingFallback,
+  title,
+  pendingView,
+}: {
+  loadingFallback: ReactNode;
+  title: string;
+  pendingView?: { title: string; content: ReactNode };
+}) {
   const session = useSession();
   const modules = useWorkspaceModules();
   const { canAdminister } = usePermissions();
@@ -120,13 +124,7 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const location = useLocation();
-  const matches = useMatches();
-
-  const current =
-    matches
-      .map((match) => match.handle as { title?: string } | undefined)
-      .filter(Boolean)
-      .at(-1)?.title ?? 'Dashboard';
+  const current = pendingView?.title ?? title;
   const section = location.pathname.split('/')[2];
 
   const routeModule: Record<string, string> = {
@@ -139,7 +137,7 @@ export function AppLayout() {
   };
 
   if (session.isPending)
-    return <LoadingState label="Opening your workspace…" />;
+    return <AppShellSkeleton>{loadingFallback}</AppShellSkeleton>;
 
   if (session.error)
     return (
@@ -376,8 +374,11 @@ export function AppLayout() {
           className="min-w-0"
           key={`${session.data.team_id}:${session.data.user_id}`}
         >
-          {routeModule[section] ? (
+          {pendingView ? (
+            pendingView.content
+          ) : routeModule[section] ? (
             <ModuleGate
+              loadingFallback={loadingFallback}
               module={routeModule[section]}
               label={current}
               requireActive={section !== 'today'}

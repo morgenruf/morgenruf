@@ -3,12 +3,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SlackText } from '@/common/components/slack-text';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -31,6 +26,11 @@ import { applyApiErrors } from '@/common/forms/api-errors';
 import { relativeTime } from '@/common/lib/format';
 
 import { useKudos, type KudosConfigInput } from '../hooks';
+import {
+  KudosConfigSkeleton,
+  KudosFeedSkeleton,
+  KudosLeaderboardSkeleton,
+} from '../loading';
 
 const periodOptions = [7, 30, 90].map((days) => ({
   value: days,
@@ -115,7 +115,7 @@ export default function KudosPage() {
           </CardHeader>
           <CardContent>
             {receivers.isPending ? (
-              <LoadingState />
+              <KudosLeaderboardSkeleton />
             ) : receivers.isError ? (
               <ErrorState
                 error={receivers.error}
@@ -152,7 +152,7 @@ export default function KudosPage() {
           </CardHeader>
           <CardContent>
             {givers.isPending ? (
-              <LoadingState />
+              <KudosLeaderboardSkeleton />
             ) : givers.isError ? (
               <ErrorState
                 error={givers.error}
@@ -184,7 +184,7 @@ export default function KudosPage() {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Recent appreciation</h2>
         {feed.isPending ? (
-          <LoadingState />
+          <KudosFeedSkeleton />
         ) : feed.isError ? (
           <ErrorState error={feed.error} retry={() => void feed.refetch()} />
         ) : !feed.data?.length ? (
@@ -235,7 +235,7 @@ export default function KudosPage() {
                 retry={() => void config.refetch()}
               />
             ) : config.isPending ? (
-              <LoadingState />
+              <KudosConfigSkeleton />
             ) : (
               <form
                 className="space-y-4"

@@ -9,10 +9,10 @@ import {
   YAxis,
 } from 'recharts';
 
+import { LoadingField } from '@/common/components/loading-skeleton';
 import {
   EmptyState,
   ErrorState,
-  LoadingState,
   PageHeader,
   StatCard,
 } from '@/common/components/page';
@@ -46,6 +46,7 @@ import { formatDate, relativeTime } from '@/common/lib/format';
 
 import { analyticsView, rateTone } from '../analytics-utils';
 import { useAnalytics } from '../hooks';
+import { AnalyticsSkeleton } from '../loading';
 
 export default function AnalyticsPage() {
   const [params, setParams] = useSearchParams();
@@ -99,26 +100,32 @@ export default function AnalyticsPage() {
       />
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
-          <Select
-            items={scheduleOptions}
-            value={scheduleId}
-            onValueChange={(value) => filter('schedule', value ?? '')}
+          <LoadingField
+            pending={query.isPending}
+            label="Loading standup filter…"
+            className="w-56"
           >
-            <SelectTrigger
-              id="analytics-schedule"
-              aria-label="Standup"
-              className="w-56"
+            <Select
+              items={scheduleOptions}
+              value={scheduleId}
+              onValueChange={(value) => filter('schedule', value ?? '')}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {scheduleOptions.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                id="analytics-schedule"
+                aria-label="Standup"
+                className="w-56"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {scheduleOptions.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </LoadingField>
         </div>
         <Label className="flex items-center gap-2">
           <Checkbox
@@ -131,7 +138,7 @@ export default function AnalyticsPage() {
         </Label>
       </div>
       {query.isPending ? (
-        <LoadingState />
+        <AnalyticsSkeleton />
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : (

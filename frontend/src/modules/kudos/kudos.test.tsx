@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 
+import { deferred } from '@/test/deferred';
 import { chooseOption } from '@/test/select';
 
 import KudosPage from './pages/kudos-page';
@@ -109,4 +110,34 @@ it('shows the selected period on load and requests numeric days after changing i
     ),
   );
   expect(mock.givers).toHaveBeenCalledWith({ days: 90 }, expect.anything());
+});
+
+it('lets independently loaded sections appear while a leaderboard is pending', async () => {
+  const receivers = deferred<{ data: never[] }>();
+  mock.leaderboard.mockReturnValue(receivers.promise);
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <MemoryRouter>
+        <KudosPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findByLabelText('Emoji or Slack token');
+  expect(
+    screen.getByRole('status', { name: 'Loading leaderboard…' }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole('status', { name: 'Loading recognition…' }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('status', { name: 'Loading kudos settings…' }),
+  ).not.toBeInTheDocument();
+  await act(async () => receivers.resolve({ data: [] }));
+  await waitFor(() =>
+    expect(screen.queryByRole('status')).not.toBeInTheDocument(),
+  );
 });

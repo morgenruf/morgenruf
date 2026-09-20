@@ -2,12 +2,7 @@ import { useState } from 'react';
 import { Copy, KeyRound, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SecretPanel } from '@/common/components/secret-panel';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -38,6 +33,7 @@ import { formatDate, relativeTime } from '@/common/lib/format';
 
 import { buildMcpConfig } from '../config';
 import { useMcp } from '../hooks';
+import { McpKeysSkeleton } from '../loading';
 
 const assistantOptions = [
   { value: 'claude', label: 'Claude Desktop' },
@@ -136,7 +132,7 @@ export default function McpPage() {
         </CardHeader>
         <CardContent>
           {keys.isPending ? (
-            <LoadingState />
+            <McpKeysSkeleton />
           ) : keys.isError ? (
             <ErrorState error={keys.error} retry={() => void keys.refetch()} />
           ) : !keys.data?.keys.length ? (

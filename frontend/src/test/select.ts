@@ -7,7 +7,7 @@ export async function chooseOption(
   name: string,
   option: string,
 ) {
-  const trigger = screen.getByRole('combobox', { name });
+  const trigger = await screen.findByRole('combobox', { name });
   await user.click(trigger);
   await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
   const listbox = await screen.findByRole('listbox');

@@ -12,11 +12,10 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+  SkeletonRegion,
+  SkeletonTable,
+} from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SecretPanel } from '@/common/components/secret-panel';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -47,6 +46,7 @@ import {
   type Webhook,
   type WebhookInput,
 } from '../hooks';
+import { WebhooksSkeleton } from '../loading';
 
 const eventLabels: Record<string, string> = {
   'standup.completed': 'Standup completed',
@@ -166,7 +166,9 @@ function WebhookCard({
         {expanded && (
           <section aria-label="Recent deliveries" className="border-t pt-4">
             {deliveries.isPending ? (
-              <LoadingState />
+              <SkeletonRegion label="Loading recent deliveries…">
+                <SkeletonTable columns={6} />
+              </SkeletonRegion>
             ) : deliveries.isError ? (
               <ErrorState
                 error={deliveries.error}
@@ -272,7 +274,7 @@ export default function WebhooksPage() {
         />
       )}
       {webhooks.isPending ? (
-        <LoadingState />
+        <WebhooksSkeleton />
       ) : webhooks.isError ? (
         <ErrorState
           error={webhooks.error}

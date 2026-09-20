@@ -12,11 +12,11 @@ import {
 } from 'recharts';
 
 import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  StatCard,
-} from '@/common/components/page';
+  SkeletonPeople,
+  SkeletonRegion,
+  SkeletonTable,
+} from '@/common/components/loading-skeleton';
+import { EmptyState, ErrorState, StatCard } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -29,6 +29,7 @@ import {
 
 import { attendanceLabels, attendanceRate } from './form-utils';
 import { useAttendance, useRoundMatches } from './hooks';
+import { AttendanceSkeleton } from './loading';
 
 function RoundMatches({
   roundId,
@@ -39,7 +40,12 @@ function RoundMatches({
 }) {
   const query = useRoundMatches(roundId);
 
-  if (query.isPending) return <LoadingState label="Loading pairings…" />;
+  if (query.isPending)
+    return (
+      <SkeletonRegion label="Loading pairings…" className="border-t px-4 py-3">
+        <SkeletonPeople rows={3} />
+      </SkeletonRegion>
+    );
 
   if (query.error)
     return <ErrorState error={query.error} retry={() => query.refetch()} />;
@@ -85,7 +91,7 @@ export function Attendance({ programId }: { programId: number }) {
   const [open, setOpen] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
 
-  if (rounds.isPending) return <LoadingState label="Loading attendance…" />;
+  if (rounds.isPending) return <AttendanceSkeleton />;
 
   if (rounds.error)
     return <ErrorState error={rounds.error} retry={() => rounds.refetch()} />;
@@ -273,7 +279,9 @@ export function Attendance({ programId }: { programId: number }) {
           </CardHeader>
           <CardContent>
             {participation.isPending ? (
-              <LoadingState />
+              <SkeletonRegion label="Loading participation…">
+                <SkeletonTable columns={3} />
+              </SkeletonRegion>
             ) : participation.error ? (
               <ErrorState
                 error={participation.error}

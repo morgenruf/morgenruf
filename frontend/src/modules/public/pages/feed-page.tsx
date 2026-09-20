@@ -1,11 +1,6 @@
 import { useParams } from 'react-router';
 
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-} from '@/common/components/page';
+import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SlackText } from '@/common/components/slack-text';
 import { ThemeToggle } from '@/common/components/theme-toggle';
 import {
@@ -17,6 +12,7 @@ import {
 import { formatDate } from '@/common/lib/format';
 
 import { usePublicFeed } from '../hooks';
+import { FeedSkeleton } from '../loading';
 
 export default function FeedPage() {
   const { token = '' } = useParams();
@@ -39,7 +35,7 @@ export default function FeedPage() {
         <ThemeToggle />
       </header>
       {query.isPending ? (
-        <LoadingState />
+        <FeedSkeleton />
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : (

@@ -28,6 +28,7 @@ const renderGate = (requireActive = true) =>
   render(
     <MemoryRouter>
       <ModuleGate
+        loadingFallback={<div role="status">Loading insights…</div>}
         module="insights"
         label="Insights"
         requireActive={requireActive}

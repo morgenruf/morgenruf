@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Standup } from '@/common/api/generated/data-contracts';
+import { deferred } from '@/test/deferred';
 import { chooseOption } from '@/test/select';
 
 import { StandupsPage } from './pages';
@@ -412,3 +413,61 @@ it.each([
   },
   15_000,
 );
+
+describe('standup loading transitions', () => {
+  it.each(['content', 'empty', 'error'] as const)(
+    'replaces its skeleton with %s',
+    async (outcome) => {
+      const response = deferred<{ data: Standup[] }>();
+      mock.list.mockReturnValue(response.promise);
+      view();
+      expect(
+        screen.getByRole('status', { name: 'Loading standups…' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Standups' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText('Your first standup starts here'),
+      ).not.toBeInTheDocument();
+      await act(async () => {
+        if (outcome === 'error') response.reject(new Error('Offline'));
+        else response.resolve({ data: outcome === 'empty' ? [] : [standup] });
+      });
+      expect(
+        await screen.findByText(
+          outcome === 'error'
+            ? 'Could not load this view'
+            : outcome === 'empty'
+              ? 'Your first standup starts here'
+              : 'Design daily',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('status', { name: 'Loading standups…' }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it('keeps cached standups visible during a background refresh', async () => {
+    const client = view();
+    await screen.findByText('Design daily');
+    const response = deferred<{ data: Standup[] }>();
+    mock.list.mockReturnValue(response.promise);
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = client.invalidateQueries({
+        queryKey: ['workspace', 'T1', 'standups'],
+      });
+    });
+    await waitFor(() => expect(mock.list).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Design daily')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('status', { name: 'Loading standups…' }),
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      response.resolve({ data: [standup] });
+      await refresh;
+    });
+  });
+});

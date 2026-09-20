@@ -4,7 +4,6 @@ import { Link } from 'react-router';
 import {
   EmptyState,
   ErrorState,
-  LoadingState,
   PageHeader,
   StatCard,
 } from '@/common/components/page';
@@ -20,6 +19,7 @@ import {
 import { formatDate } from '@/common/lib/format';
 
 import { useToday } from '../hooks';
+import { TodaySkeleton } from '../loading';
 import { answeredSummary } from '../today-utils';
 
 export default function TodayPage() {
@@ -51,7 +51,7 @@ export default function TodayPage() {
         }
       />
       {query.isPending ? (
-        <LoadingState />
+        <TodaySkeleton />
       ) : query.error ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : (
