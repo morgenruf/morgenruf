@@ -7,6 +7,7 @@ import { errorMessage } from '@/common/api/errors';
 import type { StandupResponse } from '@/common/api/generated/data-contracts';
 import { useSession } from '@/common/auth/use-session';
 import { LoadingField } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Person } from '@/common/components/person';
 import { SlackText } from '@/common/components/slack-text';
@@ -235,207 +236,221 @@ export default function ReportsPage() {
         <p role="alert" className="text-sm text-destructive">
           The start date must be on or before the end date.
         </p>
-      ) : reports.isPending ? (
-        <ReportsSkeleton />
-      ) : reports.error ? (
-        <ErrorState
-          error={reports.error}
-          retry={() => void reports.refetch()}
-        />
       ) : (
-        reports.data && (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle>Participation</CardTitle>
-                <CardDescription>
-                  {reports.data.total_days} days in this window
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {reports.data.participation.length ? (
-                  <>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Member</TableHead>
-                          <TableHead>Answered</TableHead>
-                          <TableHead>Participation</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {(allParticipation
-                          ? reports.data.participation
-                          : reports.data.participation.slice(0, 10)
-                        ).map((row) => (
-                          <TableRow key={row.user_id}>
-                            <TableCell>
-                              <Person
-                                name={
-                                  names[row.user_id] || row.name || row.user_id
-                                }
-                                avatar={
-                                  members.data?.find(
-                                    (member) => member.id === row.user_id,
-                                  )?.avatar
-                                }
-                              />
-                            </TableCell>
-                            {!row.expected ? (
-                              <TableCell
-                                colSpan={2}
-                                className="text-muted-foreground"
-                              >
-                                {row.enrolled === false
-                                  ? 'Not in any standup'
-                                  : row.on_vacation
-                                    ? 'On vacation'
-                                    : 'Nothing scheduled in this window'}
-                              </TableCell>
-                            ) : (
-                              <>
-                                <TableCell className="tabular-nums">
-                                  {row.responses}/{row.total}
-                                </TableCell>
-                                <TableCell>
-                                  <span
-                                    aria-label={`${Math.max(0, Math.min(row.stars, 5))} out of 5 stars`}
-                                    className="text-warning"
-                                  >
-                                    {'★'.repeat(
-                                      Math.max(0, Math.min(row.stars, 5)),
-                                    )}
-                                    {'☆'.repeat(
-                                      5 - Math.max(0, Math.min(row.stars, 5)),
-                                    )}
-                                  </span>
-                                </TableCell>
-                              </>
-                            )}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {reports.data.participation.length > 10 &&
-                      !allParticipation && (
-                        <Button
-                          variant="ghost"
-                          className="mt-3"
-                          onClick={() => setAllParticipation(true)}
-                        >
-                          Show all {reports.data.participation.length} members
-                        </Button>
-                      )}
-                  </>
-                ) : (
-                  <EmptyState title="No participation data" />
-                )}
-              </CardContent>
-            </Card>
-            {!grouped.length ? (
-              <EmptyState
-                title="No responses in this window"
-                description="Try another date range or member."
-              />
-            ) : (
-              grouped.slice(0, dayLimit).map(([date, rows]) => (
-                <Card key={date}>
+        <LoadingTransition pending={reports.isPending}>
+          {reports.isPending ? (
+            <ReportsSkeleton />
+          ) : reports.error ? (
+            <ErrorState
+              error={reports.error}
+              retry={() => void reports.refetch()}
+            />
+          ) : (
+            reports.data && (
+              <>
+                <Card>
                   <CardHeader>
-                    <CardTitle>{formatDate(date)}</CardTitle>
+                    <CardTitle>Participation</CardTitle>
                     <CardDescription>
-                      {rows.length}{' '}
-                      {rows.length === 1 ? 'response' : 'responses'}
+                      {reports.data.total_days} days in this window
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="divide-y">
-                    {(expanded.has(date) ? rows : rows.slice(0, 5)).map(
-                      (row, index) => (
-                        <article
-                          key={`${row.id ?? row.user_id}-${index}`}
-                          className="py-5 first:pt-0"
-                        >
-                          <div className="flex flex-wrap items-center gap-3">
-                            <Person
-                              name={
-                                names[row.user_id] ||
-                                row.real_name ||
-                                row.user_name ||
-                                row.user_id
-                              }
-                              avatar={
-                                members.data?.find(
-                                  (member) => member.id === row.user_id,
-                                )?.avatar
-                              }
-                              detail={
-                                row.submitted_at
-                                  ? formatDate(row.submitted_at, {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })
-                                  : undefined
-                              }
-                            />
-                            {row.mood && (
-                              <Badge variant="secondary">{row.mood}</Badge>
-                            )}
-                            {row.has_blockers && (
-                              <Badge variant="destructive">Blocked</Badge>
-                            )}
-                          </div>
-                          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                            {[row.yesterday, row.today, row.blockers].map(
-                              (answer, index) => (
-                                <div
-                                  key={index}
-                                  className={index === 2 ? 'sm:col-span-2' : ''}
-                                >
-                                  <h3
-                                    className={`mb-1 text-xs font-medium ${index === 2 && row.has_blockers ? 'text-destructive' : 'text-muted-foreground'}`}
+                  <CardContent>
+                    {reports.data.participation.length ? (
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Member</TableHead>
+                              <TableHead>Answered</TableHead>
+                              <TableHead>Participation</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(allParticipation
+                              ? reports.data.participation
+                              : reports.data.participation.slice(0, 10)
+                            ).map((row) => (
+                              <TableRow key={row.user_id}>
+                                <TableCell>
+                                  <Person
+                                    name={
+                                      names[row.user_id] ||
+                                      row.name ||
+                                      row.user_id
+                                    }
+                                    avatar={
+                                      members.data?.find(
+                                        (member) => member.id === row.user_id,
+                                      )?.avatar
+                                    }
+                                  />
+                                </TableCell>
+                                {!row.expected ? (
+                                  <TableCell
+                                    colSpan={2}
+                                    className="text-muted-foreground"
                                   >
-                                    {row.questions?.[index] ||
-                                      ['Yesterday', 'Today', 'Blockers'][index]}
-                                  </h3>
-                                  <div className="text-sm leading-relaxed">
-                                    <SlackText
-                                      text={answer}
-                                      members={names}
-                                      channels={reports.data?.channel_names}
-                                    />
-                                  </div>
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        </article>
-                      ),
-                    )}
-                    {rows.length > 5 && !expanded.has(date) && (
-                      <Button
-                        variant="ghost"
-                        className="mt-3"
-                        onClick={() =>
-                          setExpanded((current) => new Set([...current, date]))
-                        }
-                      >
-                        Show all {rows.length} responses
-                      </Button>
+                                    {row.enrolled === false
+                                      ? 'Not in any standup'
+                                      : row.on_vacation
+                                        ? 'On vacation'
+                                        : 'Nothing scheduled in this window'}
+                                  </TableCell>
+                                ) : (
+                                  <>
+                                    <TableCell className="tabular-nums">
+                                      {row.responses}/{row.total}
+                                    </TableCell>
+                                    <TableCell>
+                                      <span
+                                        aria-label={`${Math.max(0, Math.min(row.stars, 5))} out of 5 stars`}
+                                        className="text-warning"
+                                      >
+                                        {'★'.repeat(
+                                          Math.max(0, Math.min(row.stars, 5)),
+                                        )}
+                                        {'☆'.repeat(
+                                          5 -
+                                            Math.max(0, Math.min(row.stars, 5)),
+                                        )}
+                                      </span>
+                                    </TableCell>
+                                  </>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        {reports.data.participation.length > 10 &&
+                          !allParticipation && (
+                            <Button
+                              variant="ghost"
+                              className="mt-3"
+                              onClick={() => setAllParticipation(true)}
+                            >
+                              Show all {reports.data.participation.length}{' '}
+                              members
+                            </Button>
+                          )}
+                      </>
+                    ) : (
+                      <EmptyState title="No participation data" />
                     )}
                   </CardContent>
                 </Card>
-              ))
-            )}
-            {grouped.length > dayLimit && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setDayLimit((current) => current + 7)}
-              >
-                Load earlier days ({grouped.length - dayLimit} remaining)
-              </Button>
-            )}
-          </>
-        )
+                {!grouped.length ? (
+                  <EmptyState
+                    title="No responses in this window"
+                    description="Try another date range or member."
+                  />
+                ) : (
+                  grouped.slice(0, dayLimit).map(([date, rows]) => (
+                    <Card key={date}>
+                      <CardHeader>
+                        <CardTitle>{formatDate(date)}</CardTitle>
+                        <CardDescription>
+                          {rows.length}{' '}
+                          {rows.length === 1 ? 'response' : 'responses'}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="divide-y">
+                        {(expanded.has(date) ? rows : rows.slice(0, 5)).map(
+                          (row, index) => (
+                            <article
+                              key={`${row.id ?? row.user_id}-${index}`}
+                              className="py-5 first:pt-0"
+                            >
+                              <div className="flex flex-wrap items-center gap-3">
+                                <Person
+                                  name={
+                                    names[row.user_id] ||
+                                    row.real_name ||
+                                    row.user_name ||
+                                    row.user_id
+                                  }
+                                  avatar={
+                                    members.data?.find(
+                                      (member) => member.id === row.user_id,
+                                    )?.avatar
+                                  }
+                                  detail={
+                                    row.submitted_at
+                                      ? formatDate(row.submitted_at, {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })
+                                      : undefined
+                                  }
+                                />
+                                {row.mood && (
+                                  <Badge variant="secondary">{row.mood}</Badge>
+                                )}
+                                {row.has_blockers && (
+                                  <Badge variant="destructive">Blocked</Badge>
+                                )}
+                              </div>
+                              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                {[row.yesterday, row.today, row.blockers].map(
+                                  (answer, index) => (
+                                    <div
+                                      key={index}
+                                      className={
+                                        index === 2 ? 'sm:col-span-2' : ''
+                                      }
+                                    >
+                                      <h3
+                                        className={`mb-1 text-xs font-medium ${index === 2 && row.has_blockers ? 'text-destructive' : 'text-muted-foreground'}`}
+                                      >
+                                        {row.questions?.[index] ||
+                                          ['Yesterday', 'Today', 'Blockers'][
+                                            index
+                                          ]}
+                                      </h3>
+                                      <div className="text-sm leading-relaxed">
+                                        <SlackText
+                                          text={answer}
+                                          members={names}
+                                          channels={reports.data?.channel_names}
+                                        />
+                                      </div>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </article>
+                          ),
+                        )}
+                        {rows.length > 5 && !expanded.has(date) && (
+                          <Button
+                            variant="ghost"
+                            className="mt-3"
+                            onClick={() =>
+                              setExpanded(
+                                (current) => new Set([...current, date]),
+                              )
+                            }
+                          >
+                            Show all {rows.length} responses
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+                {grouped.length > dayLimit && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setDayLimit((current) => current + 7)}
+                  >
+                    Load earlier days ({grouped.length - dayLimit} remaining)
+                  </Button>
+                )}
+              </>
+            )
+          )}
+        </LoadingTransition>
       )}
     </div>
   );

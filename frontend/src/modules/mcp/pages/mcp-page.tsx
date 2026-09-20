@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Copy, KeyRound, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SecretPanel } from '@/common/components/secret-panel';
 import { Badge } from '@/common/components/ui/badge';
@@ -131,70 +132,75 @@ export default function McpPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {keys.isPending ? (
-            <McpKeysSkeleton />
-          ) : keys.isError ? (
-            <ErrorState error={keys.error} retry={() => void keys.refetch()} />
-          ) : !keys.data?.keys.length ? (
-            <EmptyState
-              title="No API keys yet"
-              description="Generate a key to connect an assistant."
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Prefix</th>
-                    <th className="p-3">Created</th>
-                    <th className="p-3">Last used</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {keys.data.keys.map((key) => (
-                    <tr key={key.id} className="border-b last:border-0">
-                      <td className="p-3 font-medium">
-                        {key.name || 'Default'}
-                      </td>
-                      <td className="p-3">
-                        <code>{key.key_prefix}…</code>
-                      </td>
-                      <td className="whitespace-nowrap p-3">
-                        {formatDate(key.created_at)}
-                      </td>
-                      <td className="whitespace-nowrap p-3">
-                        {key.last_used_at
-                          ? relativeTime(key.last_used_at)
-                          : 'Never'}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={key.active ? 'secondary' : 'outline'}>
-                          {key.active ? 'Active' : 'Revoked'}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        {canEdit && key.active && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={revoke.isPending}
-                            onClick={() => setDeleting(key.id)}
-                          >
-                            Revoke
-                          </Button>
-                        )}
-                      </td>
+          <LoadingTransition pending={keys.isPending}>
+            {keys.isPending ? (
+              <McpKeysSkeleton />
+            ) : keys.isError ? (
+              <ErrorState
+                error={keys.error}
+                retry={() => void keys.refetch()}
+              />
+            ) : !keys.data?.keys.length ? (
+              <EmptyState
+                title="No API keys yet"
+                description="Generate a key to connect an assistant."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-muted-foreground">
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Prefix</th>
+                      <th className="p-3">Created</th>
+                      <th className="p-3">Last used</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {keys.data.keys.map((key) => (
+                      <tr key={key.id} className="border-b last:border-0">
+                        <td className="p-3 font-medium">
+                          {key.name || 'Default'}
+                        </td>
+                        <td className="p-3">
+                          <code>{key.key_prefix}…</code>
+                        </td>
+                        <td className="whitespace-nowrap p-3">
+                          {formatDate(key.created_at)}
+                        </td>
+                        <td className="whitespace-nowrap p-3">
+                          {key.last_used_at
+                            ? relativeTime(key.last_used_at)
+                            : 'Never'}
+                        </td>
+                        <td className="p-3">
+                          <Badge variant={key.active ? 'secondary' : 'outline'}>
+                            {key.active ? 'Active' : 'Revoked'}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          {canEdit && key.active && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={revoke.isPending}
+                              onClick={() => setDeleting(key.id)}
+                            >
+                              Revoke
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </LoadingTransition>
         </CardContent>
       </Card>
       <Card>

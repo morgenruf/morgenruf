@@ -15,6 +15,7 @@ import {
   SkeletonRegion,
   SkeletonTable,
 } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SecretPanel } from '@/common/components/secret-panel';
 import { Badge } from '@/common/components/ui/badge';
@@ -165,63 +166,68 @@ function WebhookCard({
         )}
         {expanded && (
           <section aria-label="Recent deliveries" className="border-t pt-4">
-            {deliveries.isPending ? (
-              <SkeletonRegion label="Loading recent deliveries…">
-                <SkeletonTable columns={6} />
-              </SkeletonRegion>
-            ) : deliveries.isError ? (
-              <ErrorState
-                error={deliveries.error}
-                retry={() => void deliveries.refetch()}
-              />
-            ) : !deliveries.data?.length ? (
-              <EmptyState title="No deliveries recorded yet" />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b text-muted-foreground">
-                      <th className="p-2">Status</th>
-                      <th className="p-2">Event</th>
-                      <th className="p-2">When</th>
-                      <th className="p-2">Duration</th>
-                      <th className="p-2">Signing</th>
-                      <th className="p-2">Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {deliveries.data.map((delivery) => (
-                      <tr key={delivery.id} className="border-b last:border-0">
-                        <td
-                          className={`p-2 ${delivery.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
-                        >
-                          {delivery.status_code ?? 'No response'}
-                        </td>
-                        <td className="p-2">
-                          {eventLabels[delivery.event_type] ??
-                            delivery.event_type}
-                        </td>
-                        <td className="whitespace-nowrap p-2">
-                          {formatDate(delivery.created_at, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td className="whitespace-nowrap p-2">
-                          {delivery.duration_ms} ms
-                        </td>
-                        <td className="p-2">
-                          {delivery.signed ? 'Signed' : 'Unsigned'}
-                        </td>
-                        <td className="p-2">{delivery.error ?? '—'}</td>
+            <LoadingTransition pending={deliveries.isPending}>
+              {deliveries.isPending ? (
+                <SkeletonRegion label="Loading recent deliveries…">
+                  <SkeletonTable columns={6} />
+                </SkeletonRegion>
+              ) : deliveries.isError ? (
+                <ErrorState
+                  error={deliveries.error}
+                  retry={() => void deliveries.refetch()}
+                />
+              ) : !deliveries.data?.length ? (
+                <EmptyState title="No deliveries recorded yet" />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Event</th>
+                        <th className="p-2">When</th>
+                        <th className="p-2">Duration</th>
+                        <th className="p-2">Signing</th>
+                        <th className="p-2">Error</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody>
+                      {deliveries.data.map((delivery) => (
+                        <tr
+                          key={delivery.id}
+                          className="border-b last:border-0"
+                        >
+                          <td
+                            className={`p-2 ${delivery.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
+                          >
+                            {delivery.status_code ?? 'No response'}
+                          </td>
+                          <td className="p-2">
+                            {eventLabels[delivery.event_type] ??
+                              delivery.event_type}
+                          </td>
+                          <td className="whitespace-nowrap p-2">
+                            {formatDate(delivery.created_at, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="whitespace-nowrap p-2">
+                            {delivery.duration_ms} ms
+                          </td>
+                          <td className="p-2">
+                            {delivery.signed ? 'Signed' : 'Unsigned'}
+                          </td>
+                          <td className="p-2">{delivery.error ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </LoadingTransition>
           </section>
         )}
       </CardContent>
@@ -273,49 +279,51 @@ export default function WebhooksPage() {
           retry={() => void catalog.refetch()}
         />
       )}
-      {webhooks.isPending ? (
-        <WebhooksSkeleton />
-      ) : webhooks.isError ? (
-        <ErrorState
-          error={webhooks.error}
-          retry={() => void webhooks.refetch()}
-        />
-      ) : !webhooks.data?.length ? (
-        <EmptyState
-          title="No webhooks yet"
-          description={
-            <div className="space-y-2">
-              <p>
-                Post standup activity to a build pipeline, status page, or
-                anything that accepts HTTP events.
-              </p>
-              <p>
-                {catalog.data?.events
-                  .map((event) => eventLabels[event] ?? event)
-                  .join(' · ')}
-              </p>
-            </div>
-          }
-        />
-      ) : (
-        <div className="space-y-4">
-          {webhooks.data.map((hook) => (
-            <WebhookCard
-              key={hook.id}
-              hook={hook}
-              canEdit={canEdit}
-              busy={busy}
-              edit={() => openEditor(hook)}
-              rotate={() =>
-                setConfirmation({ kind: 'rotate', id: String(hook.id) })
-              }
-              remove={() =>
-                setConfirmation({ kind: 'delete', id: String(hook.id) })
-              }
-            />
-          ))}
-        </div>
-      )}
+      <LoadingTransition pending={webhooks.isPending}>
+        {webhooks.isPending ? (
+          <WebhooksSkeleton />
+        ) : webhooks.isError ? (
+          <ErrorState
+            error={webhooks.error}
+            retry={() => void webhooks.refetch()}
+          />
+        ) : !webhooks.data?.length ? (
+          <EmptyState
+            title="No webhooks yet"
+            description={
+              <div className="space-y-2">
+                <p>
+                  Post standup activity to a build pipeline, status page, or
+                  anything that accepts HTTP events.
+                </p>
+                <p>
+                  {catalog.data?.events
+                    .map((event) => eventLabels[event] ?? event)
+                    .join(' · ')}
+                </p>
+              </div>
+            }
+          />
+        ) : (
+          <div className="space-y-4">
+            {webhooks.data.map((hook) => (
+              <WebhookCard
+                key={hook.id}
+                hook={hook}
+                canEdit={canEdit}
+                busy={busy}
+                edit={() => openEditor(hook)}
+                rotate={() =>
+                  setConfirmation({ kind: 'rotate', id: String(hook.id) })
+                }
+                remove={() =>
+                  setConfirmation({ kind: 'delete', id: String(hook.id) })
+                }
+              />
+            ))}
+          </div>
+        )}
+      </LoadingTransition>
       <Dialog
         open={editor !== null}
         onOpenChange={(open) => {

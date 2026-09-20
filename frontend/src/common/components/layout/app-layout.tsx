@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { api, clearSession } from '@/common/api/client';
 import { errorMessage } from '@/common/api/errors';
 import { useSession } from '@/common/auth/use-session';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { ModuleGate } from '@/common/components/module-gate';
 import { ErrorState } from '@/common/components/page';
 import { ThemeToggle } from '@/common/components/theme-toggle';
@@ -103,20 +104,22 @@ export function AppLayout({
           key={`${session.data.team_id}:${session.data.user_id}`}
           pathname={location.pathname}
         >
-          {pendingView ? (
-            pendingView.content
-          ) : routeModule[section] ? (
-            <ModuleGate
-              loadingFallback={loadingFallback}
-              module={routeModule[section]}
-              label={current}
-              requireActive={section !== 'today'}
-            >
+          <LoadingTransition pending={!!pendingView}>
+            {pendingView ? (
+              pendingView.content
+            ) : routeModule[section] ? (
+              <ModuleGate
+                loadingFallback={loadingFallback}
+                module={routeModule[section]}
+                label={current}
+                requireActive={section !== 'today'}
+              >
+                <Outlet />
+              </ModuleGate>
+            ) : (
               <Outlet />
-            </ModuleGate>
-          ) : (
-            <Outlet />
-          )}
+            )}
+          </LoadingTransition>
         </AppMain>
       </div>
     </SidebarProvider>

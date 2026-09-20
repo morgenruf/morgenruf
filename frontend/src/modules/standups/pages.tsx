@@ -18,6 +18,7 @@ import {
   SkeletonPeople,
   SkeletonRegion,
 } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -366,49 +367,51 @@ function StandupEditor({
                   Use whole channel
                 </Button>
               </div>
-              {resources.members.isPending ? (
-                <SkeletonRegion label="Loading participants…">
-                  <SkeletonPeople />
-                </SkeletonRegion>
-              ) : resources.members.error ? (
-                <ErrorState
-                  error={resources.members.error}
-                  retry={() => resources.members.refetch()}
-                />
-              ) : (
-                <div className="grid max-h-52 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2">
-                  {resources.members.data
-                    ?.filter((member) =>
-                      `${member.name} ${member.id}`
-                        .toLowerCase()
-                        .includes(memberSearch.toLowerCase()),
-                    )
-                    .map((member) => (
-                      <label
-                        key={member.id}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          className="size-4 accent-primary"
-                          checked={participants.includes(member.id)}
-                          onChange={(event) =>
-                            setValue(
-                              'participants',
-                              event.target.checked
-                                ? [...participants, member.id]
-                                : participants.filter(
-                                    (value) => value !== member.id,
-                                  ),
-                              { shouldDirty: true },
-                            )
-                          }
-                        />
-                        {member.name || member.id}
-                      </label>
-                    ))}
-                </div>
-              )}
+              <LoadingTransition pending={resources.members.isPending}>
+                {resources.members.isPending ? (
+                  <SkeletonRegion label="Loading participants…">
+                    <SkeletonPeople />
+                  </SkeletonRegion>
+                ) : resources.members.error ? (
+                  <ErrorState
+                    error={resources.members.error}
+                    retry={() => resources.members.refetch()}
+                  />
+                ) : (
+                  <div className="grid max-h-52 gap-2 overflow-y-auto rounded-lg border p-3 sm:grid-cols-2">
+                    {resources.members.data
+                      ?.filter((member) =>
+                        `${member.name} ${member.id}`
+                          .toLowerCase()
+                          .includes(memberSearch.toLowerCase()),
+                      )
+                      .map((member) => (
+                        <label
+                          key={member.id}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-primary"
+                            checked={participants.includes(member.id)}
+                            onChange={(event) =>
+                              setValue(
+                                'participants',
+                                event.target.checked
+                                  ? [...participants, member.id]
+                                  : participants.filter(
+                                      (value) => value !== member.id,
+                                    ),
+                                { shouldDirty: true },
+                              )
+                            }
+                          />
+                          {member.name || member.id}
+                        </label>
+                      ))}
+                  </div>
+                )}
+              </LoadingTransition>
               <p className="text-xs text-muted-foreground">
                 {participants.length
                   ? `${participants.length} selected`
@@ -902,163 +905,172 @@ export function StandupsPage() {
           )
         }
       />
-      {query.isPending ? (
-        <StandupsSkeleton />
-      ) : query.error ? (
-        <ErrorState error={query.error} retry={() => query.refetch()} />
-      ) : !query.data?.length ? (
-        <EmptyState
-          title="Your first standup starts here"
-          description="Choose a channel, a few questions, and a time that works for your team."
-          action={
-            editable && (
-              <Button onClick={() => setParams({ new: 'true' })}>
-                Create standup
-              </Button>
-            )
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {query.data.length}{' '}
-            {query.data.length === 1 ? 'standup' : 'standups'} · earliest time
-            of day first
-          </p>
-          {sortedStandups(query.data).map((standup) => {
-            const channel = channels.data?.find(
-              (value) => value.id === standup.channel_id,
-            );
+      <LoadingTransition pending={query.isPending}>
+        {query.isPending ? (
+          <StandupsSkeleton />
+        ) : query.error ? (
+          <ErrorState error={query.error} retry={() => query.refetch()} />
+        ) : !query.data?.length ? (
+          <EmptyState
+            title="Your first standup starts here"
+            description="Choose a channel, a few questions, and a time that works for your team."
+            action={
+              editable && (
+                <Button onClick={() => setParams({ new: 'true' })}>
+                  Create standup
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {query.data.length}{' '}
+              {query.data.length === 1 ? 'standup' : 'standups'} · earliest time
+              of day first
+            </p>
+            {sortedStandups(query.data).map((standup) => {
+              const channel = channels.data?.find(
+                (value) => value.id === standup.channel_id,
+              );
 
-            const metrics = health.data?.schedules?.find(
-              (row) => row.schedule_id === standup.id,
-            );
+              const metrics = health.data?.schedules?.find(
+                (row) => row.schedule_id === standup.id,
+              );
 
-            return (
-              <Card key={standup.id}>
-                <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <AlarmClock className="size-5" />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h2 className="font-semibold">{standup.name}</h2>
-                      <Badge variant={standup.active ? 'default' : 'secondary'}>
-                        {standup.active ? 'Active' : 'Paused'}
-                      </Badge>
+              return (
+                <Card key={standup.id}>
+                  <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <AlarmClock className="size-5" />
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      #{channel?.name ?? standup.channel_id} ·{' '}
-                      {standup.schedule_time} {standup.schedule_tz}
-                    </p>
-                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <Users className="size-3.5" />
-                        {standup.participants?.length
-                          ? `${standup.participants.length} participants`
-                          : 'Everyone in the channel'}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <CalendarDays className="size-3.5" />
-                        {standup.schedule_days.join(', ')}
-                      </span>
-                    </div>
-                    {standup.registration_error ? (
-                      <p
-                        role="alert"
-                        className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
-                      >
-                        <strong>This standup never runs.</strong>{' '}
-                        {standup.registration_error}
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h2 className="font-semibold">{standup.name}</h2>
+                        <Badge
+                          variant={standup.active ? 'default' : 'secondary'}
+                        >
+                          {standup.active ? 'Active' : 'Paused'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        #{channel?.name ?? standup.channel_id} ·{' '}
+                        {standup.schedule_time} {standup.schedule_tz}
                       </p>
-                    ) : (
-                      <>
-                        {standup.next_run && (
-                          <p className="text-xs text-muted-foreground">
-                            Next run:{' '}
-                            {new Date(standup.next_run).toLocaleString()}
-                          </p>
-                        )}
-                        {health.isPending ? (
-                          <SkeletonRegion label="Loading participation summary…">
-                            <Skeleton className="h-3 w-64 max-w-full" />
-                          </SkeletonRegion>
-                        ) : (
-                          metrics && (
-                            <p className="text-xs">
-                              <span className="font-medium">
-                                {healthLabel(metrics.completion_rate)}
-                                {metrics.completion_rate != null
-                                  ? ` · ${metrics.completion_rate}%`
-                                  : ''}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {' '}
-                                · {metrics.completed} of {metrics.expected}{' '}
-                                filed in the last 14 days
-                              </span>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="size-3.5" />
+                          {standup.participants?.length
+                            ? `${standup.participants.length} participants`
+                            : 'Everyone in the channel'}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <CalendarDays className="size-3.5" />
+                          {standup.schedule_days.join(', ')}
+                        </span>
+                      </div>
+                      {standup.registration_error ? (
+                        <p
+                          role="alert"
+                          className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+                        >
+                          <strong>This standup never runs.</strong>{' '}
+                          {standup.registration_error}
+                        </p>
+                      ) : (
+                        <>
+                          {standup.next_run && (
+                            <p className="text-xs text-muted-foreground">
+                              Next run:{' '}
+                              {new Date(standup.next_run).toLocaleString()}
                             </p>
-                          )
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {editable && (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={save.isPending}
-                        onClick={() =>
-                          save.mutate(
-                            {
-                              id: standup.id,
-                              body: { active: !standup.active },
-                            },
-                            {
-                              onError: (error) =>
-                                toast.error(errorMessage(error)),
-                            },
-                          )
-                        }
-                      >
-                        {standup.active ? 'Pause' : 'Resume'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setParams({ edit: String(standup.id) })}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="destructiveGhost"
-                        disabled={remove.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Delete ${standup.name}? This cannot be undone.`,
-                            )
-                          )
-                            remove.mutate(standup.id, {
-                              onSuccess: () => toast.success('Standup deleted'),
-                              onError: (error) =>
-                                toast.error(errorMessage(error)),
-                            });
-                        }}
-                      >
-                        <Trash />
-                        <span className="sr-only">Delete</span>
-                      </Button>
+                          )}
+                          <LoadingTransition pending={health.isPending}>
+                            {health.isPending ? (
+                              <SkeletonRegion label="Loading participation summary…">
+                                <Skeleton className="h-3 w-64 max-w-full" />
+                              </SkeletonRegion>
+                            ) : (
+                              metrics && (
+                                <p className="text-xs">
+                                  <span className="font-medium">
+                                    {healthLabel(metrics.completion_rate)}
+                                    {metrics.completion_rate != null
+                                      ? ` · ${metrics.completion_rate}%`
+                                      : ''}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {' '}
+                                    · {metrics.completed} of {metrics.expected}{' '}
+                                    filed in the last 14 days
+                                  </span>
+                                </p>
+                              )
+                            )}
+                          </LoadingTransition>
+                        </>
+                      )}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                    {editable && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={save.isPending}
+                          onClick={() =>
+                            save.mutate(
+                              {
+                                id: standup.id,
+                                body: { active: !standup.active },
+                              },
+                              {
+                                onError: (error) =>
+                                  toast.error(errorMessage(error)),
+                              },
+                            )
+                          }
+                        >
+                          {standup.active ? 'Pause' : 'Resume'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setParams({ edit: String(standup.id) })
+                          }
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="destructiveGhost"
+                          disabled={remove.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete ${standup.name}? This cannot be undone.`,
+                              )
+                            )
+                              remove.mutate(standup.id, {
+                                onSuccess: () =>
+                                  toast.success('Standup deleted'),
+                                onError: (error) =>
+                                  toast.error(errorMessage(error)),
+                              });
+                          }}
+                        >
+                          <Trash />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </LoadingTransition>
       {editable && query.data && (creating || editing) && (
         <StandupEditor
           key={editing?.id ?? 'new'}

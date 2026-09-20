@@ -27,22 +27,26 @@ export function FeatureSettingsSkeleton() {
   );
 }
 
-// Keep all three cards in the existing Settings grid during loading.
-export function StandupSettingsSkeleton() {
+// Each settings card keeps its own grid cell through its loading transition.
+export function StandupSettingsSkeleton({
+  section = 'schedule',
+}: {
+  section?: 'schedule' | 'feed' | 'digest';
+}) {
+  const labels = {
+    schedule: 'Loading standup settings…',
+    feed: 'Loading public feed settings…',
+    digest: 'Loading digest settings…',
+  };
+
   return (
     <SkeletonRegion
-      label="Loading standup settings…"
-      className="contents"
-      contentClassName="contents"
+      label={labels[section]}
+      className="h-full"
+      contentClassName="h-full"
     >
-      <SkeletonCard>
-        <SkeletonFields />
-      </SkeletonCard>
-      <SkeletonCard>
-        <SkeletonFields count={2} />
-      </SkeletonCard>
-      <SkeletonCard>
-        <SkeletonFields count={2} />
+      <SkeletonCard className="h-full">
+        <SkeletonFields count={section === 'schedule' ? 4 : 2} />
       </SkeletonCard>
     </SkeletonRegion>
   );

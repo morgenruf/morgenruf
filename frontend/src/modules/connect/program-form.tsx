@@ -18,6 +18,7 @@ import {
   SkeletonTable,
   SkeletonText,
 } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -120,138 +121,147 @@ function ProgramMembers({ programId }: { programId: number }) {
 
   const [search, setSearch] = useState('');
 
-  if (query.isPending)
+  function renderContent() {
+    if (query.isPending)
+      return (
+        <SkeletonRegion label="Loading coffee chat members…">
+          <SkeletonTable columns={4} />
+        </SkeletonRegion>
+      );
+
+    if (query.error)
+      return <ErrorState error={query.error} retry={() => query.refetch()} />;
+
+    if (!query.data?.length)
+      return (
+        <EmptyState
+          title="Nobody in this channel yet"
+          description="Invite people to the channel and they will appear here."
+        />
+      );
+
+    const eligible = query.data.filter(
+      (person) => person.eligible && person.state === 'in',
+    ).length;
+
     return (
-      <SkeletonRegion label="Loading coffee chat members…">
-        <SkeletonTable columns={4} />
-      </SkeletonRegion>
-    );
-
-  if (query.error)
-    return <ErrorState error={query.error} retry={() => query.refetch()} />;
-
-  if (!query.data?.length)
-    return (
-      <EmptyState
-        title="Nobody in this channel yet"
-        description="Invite people to the channel and they will appear here."
-      />
-    );
-
-  const eligible = query.data.filter(
-    (person) => person.eligible && person.state === 'in',
-  ).length;
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {eligible} in the pool. Everyone in the channel is matched unless they
-        are excluded, snoozed, or not eligible.
-      </p>
-      <Input
-        aria-label="Search coffee chat members"
-        placeholder="Search members…"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-xs text-muted-foreground">
-              <th className="py-3 font-medium">Member</th>
-              <th className="py-3 font-medium">Paired</th>
-              <th className="py-3 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {query.data
-              .filter((person) =>
-                `${person.name} ${person.user_id}`
-                  .toLowerCase()
-                  .includes(search.toLowerCase()),
-              )
-              .map((person) => (
-                <tr key={person.user_id} className="border-b last:border-0">
-                  <td className="py-3 pr-3">
-                    <div className="flex items-center gap-2">
-                      {person.avatar && (
-                        <img
-                          src={person.avatar}
-                          alt=""
-                          className="size-7 rounded-full"
-                          loading="lazy"
-                        />
-                      )}
-                      <div>
-                        {person.name}
-                        <p className="text-xs text-muted-foreground">
-                          {person.eligible ? '' : 'Not on the eligible roster'}
-                        </p>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          {eligible} in the pool. Everyone in the channel is matched unless they
+          are excluded, snoozed, or not eligible.
+        </p>
+        <Input
+          aria-label="Search coffee chat members"
+          placeholder="Search members…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs text-muted-foreground">
+                <th className="py-3 font-medium">Member</th>
+                <th className="py-3 font-medium">Paired</th>
+                <th className="py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {query.data
+                .filter((person) =>
+                  `${person.name} ${person.user_id}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
+                )
+                .map((person) => (
+                  <tr key={person.user_id} className="border-b last:border-0">
+                    <td className="py-3 pr-3">
+                      <div className="flex items-center gap-2">
+                        {person.avatar && (
+                          <img
+                            src={person.avatar}
+                            alt=""
+                            className="size-7 rounded-full"
+                            loading="lazy"
+                          />
+                        )}
+                        <div>
+                          {person.name}
+                          <p className="text-xs text-muted-foreground">
+                            {person.eligible
+                              ? ''
+                              : 'Not on the eligible roster'}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="py-3 pr-3 tabular-nums">{person.paired}</td>
-                  <td className="py-3">
-                    {canAdminister('connect') ? (
-                      <Select
-                        items={memberStateOptions}
-                        value={person.state}
-                        disabled={member.isPending}
-                        onValueChange={(value) =>
-                          value !== null &&
-                          member.mutate(
-                            {
-                              id: programId,
-                              userId: person.user_id,
-                              body: {
-                                state: value as ProgramMemberInput['state'],
-                                weeks: 2,
+                    </td>
+                    <td className="py-3 pr-3 tabular-nums">{person.paired}</td>
+                    <td className="py-3">
+                      {canAdminister('connect') ? (
+                        <Select
+                          items={memberStateOptions}
+                          value={person.state}
+                          disabled={member.isPending}
+                          onValueChange={(value) =>
+                            value !== null &&
+                            member.mutate(
+                              {
+                                id: programId,
+                                userId: person.user_id,
+                                body: {
+                                  state: value as ProgramMemberInput['state'],
+                                  weeks: 2,
+                                },
                               },
-                            },
-                            {
-                              onSuccess: () =>
-                                toast.success('Participation updated'),
-                              onError: (error) =>
-                                toast.error(errorMessage(error)),
-                            },
-                          )
-                        }
-                      >
-                        <SelectTrigger
-                          aria-label={`Status for ${person.name}`}
-                          className="w-full"
+                              {
+                                onSuccess: () =>
+                                  toast.success('Participation updated'),
+                                onError: (error) =>
+                                  toast.error(errorMessage(error)),
+                              },
+                            )
+                          }
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {memberStateOptions.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Badge variant="secondary">
-                        {person.state === 'in'
-                          ? 'In the pool'
-                          : person.state === 'out'
-                            ? 'Excluded'
-                            : 'Snoozed'}
-                      </Badge>
-                    )}
-                    {person.until && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Until {new Date(person.until).toLocaleDateString()}
-                      </p>
-                    )}
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
+                          <SelectTrigger
+                            aria-label={`Status for ${person.name}`}
+                            className="w-full"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {memberStateOptions.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="secondary">
+                          {person.state === 'in'
+                            ? 'In the pool'
+                            : person.state === 'out'
+                              ? 'Excluded'
+                              : 'Snoozed'}
+                        </Badge>
+                      )}
+                      {person.until && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Until {new Date(person.until).toLocaleDateString()}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    );
+  }
+  return (
+    <LoadingTransition pending={query.isPending}>
+      {renderContent()}
+    </LoadingTransition>
   );
 }
 
@@ -864,38 +874,41 @@ export function ProgramForm({ program }: { program?: Program }) {
                 )}
                 {values.video_mode === 'zoom' && (
                   <div className="rounded-lg border p-4 text-sm">
-                    {resources.zoom.isPending ? (
-                      <SkeletonRegion label="Checking Zoom configuration…">
-                        <SkeletonText lines={2} />
-                      </SkeletonRegion>
-                    ) : resources.zoom.error ? (
-                      <ErrorState
-                        error={resources.zoom.error}
-                        retry={() => resources.zoom.refetch()}
-                      />
-                    ) : resources.zoom.data?.configured ? (
-                      <>
-                        <p>
-                          {resources.zoom.data.linked} people have linked Zoom.
-                        </p>
-                        {resources.zoom.data.needs_reconnect > 0 && (
-                          <p className="mt-1 text-amber-600">
-                            {resources.zoom.data.needs_reconnect} need to
-                            reconnect.
+                    <LoadingTransition pending={resources.zoom.isPending}>
+                      {resources.zoom.isPending ? (
+                        <SkeletonRegion label="Checking Zoom configuration…">
+                          <SkeletonText lines={2} />
+                        </SkeletonRegion>
+                      ) : resources.zoom.error ? (
+                        <ErrorState
+                          error={resources.zoom.error}
+                          retry={() => resources.zoom.refetch()}
+                        />
+                      ) : resources.zoom.data?.configured ? (
+                        <>
+                          <p>
+                            {resources.zoom.data.linked} people have linked
+                            Zoom.
                           </p>
-                        )}
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          People connect their accounts from the Morgenruf tab
-                          in Slack.
+                          {resources.zoom.data.needs_reconnect > 0 && (
+                            <p className="mt-1 text-amber-600">
+                              {resources.zoom.data.needs_reconnect} need to
+                              reconnect.
+                            </p>
+                          )}
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            People connect their accounts from the Morgenruf tab
+                            in Slack.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Zoom is not configured on this deployment. Ask the
+                          operator to configure Zoom OAuth before choosing this
+                          option.
                         </p>
-                      </>
-                    ) : (
-                      <p className="text-muted-foreground">
-                        Zoom is not configured on this deployment. Ask the
-                        operator to configure Zoom OAuth before choosing this
-                        option.
-                      </p>
-                    )}
+                      )}
+                    </LoadingTransition>
                   </div>
                 )}
               </section>

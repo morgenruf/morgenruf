@@ -1,10 +1,12 @@
 import {
   SkeletonCard,
-  SkeletonPage,
   SkeletonPeople,
   SkeletonRegion,
   SkeletonStats,
 } from '@/common/components/loading-skeleton';
+import { Skeleton } from '@/common/components/ui/skeleton';
+
+import { TodayPageHeader } from './today-page-header';
 
 export function TodaySkeleton() {
   return (
@@ -28,18 +30,12 @@ export function TodaySkeleton() {
 }
 
 export function TodayPageSkeleton() {
-  const hour = new Date().getHours();
   return (
-    <SkeletonPage
-      title={
-        hour < 12
-          ? 'Good morning'
-          : hour < 18
-            ? 'Good afternoon'
-            : 'Good evening'
-      }
-    >
+    <div className="page">
+      <TodayPageHeader
+        description={<Skeleton className="mt-2 h-4 w-72 max-w-full" />}
+      />
       <TodaySkeleton />
-    </SkeletonPage>
+    </div>
   );
 }

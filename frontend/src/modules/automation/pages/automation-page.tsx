@@ -4,6 +4,7 @@ import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { LoadingField } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -148,57 +149,59 @@ export default function AutomationPage() {
           )
         }
       />
-      {rules.isPending ? (
-        <AutomationSkeleton />
-      ) : rules.isError ? (
-        <ErrorState error={rules.error} retry={() => void rules.refetch()} />
-      ) : !rules.data?.length ? (
-        <EmptyState
-          title="Nothing runs by itself yet"
-          description="Start from a template or build your own rule."
-        />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {rules.data.map((rule) => (
-            <Card key={rule.id}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="size-4 text-primary" />
-                  {rule.name}
-                </CardTitle>
-                <CardDescription>
-                  When {triggers[rule.trigger] ?? rule.trigger}
-                  {rule.trigger === 'low_participation' &&
-                  rule.condition_value != null
-                    ? ` below ${rule.condition_value}%`
-                    : ''}
-                  , {actions[rule.action] ?? rule.action}{' '}
-                  {rule.action === 'post_to_channel'
-                    ? `#${channels.data?.find((channel) => channel.id === rule.action_target)?.name ?? rule.action_target}`
-                    : rule.action_target}
-                  .
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {rule.action_message && (
-                  <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
-                    {rule.action_message}
-                  </p>
-                )}
-                {canEdit && (
-                  <Button
-                    variant="destructive"
-                    disabled={remove.isPending}
-                    onClick={() => setDeleting(rule.id)}
-                  >
-                    <Trash2 /> Delete
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <LoadingTransition pending={rules.isPending}>
+        {rules.isPending ? (
+          <AutomationSkeleton />
+        ) : rules.isError ? (
+          <ErrorState error={rules.error} retry={() => void rules.refetch()} />
+        ) : !rules.data?.length ? (
+          <EmptyState
+            title="Nothing runs by itself yet"
+            description="Start from a template or build your own rule."
+          />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {rules.data.map((rule) => (
+              <Card key={rule.id}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="size-4 text-primary" />
+                    {rule.name}
+                  </CardTitle>
+                  <CardDescription>
+                    When {triggers[rule.trigger] ?? rule.trigger}
+                    {rule.trigger === 'low_participation' &&
+                    rule.condition_value != null
+                      ? ` below ${rule.condition_value}%`
+                      : ''}
+                    , {actions[rule.action] ?? rule.action}{' '}
+                    {rule.action === 'post_to_channel'
+                      ? `#${channels.data?.find((channel) => channel.id === rule.action_target)?.name ?? rule.action_target}`
+                      : rule.action_target}
+                    .
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {rule.action_message && (
+                    <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">
+                      {rule.action_message}
+                    </p>
+                  )}
+                  {canEdit && (
+                    <Button
+                      variant="destructive"
+                      disabled={remove.isPending}
+                      onClick={() => setDeleting(rule.id)}
+                    >
+                      <Trash2 /> Delete
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </LoadingTransition>
       {canEdit && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold">Start with a template</h2>

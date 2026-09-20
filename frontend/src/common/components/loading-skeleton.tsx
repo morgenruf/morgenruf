@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { cn } from '@/common/lib/utils';
 
 import { PageHeader } from './page';
@@ -41,12 +42,14 @@ export function SkeletonRegion({
 export function SkeletonPage({
   title,
   children,
+  className
 }: {
   title: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className="page">
+    <div className={cn("page", className)}>
       <PageHeader
         title={title}
         description={<Skeleton className="mt-2 h-4 w-72 max-w-full" />}
@@ -263,13 +266,19 @@ export function LoadingField({
   children: ReactNode;
   className?: string;
 }) {
-  return pending ? (
-    <div className={cn('space-y-2', className)}>
-      {fieldLabel && <div className="text-sm font-medium">{fieldLabel}</div>}
-      <FieldSkeleton label={label} />
-    </div>
-  ) : (
-    children
+  return (
+    <LoadingTransition pending={pending} className={className}>
+      {pending ? (
+        <div className="space-y-2">
+          {fieldLabel && (
+            <div className="text-sm font-medium">{fieldLabel}</div>
+          )}
+          <FieldSkeleton label={label} />
+        </div>
+      ) : (
+        children
+      )}
+    </LoadingTransition>
   );
 }
 

@@ -26,7 +26,7 @@ export function AnalyticsSkeleton() {
 
 export function AnalyticsPageSkeleton() {
   return (
-    <SkeletonPage title="Analytics">
+    <SkeletonPage className='page-wide' title="Analytics">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-4">
           <Skeleton className="h-9 w-56" />
