@@ -188,6 +188,12 @@ ops:
   email: ""
   alertWebhook: ""
 
+# Product analytics. Empty apiKey means nothing is sent, which is the default
+# for a self-hosted install. host defaults to the US cloud when left blank.
+posthog:
+  apiKey: ""
+  host: ""
+
 sentry:
   dsn: ""
   env: "production"

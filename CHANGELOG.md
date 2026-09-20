@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Product analytics, off unless an operator switches them on.** `POSTHOG_API_KEY`
+  turns on workspace-level counting: installs, uninstalls, standups posted,
+  coffee matches, kudos and module toggles. The distinct ID is the Slack team
+  ID, and no Slack user ID, channel name or standup text is ever sent.
+  `POSTHOG_HOST` defaults to the US cloud. Unset means nothing leaves the
+  instance, which is what a self-hosted install gets.
+
 ## [1.8.5] - 2026-09-18
 
 ### Added

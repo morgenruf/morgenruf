@@ -144,6 +144,10 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
 
     cdb.create_matches(round_row["id"], team_id, groups)
     cdb.record_pairs(program_id, round_row["id"], groups)
+
+    from src.core.analytics import capture  # noqa: PLC0415
+
+    capture("coffee_match_created", team_id, matches=len(groups), participants=len(pool))
     cdb.set_round_state(round_row["id"], "matched", len(pool))
     if program.get("next_round_date"):
         try:

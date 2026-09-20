@@ -211,8 +211,9 @@ def _persist_standup(
     """
     try:
         import src.core.db as db  # noqa: PLC0415
+        from src.core.analytics import capture  # noqa: PLC0415
 
-        return db.save_standup(
+        standup_id = db.save_standup(
             team_id=team_id,
             user_id=user_id,
             yesterday=answers[0] if len(answers) > 0 else "",
@@ -222,6 +223,8 @@ def _persist_standup(
             questions=questions,
             schedule_id=schedule_id,
         )
+        capture("standup_posted", team_id, scheduled=schedule_id is not None, with_mood=mood is not None)
+        return standup_id
     except Exception as exc:
         logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
         return None
@@ -784,10 +787,12 @@ def register_handlers(app: App) -> None:
         # Before the delete, not after: the address and the history this email
         # needs are in the rows about to be removed.
         from src.core.alerts import departed  # noqa: PLC0415
+        from src.core.analytics import capture  # noqa: PLC0415
         from src.core.mailer import farewell  # noqa: PLC0415
 
         departed(team_id)
         farewell(team_id)
+        capture("workspace_uninstalled", team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
             logger.info("tokens_revoked: deleted installation and all data for team %s", team_id)
@@ -807,10 +812,12 @@ def register_handlers(app: App) -> None:
         # Before the delete, not after: the address and the history this email
         # needs are in the rows about to be removed.
         from src.core.alerts import departed  # noqa: PLC0415
+        from src.core.analytics import capture  # noqa: PLC0415
         from src.core.mailer import farewell  # noqa: PLC0415
 
         departed(team_id)
         farewell(team_id)
+        capture("workspace_uninstalled", team_id)
         deleted = db.delete_installation(team_id)
         if deleted:
             logger.info("app_uninstalled: deleted installation and all data for team %s", team_id)

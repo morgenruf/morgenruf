@@ -188,6 +188,10 @@ def oauth_callback():
         except Exception as exc:
             logger.warning("Could not post install alert for %s: %s", team_id, exc)
 
+        from src.core.analytics import capture  # noqa: PLC0415
+
+        capture("workspace_installed", team_id)
+
     # Register scheduler job for this workspace
     _schedule_workspace(team_id, bot_token)
 

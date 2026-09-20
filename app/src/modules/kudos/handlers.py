@@ -135,6 +135,9 @@ def register_handlers(app) -> None:
             # Persist kudos to database
             if to_user:
                 db.save_kudos(team_id, user_id, to_user, kudos_message, channel_id, emoji)
+                from src.core.analytics import capture  # noqa: PLC0415
+
+                capture("kudos_given", team_id, source="command")
 
             card_text, card_blocks = kudos_card(user_id, to_user, kudos_message, emoji)
             if channel_id:
@@ -176,6 +179,9 @@ def register_handlers(app) -> None:
             import src.modules.kudos.db as db  # noqa: PLC0415
 
             db.save_kudos(team_id, from_user, to_user, kudos_message, channel_id, state["emoji"])
+            from src.core.analytics import capture  # noqa: PLC0415
+
+            capture("kudos_given", team_id, source="message")
         except Exception as exc:
             logger.warning("Could not save kudos: %s", exc)
 
