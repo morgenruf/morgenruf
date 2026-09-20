@@ -21,6 +21,7 @@ import {
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState } from '@/common/components/page';
 import { Person } from '@/common/components/person';
+import { TimezoneSelect } from '@/common/components/timezone-select';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import {
@@ -624,21 +625,24 @@ export function ProgramForm({ program }: { program?: Program }) {
                       }}
                     />
                   </Field>
-                  <Field label="Timezone">
-                    <Input
-                      list={`${id}-zones`}
-                      {...register('timezone', {
-                        required: 'Choose a timezone.',
-                      })}
-                    />
-                    <datalist id={`${id}-zones`}>
-                      {['UTC', ...Intl.supportedValuesOf('timeZone')].map(
-                        (zone) => (
-                          <option key={zone}>{zone}</option>
-                        ),
-                      )}
-                    </datalist>
-                  </Field>
+                  <Controller
+                    control={form.control}
+                    name="timezone"
+                    rules={{ required: 'Choose a timezone.' }}
+                    render={({ field, fieldState }) => (
+                      <Field label="Timezone">
+                        <TimezoneSelect
+                          name={field.name}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          ref={field.ref}
+                          onBlur={field.onBlur}
+                          aria-invalid={fieldState.invalid}
+                          disabled={!editable || save.isPending}
+                        />
+                      </Field>
+                    )}
+                  />
                 </div>
                 {form.formState.errors.timezone && (
                   <p role="alert" className="text-sm text-destructive">

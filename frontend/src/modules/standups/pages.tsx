@@ -30,6 +30,7 @@ import {
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Person } from '@/common/components/person';
+import { TimezoneSelect } from '@/common/components/timezone-select';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
@@ -518,19 +519,23 @@ function StandupEditor({
                     {...register('schedule_time', { required: 'Set a time.' })}
                   />
                 </Field>
-                <Field label="Timezone">
-                  <Input
-                    list={`${id}-timezones`}
-                    {...register('schedule_tz')}
-                  />
-                  <datalist id={`${id}-timezones`}>
-                    {['UTC', ...Intl.supportedValuesOf('timeZone')].map(
-                      (zone) => (
-                        <option key={zone}>{zone}</option>
-                      ),
-                    )}
-                  </datalist>
-                </Field>
+                <Controller
+                  control={form.control}
+                  name="schedule_tz"
+                  render={({ field, fieldState }) => (
+                    <Field label="Timezone">
+                      <TimezoneSelect
+                        name={field.name}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        aria-invalid={fieldState.invalid}
+                        disabled={save.isPending}
+                      />
+                    </Field>
+                  )}
+                />
               </div>
               {errors.schedule_tz && (
                 <p role="alert" className="text-sm text-destructive">

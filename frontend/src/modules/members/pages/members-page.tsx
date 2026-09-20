@@ -379,6 +379,7 @@ export default function MembersPage() {
                         )}
                         {isAdmin && member.id !== session?.user_id && (
                           <Button
+                            size='sm'
                             variant="outline"
                             className="w-full"
                             disabled={busy}
