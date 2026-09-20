@@ -142,6 +142,7 @@ export default function AutomationPage() {
     <div className="page">
       <PageHeader
         title="Automation"
+        reserveActionSpace
         description="When something happens in a standup, do something useful about it."
         actions={
           canEdit && (

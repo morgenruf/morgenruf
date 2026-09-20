@@ -11,13 +11,20 @@ export function PageHeader({
   title,
   description,
   actions,
+  reserveActionSpace = false,
 }: {
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  reserveActionSpace?: boolean;
 }) {
   return (
-    <header className="flex items-center justify-between gap-4">
+    <header
+      className={cn(
+        'flex items-center justify-between gap-4',
+        reserveActionSpace && 'min-h-9',
+      )}
+    >
       <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight">
         {title}
       </h1>

@@ -75,6 +75,7 @@ export default function KudosPage() {
     <div className="page">
       <PageHeader
         title="Kudos"
+        reserveActionSpace
         description="Celebrate the people who make your team better."
         actions={
           <Select

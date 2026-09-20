@@ -158,6 +158,7 @@ export default function ReportsPage() {
     <div className="page">
       <PageHeader
         title="Reports"
+        reserveActionSpace
         description="Standup history, filtered by date or member."
         actions={
           <Button

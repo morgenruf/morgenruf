@@ -364,6 +364,7 @@ export function ConnectListPage() {
     <div className="page">
       <PageHeader
         title="Coffee chats"
+        reserveActionSpace
         description="Small conversations that bring your team closer."
         actions={
           canAdminister('connect') && (

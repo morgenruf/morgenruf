@@ -267,6 +267,7 @@ export default function WebhooksPage() {
     <div className="page">
       <PageHeader
         title="Webhooks"
+        reserveActionSpace
         description="Send signed standup events to your own systems."
         actions={
           canEdit && (

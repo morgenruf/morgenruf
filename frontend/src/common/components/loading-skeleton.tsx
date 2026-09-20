@@ -44,15 +44,18 @@ export function SkeletonPage({
   title,
   children,
   className,
+  reserveActionSpace = false,
 }: {
   title: string;
   className?: string;
   children: ReactNode;
+  reserveActionSpace?: boolean;
 }) {
   return (
     <div className={cn('page', className)}>
       <PageHeader
         title={title}
+        reserveActionSpace={reserveActionSpace}
         description={<Skeleton className="h-4 w-72 max-w-full" />}
       />
       <SkeletonRegion label={`Loading ${title.toLowerCase()}…`}>

@@ -69,6 +69,7 @@ export function StandupsPage() {
     <div className="page">
       <PageHeader
         title="Standups"
+        reserveActionSpace
         description="Your team’s check-ins, at a glance."
         actions={
           editable && (

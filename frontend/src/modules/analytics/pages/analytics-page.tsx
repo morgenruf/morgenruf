@@ -78,6 +78,7 @@ export default function AnalyticsPage() {
     <div className="page page-wide">
       <PageHeader
         title="Analytics"
+        reserveActionSpace
         description="Participation, blockers, and standup health."
         actions={
           <Tabs

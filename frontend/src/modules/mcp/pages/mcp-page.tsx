@@ -62,6 +62,7 @@ export default function McpPage() {
     <div className="page">
       <PageHeader
         title="MCP"
+        reserveActionSpace
         description="Give your AI assistant scoped access to your team’s standup data."
         actions={
           canEdit && (

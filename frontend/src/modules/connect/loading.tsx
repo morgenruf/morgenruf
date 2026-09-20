@@ -102,7 +102,7 @@ export function ConnectAttendanceSkeleton() {
 
 export function ConnectListPageSkeleton() {
   return (
-    <SkeletonPage title="Coffee chats">
+    <SkeletonPage title="Coffee chats" reserveActionSpace>
       <ConnectListSkeleton />
     </SkeletonPage>
   );

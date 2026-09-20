@@ -50,7 +50,7 @@ export function KudosConfigSkeleton() {
 }
 export function KudosPageSkeleton() {
   return (
-    <SkeletonPage title="Kudos">
+    <SkeletonPage title="Kudos" reserveActionSpace>
       <div className="space-y-6">
         <SkeletonCard />
         <div className="grid gap-5 md:grid-cols-2">

@@ -37,7 +37,7 @@ export function StandupsSkeleton() {
 
 export function StandupsPageSkeleton() {
   return (
-    <SkeletonPage title="Standups">
+    <SkeletonPage title="Standups" reserveActionSpace>
       <StandupsSkeleton />
     </SkeletonPage>
   );

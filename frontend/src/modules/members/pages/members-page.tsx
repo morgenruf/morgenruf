@@ -145,6 +145,7 @@ export default function MembersPage() {
     <div className="page">
       <PageHeader
         title="Members"
+        reserveActionSpace
         description="Your Slack workspace, and the people who run each feature."
         actions={
           <>

@@ -15,7 +15,7 @@ export function McpKeysSkeleton() {
 }
 export function McpPageSkeleton() {
   return (
-    <SkeletonPage title="MCP">
+    <SkeletonPage title="MCP" reserveActionSpace>
       <div className="space-y-6">
         <SkeletonCard>
           <SkeletonText lines={5} />

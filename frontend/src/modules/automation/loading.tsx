@@ -25,7 +25,7 @@ export function AutomationSkeleton() {
 
 export function AutomationPageSkeleton() {
   return (
-    <SkeletonPage title="Automation">
+    <SkeletonPage title="Automation" reserveActionSpace>
       <AutomationSkeleton />
     </SkeletonPage>
   );
