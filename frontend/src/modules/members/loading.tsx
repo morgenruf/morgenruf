@@ -32,7 +32,7 @@ export function MembersSkeleton() {
 
 export function MembersPageSkeleton() {
   return (
-    <SkeletonPage title="Members">
+    <SkeletonPage title="Members" reserveActionSpace>
       <div className="space-y-6">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }, (_, index) => (

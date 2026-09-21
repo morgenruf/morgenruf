@@ -72,6 +72,7 @@ const sam = {
   email: 'sam@example.com',
   display_name: 'sam',
   role: 'member',
+  avatar: 'https://example.com/sam.png',
 };
 
 function view(path = '/dashboard/members') {
@@ -101,7 +102,9 @@ describe('member management', () => {
   it('counts schedules that include the whole channel', async () => {
     view('/dashboard/members?channel=C1');
 
-    expect(await screen.findByText('Mina')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Mina', level: 2 }),
+    ).toBeInTheDocument();
     expect(screen.getByText('1 standup')).toBeInTheDocument();
   });
 
@@ -117,7 +120,9 @@ describe('member management', () => {
       screen.getByRole('button', { name: 'Grant admin access' }),
     ).toBeDisabled();
 
-    await user.click(await screen.findByRole('button', { name: /Sam/ }));
+    const samChoice = await screen.findByRole('button', { name: /Sam/ });
+    expect(samChoice.querySelector('img')).toHaveAttribute('src', sam.avatar);
+    await user.click(samChoice);
 
     expect(mock.invite).not.toHaveBeenCalled();
 
@@ -166,10 +171,7 @@ it('loads selected channel labels and clears filters without losing other choice
   ).toHaveTextContent('Admins');
   await chooseOption(user, 'Filter by channel', 'All channels');
   await waitFor(() =>
-    expect(mock.members).toHaveBeenCalledWith(
-      { channel_id: undefined },
-      expect.anything(),
-    ),
+    expect(mock.members).toHaveBeenCalledWith({}, expect.anything()),
   );
   expect(
     screen.getByRole('combobox', { name: 'Filter by role' }),

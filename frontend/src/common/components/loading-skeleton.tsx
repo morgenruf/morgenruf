@@ -1,5 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
+import { LoadingTransition } from '@/common/components/loading-transition';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import { cn } from '@/common/lib/utils';
 
 import { PageHeader } from './page';
@@ -41,15 +43,20 @@ export function SkeletonRegion({
 export function SkeletonPage({
   title,
   children,
+  className,
+  reserveActionSpace = false,
 }: {
   title: string;
+  className?: string;
   children: ReactNode;
+  reserveActionSpace?: boolean;
 }) {
   return (
-    <div className="page">
+    <div className={cn('page', className)}>
       <PageHeader
         title={title}
-        description={<Skeleton className="mt-2 h-4 w-72 max-w-full" />}
+        reserveActionSpace={reserveActionSpace}
+        description={<Skeleton className="h-4 w-72 max-w-full" />}
       />
       <SkeletonRegion label={`Loading ${title.toLowerCase()}…`}>
         {children}
@@ -92,16 +99,19 @@ export function SkeletonCard({
 export function SkeletonStats({
   count = 4,
   className,
+  icons = false,
 }: {
   count?: number;
   className?: string;
+  icons?: boolean;
 }) {
   return (
     <div className={cn('grid gap-4 sm:grid-cols-2 lg:grid-cols-4', className)}>
       {Array.from({ length: count }, (_, index) => (
         <Card key={index}>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <Skeleton className="h-3 w-24" />
+            {icons && <Skeleton className="size-8 shrink-0 rounded-lg" />}
           </CardHeader>
           <CardContent className="space-y-2">
             <Skeleton className="h-8 w-20" />
@@ -141,7 +151,7 @@ export function SkeletonTable({
   rows?: number;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <ScrollArea orientation="horizontal" className="min-w-0">
       <table className="w-full min-w-96">
         <thead>
           <tr>
@@ -166,7 +176,7 @@ export function SkeletonTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -263,13 +273,20 @@ export function LoadingField({
   children: ReactNode;
   className?: string;
 }) {
-  return pending ? (
-    <div className={cn('space-y-2', className)}>
-      {fieldLabel && <div className="text-sm font-medium">{fieldLabel}</div>}
-      <FieldSkeleton label={label} />
-    </div>
-  ) : (
-    children
+  // Selects render invisible input siblings that must not add field spacing.
+  return (
+    <LoadingTransition pending={pending} className={cn('space-y-0', className)}>
+      {pending ? (
+        <div className="space-y-2">
+          {fieldLabel && (
+            <div className="text-sm font-medium">{fieldLabel}</div>
+          )}
+          <FieldSkeleton label={label} />
+        </div>
+      ) : (
+        children
+      )}
+    </LoadingTransition>
   );
 }
 

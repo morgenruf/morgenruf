@@ -8,18 +8,23 @@ import {
   SkeletonPeople,
   SkeletonRegion,
 } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
+import { Person, PersonAvatar } from '@/common/components/person';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
 import { Card, CardContent } from '@/common/components/ui/card';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -140,6 +145,7 @@ export default function MembersPage() {
     <div className="page">
       <PageHeader
         title="Members"
+        reserveActionSpace
         description="Your Slack workspace, and the people who run each feature."
         actions={
           <>
@@ -241,171 +247,165 @@ export default function MembersPage() {
           </SelectContent>
         </Select>
       </div>
-      {members.isPending ? (
-        <MembersSkeleton />
-      ) : members.isError ? (
-        <ErrorState
-          error={members.error}
-          retry={() => void members.refetch()}
-        />
-      ) : (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} of {all.length} members ·{' '}
-            {all.filter((member) => member.tracked !== false).length} in
-            Morgenruf. People not tracked by Morgenruf do not appear in
-            participation figures.
-          </p>
-          {!filtered.length ? (
-            <EmptyState
-              title={
-                all.length
-                  ? 'No members match these filters'
-                  : 'No members found'
-              }
-              description="Members are synchronized from your Slack workspace."
-            />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((member) => {
-                const name = member.name || member.display_name || member.id;
+      <LoadingTransition pending={members.isPending}>
+        {members.isPending ? (
+          <MembersSkeleton />
+        ) : members.isError ? (
+          <ErrorState
+            error={members.error}
+            retry={() => void members.refetch()}
+          />
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {filtered.length} of {all.length} members ·{' '}
+              {all.filter((member) => member.tracked !== false).length} in
+              Morgenruf. People not tracked by Morgenruf do not appear in
+              participation figures.
+            </p>
+            {!filtered.length ? (
+              <EmptyState
+                title={
+                  all.length
+                    ? 'No members match these filters'
+                    : 'No members found'
+                }
+                description="Members are synchronized from your Slack workspace."
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filtered.map((member) => {
+                  const name = member.name || member.display_name || member.id;
 
-                const count = (standups.data ?? []).filter(
-                  (standup) =>
-                    !standup.participants?.length ||
-                    standup.participants.includes(member.id),
-                ).length;
+                  const count = (standups.data ?? []).filter(
+                    (standup) =>
+                      !standup.participants?.length ||
+                      standup.participants.includes(member.id),
+                  ).length;
 
-                return (
-                  <Card key={member.id}>
-                    <CardContent className="space-y-4 pt-5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-11 shrink-0 items-center justify-center relative overflow-hidden rounded-full bg-primary/10 font-semibold text-primary">
-                          {name
-                            .split(/\s+/)
-                            .map((word) => word[0])
-                            .slice(0, 2)
-                            .join('')}
-                          {member.avatar && (
-                            <img
-                              src={member.avatar}
-                              alt=""
-                              className="absolute inset-0 size-full object-cover"
-                              loading="lazy"
-                              onError={(event) => {
-                                event.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <h2 className="truncate font-medium">{name}</h2>
-                          <p className="truncate text-xs text-muted-foreground">
-                            @{member.display_name || member.id}
-                          </p>
-                        </div>
-                        <Badge
-                          className="ml-auto"
-                          variant={
-                            member.role === 'admin' ? 'default' : 'secondary'
-                          }
-                        >
-                          {member.role ?? 'member'}
-                        </Badge>
-                      </div>
-                      <div className="space-y-1 text-sm text-muted-foreground">
-                        <p>{member.email || 'No email shared'}</p>
-                        <p>{member.tz || 'UTC'}</p>
-                        {standups.isPending ? (
-                          <SkeletonRegion label="Loading standup enrollment…">
-                            <Skeleton className="h-4 w-24" />
-                          </SkeletonRegion>
-                        ) : (
-                          <p>
-                            {count
-                              ? `${count} standup${count === 1 ? '' : 's'}`
-                              : member.tracked === false
-                                ? 'Not in Morgenruf'
-                                : 'No standups'}
-                          </p>
-                        )}
-                      </div>
-                      {grantable.length > 0 && (
-                        <div className="space-y-2 border-t pt-3">
-                          <p className="text-xs text-muted-foreground">
-                            {member.role === 'admin'
-                              ? 'Runs every feature'
-                              : (member.module_admin?.length ?? 0)
-                                ? 'Runs'
-                                : isAdmin
-                                  ? 'Put in charge of'
-                                  : 'Feature access'}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {grantable
-                              .filter(
-                                (module) =>
-                                  isAdmin ||
-                                  member.role === 'admin' ||
-                                  member.module_admin?.includes(module.name),
-                              )
-                              .map((module) => {
-                                const active =
-                                  member.role === 'admin' ||
-                                  !!member.module_admin?.includes(module.name);
-
-                                return (
-                                  <Button
-                                    key={module.name}
-                                    size="sm"
-                                    variant={active ? 'secondary' : 'outline'}
-                                    aria-pressed={active}
-                                    disabled={
-                                      !isAdmin ||
-                                      member.role === 'admin' ||
-                                      busy
-                                    }
-                                    onClick={() =>
-                                      grant.mutate({
-                                        id: member.id,
-                                        module: module.name,
-                                        enabled: !active,
-                                      })
-                                    }
-                                  >
-                                    {moduleLabels[module.name] ?? module.name}
-                                  </Button>
-                                );
-                              })}
+                  return (
+                    <Card key={member.id}>
+                      <CardContent className="space-y-4 pt-5">
+                        <div className="flex items-center gap-3">
+                          <PersonAvatar
+                            name={name}
+                            avatar={member.avatar}
+                            size="large"
+                          />
+                          <div className="min-w-0">
+                            <h2 className="break-words font-medium">{name}</h2>
+                            <p className="truncate text-xs text-muted-foreground">
+                              @{member.display_name || member.id}
+                            </p>
                           </div>
+                          <Badge
+                            className="ml-auto"
+                            variant={
+                              member.role === 'admin' ? 'default' : 'secondary'
+                            }
+                          >
+                            {member.role ?? 'member'}
+                          </Badge>
                         </div>
-                      )}
-                      {isAdmin && member.id !== session?.user_id && (
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          disabled={busy}
-                          onClick={() =>
-                            role.mutate({
-                              id: member.id,
-                              role:
-                                member.role === 'admin' ? 'member' : 'admin',
-                            })
-                          }
-                        >
-                          {member.role === 'admin'
-                            ? 'Make member'
-                            : 'Make admin'}
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p>{member.email || 'No email shared'}</p>
+                          <p>{member.tz || 'UTC'}</p>
+                          <LoadingTransition pending={standups.isPending}>
+                            {standups.isPending ? (
+                              <SkeletonRegion label="Loading standup enrollment…">
+                                <Skeleton className="h-4 w-24" />
+                              </SkeletonRegion>
+                            ) : (
+                              <p>
+                                {count
+                                  ? `${count} standup${count === 1 ? '' : 's'}`
+                                  : member.tracked === false
+                                    ? 'Not in Morgenruf'
+                                    : 'No standups'}
+                              </p>
+                            )}
+                          </LoadingTransition>
+                        </div>
+                        {grantable.length > 0 && (
+                          <div className="space-y-2 border-t pt-3">
+                            <p className="text-xs text-muted-foreground">
+                              {member.role === 'admin'
+                                ? 'Runs every feature'
+                                : (member.module_admin?.length ?? 0)
+                                  ? 'Runs'
+                                  : isAdmin
+                                    ? 'Put in charge of'
+                                    : 'Feature access'}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {grantable
+                                .filter(
+                                  (module) =>
+                                    isAdmin ||
+                                    member.role === 'admin' ||
+                                    member.module_admin?.includes(module.name),
+                                )
+                                .map((module) => {
+                                  const active =
+                                    member.role === 'admin' ||
+                                    !!member.module_admin?.includes(
+                                      module.name,
+                                    );
+
+                                  return (
+                                    <Button
+                                      key={module.name}
+                                      size="sm"
+                                      variant={active ? 'secondary' : 'outline'}
+                                      aria-pressed={active}
+                                      disabled={
+                                        !isAdmin ||
+                                        member.role === 'admin' ||
+                                        busy
+                                      }
+                                      onClick={() =>
+                                        grant.mutate({
+                                          id: member.id,
+                                          module: module.name,
+                                          enabled: !active,
+                                        })
+                                      }
+                                    >
+                                      {moduleLabels[module.name] ?? module.name}
+                                    </Button>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        )}
+                        {isAdmin && member.id !== session?.user_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            disabled={busy}
+                            onClick={() =>
+                              role.mutate({
+                                id: member.id,
+                                role:
+                                  member.role === 'admin' ? 'member' : 'admin',
+                              })
+                            }
+                          >
+                            {member.role === 'admin'
+                              ? 'Make member'
+                              : 'Make admin'}
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </LoadingTransition>
       <Dialog open={inviting} onOpenChange={setInviting}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -415,47 +415,65 @@ export default function MembersPage() {
               access.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            aria-label="Find a member to invite"
-            placeholder="Search members…"
-            value={inviteSearch}
-            onChange={(event) => setInviteSearch(event.target.value)}
-          />
-          {inviteMembers.isPending ? (
-            <SkeletonRegion label="Loading members to invite…">
-              <SkeletonPeople rows={5} />
-            </SkeletonRegion>
-          ) : inviteMembers.isError ? (
-            <ErrorState
-              error={inviteMembers.error}
-              retry={() => void inviteMembers.refetch()}
+          <DialogBody>
+            <Input
+              aria-label="Find a member to invite"
+              placeholder="Search members…"
+              value={inviteSearch}
+              onChange={(event) => setInviteSearch(event.target.value)}
             />
-          ) : (
-            <div className="max-h-72 space-y-2 overflow-y-auto">
-              {inviteMembers.data
-                ?.filter((member) =>
-                  `${member.name} ${member.display_name} ${member.email}`
-                    .toLowerCase()
-                    .includes(inviteSearch.toLowerCase()),
-                )
-                .map((member) => (
-                  <Button
-                    key={member.id}
-                    variant={inviteId === member.id ? 'secondary' : 'outline'}
-                    aria-pressed={inviteId === member.id}
-                    className="h-auto w-full justify-between py-3"
-                    disabled={invite.isPending || member.role === 'admin'}
-                    onClick={() => setInviteId(member.id)}
-                  >
-                    <span>{member.name || member.id}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {member.role === 'admin' ? 'Already admin' : member.email}
-                    </span>
-                  </Button>
-                ))}
-            </div>
-          )}
-          <div className="flex justify-end gap-2">
+            <LoadingTransition pending={inviteMembers.isPending}>
+              {inviteMembers.isPending ? (
+                <SkeletonRegion label="Loading members to invite…">
+                  <SkeletonPeople rows={5} />
+                </SkeletonRegion>
+              ) : inviteMembers.isError ? (
+                <ErrorState
+                  error={inviteMembers.error}
+                  retry={() => void inviteMembers.refetch()}
+                />
+              ) : (
+                <ScrollArea
+                  className="max-h-72"
+                  contentClassName="space-y-2 p-1"
+                  viewportProps={{
+                    role: 'region',
+                    'aria-label': 'Members to invite',
+                  }}
+                >
+                  {inviteMembers.data
+                    ?.filter((member) =>
+                      `${member.name} ${member.display_name} ${member.email}`
+                        .toLowerCase()
+                        .includes(inviteSearch.toLowerCase()),
+                    )
+                    .map((member) => (
+                      <Button
+                        key={member.id}
+                        variant={
+                          inviteId === member.id ? 'secondary' : 'outline'
+                        }
+                        aria-pressed={inviteId === member.id}
+                        className="h-auto w-full flex-wrap justify-between py-3 text-left whitespace-normal"
+                        disabled={invite.isPending || member.role === 'admin'}
+                        onClick={() => setInviteId(member.id)}
+                      >
+                        <Person
+                          {...inviteMembers.person(member.id)}
+                          size="compact"
+                        />
+                        <span className="break-all text-xs text-muted-foreground">
+                          {member.role === 'admin'
+                            ? 'Already admin'
+                            : member.email}
+                        </span>
+                      </Button>
+                    ))}
+                </ScrollArea>
+              )}
+            </LoadingTransition>
+          </DialogBody>
+          <DialogFooter>
             <Button variant="outline" onClick={() => setInviting(false)}>
               Cancel
             </Button>
@@ -476,7 +494,7 @@ export default function MembersPage() {
             >
               {invite.isPending ? 'Granting access…' : 'Grant admin access'}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

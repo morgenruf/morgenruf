@@ -6,6 +6,7 @@ import {
   SkeletonRegion,
   SkeletonText,
 } from '@/common/components/loading-skeleton';
+import { Card, CardContent } from '@/common/components/ui/card';
 import { Skeleton } from '@/common/components/ui/skeleton';
 
 // The kudos page shows two leaderboards side by side, so each one needs its own
@@ -27,9 +28,18 @@ export function KudosFeedSkeleton() {
     <SkeletonRegion label="Loading recognition…">
       <div className="space-y-3">
         {Array.from({ length: 3 }, (_, index) => (
-          <SkeletonCard key={index}>
-            <SkeletonText />
-          </SkeletonCard>
+          <Card key={index}>
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="size-5 shrink-0 rounded-full" />
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-3 w-10" />
+                <Skeleton className="size-5 shrink-0 rounded-full" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <SkeletonText lines={2} />
+            </CardContent>
+          </Card>
         ))}
       </div>
     </SkeletonRegion>
@@ -47,7 +57,7 @@ export function KudosConfigSkeleton() {
 }
 export function KudosPageSkeleton() {
   return (
-    <SkeletonPage title="Kudos">
+    <SkeletonPage title="Kudos" reserveActionSpace>
       <div className="space-y-6">
         <SkeletonCard />
         <div className="grid gap-5 md:grid-cols-2">

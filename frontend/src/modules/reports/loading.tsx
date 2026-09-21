@@ -30,7 +30,7 @@ export function ReportsSkeleton() {
 
 export function ReportsPageSkeleton() {
   return (
-    <SkeletonPage title="Reports">
+    <SkeletonPage title="Reports" reserveActionSpace>
       <div className="space-y-6">
         <Card>
           <CardContent className="space-y-4">

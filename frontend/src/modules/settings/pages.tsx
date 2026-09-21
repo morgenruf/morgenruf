@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { api } from '@/common/api/client';
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -24,6 +25,7 @@ import {
   CardTitle,
 } from '@/common/components/ui/card';
 import { Input } from '@/common/components/ui/input';
+import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
 
 import { useSettings, useSettingsMutations } from './hooks';
@@ -92,7 +94,7 @@ function DigestSettings({ standup }: { standup: Standup }) {
             }
           })}
         >
-          <label className="grid gap-2 text-sm font-medium">
+          <label className="flex flex-col gap-2 text-sm font-medium">
             Manager email
             <Input
               type="email"
@@ -169,84 +171,88 @@ export function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {modules.isPending ? (
-              <FeatureSettingsSkeleton />
-            ) : modules.error ? (
-              <ErrorState
-                error={modules.error}
-                retry={() => modules.refetch()}
-              />
-            ) : (
-              <div className="divide-y">
-                {modules.data
-                  ?.filter((item) => item.available !== false)
-                  .map((item) => (
-                    <div
-                      key={item.name}
-                      className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
-                    >
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">
-                          {featureNames[item.name] ?? item.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {featureDescriptions[item.name]}
-                        </p>
-                        {!!item.missing_scopes?.length && (
-                          <p className="text-xs text-amber-600">
-                            Needs Slack permissions:{' '}
-                            {item.missing_scopes.join(', ')}.{' '}
-                            <a href="/install" className="underline">
-                              Re-authorise Slack
-                            </a>
+            <LoadingTransition pending={modules.isPending}>
+              {modules.isPending ? (
+                <FeatureSettingsSkeleton />
+              ) : modules.error ? (
+                <ErrorState
+                  error={modules.error}
+                  retry={() => modules.refetch()}
+                />
+              ) : (
+                <div className="divide-y">
+                  {modules.data
+                    ?.filter((item) => item.available !== false)
+                    .map((item) => (
+                      <div
+                        key={item.name}
+                        className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                      >
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">
+                            {featureNames[item.name] ?? item.name}
                           </p>
+                          <p className="text-xs text-muted-foreground">
+                            {featureDescriptions[item.name]}
+                          </p>
+                          {!!item.missing_scopes?.length && (
+                            <p className="text-xs text-amber-600">
+                              Needs Slack permissions:{' '}
+                              {item.missing_scopes.join(', ')}.{' '}
+                              <a href="/install" className="underline">
+                                Re-authorise Slack
+                              </a>
+                            </p>
+                          )}
+                        </div>
+                        {isAdmin && !item.missing_scopes?.length ? (
+                          <Switch
+                            checked={item.active}
+                            aria-label={`${featureNames[item.name] ?? item.name} enabled`}
+                            className="mt-0.5"
+                            disabled={module.isPending}
+                            onCheckedChange={(enabled) =>
+                              module.mutate(
+                                { name: item.name, enabled },
+                                {
+                                  onSuccess: () =>
+                                    toast.success(
+                                      `${featureNames[item.name] ?? item.name} ${enabled ? 'enabled' : 'disabled'}`,
+                                    ),
+                                  onError: (error) =>
+                                    toast.error(errorMessage(error)),
+                                },
+                              )
+                            }
+                          />
+                        ) : (
+                          <Badge variant="secondary">
+                            {item.missing_scopes?.length
+                              ? 'Unavailable'
+                              : item.active
+                                ? 'On'
+                                : 'Off'}
+                          </Badge>
                         )}
                       </div>
-                      {isAdmin && !item.missing_scopes?.length ? (
-                        <Button
-                          role="switch"
-                          aria-checked={item.active}
-                          aria-label={`${featureNames[item.name] ?? item.name} enabled`}
-                          variant={item.active ? 'default' : 'outline'}
-                          size="sm"
-                          disabled={module.isPending}
-                          onClick={() =>
-                            module.mutate(
-                              { name: item.name, enabled: !item.active },
-                              {
-                                onSuccess: () =>
-                                  toast.success(
-                                    `${featureNames[item.name] ?? item.name} ${item.active ? 'disabled' : 'enabled'}`,
-                                  ),
-                                onError: (error) =>
-                                  toast.error(errorMessage(error)),
-                              },
-                            )
-                          }
-                        >
-                          {item.active ? 'On' : 'Off'}
-                        </Button>
-                      ) : (
-                        <Badge variant="secondary">
-                          {item.missing_scopes?.length
-                            ? 'Unavailable'
-                            : item.active
-                              ? 'On'
-                              : 'Off'}
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            )}
+                    ))}
+                </div>
+              )}
+            </LoadingTransition>
           </CardContent>
         </Card>
-        {standups.isPending ? (
-          <StandupSettingsSkeleton />
-        ) : standups.error ? (
-          <ErrorState error={standups.error} retry={() => standups.refetch()} />
-        ) : first ? (
-          <>
+        <LoadingTransition
+          pending={standups.isPending}
+          className="*:data-[slot=card]:h-full"
+        >
+          {standups.isPending ? (
+            <StandupSettingsSkeleton />
+          ) : standups.error ? (
+            <ErrorState
+              error={standups.error}
+              retry={() => standups.refetch()}
+            />
+          ) : first ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -278,7 +284,7 @@ export function SettingsPage() {
                     Next run: {new Date(first.next_run).toLocaleString()}
                   </p>
                 ) : (
-                  <Badge variant="secondary">
+                  <Badge variant="secondary" className="me-2">
                     {first.active ? 'No next run scheduled' : 'Paused'}
                   </Badge>
                 )}
@@ -303,122 +309,145 @@ export function SettingsPage() {
                 )}
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe className="size-4 text-muted-foreground" />
-                  Public standup feed
-                </CardTitle>
-                <CardDescription>
-                  A read-only link to today’s standups. Anyone with the link can
-                  read it without signing in.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm">Enable public feed</span>
-                  {isAdmin ? (
-                    <Button
-                      role="switch"
-                      aria-checked={!!first.feed_public}
-                      aria-label="Public standup feed enabled"
-                      size="sm"
-                      variant={first.feed_public ? 'default' : 'outline'}
-                      disabled={feed.isPending}
-                      onClick={() =>
-                        feed.mutate(!first.feed_public, {
-                          onSuccess: () =>
-                            toast.success(
-                              first.feed_public
-                                ? 'Public feed disabled'
-                                : 'Public feed enabled',
-                            ),
-                          onError: (error) => toast.error(errorMessage(error)),
-                        })
-                      }
-                    >
-                      {first.feed_public ? 'On' : 'Off'}
-                    </Button>
-                  ) : (
-                    <Badge variant="secondary">
-                      {first.feed_public ? 'On' : 'Off'}
-                    </Badge>
-                  )}
-                </div>
-                {first.feed_public && feedUrl && (
-                  <div className="flex gap-2">
-                    <Input
-                      aria-label="Public feed URL"
-                      readOnly
-                      value={feedUrl}
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Copy public feed URL"
-                      onClick={() =>
-                        navigator.clipboard
-                          .writeText(feedUrl)
-                          .then(() => toast.success('Feed URL copied'))
-                          .catch(() =>
-                            toast.error(
-                              'Copy unavailable. Select and copy the URL.',
-                            ),
-                          )
-                      }
-                    >
-                      <Copy className="size-4" />
-                    </Button>
-                    <a
-                      className="inline-flex items-center rounded-md border px-3"
-                      href={feedUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label="Open public feed"
-                    >
-                      <ExternalLink className="size-4" />
-                    </a>
-                  </div>
-                )}
-                {first.feed_public && !feedUrl && isAdmin && (
-                  <Button
-                    disabled={feed.isPending}
-                    onClick={() =>
-                      feed.mutate(true, {
-                        onError: (error) => toast.error(errorMessage(error)),
-                      })
-                    }
+          ) : (
+            <EmptyState
+              title="No standup configured"
+              description="Create a standup to configure daily digest and public feed settings."
+              action={
+                canAdminister('standup') && (
+                  <Link
+                    to="/dashboard/standups?new=true"
+                    className="text-sm font-medium text-primary"
                   >
-                    Generate feed URL
-                  </Button>
-                )}
-                {!isAdmin && (
-                  <p className="text-xs text-muted-foreground">
-                    Only workspace administrators can publish the feed.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            <DigestSettings
-              key={`${first.id}-${first.manager_email}-${first.manager_digest_enabled}`}
-              standup={first}
+                    Create a standup
+                  </Link>
+                )
+              }
             />
+          )}
+        </LoadingTransition>
+        {(standups.isPending || (!standups.error && first)) && (
+          <>
+            <LoadingTransition
+              pending={standups.isPending}
+              className="[&>[data-slot=card]]:h-full"
+            >
+              {standups.isPending ? (
+                <StandupSettingsSkeleton section="feed" />
+              ) : (
+                first && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Globe className="size-4 text-muted-foreground" />
+                        Public standup feed
+                      </CardTitle>
+                      <CardDescription>
+                        A read-only link to today’s standups. Anyone with the
+                        link can read it without signing in.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm">Enable public feed</span>
+                        {isAdmin ? (
+                          <Switch
+                            checked={!!first.feed_public}
+                            aria-label="Public standup feed enabled"
+                            disabled={feed.isPending}
+                            onCheckedChange={(enabled) =>
+                              feed.mutate(enabled, {
+                                onSuccess: () =>
+                                  toast.success(
+                                    enabled
+                                      ? 'Public feed enabled'
+                                      : 'Public feed disabled',
+                                  ),
+                                onError: (error) =>
+                                  toast.error(errorMessage(error)),
+                              })
+                            }
+                          />
+                        ) : (
+                          <Badge variant="secondary">
+                            {first.feed_public ? 'On' : 'Off'}
+                          </Badge>
+                        )}
+                      </div>
+                      {first.feed_public && feedUrl && (
+                        <div className="flex gap-2">
+                          <Input
+                            aria-label="Public feed URL"
+                            readOnly
+                            value={feedUrl}
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Copy public feed URL"
+                            onClick={() =>
+                              navigator.clipboard
+                                .writeText(feedUrl)
+                                .then(() => toast.success('Feed URL copied'))
+                                .catch(() =>
+                                  toast.error(
+                                    'Copy unavailable. Select and copy the URL.',
+                                  ),
+                                )
+                            }
+                          >
+                            <Copy className="size-4" />
+                          </Button>
+                          <a
+                            className="inline-flex items-center rounded-md border px-3"
+                            href={feedUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="Open public feed"
+                          >
+                            <ExternalLink className="size-4" />
+                          </a>
+                        </div>
+                      )}
+                      {first.feed_public && !feedUrl && isAdmin && (
+                        <Button
+                          disabled={feed.isPending}
+                          onClick={() =>
+                            feed.mutate(true, {
+                              onError: (error) =>
+                                toast.error(errorMessage(error)),
+                            })
+                          }
+                        >
+                          Generate feed URL
+                        </Button>
+                      )}
+                      {!isAdmin && (
+                        <p className="text-xs text-muted-foreground">
+                          Only workspace administrators can publish the feed.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              )}
+            </LoadingTransition>
+            <LoadingTransition
+              pending={standups.isPending}
+              className="[&>[data-slot=card]]:h-full"
+            >
+              {standups.isPending ? (
+                <StandupSettingsSkeleton section="digest" />
+              ) : (
+                first && (
+                  <DigestSettings
+                    key={`${first.id}-${first.manager_email}-${first.manager_digest_enabled}`}
+                    standup={first}
+                  />
+                )
+              )}
+            </LoadingTransition>
           </>
-        ) : (
-          <EmptyState
-            title="No standup configured"
-            description="Create a standup to configure daily digest and public feed settings."
-            action={
-              canAdminister('standup') && (
-                <Link
-                  to="/dashboard/standups?new=true"
-                  className="text-sm font-medium text-primary"
-                >
-                  Create a standup
-                </Link>
-              )
-            }
-          />
         )}
       </div>
     </div>

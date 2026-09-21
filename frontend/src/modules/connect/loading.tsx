@@ -1,6 +1,5 @@
 import {
   SkeletonCard,
-  SkeletonChart,
   SkeletonFields,
   SkeletonPage,
   SkeletonPeople,
@@ -10,22 +9,25 @@ import {
   SkeletonTable,
   SkeletonText,
 } from '@/common/components/loading-skeleton';
+import { PageHeader } from '@/common/components/page';
 import { Skeleton } from '@/common/components/ui/skeleton';
 
 export function AttendanceSkeleton() {
   return (
     <SkeletonRegion label="Loading attendance…">
       <div className="space-y-6">
-        <SkeletonStats />
+        <Skeleton className="h-4 w-64 max-w-full" />
+        <SkeletonStats icons />
+        <SkeletonCard>
+          <Skeleton className="h-64 w-full rounded-lg sm:h-72" />
+          <Skeleton className="mt-4 h-12 w-full rounded-lg" />
+        </SkeletonCard>
         <div className="grid gap-5 xl:grid-cols-2">
           <SkeletonCard>
-            <div className="space-y-5">
-              <SkeletonChart className="h-56" />
-              <SkeletonPeople rows={3} />
-            </div>
+            <SkeletonPeople rows={3} />
           </SkeletonCard>
           <SkeletonCard>
-            <SkeletonTable columns={3} />
+            <SkeletonTable columns={5} />
           </SkeletonCard>
         </div>
       </div>
@@ -87,21 +89,12 @@ export function ConnectDetailSkeleton() {
 }
 
 export function ConnectAttendanceSkeleton() {
-  return (
-    <SkeletonRegion label="Loading attendance…">
-      <div className="space-y-6">
-        <div className="max-w-sm">
-          <SkeletonFields count={1} />
-        </div>
-        <AttendanceSkeleton />
-      </div>
-    </SkeletonRegion>
-  );
+  return <AttendanceSkeleton />;
 }
 
 export function ConnectListPageSkeleton() {
   return (
-    <SkeletonPage title="Coffee chats">
+    <SkeletonPage title="Coffee chats" reserveActionSpace>
       <ConnectListSkeleton />
     </SkeletonPage>
   );
@@ -123,8 +116,13 @@ export function ConnectDetailPageSkeleton() {
 }
 export function ConnectAttendancePageSkeleton() {
   return (
-    <SkeletonPage title="Coffee chat attendance">
+    <div className="page">
+      <PageHeader
+        title="Coffee chat attendance"
+        reserveActionSpace
+        actions={<Skeleton className="h-9 w-40 sm:w-64" />}
+      />
       <ConnectAttendanceSkeleton />
-    </SkeletonPage>
+    </div>
   );
 }

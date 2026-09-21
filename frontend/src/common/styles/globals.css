@@ -27,9 +27,12 @@
   --radius: 0.625rem;
   --sidebar: #f3f2ef;
   --sidebar-foreground: #292c42;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: #e8e9f9;
   --sidebar-accent-foreground: #363db0;
   --sidebar-border: #e8e6e1;
+  --sidebar-ring: var(--ring);
   --chart-1: #5030d0;
   --chart-2: #007fac;
   --chart-3: #ae7605;
@@ -61,9 +64,12 @@
   --ring: #a4a9ff;
   --sidebar: #191c23;
   --sidebar-foreground: #ebeaf2;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: #303455;
   --sidebar-accent-foreground: #c6c9ff;
   --sidebar-border: #343744;
+  --sidebar-ring: var(--ring);
   --chart-1: #b39bff;
   --chart-2: #53c6f1;
   --chart-3: #f0bd54;
@@ -95,9 +101,12 @@
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -133,8 +142,16 @@
 }
 
 @layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
   .page {
-    @apply mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10;
+    @apply mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-6;
   }
 
   .page-wide {

@@ -30,7 +30,7 @@ Place frontend unit tests in a `__test__` subfolder of the directory that owns t
 - `src/common/api/__test__/client.test.ts`
 - `src/modules/analytics/__test__/analytics-utils.test.ts`
 
-Shared test setup and helpers stay in `src/test`; shared infrastructure test suites live in `src/test/__test__`. Playwright tests stay in `e2e`. Run unit tests with `pnpm test` or use `pnpm test:watch` from `frontend/` during development.
+Shared test setup and helpers stay in `src/test`; shared infrastructure test suites live in `src/test/__test__`. Playwright tests stay in `e2e`. Run unit tests with `pnpm test` or use `pnpm test:watch` from `frontend/` during development. Browser tests use port 3008 for their fixture backend; when it is occupied, run with an override such as `MORGENRUF_E2E_BACKEND_PORT=3018 pnpm test:e2e`.
 
 ## API and query conventions
 
@@ -43,6 +43,8 @@ Keep newly created keys and webhook secrets only in component state, and clear t
 ## UI conventions
 
 Use semantic theme tokens and shadcn primitives under `common/components/ui`. The shell follows Hostleaf's compact navigation with Morgenruf branding. Feature pages use the shared page header, loading, error, and empty states; forms remain keyboard accessible. User-authored Slack text is rendered as React nodes using `SlackText`, never as injected HTML. Fonts and application assets are bundled locally.
+
+All charts use the local [EvilCharts](https://evilcharts.com/docs) Recharts components under `common/components/evilcharts`, including compact bars and sparklines. The official area, line, and bar registry sources and their dependencies are checked in with the upstream MIT license; Recharts and Motion remain the rendering dependencies. Local adaptations provide semantic per-point bar colors, visible zero markers, a shared frosted tooltip surface, tooltips that escape table clipping, keyboard focus styles, and reduced-motion support. Use theme tokens for gradients, keep percentage scales at 0–100, and preserve missing-data gaps and exact-value alternatives when adding charts.
 
 ## Production routing
 

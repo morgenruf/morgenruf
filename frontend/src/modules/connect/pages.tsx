@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -239,112 +240,119 @@ function ProgramList() {
   const { channels, zoom } = useConnectResources();
   const { canAdminister } = usePermissions();
 
-  if (query.isPending) return <ConnectListSkeleton />;
+  function renderContent() {
+    if (query.isPending) return <ConnectListSkeleton />;
 
-  if (query.error)
-    return <ErrorState error={query.error} retry={() => query.refetch()} />;
+    if (query.error)
+      return <ErrorState error={query.error} retry={() => query.refetch()} />;
 
-  if (!query.data?.length)
+    if (!query.data?.length)
+      return (
+        <EmptyState
+          title="Make room for a conversation"
+          description="Pick a channel and a cadence. Morgenruf introduces people in a group DM, giving them a simple way to meet."
+          action={
+            canAdminister('connect') && (
+              <Link
+                className="text-sm font-medium text-primary"
+                to="/dashboard/connect/new"
+              >
+                Create the first coffee chat
+              </Link>
+            )
+          }
+        />
+      );
+
     return (
-      <EmptyState
-        title="Make room for a conversation"
-        description="Pick a channel and a cadence. Morgenruf introduces people in a group DM, giving them a simple way to meet."
-        action={
-          canAdminister('connect') && (
-            <Link
-              className="text-sm font-medium text-primary"
-              to="/dashboard/connect/new"
-            >
-              Create the first coffee chat
-            </Link>
-          )
-        }
-      />
-    );
-
-  return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        {query.data.map((program) => (
-          <Card key={program.id}>
-            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Coffee className="size-5" />
-              </div>
-              <div className="min-w-0 flex-1 space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    to={`/dashboard/connect/${program.id}`}
-                    className="font-semibold hover:text-primary"
-                  >
-                    {program.name}
-                  </Link>
-                  <Badge variant={program.enabled ? 'default' : 'secondary'}>
-                    {program.enabled ? 'Running' : 'Paused'}
-                  </Badge>
+      <div className="space-y-6">
+        <div className="space-y-3">
+          {query.data.map((program) => (
+            <Card key={program.id}>
+              <CardContent className="flex flex-col gap-4 p-5 sm:flex-row">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Coffee className="size-5" />
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  #
-                  {channels.data?.find(
-                    (channel) => channel.id === program.channel_id,
-                  )?.name ?? program.channel_id}
-                </p>
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <CalendarDays className="size-3.5" />
-                    {cadenceLabel(program)} · {program.timezone}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="size-3.5" />
-                    {program.pool_size == null
-                      ? 'Pool size unavailable'
-                      : `${program.pool_size} in the pool`}
-                  </span>
-                </div>
-                {program.next_round_date && (
-                  <p className="text-xs text-muted-foreground">
-                    Next round:{' '}
-                    {new Date(program.next_round_date).toLocaleDateString()}
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to={`/dashboard/connect/${program.id}`}
+                      className="font-semibold hover:text-primary"
+                    >
+                      {program.name}
+                    </Link>
+                    <Badge variant={program.enabled ? 'default' : 'secondary'}>
+                      {program.enabled ? 'Running' : 'Paused'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    #
+                    {channels.data?.find(
+                      (channel) => channel.id === program.channel_id,
+                    )?.name ?? program.channel_id}
                   </p>
-                )}
-                <div className="flex flex-wrap items-center gap-4">
-                  <Link
-                    to={`/dashboard/connect/${program.id}`}
-                    className="text-sm font-medium text-primary"
-                  >
-                    {canAdminister('connect')
-                      ? 'Settings & members'
-                      : 'View details'}
-                  </Link>
-                  <Link
-                    to={`/dashboard/connect/attendance?program=${program.id}`}
-                    className="text-sm font-medium text-primary"
-                  >
-                    Attendance
-                  </Link>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <CalendarDays className="size-3.5" />
+                      {cadenceLabel(program)} · {program.timezone}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="size-3.5" />
+                      {program.pool_size == null
+                        ? 'Pool size unavailable'
+                        : `${program.pool_size} in the pool`}
+                    </span>
+                  </div>
+                  {program.next_round_date && (
+                    <p className="text-xs text-muted-foreground">
+                      Next round:{' '}
+                      {new Date(program.next_round_date).toLocaleDateString()}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Link
+                      to={`/dashboard/connect/${program.id}`}
+                      className="text-sm font-medium text-primary"
+                    >
+                      {canAdminister('connect')
+                        ? 'Settings & members'
+                        : 'View details'}
+                    </Link>
+                    <Link
+                      to={`/dashboard/connect/attendance?program=${program.id}`}
+                      className="text-sm font-medium text-primary"
+                    >
+                      Attendance
+                    </Link>
+                  </div>
                 </div>
-              </div>
-              <ProgramActions program={program} />
-            </CardContent>
-          </Card>
-        ))}
+                <ProgramActions program={program} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {zoom.data?.configured && (
+          <p className="text-xs text-muted-foreground">
+            {zoom.data.linked} people have linked Zoom
+            {zoom.data.needs_reconnect
+              ? ` · ${zoom.data.needs_reconnect} need to reconnect`
+              : ''}
+            .
+          </p>
+        )}
+        <div className="space-y-4">
+          <h2 className="font-semibold">
+            {query.data[0].name} · recent attendance
+          </h2>
+          <Attendance programId={query.data[0].id} />
+        </div>
       </div>
-      {zoom.data?.configured && (
-        <p className="text-xs text-muted-foreground">
-          {zoom.data.linked} people have linked Zoom
-          {zoom.data.needs_reconnect
-            ? ` · ${zoom.data.needs_reconnect} need to reconnect`
-            : ''}
-          .
-        </p>
-      )}
-      <div className="space-y-4">
-        <h2 className="font-semibold">
-          {query.data[0].name} · recent attendance
-        </h2>
-        <Attendance programId={query.data[0].id} />
-      </div>
-    </div>
+    );
+  }
+  return (
+    <LoadingTransition pending={query.isPending}>
+      {renderContent()}
+    </LoadingTransition>
   );
 }
 
@@ -356,6 +364,7 @@ export function ConnectListPage() {
     <div className="page">
       <PageHeader
         title="Coffee chats"
+        reserveActionSpace
         description="Small conversations that bring your team closer."
         actions={
           canAdminister('connect') && (
@@ -409,41 +418,48 @@ function ProgramDetail() {
   const { programId } = useParams();
   const query = useConnect();
 
-  if (query.isPending) return <ConnectDetailSkeleton />;
+  function renderContent() {
+    if (query.isPending) return <ConnectDetailSkeleton />;
 
-  if (query.error)
-    return <ErrorState error={query.error} retry={() => query.refetch()} />;
+    if (query.error)
+      return <ErrorState error={query.error} retry={() => query.refetch()} />;
 
-  const program = query.data?.find((item) => String(item.id) === programId);
+    const program = query.data?.find((item) => String(item.id) === programId);
 
-  if (!program)
+    if (!program)
+      return (
+        <EmptyState
+          title="Coffee chat not found"
+          description="It may have been deleted, or you may be viewing another workspace."
+          action={
+            <Link to="/dashboard/connect" className="text-primary">
+              Back to coffee chats
+            </Link>
+          }
+        />
+      );
+
     return (
-      <EmptyState
-        title="Coffee chat not found"
-        description="It may have been deleted, or you may be viewing another workspace."
-        action={
-          <Link to="/dashboard/connect" className="text-primary">
-            Back to coffee chats
-          </Link>
-        }
-      />
+      <div className="space-y-6">
+        <PageHeader
+          title={program.name}
+          description={cadenceLabel(program)}
+          actions={<ProgramActions program={program} />}
+        />
+        <ProgramForm key={program.id} program={program} />
+        <Link
+          to={`/dashboard/connect/attendance?program=${program.id}`}
+          className="inline-block text-sm font-medium text-primary"
+        >
+          View attendance →
+        </Link>
+      </div>
     );
-
+  }
   return (
-    <>
-      <PageHeader
-        title={program.name}
-        description={cadenceLabel(program)}
-        actions={<ProgramActions program={program} />}
-      />
-      <ProgramForm key={program.id} program={program} />
-      <Link
-        to={`/dashboard/connect/attendance?program=${program.id}`}
-        className="inline-block text-sm font-medium text-primary"
-      >
-        View attendance →
-      </Link>
-    </>
+    <LoadingTransition pending={query.isPending}>
+      {renderContent()}
+    </LoadingTransition>
   );
 }
 
@@ -464,69 +480,68 @@ export function ConnectDetailPage() {
   );
 }
 
-function AttendancePageContent() {
+export function ConnectAttendancePage() {
   const query = useConnect();
   const [params, setParams] = useSearchParams();
-
-  if (query.isPending) return <ConnectAttendanceSkeleton />;
-
-  if (query.error)
-    return <ErrorState error={query.error} retry={() => query.refetch()} />;
-
-  if (!query.data?.length)
-    return (
-      <EmptyState
-        title="Create a coffee chat first"
-        description="Round attendance will appear after the first introductions."
-      />
-    );
-
-  const programOptions = query.data.map((program) => ({
-    value: program.id,
-    label: program.name,
-  }));
+  const programOptions =
+    query.data?.map((program) => ({
+      value: program.id,
+      label: program.name,
+    })) ?? [];
   const selected =
-    query.data.find(
+    query.data?.find(
       (program) => String(program.id) === params.get('program'),
-    ) ?? query.data[0];
+    ) ?? query.data?.[0];
 
-  return (
-    <div className="space-y-6">
-      <label className="grid max-w-sm gap-2 text-sm font-medium">
-        Coffee chat
-        <Select
-          items={programOptions}
-          value={selected.id}
-          onValueChange={(value) => {
-            if (value !== null) setParams({ program: String(value) });
-          }}
-        >
-          <SelectTrigger aria-label="Coffee chat" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {programOptions.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </label>
-      <Attendance key={selected.id} programId={selected.id} />
-    </div>
-  );
-}
+  function renderContent() {
+    if (query.isPending) return <ConnectAttendanceSkeleton />;
 
-export function ConnectAttendancePage() {
+    if (query.error)
+      return <ErrorState error={query.error} retry={() => query.refetch()} />;
+
+    if (!selected)
+      return (
+        <EmptyState
+          title="Create a coffee chat first"
+          description="Round attendance will appear after the first introductions."
+        />
+      );
+
+    return <Attendance key={selected.id} programId={selected.id} />;
+  }
+
   return (
     <div className="page">
       <PageHeader
         title="Coffee chat attendance"
-        description="Who was introduced, who met, and where a nudge might help."
+        reserveActionSpace
+        actions={
+          selected && (
+            <Select
+              items={programOptions}
+              value={selected.id}
+              onValueChange={(value) => {
+                if (value !== null) setParams({ program: String(value) });
+              }}
+            >
+              <SelectTrigger aria-label="Coffee chat" className="w-40 sm:w-64">
+                <SelectValue className="min-w-0 truncate" />
+              </SelectTrigger>
+              <SelectContent>
+                {programOptions.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        }
       />
       <ConnectGate loadingFallback={<ConnectAttendanceSkeleton />}>
-        <AttendancePageContent />
+        <LoadingTransition pending={query.isPending}>
+          {renderContent()}
+        </LoadingTransition>
       </ConnectGate>
     </div>
   );

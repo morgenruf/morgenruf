@@ -15,6 +15,7 @@ import {
   SkeletonRegion,
   SkeletonTable,
 } from '@/common/components/loading-skeleton';
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SecretPanel } from '@/common/components/secret-panel';
 import { Badge } from '@/common/components/ui/badge';
@@ -29,13 +30,16 @@ import {
 import { Checkbox } from '@/common/components/ui/checkbox';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
 import { Label } from '@/common/components/ui/label';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { formatDate } from '@/common/lib/format';
 
@@ -165,63 +169,68 @@ function WebhookCard({
         )}
         {expanded && (
           <section aria-label="Recent deliveries" className="border-t pt-4">
-            {deliveries.isPending ? (
-              <SkeletonRegion label="Loading recent deliveries…">
-                <SkeletonTable columns={6} />
-              </SkeletonRegion>
-            ) : deliveries.isError ? (
-              <ErrorState
-                error={deliveries.error}
-                retry={() => void deliveries.refetch()}
-              />
-            ) : !deliveries.data?.length ? (
-              <EmptyState title="No deliveries recorded yet" />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b text-muted-foreground">
-                      <th className="p-2">Status</th>
-                      <th className="p-2">Event</th>
-                      <th className="p-2">When</th>
-                      <th className="p-2">Duration</th>
-                      <th className="p-2">Signing</th>
-                      <th className="p-2">Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {deliveries.data.map((delivery) => (
-                      <tr key={delivery.id} className="border-b last:border-0">
-                        <td
-                          className={`p-2 ${delivery.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
-                        >
-                          {delivery.status_code ?? 'No response'}
-                        </td>
-                        <td className="p-2">
-                          {eventLabels[delivery.event_type] ??
-                            delivery.event_type}
-                        </td>
-                        <td className="whitespace-nowrap p-2">
-                          {formatDate(delivery.created_at, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td className="whitespace-nowrap p-2">
-                          {delivery.duration_ms} ms
-                        </td>
-                        <td className="p-2">
-                          {delivery.signed ? 'Signed' : 'Unsigned'}
-                        </td>
-                        <td className="p-2">{delivery.error ?? '—'}</td>
+            <LoadingTransition pending={deliveries.isPending}>
+              {deliveries.isPending ? (
+                <SkeletonRegion label="Loading recent deliveries…">
+                  <SkeletonTable columns={6} />
+                </SkeletonRegion>
+              ) : deliveries.isError ? (
+                <ErrorState
+                  error={deliveries.error}
+                  retry={() => void deliveries.refetch()}
+                />
+              ) : !deliveries.data?.length ? (
+                <EmptyState title="No deliveries recorded yet" />
+              ) : (
+                <ScrollArea orientation="horizontal" className="min-w-0">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Event</th>
+                        <th className="p-2">When</th>
+                        <th className="p-2">Duration</th>
+                        <th className="p-2">Signing</th>
+                        <th className="p-2">Error</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody>
+                      {deliveries.data.map((delivery) => (
+                        <tr
+                          key={delivery.id}
+                          className="border-b last:border-0"
+                        >
+                          <td
+                            className={`p-2 ${delivery.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
+                          >
+                            {delivery.status_code ?? 'No response'}
+                          </td>
+                          <td className="p-2">
+                            {eventLabels[delivery.event_type] ??
+                              delivery.event_type}
+                          </td>
+                          <td className="whitespace-nowrap p-2">
+                            {formatDate(delivery.created_at, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="whitespace-nowrap p-2">
+                            {delivery.duration_ms} ms
+                          </td>
+                          <td className="p-2">
+                            {delivery.signed ? 'Signed' : 'Unsigned'}
+                          </td>
+                          <td className="p-2">{delivery.error ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </ScrollArea>
+              )}
+            </LoadingTransition>
           </section>
         )}
       </CardContent>
@@ -258,6 +267,7 @@ export default function WebhooksPage() {
     <div className="page">
       <PageHeader
         title="Webhooks"
+        reserveActionSpace
         description="Send signed standup events to your own systems."
         actions={
           canEdit && (
@@ -273,49 +283,51 @@ export default function WebhooksPage() {
           retry={() => void catalog.refetch()}
         />
       )}
-      {webhooks.isPending ? (
-        <WebhooksSkeleton />
-      ) : webhooks.isError ? (
-        <ErrorState
-          error={webhooks.error}
-          retry={() => void webhooks.refetch()}
-        />
-      ) : !webhooks.data?.length ? (
-        <EmptyState
-          title="No webhooks yet"
-          description={
-            <div className="space-y-2">
-              <p>
-                Post standup activity to a build pipeline, status page, or
-                anything that accepts HTTP events.
-              </p>
-              <p>
-                {catalog.data?.events
-                  .map((event) => eventLabels[event] ?? event)
-                  .join(' · ')}
-              </p>
-            </div>
-          }
-        />
-      ) : (
-        <div className="space-y-4">
-          {webhooks.data.map((hook) => (
-            <WebhookCard
-              key={hook.id}
-              hook={hook}
-              canEdit={canEdit}
-              busy={busy}
-              edit={() => openEditor(hook)}
-              rotate={() =>
-                setConfirmation({ kind: 'rotate', id: String(hook.id) })
-              }
-              remove={() =>
-                setConfirmation({ kind: 'delete', id: String(hook.id) })
-              }
-            />
-          ))}
-        </div>
-      )}
+      <LoadingTransition pending={webhooks.isPending}>
+        {webhooks.isPending ? (
+          <WebhooksSkeleton />
+        ) : webhooks.isError ? (
+          <ErrorState
+            error={webhooks.error}
+            retry={() => void webhooks.refetch()}
+          />
+        ) : !webhooks.data?.length ? (
+          <EmptyState
+            title="No webhooks yet"
+            description={
+              <div className="space-y-2">
+                <p>
+                  Post standup activity to a build pipeline, status page, or
+                  anything that accepts HTTP events.
+                </p>
+                <p>
+                  {catalog.data?.events
+                    .map((event) => eventLabels[event] ?? event)
+                    .join(' · ')}
+                </p>
+              </div>
+            }
+          />
+        ) : (
+          <div className="space-y-4">
+            {webhooks.data.map((hook) => (
+              <WebhookCard
+                key={hook.id}
+                hook={hook}
+                canEdit={canEdit}
+                busy={busy}
+                edit={() => openEditor(hook)}
+                rotate={() =>
+                  setConfirmation({ kind: 'rotate', id: String(hook.id) })
+                }
+                remove={() =>
+                  setConfirmation({ kind: 'delete', id: String(hook.id) })
+                }
+              />
+            ))}
+          </div>
+        )}
+      </LoadingTransition>
       <Dialog
         open={editor !== null}
         onOpenChange={(open) => {
@@ -332,7 +344,7 @@ export default function WebhooksPage() {
             </DialogDescription>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="flex min-h-0 flex-col gap-4"
             onSubmit={form.handleSubmit((data) => {
               if (!data.events?.length) {
                 form.setError('events', {
@@ -356,52 +368,57 @@ export default function WebhooksPage() {
               );
             })}
           >
-            <div className="space-y-2">
-              <Label htmlFor="webhook-url">Destination URL</Label>
-              <Input
-                id="webhook-url"
-                type="url"
-                placeholder="https://example.com/webhook"
-                required
-                {...form.register('url', { required: true })}
-              />
-            </div>
-            <fieldset className="space-y-3">
-              <legend className="mb-2 text-sm font-medium">Send on</legend>
-              {catalog.data?.events.map((event) => (
-                <label key={event} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selected.includes(event)}
-                    onCheckedChange={(checked) =>
-                      form.setValue(
-                        'events',
-                        checked
-                          ? [...selected, event]
-                          : selected.filter((item) => item !== event),
-                        { shouldDirty: true },
-                      )
-                    }
-                  />
-                  {eventLabels[event] ?? event}
-                </label>
-              ))}
-              {form.formState.errors.events && (
+            <DialogBody>
+              <div className="space-y-2">
+                <Label htmlFor="webhook-url">Destination URL</Label>
+                <Input
+                  id="webhook-url"
+                  type="url"
+                  placeholder="https://example.com/webhook"
+                  required
+                  {...form.register('url', { required: true })}
+                />
+              </div>
+              <fieldset className="space-y-3">
+                <legend className="mb-2 text-sm font-medium">Send on</legend>
+                {catalog.data?.events.map((event) => (
+                  <label
+                    key={event}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox
+                      checked={selected.includes(event)}
+                      onCheckedChange={(checked) =>
+                        form.setValue(
+                          'events',
+                          checked
+                            ? [...selected, event]
+                            : selected.filter((item) => item !== event),
+                          { shouldDirty: true },
+                        )
+                      }
+                    />
+                    {eventLabels[event] ?? event}
+                  </label>
+                ))}
+                {form.formState.errors.events && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {form.formState.errors.events.message}
+                  </p>
+                )}
+              </fieldset>
+              {form.formState.errors.url && (
                 <p role="alert" className="text-sm text-destructive">
-                  {form.formState.errors.events.message}
+                  {form.formState.errors.url.message}
                 </p>
               )}
-            </fieldset>
-            {form.formState.errors.url && (
-              <p role="alert" className="text-sm text-destructive">
-                {form.formState.errors.url.message}
-              </p>
-            )}
-            {form.formState.errors.root?.server && (
-              <p role="alert" className="text-sm text-destructive">
-                {form.formState.errors.root.server.message}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
+              {form.formState.errors.root?.server && (
+                <p role="alert" className="text-sm text-destructive">
+                  {form.formState.errors.root.server.message}
+                </p>
+              )}
+            </DialogBody>
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -412,7 +429,7 @@ export default function WebhooksPage() {
               <Button type="submit" disabled={save.isPending}>
                 {save.isPending ? 'Saving…' : 'Save webhook'}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -444,7 +461,7 @@ export default function WebhooksPage() {
                 : 'Morgenruf will stop sending events to this destination.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmation(null)}>
               Cancel
             </Button>
@@ -475,7 +492,7 @@ export default function WebhooksPage() {
                 ? 'Rotate secret'
                 : 'Delete webhook'}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

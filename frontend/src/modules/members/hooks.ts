@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/common/api/client';
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
 export function useMembers(channel?: string, loadInviteRoster = false) {
@@ -9,24 +10,8 @@ export function useMembers(channel?: string, loadInviteRoster = false) {
 
   const client = useQueryClient();
 
-  const members = useQuery({
-    queryKey: ['workspace', team, 'members', channel ?? ''],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (
-        await api.members.listMembers(
-          { channel_id: channel || undefined },
-          { signal },
-        )
-      ).data,
-  });
-
-  const inviteMembers = useQuery({
-    queryKey: ['workspace', team, 'members', ''],
-    enabled: !!team && loadInviteRoster,
-    queryFn: async ({ signal }) =>
-      (await api.members.listMembers({}, { signal })).data,
-  });
+  const members = useMemberDirectory({ channel });
+  const inviteMembers = useMemberDirectory({ enabled: loadInviteRoster });
 
   const channels = useQuery({
     queryKey: ['workspace', team, 'channels'],

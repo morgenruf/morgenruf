@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Copy, KeyRound, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { SecretPanel } from '@/common/components/secret-panel';
 import { Badge } from '@/common/components/ui/badge';
@@ -15,13 +16,16 @@ import {
 } from '@/common/components/ui/card';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/common/components/ui/dialog';
 import { Input } from '@/common/components/ui/input';
 import { Label } from '@/common/components/ui/label';
+import { ScrollArea } from '@/common/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -58,6 +62,7 @@ export default function McpPage() {
     <div className="page">
       <PageHeader
         title="MCP"
+        reserveActionSpace
         description="Give your AI assistant scoped access to your team’s standup data."
         actions={
           canEdit && (
@@ -131,70 +136,75 @@ export default function McpPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {keys.isPending ? (
-            <McpKeysSkeleton />
-          ) : keys.isError ? (
-            <ErrorState error={keys.error} retry={() => void keys.refetch()} />
-          ) : !keys.data?.keys.length ? (
-            <EmptyState
-              title="No API keys yet"
-              description="Generate a key to connect an assistant."
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="p-3">Name</th>
-                    <th className="p-3">Prefix</th>
-                    <th className="p-3">Created</th>
-                    <th className="p-3">Last used</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {keys.data.keys.map((key) => (
-                    <tr key={key.id} className="border-b last:border-0">
-                      <td className="p-3 font-medium">
-                        {key.name || 'Default'}
-                      </td>
-                      <td className="p-3">
-                        <code>{key.key_prefix}…</code>
-                      </td>
-                      <td className="whitespace-nowrap p-3">
-                        {formatDate(key.created_at)}
-                      </td>
-                      <td className="whitespace-nowrap p-3">
-                        {key.last_used_at
-                          ? relativeTime(key.last_used_at)
-                          : 'Never'}
-                      </td>
-                      <td className="p-3">
-                        <Badge variant={key.active ? 'secondary' : 'outline'}>
-                          {key.active ? 'Active' : 'Revoked'}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        {canEdit && key.active && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={revoke.isPending}
-                            onClick={() => setDeleting(key.id)}
-                          >
-                            Revoke
-                          </Button>
-                        )}
-                      </td>
+          <LoadingTransition pending={keys.isPending}>
+            {keys.isPending ? (
+              <McpKeysSkeleton />
+            ) : keys.isError ? (
+              <ErrorState
+                error={keys.error}
+                retry={() => void keys.refetch()}
+              />
+            ) : !keys.data?.keys.length ? (
+              <EmptyState
+                title="No API keys yet"
+                description="Generate a key to connect an assistant."
+              />
+            ) : (
+              <ScrollArea orientation="horizontal" className="min-w-0">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-muted-foreground">
+                      <th className="p-3">Name</th>
+                      <th className="p-3">Prefix</th>
+                      <th className="p-3">Created</th>
+                      <th className="p-3">Last used</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {keys.data.keys.map((key) => (
+                      <tr key={key.id} className="border-b last:border-0">
+                        <td className="p-3 font-medium">
+                          {key.name || 'Default'}
+                        </td>
+                        <td className="p-3">
+                          <code>{key.key_prefix}…</code>
+                        </td>
+                        <td className="whitespace-nowrap p-3">
+                          {formatDate(key.created_at)}
+                        </td>
+                        <td className="whitespace-nowrap p-3">
+                          {key.last_used_at
+                            ? relativeTime(key.last_used_at)
+                            : 'Never'}
+                        </td>
+                        <td className="p-3">
+                          <Badge variant={key.active ? 'secondary' : 'outline'}>
+                            {key.active ? 'Active' : 'Revoked'}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          {canEdit && key.active && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={revoke.isPending}
+                              onClick={() => setDeleting(key.id)}
+                            >
+                              Revoke
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollArea>
+            )}
+          </LoadingTransition>
         </CardContent>
       </Card>
       <Card>
@@ -234,9 +244,17 @@ export default function McpPage() {
                     ? '%APPDATA%\\Claude\\claude_desktop_config.json'
                     : '~/Library/Application Support/Claude/claude_desktop_config.json'}
           </p>
-          <pre className="overflow-x-auto rounded-lg border bg-muted p-4 text-xs">
-            <code>{config}</code>
-          </pre>
+          <ScrollArea
+            orientation="horizontal"
+            viewportProps={{
+              'aria-label': 'MCP configuration',
+              role: 'region',
+            }}
+          >
+            <pre className="w-max min-w-full rounded-lg border bg-muted p-4 text-xs">
+              <code>{config}</code>
+            </pre>
+          </ScrollArea>
           <Button
             size="sm"
             variant="outline"
@@ -260,7 +278,7 @@ export default function McpPage() {
             </DialogDescription>
           </DialogHeader>
           <form
-            className="space-y-4"
+            className="flex min-h-0 flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               create.mutate({
@@ -272,21 +290,25 @@ export default function McpPage() {
               });
             }}
           >
-            <Label htmlFor="key-name">Key name</Label>
-            <Input
-              id="key-name"
-              placeholder="My assistant"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <Button
-              type="submit"
-              disabled={create.isPending}
-              className="w-full"
-            >
-              <KeyRound />
-              {create.isPending ? 'Generating…' : 'Generate key'}
-            </Button>
+            <DialogBody>
+              <Label htmlFor="key-name">Key name</Label>
+              <Input
+                id="key-name"
+                placeholder="My assistant"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={create.isPending}
+                className="w-full"
+              >
+                <KeyRound />
+                {create.isPending ? 'Generating…' : 'Generate key'}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -311,7 +333,7 @@ export default function McpPage() {
               Assistants using this key will lose access immediately.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(null)}>
               Cancel
             </Button>
@@ -330,7 +352,7 @@ export default function McpPage() {
             >
               Revoke key
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

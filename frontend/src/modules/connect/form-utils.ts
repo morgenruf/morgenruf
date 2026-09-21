@@ -65,6 +65,20 @@ export const attendanceLabels: Record<string, string> = {
   undelivered: 'Not delivered',
 };
 
+export const attendanceOutcomes = [
+  'met',
+  'missed',
+  'no_reply',
+  'undelivered',
+] as const;
+
+export const attendanceColors: Record<string, string> = {
+  met: 'bg-success/10 text-success',
+  missed: 'bg-warning/10 text-warning',
+  no_reply: 'bg-muted text-muted-foreground',
+  undelivered: 'bg-destructive/10 text-destructive',
+};
+
 export function attendanceRate(met: number, missed: number) {
   return met + missed ? Math.round((met / (met + missed)) * 100) : null;
 }

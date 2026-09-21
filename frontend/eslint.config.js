@@ -10,6 +10,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist',
+      '.vite',
       'src/common/api/generated',
       'node_modules',
       'playwright-report',
@@ -32,6 +33,7 @@ export default tseslint.config(
             'buttonVariants',
             'badgeVariants',
             'tabsListVariants',
+            'useSidebar',
           ],
         },
       ],

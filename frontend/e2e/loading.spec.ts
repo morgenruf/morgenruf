@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+import { backend } from './environment';
+
 async function hold(page: Page, pattern: string | RegExp) {
   let release!: () => void;
   const ready = new Promise<void>((resolve) => {
@@ -13,15 +15,9 @@ async function hold(page: Page, pattern: string | RegExp) {
 }
 
 test.beforeEach(async ({ request, context }) => {
+  expect((await request.post(`${backend}/__test__/reset`)).ok()).toBeTruthy();
   expect(
-    (await request.post('http://127.0.0.1:3008/__test__/reset')).ok(),
-  ).toBeTruthy();
-  expect(
-    (
-      await context.request.post(
-        'http://127.0.0.1:3008/__test__/session?role=admin',
-      )
-    ).ok(),
+    (await context.request.post(`${backend}/__test__/session?role=admin`)).ok(),
   ).toBeTruthy();
 });
 

@@ -29,7 +29,7 @@ export function WebhooksSkeleton() {
 
 export function WebhooksPageSkeleton() {
   return (
-    <SkeletonPage title="Webhooks">
+    <SkeletonPage title="Webhooks" reserveActionSpace>
       <WebhooksSkeleton />
     </SkeletonPage>
   );

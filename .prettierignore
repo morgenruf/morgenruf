@@ -1,5 +1,6 @@
 node_modules/
 frontend/dist/
+frontend/.vite/
 frontend/src/common/api/generated/
 app/openapi.json
 pnpm-lock.yaml
