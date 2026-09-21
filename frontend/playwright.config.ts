@@ -18,6 +18,11 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // The chart matrix renders a full analytics page per viewport, theme and
+  // motion preference, and the slowest of those runs for about 40s. The 30s
+  // default only passed in CI because the retry hid it, so these failed
+  // locally where there is no retry.
+  timeout: 90_000,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:5174',

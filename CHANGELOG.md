@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.8] - 2026-09-20
+
+### Added
+- **A sidebar and scroll areas that hold their shape.** The dashboard moved to a
+  shadcn sidebar with consistent scrolling, so long member and participant
+  lists no longer stretch the page. Loading states now cross-fade rather than
+  snapping, and respect `prefers-reduced-motion`.
+- **Charts rebuilt on EvilCharts.** Analytics and attendance render through a
+  vendored Recharts layer, with a data table behind every chart for anyone who
+  wants the numbers instead of the picture. Chart bundles stay split per page.
+- **Timezone selects and compact member actions.** Picking a timezone is a
+  search rather than a long list, and member rows fit more without wrapping.
+
+### Fixed
+- Report filters survive consecutive edits instead of resetting between saves.
+- Settings toggles are switches, so their state reads at a glance.
+- Page headings reserve space for their call to action, so titles stop shifting
+  as buttons load.
+- The standup status badge no longer crowds the edit link.
+
+### Changed
+- Browser tests allow 90s per case. The chart matrix renders a full analytics
+  page per viewport, theme and motion preference, and the slowest runs for
+  about 40s. The previous 30s default only passed in CI because the retry
+  hid it.
+
 ## [1.8.7] - 2026-09-20
 
 ### Added
