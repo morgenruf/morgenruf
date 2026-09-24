@@ -50,6 +50,7 @@ for (const mobile of [false, true]) {
       }),
     );
     await page.goto('/dashboard/standups?edit=1');
+
     const dialog = page.getByRole('dialog');
     const header = dialog.locator('[data-slot="dialog-header"]');
     const footer = dialog.locator('[data-slot="dialog-footer"]');
@@ -60,34 +61,44 @@ for (const mobile of [false, true]) {
       name: 'Participants',
       exact: true,
     });
+
     await expect(participants.getByRole('checkbox')).toHaveCount(60);
+
     await page.screenshot({
       path: testInfo.outputPath('participant-search.png'),
       animations: 'disabled',
     });
     await dialog.getByRole('button', { name: 'Use whole channel' }).click();
+
     await expect(
       footer.getByRole('button', { name: 'Save standup' }),
     ).toBeInViewport();
+
     await participants.scrollIntoViewIfNeeded();
+
     const headerBounds = await header.boundingBox();
     const footerBounds = await footer.boundingBox();
     const bodyScroll = await body.evaluate((element) => element.scrollTop);
+
     await participants.hover();
     await page.mouse.wheel(0, 300);
     await expect
       .poll(() => participants.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
+
     expect(await body.evaluate((element) => element.scrollTop)).toBe(
       bodyScroll,
     );
     expect(await header.boundingBox()).toEqual(headerBounds);
     expect(await footer.boundingBox()).toEqual(footerBounds);
+
     await participants.focus();
     await page.keyboard.press('End');
+
     await expect(
       participants.getByRole('checkbox', { name: 'Participant 59' }),
     ).toBeInViewport();
+
     await participants
       .getByRole('checkbox', { name: 'Participant 59' })
       .check();
@@ -98,41 +109,54 @@ for (const mobile of [false, true]) {
     await dialog
       .getByRole('textbox', { name: 'Search participants' })
       .fill('person1@example.com');
+
     await expect(participants.getByRole('checkbox')).toHaveCount(1);
+
     await dialog.getByRole('button', { name: 'Select results' }).click();
+
     await expect(dialog.getByText('2 selected', { exact: true })).toBeVisible();
     await expect(participants.locator('..')).not.toHaveAttribute(
       'data-has-overflow-y',
     );
+
     await dialog.getByRole('tab', { name: 'Questions' }).click();
     await dialog.getByRole('button', { name: 'Use a template' }).click();
+
     const templates = dialog.getByRole('region', {
       name: 'Question templates',
     });
+
     await templates.scrollIntoViewIfNeeded();
+
     const beforeTemplates = await body.evaluate((element) => element.scrollTop);
+
     await templates.focus();
     await page.keyboard.press('End');
+
     await expect(
       templates.getByRole('button', { name: /^Template 23 / }),
     ).toBeInViewport();
     expect(await body.evaluate((element) => element.scrollTop)).toBe(
       beforeTemplates,
     );
+
     await page.screenshot({
       path: testInfo.outputPath('templates.png'),
       animations: 'disabled',
     });
     await templates.getByRole('button', { name: /^Template 23 / }).click();
+
     await expect(dialog.getByLabel('Question 1', { exact: true })).toHaveValue(
       'Question from template 23',
     );
+
     await dialog.getByRole('tab', { name: 'Workspace' }).click();
     await body.focus();
     await page.keyboard.press('End');
     await expect
       .poll(() => body.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
+
     await expect(
       dialog.getByRole('checkbox', {
         name: 'Enable AI-generated daily summary',
@@ -140,6 +164,7 @@ for (const mobile of [false, true]) {
     ).toBeInViewport();
     await expect(header).toBeInViewport();
     await expect(footer).toBeInViewport();
+
     await page.screenshot({
       path: testInfo.outputPath('dialog-body.png'),
       animations: 'disabled',
@@ -161,46 +186,66 @@ test('long select lists keep keyboard navigation and scroll arrows inside the di
     }),
   );
   await page.goto('/dashboard/standups?edit=1');
+
   const dialog = page.getByRole('dialog');
   const channel = dialog.getByRole('combobox', {
     name: 'Channel',
     exact: true,
   });
+
   await channel.focus();
   await page.keyboard.press('Space');
+
   const list = page.getByRole('listbox');
+
   await expect(list).toBeVisible();
   await expect(
     page.getByRole('option', { name: '#channel-00', exact: true }),
   ).toBeFocused();
+
   await page.keyboard.press('End');
+
   const last = page.getByRole('option', { name: '#channel-59', exact: true });
+
   await expect(last).toBeFocused();
   await expect(last).toBeInViewport();
+
   await expect
     .poll(() => list.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(0);
   await page.keyboard.press('Escape');
+
   await expect(list).toBeHidden();
   await expect(channel).toBeFocused();
   await expect(dialog).toBeVisible();
+
   await page.keyboard.press('Space');
+
   await expect(list).toBeVisible();
   await expect(
     page.getByRole('option', { name: '#channel-00', exact: true }),
   ).toBeFocused();
+
   await page.keyboard.press('End');
+
   await expect(last).toBeFocused();
+
   await page.keyboard.press('Enter');
+
   await expect(channel).toContainText('#channel-59');
+
   await page.keyboard.press('Space');
+
   await expect(last).toBeInViewport();
   await expect(
     page.locator('[data-slot="select-scroll-up-button"]'),
   ).toBeVisible();
+
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
+
   await expect(dialog).toBeHidden();
+
   await expectNoDocumentOverflow(page);
 });
 
@@ -209,7 +254,9 @@ test('wide content and tab bars use horizontal scroll areas on narrow screens', 
 }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 600 });
   await page.goto('/dashboard/mcp');
+
   const configuration = page.getByRole('region', { name: 'MCP configuration' });
+
   await configuration.scrollIntoViewIfNeeded();
   await expect
     .poll(() =>
@@ -228,8 +275,10 @@ test('wide content and tab bars use horizontal scroll areas on narrow screens', 
     animations: 'disabled',
   });
   await expectNoDocumentOverflow(page);
+
   const main = page.getByRole('main');
   const mainScroll = await main.evaluate((element) => element.scrollTop);
+
   await configuration.hover();
   await page.mouse.wheel(0, -100);
   await expect
@@ -237,10 +286,12 @@ test('wide content and tab bars use horizontal scroll areas on narrow screens', 
     .toBeLessThan(mainScroll);
   await page.goto('/dashboard/connect/attendance');
   await page.getByText('View chart data', { exact: true }).click();
+
   const chartTable = page.getByRole('table', {
     name: 'Meeting rates and outcomes by round, oldest first',
   });
   const tableViewport = chartTable.locator('..').locator('..');
+
   await chartTable.scrollIntoViewIfNeeded();
   await tableViewport.hover();
   await page.mouse.wheel(200, 0);
@@ -249,12 +300,16 @@ test('wide content and tab bars use horizontal scroll areas on narrow screens', 
     .toBeGreaterThan(0);
   await expectNoDocumentOverflow(page);
   await page.goto('/dashboard/connect/1');
+
   const tabs = page.getByRole('tablist', { name: 'Coffee chat settings' });
   const viewport = tabs.locator('..').locator('..');
+
   await tabs.getByRole('tab').first().focus();
   await page.keyboard.press('ArrowLeft');
+
   await expect(tabs.getByRole('tab').last()).toBeFocused();
   await expect(tabs.getByRole('tab').last()).toBeInViewport();
+
   await expect
     .poll(() => viewport.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(0);
@@ -265,25 +320,40 @@ test('constrained dropdown menus scroll focused items and restore trigger focus'
   page,
 }) => {
   await page.goto('/dashboard/standups');
+
+  // Interact with the settled page header after the bootstrap shell is replaced.
+  await expect(
+    page.getByRole('button', { name: 'New standup', exact: true }),
+  ).toBeVisible();
+
   await page.addStyleTag({
     content: '[data-slot="dropdown-menu-content"] { max-height: 48px; }',
   });
+
   const trigger = page.getByRole('button', { name: 'Choose appearance' });
+
   await trigger.focus();
   await page.keyboard.press('Space');
+
   const menu = page.getByRole('menu');
   const viewport = menu.locator('[data-slot="scroll-area-viewport"]');
+
   await expect(
     menu.getByRole('menuitem', { name: 'Light', exact: true }),
   ).toBeFocused();
+
   await page.keyboard.press('End');
+
   const last = menu.getByRole('menuitem', { name: 'System', exact: true });
+
   await expect(last).toBeFocused();
   await expect(last).toBeInViewport();
+
   await expect
     .poll(() => viewport.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(0);
   await page.keyboard.press('Escape');
+
   await expect(menu).toBeHidden();
   await expect(trigger).toBeFocused();
 });
@@ -294,32 +364,39 @@ test('automation dialog keeps its actions available on a short screen', async ({
   await page.setViewportSize({ width: 390, height: 480 });
   await page.goto('/dashboard/automation');
   await page.getByRole('button', { name: 'New rule' }).click();
+
   const dialog = page.getByRole('dialog');
   const body = dialog.locator(
     '[data-slot="dialog-body"] > [data-slot="scroll-area-viewport"]',
   );
   const header = dialog.locator('[data-slot="dialog-header"]');
   const footer = dialog.locator('[data-slot="dialog-footer"]');
+
   await dialog.evaluate((element) =>
     Promise.all(element.getAnimations().map((animation) => animation.finished)),
   );
+
   const headerBounds = await header.boundingBox();
   const footerBounds = await footer.boundingBox();
+
   await body.focus();
   await page.keyboard.press('End');
   await expect
     .poll(() => body.evaluate((element) => element.scrollTop))
     .toBeGreaterThan(0);
+
   expect(await header.boundingBox()).toEqual(headerBounds);
   expect(await footer.boundingBox()).toEqual(footerBounds);
   await expect(
     dialog.getByRole('button', { name: 'Save rule' }),
   ).toBeInViewport();
+
   await page.screenshot({
     path: testInfo.outputPath('automation-dialog.png'),
     animations: 'disabled',
   });
   await expectNoDocumentOverflow(page);
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+
   await expect(dialog).toBeHidden();
 });

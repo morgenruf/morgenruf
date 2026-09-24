@@ -18,19 +18,30 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
+
       - run: pip install -r app/requirements.txt
       - run: pnpm install --frozen-lockfile
+
       - run: pnpm format:check
       - run: pnpm api:check
       - run: pnpm --filter @morgenruf/frontend lint
-      - run: pnpm --filter @morgenruf/frontend typecheck
-      - run: pnpm --filter @morgenruf/frontend test
+
       - run: pnpm --filter @morgenruf/frontend build
+      - run: git diff --exit-code -- frontend/src/routeTree.gen.ts
+      - run: test -s frontend/dist/client/_shell.html
+      - run: pnpm --filter @morgenruf/frontend typecheck
+
+      - run: pnpm --filter @morgenruf/frontend test
+
       - run: pnpm --filter @morgenruf/frontend exec playwright install --with-deps chromium
       - run: pnpm --filter @morgenruf/frontend test:e2e
+      - run: pnpm --filter @morgenruf/frontend test:e2e:production
+
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-test-results
-          path: frontend/playwright-report/
+          path: |
+            frontend/playwright-report/
+            frontend/playwright-report-production/
           retention-days: 7

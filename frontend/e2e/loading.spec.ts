@@ -7,10 +7,12 @@ async function hold(page: Page, pattern: string | RegExp) {
   const ready = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   await page.route(pattern, async (route: Route) => {
     await ready;
     await route.continue();
   });
+
   return release;
 }
 
@@ -45,7 +47,9 @@ for (const [path, endpoint, label] of [
       page,
       new RegExp(`/dashboard/api/${endpoint}(\\?.*)?$`),
     );
+
     await page.goto(`/dashboard/${path}`);
+
     await expect(
       page.getByRole('status', { name: label, exact: true }),
     ).toBeVisible();
@@ -60,11 +64,14 @@ for (const [path, endpoint, label] of [
         '[data-loading-skeleton] button, [data-loading-skeleton] input, [data-loading-skeleton] a',
       ),
     ).toHaveCount(0);
+
     await page.screenshot({ path: testInfo.outputPath('desktop-loading.png') });
     await page.setViewportSize({ width: 390, height: 844 });
+
     await expect(
       page.getByRole('status', { name: label, exact: true }),
     ).toBeVisible();
+
     await expect
       .poll(() =>
         page.evaluate(
@@ -74,43 +81,40 @@ for (const [path, endpoint, label] of [
       .toBe(true);
     await page.screenshot({ path: testInfo.outputPath('mobile-loading.png') });
     release();
+
     await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
     await expect(page.getByText('Could not load this view')).toHaveCount(0);
   });
 }
 
 for (const [path, module, label] of [
-  ['/dashboard/login', 'auth/pages/login-page', 'Loading sign in…'],
-  [
-    '/auth/result?status=success',
-    'public/pages/result-page',
-    'Loading result…',
-  ],
-  [
-    '/email/result?status=subscribed',
-    'public/pages/result-page',
-    'Loading result…',
-  ],
+  ['/dashboard/login', 'dashboard/login', 'Loading sign in…'],
+  ['/auth/result?status=success', 'auth.result', 'Loading result…'],
+  ['/email/result?status=subscribed', 'email.result', 'Loading result…'],
   [
     '/connect/zoom/result?status=connected',
-    'public/pages/result-page',
+    'connect.zoom.result',
     'Loading result…',
   ],
-  [
-    '/feed/public-browser-feed',
-    'public/pages/feed-page',
-    'Loading standup report…',
-  ],
+  ['/feed/public-browser-feed', 'feed.$token', 'Loading standup report…'],
 ]) {
   test(`cold public route ${path} has a matching fallback`, async ({
     page,
   }) => {
-    const release = await hold(page, `**/src/modules/${module}.tsx*`);
+    const release = await hold(
+      page,
+      `**/src/routes/${module}.tsx?tsr-split=component*`,
+    );
+
     await page.goto(path, { waitUntil: 'domcontentloaded' });
+
     await expect(page.locator('[data-slot="skeleton"]').first()).toBeVisible();
+
     if (!path.startsWith('/feed/'))
       await expect(page.getByRole('status', { name: label })).toBeVisible();
+
     release();
+
     await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
@@ -120,8 +124,11 @@ test('workspace bootstrap uses the requested skeleton and respects dark mode and
   page,
 }, testInfo) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+
   const release = await hold(page, '**/dashboard/api/me');
+
   await page.goto('/dashboard/analytics');
+
   await expect(
     page.getByRole('status', { name: 'Opening your workspace…' }),
   ).toBeVisible();
@@ -130,10 +137,12 @@ test('workspace bootstrap uses the requested skeleton and respects dark mode and
     'animation-name',
     'none',
   );
+
   await page.screenshot({
     path: testInfo.outputPath('dark-workspace-loading.png'),
   });
   release();
+
   await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
 });
 
@@ -141,36 +150,47 @@ test('navigation shows its destination while keeping the collapsed sidebar', asy
   page,
 }) => {
   await page.goto('/dashboard/standups');
+
   await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
+
   await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+
   const release = await hold(
     page,
-    '**/src/modules/members/pages/members-page.tsx*',
+    '**/src/routes/dashboard/_authenticated/members.tsx?tsr-split=component*',
   );
+
   await page.getByRole('link', { name: 'Members', exact: true }).click();
+
   await expect(
     page.getByRole('status', { name: 'Loading members…' }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Expand sidebar' }),
   ).toBeVisible();
+
   release();
+
   await expect(page).toHaveURL(/\/dashboard\/members$/);
   await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: 'Expand sidebar' }),
   ).toBeVisible();
+
   const refresh = await hold(page, /\/dashboard\/api\/members(\?.*)?$/);
   const cardText = await page
     .locator('main [data-slot="card"]')
     .first()
     .innerText();
+
   await page.getByRole('button', { name: /Refresh/ }).click();
+
   await expect(page.locator('main [data-slot="card"]').first()).toHaveText(
     cardText,
     { useInnerText: true },
   );
   await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
+
   refresh();
 });
 
@@ -178,33 +198,44 @@ test('nested participant, pairing, delivery, and invitation loads retain their s
   page,
 }) => {
   const participants = await hold(page, /\/dashboard\/api\/members(\?.*)?$/);
+
   await page.goto('/dashboard/standups');
   await page.getByRole('button', { name: 'New standup', exact: true }).click();
   await page.getByRole('tab', { name: 'Basics', exact: true }).click();
+
   await expect(
     page.getByRole('status', { name: 'Loading participants…' }),
   ).toBeVisible();
   await expect(
     page.getByRole('textbox', { name: 'Standup name', exact: true }),
   ).toBeVisible();
+
   participants();
+
   await expect(
     page.getByRole('status', { name: 'Loading participants…' }),
   ).toHaveCount(0);
+
   await page.unroute(/\/dashboard\/api\/members(\?.*)?$/);
 
   const pairings = await hold(
     page,
     '**/dashboard/api/connect/rounds/*/matches',
   );
+
   await page.goto('/dashboard/connect/attendance');
+
   await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
+
   await page.getByRole('button', { name: /pairings/ }).click();
+
   await expect(
     page.getByRole('status', { name: 'Loading pairings…' }),
   ).toBeVisible();
   await expect(page.getByText('By person', { exact: true })).toBeVisible();
+
   pairings();
+
   await expect(
     page.getByRole('status', { name: 'Loading pairings…' }),
   ).toHaveCount(0);
@@ -213,32 +244,40 @@ test('nested participant, pairing, delivery, and invitation loads retain their s
     page,
     '**/dashboard/api/webhooks/*/deliveries*',
   );
+
   await page.goto('/dashboard/webhooks');
   await page
     .getByRole('button', { name: 'Deliveries', exact: true })
     .first()
     .click();
+
   await expect(
     page.getByRole('status', { name: 'Loading recent deliveries…' }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Hide deliveries' }),
   ).toBeVisible();
+
   deliveries();
+
   await expect(
     page.getByRole('status', { name: 'Loading recent deliveries…' }),
   ).toHaveCount(0);
 
   const invitations = await hold(page, /\/dashboard\/api\/members$/);
+
   await page.goto('/dashboard/members?channel=C_ENGINEERING');
   await page.getByRole('button', { name: 'Invite admin', exact: true }).click();
+
   await expect(
     page.getByRole('status', { name: 'Loading members to invite…' }),
   ).toBeVisible();
   await expect(
     page.getByRole('textbox', { name: 'Find a member to invite' }),
   ).toBeVisible();
+
   invitations();
+
   await expect(
     page.getByRole('status', { name: 'Loading members to invite…' }),
   ).toHaveCount(0);
