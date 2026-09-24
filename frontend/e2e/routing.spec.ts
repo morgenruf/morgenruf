@@ -67,6 +67,92 @@ test('malformed bookmarks recover and literal text filters survive refresh', asy
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
+for (const { path, label, endpoint, age } of [
+  {
+    path: '/dashboard/standups?status=active',
+    label: 'Search standups',
+    endpoint: 'me',
+    age: 61_000,
+  },
+  {
+    path: '/dashboard/members?role=admin',
+    label: 'Search members',
+    endpoint: 'me',
+    age: 61_000,
+  },
+  {
+    path: '/dashboard/standups?status=active',
+    label: 'Search standups',
+    endpoint: 'modules',
+    age: 31_000,
+  },
+]) {
+  test(`${label} preserves typing while stale ${endpoint} refreshes`, async ({
+    page,
+    context,
+  }) => {
+    await context.request.post(`${backend}/__test__/session?role=admin`);
+    await page.goto(path);
+
+    const input = page.getByRole('textbox', { name: label });
+
+    await expect(input).toBeVisible();
+    await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
+
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pattern = `**/dashboard/api/${endpoint}`;
+
+    await page.route(pattern, async (route) => {
+      await ready;
+      await route.continue();
+    });
+    await page.clock.setFixedTime(Date.now() + age);
+
+    const refreshing = page.waitForRequest(pattern);
+    const refreshed = page.waitForResponse(pattern);
+
+    try {
+      await input.pressSequentially('D');
+      await refreshing;
+      await input.pressSequentially('aily', { delay: 50 });
+
+      await expect(input).toHaveValue('Daily');
+      await expect(input).toBeFocused();
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get('q') === 'Daily',
+      );
+
+      await input.press('Backspace');
+
+      await expect(input).toHaveValue('Dail');
+
+      await input.fill('');
+      await input.pressSequentially('true', { delay: 50 });
+
+      await expect(input).toHaveValue('true');
+    } finally {
+      release();
+      await refreshed;
+    }
+
+    await expect(input).toHaveValue('true');
+    await expect(input).toBeFocused();
+    await expect(page).toHaveURL((url) => url.searchParams.get('q') === 'true');
+
+    for (const [key, value] of new URL(path, backend).searchParams)
+      await expect(page).toHaveURL(
+        (url) => url.searchParams.get(key) === value,
+      );
+
+    await page.reload();
+
+    await expect(input).toHaveValue('true');
+  });
+}
+
 test('unknown dashboard paths and result routes never bootstrap a private session', async ({
   page,
 }) => {

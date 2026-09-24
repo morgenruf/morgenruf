@@ -1,4 +1,4 @@
-import { getRouteApi } from '@tanstack/react-router';
+import { getRouteApi, useLocation } from '@tanstack/react-router';
 import { Plus, Search, X } from 'lucide-react';
 
 import { usePermissions } from '@/common/auth/use-session';
@@ -32,7 +32,11 @@ export function StandupsPage() {
   const params = route.useSearch();
   const navigate = route.useNavigate();
 
-  const search = params.q ?? '';
+  // Route search commits after loaders; typing needs the latest URL immediately.
+  const search = useLocation({
+    select: (location) => validateSearch.shape.q.parse(location.search.q),
+  });
+
   const status = params.status;
   const selected = params.edit;
   const creating = params.new;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getRouteApi } from '@tanstack/react-router';
+import { getRouteApi, useLocation } from '@tanstack/react-router';
 import { RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -68,6 +68,11 @@ export default function MembersPage() {
   const params = route.useSearch();
   const navigate = route.useNavigate();
 
+  // Route search commits after loaders; typing needs the latest URL immediately.
+  const search = useLocation({
+    select: (location) => validateSearch.shape.q.parse(location.search.q),
+  });
+
   const [inviting, setInviting] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
   const [inviteId, setInviteId] = useState('');
@@ -96,7 +101,7 @@ export default function MembersPage() {
 
   const isAdmin = session?.role === 'admin';
   const all = members.data ?? [];
-  const q = (params.q ?? '').trim().toLowerCase();
+  const q = search.trim().toLowerCase();
 
   const filtered = all
     .filter((member) => {
@@ -177,7 +182,7 @@ export default function MembersPage() {
         <Input
           aria-label="Search members"
           placeholder="Search name, handle or email"
-          value={params.q ?? ''}
+          value={search}
           onChange={(event) => filter('q', event.target.value)}
         />
         <LoadingField
