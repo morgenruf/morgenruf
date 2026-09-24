@@ -147,6 +147,8 @@ export interface ConnectProgram {
   suggest_times: boolean;
   team_id: string;
   timezone: string;
+  /** @format date */
+  upcoming_round?: string | null;
   use_icebreaker: boolean;
   video_mode: string;
 }

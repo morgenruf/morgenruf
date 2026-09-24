@@ -11,7 +11,8 @@ round late instead of losing it, which matters when the bot was down.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def is_round_due(
@@ -94,6 +95,15 @@ def upcoming_round_date(program: dict, today: date) -> date:
             return day
         day += timedelta(days=7)
     return day
+
+
+def programme_today(program: dict, now: datetime | None = None) -> date:
+    """Today on the programme's own calendar, which is the day its cron fires on."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        return now.astimezone(ZoneInfo(program.get("timezone") or "UTC")).date()
+    except (ZoneInfoNotFoundError, ValueError):
+        return now.date()
 
 
 def _as_date(value: object) -> date | None:

@@ -28,6 +28,7 @@ Program = model(
     intro_tone=string(),
     video_mode=string(),
     next_round_date=iso("date", allow_none=True),
+    upcoming_round=iso("date", allow_none=True, required=False),
     round_count=fields.Integer(),
     last_round=iso(allow_none=True, required=False),
     pool_size=fields.Integer(allow_none=True),

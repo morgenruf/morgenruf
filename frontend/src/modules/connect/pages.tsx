@@ -35,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/common/components/ui/select';
+import { formatDate } from '@/common/lib/format';
 
 import { Attendance } from './attendance';
 import { cadenceLabel } from './form-utils';
@@ -306,10 +307,15 @@ function ProgramList() {
                         : `${program.pool_size} in the pool`}
                     </span>
                   </div>
-                  {program.next_round_date && (
+                  {program.upcoming_round && (
                     <p className="text-xs text-muted-foreground">
                       Next round:{' '}
-                      {new Date(program.next_round_date).toLocaleDateString()}
+                      {formatDate(program.upcoming_round, {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                      })}
+                      {program.next_round_date && ' (pinned date)'}
                     </p>
                   )}
                   <div className="flex flex-wrap items-center gap-4">

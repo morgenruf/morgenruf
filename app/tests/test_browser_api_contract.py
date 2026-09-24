@@ -289,3 +289,19 @@ print(json.dumps(spec, sort_keys=True))
     assert len(operations) == 54
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
+
+
+def test_connect_programmes_carry_the_round_the_job_will_run(browser):
+    """The dashboard names the same day as the scheduler: the programme's
+    weekday (Friday here), and no earlier than a pinned date."""
+    from datetime import date
+
+    _, client, headers = browser
+    program = client.get("/dashboard/api/connect/programs").json[0]
+    upcoming = date.fromisoformat(program["upcoming_round"])
+
+    assert upcoming.weekday() == program["day_of_week"]
+    assert upcoming >= date.fromisoformat(program["next_round_date"])
+
+    client.post("/dashboard/api/connect/programs/1", json={"enabled": False}, headers=headers)
+    assert client.get("/dashboard/api/connect/programs").json[0]["upcoming_round"] is None
