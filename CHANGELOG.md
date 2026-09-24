@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.10] - 2026-09-24
+
+### Fixed
+- **Coffee chats no longer skip a week after "Run now".** The schedule counted
+  from the latest round of any kind, so trying a Monday programme by hand on a
+  Thursday made the following Monday "not due". Manual rounds are now extras:
+  the regular round still runs, and a pinned next date stays in place.
+- The next coffee chat date shown in Slack always falls on the programme's own
+  weekday and respects a pinned date.
+- Clicking "Run now" twice on the same day no longer sends a second set of
+  introductions. The check uses the programme's timezone.
+
+### Changed
+- Migration `050_connect_manual_rounds.sql` adds `connect_rounds.manual`.
+  Additive, with a default, so rollback is a plain image revert.
+
 ## [1.8.9] - 2026-09-24
 
 ### Changed
