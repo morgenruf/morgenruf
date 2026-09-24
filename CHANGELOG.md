@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.9] - 2026-09-24
+
+### Changed
+- **Dashboard routing runs on TanStack Start in SPA mode.** Pages load their
+  data before they render, filters live in the URL so bookmarks and refreshes
+  keep them, and malformed links recover instead of erroring. The frontend
+  image now serves `_shell.html` as its entry point; Nginx routing is otherwise
+  unchanged.
+
+### Fixed
+- Search boxes on Members and Standups keep every keystroke while the session
+  refreshes in the background.
+- Report date filters no longer drop digits while the page refreshes.
+- Logging out lands on the plain login page instead of sometimes redirecting
+  back with a `next` link to the page you just left.
+
 ## [1.8.8] - 2026-09-20
 
 ### Added
