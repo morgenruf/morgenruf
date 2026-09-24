@@ -1,15 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
-import { queryKeys } from '@/common/api/query-keys';
+import { sessionOptions } from '@/common/api/queries';
+import { useServices } from '@/common/api/services-context';
 
 export function useSession() {
-  return useQuery({
-    queryKey: queryKeys.session,
-    queryFn: async ({ signal }) =>
-      (await api.session.getSession({ signal })).data,
-    staleTime: 60_000,
-  });
+  return useQuery(sessionOptions(useServices()));
 }
 
 export function usePermissions() {

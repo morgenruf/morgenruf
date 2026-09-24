@@ -42,11 +42,13 @@ export function SkeletonRegion({
 
 export function SkeletonPage({
   title,
+  label,
   children,
   className,
   reserveActionSpace = false,
 }: {
   title: string;
+  label?: string;
   className?: string;
   children: ReactNode;
   reserveActionSpace?: boolean;
@@ -58,7 +60,8 @@ export function SkeletonPage({
         reserveActionSpace={reserveActionSpace}
         description={<Skeleton className="h-4 w-72 max-w-full" />}
       />
-      <SkeletonRegion label={`Loading ${title.toLowerCase()}…`}>
+
+      <SkeletonRegion label={label ?? `Loading ${title.toLowerCase()}…`}>
         {children}
       </SkeletonRegion>
     </div>
@@ -91,6 +94,7 @@ export function SkeletonCard({
         <Skeleton className="h-4 w-40 max-w-full" />
         <Skeleton className="h-3 w-56 max-w-full" />
       </CardHeader>
+
       <CardContent>{children ?? <SkeletonText />}</CardContent>
     </Card>
   );
@@ -113,6 +117,7 @@ export function SkeletonStats({
             <Skeleton className="h-3 w-24" />
             {icons && <Skeleton className="size-8 shrink-0 rounded-lg" />}
           </CardHeader>
+
           <CardContent className="space-y-2">
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-3 w-36 max-w-full" />
@@ -162,6 +167,7 @@ export function SkeletonTable({
             ))}
           </tr>
         </thead>
+
         <tbody>
           {Array.from({ length: rows }, (_, row) => (
             <tr key={row} className="border-b last:border-0">

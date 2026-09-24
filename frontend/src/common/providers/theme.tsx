@@ -13,7 +13,11 @@ function initialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(initialTheme);
+  const [theme, setThemeState] = useState<Theme>('system');
+
+  useEffect(() => {
+    setThemeState(initialTheme());
+  }, []);
 
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');

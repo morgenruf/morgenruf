@@ -1,43 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import type { Api } from '@/common/api/client';
+import { useServices } from '@/common/api/services-context';
 import { useSession } from '@/common/auth/use-session';
 
-export type KudosConfigInput = Parameters<typeof api.kudos.updateConfig>[0];
+import {
+  kudosConfigOptions,
+  kudosFeedOptions,
+  kudosGiversOptions,
+  kudosReceiversOptions,
+} from './queries';
+
+export type KudosConfigInput = Parameters<Api['kudos']['updateConfig']>[0];
 
 export function useKudos(days: number) {
+  const services = useServices();
+  const { api } = services;
   const { data: session } = useSession();
   const team = session?.team_id;
 
   const client = useQueryClient();
   const key = ['workspace', team, 'kudos'];
 
-  const feed = useQuery({
-    queryKey: [...key, 'feed'],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.kudos.listKudos({ limit: 50 }, { signal })).data,
-  });
-
-  const receivers = useQuery({
-    queryKey: [...key, 'receivers', days],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.kudos.getLeaderboard({ days }, { signal })).data,
-  });
-
-  const givers = useQuery({
-    queryKey: [...key, 'givers', days],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.kudos.getGivers({ days }, { signal })).data,
-  });
-
-  const config = useQuery({
-    queryKey: [...key, 'config'],
-    enabled: !!team,
-    queryFn: async ({ signal }) => (await api.kudos.getConfig({ signal })).data,
-  });
+  const feed = useQuery(kudosFeedOptions(services, team));
+  const receivers = useQuery(kudosReceiversOptions(services, team, days));
+  const givers = useQuery(kudosGiversOptions(services, team, days));
+  const config = useQuery(kudosConfigOptions(services, team));
 
   const save = useMutation({
     mutationFn: (data: KudosConfigInput) => api.kudos.updateConfig(data),

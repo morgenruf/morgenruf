@@ -3,14 +3,19 @@ import { toast } from 'sonner';
 
 import { errorMessage } from './errors';
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 30_000, retry: false, refetchOnWindowFocus: true },
-    mutations: { retry: false, gcTime: 0 },
-  },
-  mutationCache: new MutationCache({
-    onError: (error, _variables, _context, mutation) => {
-      if (mutation.meta?.silent !== true) toast.error(errorMessage(error));
+export function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { staleTime: 30_000, retry: false, refetchOnWindowFocus: true },
+      mutations: { retry: false, gcTime: 0 },
     },
-  }),
-});
+    mutationCache: new MutationCache({
+      onError: (error, _variables, _context, mutation) => {
+        if (error instanceof DOMException && error.name === 'AbortError')
+          return;
+
+        if (mutation.meta?.silent !== true) toast.error(errorMessage(error));
+      },
+    }),
+  });
+}

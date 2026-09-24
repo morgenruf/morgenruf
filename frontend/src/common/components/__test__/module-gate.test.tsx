@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkspaceModule } from '@/common/api/generated/data-contracts';
+import { TestRouter } from '@/test/router';
 
 import { ModuleGate } from '../module-gate';
 
@@ -26,7 +26,7 @@ vi.mock('@/common/auth/use-session', () => ({
 
 const renderGate = (requireActive = true) =>
   render(
-    <MemoryRouter>
+    <TestRouter routeId="/test">
       <ModuleGate
         loadingFallback={<div role="status">Loading insights…</div>}
         module="insights"
@@ -35,7 +35,7 @@ const renderGate = (requireActive = true) =>
       >
         <div>Protected feature</div>
       </ModuleGate>
-    </MemoryRouter>,
+    </TestRouter>,
   );
 
 beforeEach(() => {
@@ -55,44 +55,46 @@ beforeEach(() => {
 });
 
 describe('direct URL module gating', () => {
-  it('does not mount feature children for unavailable deployments', () => {
+  it('does not mount feature children for unavailable deployments', async () => {
     state.modules[0].available = false;
 
     renderGate();
 
-    expect(screen.getByText('Insights unavailable')).toBeInTheDocument();
+    expect(await screen.findByText('Insights unavailable')).toBeInTheDocument();
     expect(screen.queryByText('Protected feature')).not.toBeInTheDocument();
   });
 
-  it('offers settings to administrators for disabled modules', () => {
+  it('offers settings to administrators for disabled modules', async () => {
     state.modules[0].active = false;
 
     renderGate();
 
     expect(
-      screen.getByRole('link', { name: 'Open workspace settings' }),
+      await screen.findByRole('link', { name: 'Open workspace settings' }),
     ).toHaveAttribute('href', '/dashboard/settings');
   });
 
-  it('offers re-authorisation only to workspace admins when Slack permissions are missing', () => {
+  it('offers re-authorisation only to workspace admins when Slack permissions are missing', async () => {
     state.modules[0].missing_scopes = ['groups:write'];
     state.isAdmin = false;
 
     renderGate();
 
     expect(
-      screen.getByText(/Ask a workspace administrator to reconnect Slack/),
+      await screen.findByText(
+        /Ask a workspace administrator to reconnect Slack/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Re-authorise Slack' }),
     ).not.toBeInTheDocument();
   });
 
-  it('allows Today aggregation when Insights is disabled but deployed', () => {
+  it('allows Today aggregation when Insights is disabled but deployed', async () => {
     state.modules[0].active = false;
 
     renderGate(false);
 
-    expect(screen.getByText('Protected feature')).toBeInTheDocument();
+    expect(await screen.findByText('Protected feature')).toBeInTheDocument();
   });
 });

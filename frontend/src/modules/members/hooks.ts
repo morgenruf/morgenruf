@@ -1,10 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import type { Api } from '@/common/api/client';
+import {
+  channelsOptions,
+  modulesOptions,
+  standupsOptions,
+} from '@/common/api/queries';
+import { useServices } from '@/common/api/services-context';
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
 export function useMembers(channel?: string, loadInviteRoster = false) {
+  const services = useServices();
+  const { api } = services;
+
   const { data: session } = useSession();
   const team = session?.team_id;
 
@@ -13,32 +22,17 @@ export function useMembers(channel?: string, loadInviteRoster = false) {
   const members = useMemberDirectory({ channel });
   const inviteMembers = useMemberDirectory({ enabled: loadInviteRoster });
 
-  const channels = useQuery({
-    queryKey: ['workspace', team, 'channels'],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.workspace.listChannels({ signal })).data,
-  });
-
-  const modules = useQuery({
-    queryKey: ['workspace', team, 'modules'],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.workspace.listModules({ signal })).data,
-  });
-
-  const standups = useQuery({
-    queryKey: ['workspace', team, 'standups'],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.standups.listStandups({ signal })).data,
-  });
+  const channels = useQuery(channelsOptions(services, team));
+  const modules = useQuery(modulesOptions(services, team));
+  const standups = useQuery(standupsOptions(services, team));
 
   async function invalidate() {
     await Promise.all([
       client.invalidateQueries({ queryKey: ['workspace', team, 'members'] }),
       client.invalidateQueries({ queryKey: ['session'] }),
     ]);
+
+    services.invalidateRouter();
   }
 
   const role = useMutation({
@@ -64,7 +58,7 @@ export function useMembers(channel?: string, loadInviteRoster = false) {
   });
 
   const invite = useMutation({
-    mutationFn: (data: Parameters<typeof api.members.inviteMember>[0]) =>
+    mutationFn: (data: Parameters<Api['members']['inviteMember']>[0]) =>
       api.members.inviteMember(data),
     onSuccess: invalidate,
   });

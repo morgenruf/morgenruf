@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import {
   Copy,
   ExternalLink,
@@ -7,10 +8,9 @@ import {
   Settings2,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
 
-import { api } from '@/common/api/client';
+import type { Api } from '@/common/api/client';
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
@@ -32,10 +32,10 @@ import { useSettings, useSettingsMutations } from './hooks';
 import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
 
 type Standup = Awaited<
-  ReturnType<typeof api.standups.listStandups>
+  ReturnType<Api['standups']['listStandups']>
 >['data'][number];
 type DigestInput = Pick<
-  Parameters<typeof api.standups.updateStandup>[1],
+  Parameters<Api['standups']['updateStandup']>[1],
   'manager_email' | 'manager_digest_enabled'
 >;
 
@@ -158,6 +158,7 @@ export function SettingsPage() {
         title="Settings"
         description="Make Morgenruf work for your workspace."
       />
+
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -241,6 +242,7 @@ export function SettingsPage() {
             </LoadingTransition>
           </CardContent>
         </Card>
+
         <LoadingTransition
           pending={standups.isPending}
           className="*:data-[slot=card]:h-full"
@@ -289,10 +291,9 @@ export function SettingsPage() {
                   </Badge>
                 )}
                 <Link
-                  to={
-                    canAdminister('standup')
-                      ? `/dashboard/standups?edit=${first.id}`
-                      : '/dashboard/standups'
+                  to="/dashboard/standups"
+                  search={
+                    canAdminister('standup') ? { edit: String(first.id) } : {}
                   }
                   className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
                 >
@@ -316,7 +317,8 @@ export function SettingsPage() {
               action={
                 canAdminister('standup') && (
                   <Link
-                    to="/dashboard/standups?new=true"
+                    to="/dashboard/standups"
+                    search={{ new: true }}
                     className="text-sm font-medium text-primary"
                   >
                     Create a standup
@@ -326,6 +328,7 @@ export function SettingsPage() {
             />
           )}
         </LoadingTransition>
+
         {(standups.isPending || (!standups.error && first)) && (
           <>
             <LoadingTransition
@@ -432,6 +435,7 @@ export function SettingsPage() {
                 )
               )}
             </LoadingTransition>
+
             <LoadingTransition
               pending={standups.isPending}
               className="[&>[data-slot=card]]:h-full"

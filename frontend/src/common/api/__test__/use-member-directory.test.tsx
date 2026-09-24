@@ -9,8 +9,9 @@ const mock = vi.hoisted(() => ({ team: 'T1', listMembers: vi.fn() }));
 vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({ data: { team_id: mock.team } }),
 }));
-vi.mock('@/common/api/client', () => ({
-  api: { members: { listMembers: mock.listMembers } },
+
+vi.mock('@/common/api/services-context', () => ({
+  useServices: () => ({ api: { members: { listMembers: mock.listMembers } } }),
 }));
 
 function Identity({
@@ -24,6 +25,7 @@ function Identity({
 }) {
   const directory = useMemberDirectory({ channel });
   const person = directory.person(id, fallback);
+
   return <span data-avatar={person.avatar}>{person.name}</span>;
 }
 
@@ -52,6 +54,7 @@ describe('shared member directory', () => {
       ],
     });
     const cache = client();
+
     render(
       <QueryClientProvider client={cache}>
         <Identity />
@@ -60,6 +63,7 @@ describe('shared member directory', () => {
         <Identity id="unknown" fallback="" />
       </QueryClientProvider>,
     );
+
     expect(await screen.findAllByText('Ada Lovelace')).toHaveLength(2);
     expect(screen.getByText('sam')).toBeInTheDocument();
     expect(screen.getByText('unknown')).toBeInTheDocument();
@@ -67,11 +71,13 @@ describe('shared member directory', () => {
       'data-avatar',
       '/ada.png',
     );
+
     expect(mock.listMembers).toHaveBeenCalledTimes(1);
     expect(mock.listMembers).toHaveBeenCalledWith(
       {},
       { signal: expect.any(AbortSignal) },
     );
+
     expect(cache.getQueryData(['workspace', 'T1', 'members', ''])).toHaveLength(
       2,
     );
@@ -85,18 +91,22 @@ describe('shared member directory', () => {
       }),
     );
     const cache = client();
+
     render(
       <QueryClientProvider client={cache}>
         <Identity />
       </QueryClientProvider>,
     );
+
     expect(screen.getByText('Saved name')).toBeInTheDocument();
+
     reject(new Error('Directory unavailable'));
     await waitFor(() =>
       expect(
         cache.getQueryState(['workspace', 'T1', 'members', ''])?.status,
       ).toBe('error'),
     );
+
     expect(screen.getByText('Saved name')).toBeInTheDocument();
   });
 
@@ -105,11 +115,13 @@ describe('shared member directory', () => {
       data: [{ id: 'U1', name: 'Team one', avatar: '' }],
     });
     const cache = client();
+
     const { rerender } = render(
       <QueryClientProvider client={cache}>
         <Identity channel="C1" />
       </QueryClientProvider>,
     );
+
     expect(await screen.findByText('Team one')).toBeInTheDocument();
     expect(mock.listMembers).toHaveBeenCalledWith(
       { channel_id: 'C1' },
@@ -120,11 +132,13 @@ describe('shared member directory', () => {
     mock.listMembers.mockResolvedValue({
       data: [{ id: 'U1', name: 'Team two', avatar: '' }],
     });
+
     rerender(
       <QueryClientProvider client={cache}>
         <Identity channel="C1" />
       </QueryClientProvider>,
     );
+
     expect(screen.queryByText('Team one')).not.toBeInTheDocument();
     expect(await screen.findByText('Team two')).toBeInTheDocument();
     expect(mock.listMembers).toHaveBeenCalledTimes(2);

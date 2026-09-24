@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 import type { Member } from '@/common/api/generated/data-contracts';
 import { deferred } from '@/test/deferred';
+import { TestRouter } from '@/test/router';
 import { chooseOption } from '@/test/select';
 
 import KudosPage from '../pages/kudos-page';
@@ -25,8 +25,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     kudos: {
       getConfig: mock.config,
       updateConfig: mock.save,
@@ -35,11 +36,18 @@ vi.mock('@/common/api/client', () => ({
       getGivers: mock.givers,
     },
     members: { listMembers: mock.members },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
+
   mock.leaderboard.mockResolvedValue({ data: [] });
   mock.givers.mockResolvedValue({ data: [] });
   mock.feed.mockResolvedValue({ data: [] });
@@ -60,9 +68,9 @@ it('previews the chosen token and disabled allowance, preserving unsaved edits d
 
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <TestRouter routeId="/dashboard/_authenticated/kudos">
         <KudosPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 
@@ -94,20 +102,29 @@ it('previews the chosen token and disabled allowance, preserving unsaved edits d
 
 it('shows the selected period on load and requests numeric days after changing it', async () => {
   const user = userEvent.setup({ delay: null });
+
   render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter initialEntries={['/dashboard/kudos?days=30']}>
+      <TestRouter
+        routeId="/dashboard/_authenticated/kudos"
+        initialEntries={['/dashboard/kudos?days=30']}
+      >
         <KudosPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
-  const period = screen.getByRole('combobox', { name: 'Leaderboard period' });
+
+  const period = await screen.findByRole('combobox', {
+    name: 'Leaderboard period',
+  });
   expect(period).toHaveTextContent('Last 30 days');
+
   await chooseOption(user, 'Leaderboard period', 'Last 90 days');
+
   expect(period).toHaveTextContent('Last 90 days');
   await waitFor(() =>
     expect(mock.leaderboard).toHaveBeenCalledWith(
@@ -173,9 +190,9 @@ function renderKudos() {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter>
+      <TestRouter routeId="/dashboard/_authenticated/kudos">
         <KudosPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 }
@@ -183,6 +200,7 @@ function renderKudos() {
 it('uses directory names and avatars for both leaderboard and recognition participants', async () => {
   populatedKudos();
   mock.members.mockResolvedValue({ data: members });
+
   const { container } = renderKudos();
 
   await waitFor(() =>
@@ -199,6 +217,7 @@ it('shows available names while the directory loads, then updates all identities
   populatedKudos();
   const directory = deferred<{ data: Member[] }>();
   mock.members.mockReturnValue(directory.promise);
+
   renderKudos();
 
   expect(await screen.findByText('Previous Priya')).toBeInTheDocument();
@@ -210,6 +229,7 @@ it('shows available names while the directory loads, then updates all identities
   ).toBeInTheDocument();
 
   await act(async () => directory.resolve({ data: members }));
+
   await waitFor(() =>
     expect(screen.getAllByText('Priya Sharma')).toHaveLength(2),
   );
@@ -220,6 +240,7 @@ it('shows available names while the directory loads, then updates all identities
 it('keeps recognition and leaderboards usable if the directory fails', async () => {
   populatedKudos();
   mock.members.mockRejectedValue(new Error('Directory unavailable'));
+
   const { container } = renderKudos();
 
   expect(await screen.findByText('Previous Priya')).toBeInTheDocument();
@@ -237,17 +258,19 @@ it('keeps recognition and leaderboards usable if the directory fails', async () 
 it('lets independently loaded sections appear while a leaderboard is pending', async () => {
   const receivers = deferred<{ data: never[] }>();
   mock.leaderboard.mockReturnValue(receivers.promise);
+
   render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter>
+      <TestRouter routeId="/dashboard/_authenticated/kudos">
         <KudosPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
+
   await screen.findByLabelText('Emoji or Slack token');
   expect(
     screen.getByRole('status', { name: 'Loading leaderboard…' }),
@@ -258,7 +281,9 @@ it('lets independently loaded sections appear while a leaderboard is pending', a
   expect(
     screen.queryByRole('status', { name: 'Loading kudos settings…' }),
   ).not.toBeInTheDocument();
+
   await act(async () => receivers.resolve({ data: [] }));
+
   await waitFor(() =>
     expect(screen.queryByRole('status')).not.toBeInTheDocument(),
   );

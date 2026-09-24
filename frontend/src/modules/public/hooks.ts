@@ -1,12 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import { useServices } from '@/common/api/services-context';
+
+import { publicFeedOptions } from './queries';
 
 export function usePublicFeed(token: string) {
-  return useQuery({
-    queryKey: ['public-feed', token],
-    queryFn: async ({ signal }) =>
-      (await api.public.getFeed({ token }, { signal })).data,
-    retry: false,
-  });
+  return useQuery(publicFeedOptions(useServices(), token));
 }

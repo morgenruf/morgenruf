@@ -1,64 +1,55 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import type { Api } from '@/common/api/client';
+import {
+  analyticsOptions,
+  channelsOptions,
+  standupsOptions,
+} from '@/common/api/queries';
+import { useServices } from '@/common/api/services-context';
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
+import { standupTemplatesOptions } from './queries';
+
 export type Standup = Awaited<
-  ReturnType<typeof api.standups.listStandups>
+  ReturnType<Api['standups']['listStandups']>
 >['data'][number];
-export type StandupInput = Parameters<typeof api.standups.createStandup>[0];
+export type StandupInput = Parameters<Api['standups']['createStandup']>[0];
 
 export const standupKeys = {
   list: (workspace?: string) => ['workspace', workspace, 'standups'] as const,
 };
 
 export function useStandups() {
+  const services = useServices();
   const { data: session } = useSession();
 
-  return useQuery({
-    queryKey: standupKeys.list(session?.team_id),
-    queryFn: ({ signal }) =>
-      api.standups.listStandups({ signal }).then((r) => r.data),
-    enabled: !!session,
-  });
+  return useQuery(standupsOptions(services, session?.team_id));
 }
 
 export function useStandupResources(channelId = '') {
+  const services = useServices();
   const { data: session } = useSession();
   const workspace = session?.team_id;
 
-  const channels = useQuery({
-    queryKey: ['workspace', workspace, 'channels'],
-    queryFn: ({ signal }) =>
-      api.workspace.listChannels({ signal }).then((r) => r.data),
-    enabled: !!workspace,
-  });
-
+  const channels = useQuery(channelsOptions(services, workspace));
   const members = useMemberDirectory({ channel: channelId });
-
-  const templates = useQuery({
-    queryKey: ['workspace', workspace, 'templates'],
-    queryFn: ({ signal }) =>
-      api.standups.listTemplates({ signal }).then((r) => r.data),
-    enabled: !!workspace,
-  });
+  const templates = useQuery(standupTemplatesOptions(services, workspace));
 
   return { channels, members, templates };
 }
 
 export function useStandupHealth() {
+  const services = useServices();
   const { data: session } = useSession();
 
-  return useQuery({
-    queryKey: ['workspace', session?.team_id, 'analytics', { days: 14 }],
-    queryFn: ({ signal }) =>
-      api.analytics.getAnalytics({ days: 14 }, { signal }).then((r) => r.data),
-    enabled: !!session,
-  });
+  return useQuery(analyticsOptions(services, session?.team_id, 14));
 }
 
 export function useStandupMutations() {
+  const services = useServices();
+  const { api } = services;
   const client = useQueryClient();
   const { data: session } = useSession();
 

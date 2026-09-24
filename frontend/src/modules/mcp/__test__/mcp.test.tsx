@@ -16,8 +16,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     mcp: {
       listKeys: vi.fn().mockResolvedValue({
         data: {
@@ -36,8 +37,14 @@ vi.mock('@/common/api/client', () => ({
       createKey: vi.fn(),
       revokeKey: vi.fn(),
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 it('marks revoked keys and does not offer to revoke them again', async () => {
   render(
@@ -51,11 +58,14 @@ it('marks revoked keys and does not offer to revoke them again', async () => {
   expect(
     screen.queryByRole('button', { name: 'Revoke' }),
   ).not.toBeInTheDocument();
+
   const user = userEvent.setup({ delay: null });
   const assistant = screen.getByRole('combobox', { name: 'Assistant' });
   expect(assistant).toHaveTextContent('Claude Desktop');
+
   await user.click(assistant);
   await user.click(await screen.findByRole('option', { name: 'HTTP / curl' }));
+
   expect(assistant).toHaveTextContent('HTTP / curl');
   expect(
     screen.getByText('Run in a terminal to list available tools.'),

@@ -79,21 +79,19 @@ for (const mode of ['expanded', 'collapsed', 'mobile']) {
     });
 
     await main.focus();
+
     await page.keyboard.press('End');
     await expect(area).not.toHaveAttribute('data-overflow-y-end');
+    await expect(area).not.toHaveAttribute('data-scrolling');
+
     await page.keyboard.press('Home');
     await expect(area).not.toHaveAttribute('data-overflow-y-start');
-    const scrollFinished = main.evaluate(
-      (element) =>
-        new Promise<void>((resolve) => {
-          element.addEventListener('scrollend', () => resolve(), {
-            once: true,
-          });
-        }),
-    );
+    await expect(area).not.toHaveAttribute('data-scrolling');
+
+    await expect(main).toBeFocused();
     await page.keyboard.press('PageDown');
-    await scrollFinished;
     await expect(area).toHaveAttribute('data-overflow-y-start');
+    await expect(area).not.toHaveAttribute('data-scrolling');
 
     await page.getByRole('link', { name: 'Skip to content' }).focus();
     await page.keyboard.press('Enter');

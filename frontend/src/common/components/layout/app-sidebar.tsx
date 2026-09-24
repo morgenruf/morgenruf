@@ -1,3 +1,4 @@
+import { Link, useLocation } from '@tanstack/react-router';
 import {
   BarChart3,
   CalendarCheck,
@@ -15,7 +16,6 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { matchPath, NavLink, useLocation } from 'react-router';
 
 import { useWorkspaceModules } from '@/common/api/use-workspace-modules';
 import { usePermissions } from '@/common/auth/use-session';
@@ -38,9 +38,23 @@ import {
   useSidebar,
 } from '@/common/components/ui/sidebar';
 
+type DashboardPath =
+  | '/dashboard/today'
+  | '/dashboard/standups'
+  | '/dashboard/connect'
+  | '/dashboard/kudos'
+  | '/dashboard/members'
+  | '/dashboard/insights'
+  | '/dashboard/reports'
+  | '/dashboard/analytics'
+  | '/dashboard/settings'
+  | '/dashboard/automation'
+  | '/dashboard/webhooks'
+  | '/dashboard/mcp';
+
 type NavItem = {
   label: string;
-  path: string;
+  path: DashboardPath;
   icon: LucideIcon;
   module?: string;
 };
@@ -49,7 +63,12 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: '',
     items: [
-      { label: 'Today', path: 'today', icon: Sunrise, module: 'insights' },
+      {
+        label: 'Today',
+        path: '/dashboard/today',
+        icon: Sunrise,
+        module: 'insights',
+      },
     ],
   },
   {
@@ -57,18 +76,23 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       {
         label: 'Standups',
-        path: 'standups',
+        path: '/dashboard/standups',
         icon: CalendarCheck,
         module: 'standup',
       },
       {
         label: 'Coffee chats',
-        path: 'connect',
+        path: '/dashboard/connect',
         icon: Coffee,
         module: 'connect',
       },
-      { label: 'Kudos', path: 'kudos', icon: HeartHandshake, module: 'kudos' },
-      { label: 'Members', path: 'members', icon: Users },
+      {
+        label: 'Kudos',
+        path: '/dashboard/kudos',
+        icon: HeartHandshake,
+        module: 'kudos',
+      },
+      { label: 'Members', path: '/dashboard/members', icon: Users },
     ],
   },
   {
@@ -76,26 +100,26 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       {
         label: 'Insights',
-        path: 'insights',
+        path: '/dashboard/insights',
         icon: Lightbulb,
         module: 'insights',
       },
-      { label: 'Reports', path: 'reports', icon: FileChartColumn },
-      { label: 'Analytics', path: 'analytics', icon: BarChart3 },
+      { label: 'Reports', path: '/dashboard/reports', icon: FileChartColumn },
+      { label: 'Analytics', path: '/dashboard/analytics', icon: BarChart3 },
     ],
   },
   {
     label: 'Configure',
     items: [
-      { label: 'Settings', path: 'settings', icon: Settings2 },
+      { label: 'Settings', path: '/dashboard/settings', icon: Settings2 },
       {
         label: 'Automation',
-        path: 'automation',
+        path: '/dashboard/automation',
         icon: Workflow,
         module: 'standup',
       },
-      { label: 'Webhooks', path: 'webhooks', icon: Webhook },
-      { label: 'MCP', path: 'mcp', icon: Plug, module: 'mcp' },
+      { label: 'Webhooks', path: '/dashboard/webhooks', icon: Webhook },
+      { label: 'MCP', path: '/dashboard/mcp', icon: Plug, module: 'mcp' },
     ],
   },
 ];
@@ -111,9 +135,10 @@ export function AppSidebar({
   const { canAdminister } = usePermissions();
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
+
   const closeMobile = () => setOpenMobile(false);
   const isActive = (path: string, end = false) =>
-    !!matchPath({ path, end }, pathname);
+    pathname === path || (!end && pathname.startsWith(`${path}/`));
 
   return (
     <Sidebar collapsible="icon">
@@ -123,7 +148,7 @@ export function AppSidebar({
             <SidebarMenuItem>
               <SidebarMenuButton
                 size="lg"
-                render={<NavLink to="/dashboard/standups" />}
+                render={<Link to="/dashboard/standups" />}
                 aria-label="Morgenruf"
                 tooltip="Morgenruf"
                 onClick={closeMobile}
@@ -154,6 +179,7 @@ export function AppSidebar({
           )}
         </div>
       </SidebarHeader>
+
       <SidebarContent>
         <nav aria-label="Main navigation">
           {groups.map((group) => {
@@ -174,8 +200,8 @@ export function AppSidebar({
                     {items.map((item) => (
                       <SidebarMenuItem key={item.path}>
                         <SidebarMenuButton
-                          render={<NavLink to={`/dashboard/${item.path}`} />}
-                          isActive={isActive(`/dashboard/${item.path}`)}
+                          render={<Link to={item.path} />}
+                          isActive={isActive(item.path)}
                           aria-label={item.label}
                           tooltip={item.label}
                           onClick={closeMobile}
@@ -183,14 +209,19 @@ export function AppSidebar({
                           <item.icon />
                           <span>{item.label}</span>
                         </SidebarMenuButton>
-                        {item.path === 'connect' &&
+                        {item.path === '/dashboard/connect' &&
                           isActive('/dashboard/connect') && (
                             <SidebarMenuSub>
-                              {[
-                                ['All coffee chats', '/dashboard/connect'],
-                                ['New coffee chat', '/dashboard/connect/new'],
-                                ['Attendance', '/dashboard/connect/attendance'],
-                              ]
+                              {(
+                                [
+                                  ['All coffee chats', '/dashboard/connect'],
+                                  ['New coffee chat', '/dashboard/connect/new'],
+                                  [
+                                    'Attendance',
+                                    '/dashboard/connect/attendance',
+                                  ],
+                                ] as const
+                              )
                                 .filter(
                                   ([label]) =>
                                     label !== 'New coffee chat' ||
@@ -199,7 +230,12 @@ export function AppSidebar({
                                 .map(([label, path]) => (
                                   <SidebarMenuSubItem key={path}>
                                     <SidebarMenuSubButton
-                                      render={<NavLink end to={path} />}
+                                      render={
+                                        <Link
+                                          to={path}
+                                          activeOptions={{ exact: true }}
+                                        />
+                                      }
                                       isActive={isActive(path, true)}
                                       onClick={closeMobile}
                                     >
@@ -218,6 +254,7 @@ export function AppSidebar({
           })}
         </nav>
       </SidebarContent>
+
       <SidebarGroup className="shrink-0 py-2">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -232,6 +269,7 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
+
       <SidebarFooter className="border-t">
         <div className="flex min-w-0 items-center gap-2" title={teamName}>
           <span

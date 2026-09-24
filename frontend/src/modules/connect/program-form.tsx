@@ -6,8 +6,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
@@ -93,24 +93,30 @@ const memberStateOptions = [
   { value: 'snoozed', label: 'Snoozed 2 weeks' },
   { value: 'out', label: 'Excluded' },
 ];
+
 const intervalOptions = Array.from({ length: 8 }, (_, index) => ({
   value: index + 1,
   label: index === 0 ? 'Week' : `${index + 1} weeks`,
 }));
+
 const dayOptions = dayNames.map((day, index) => ({ value: index, label: day }));
+
 const groupSizeOptions = Array.from({ length: 7 }, (_, index) => ({
   value: index + 2,
   label: `${index + 2} people`,
 }));
+
 const introToneOptions = [
   { value: 'hybrid', label: 'Some of us are remote' },
   { value: 'remote', label: 'Fully remote' },
   { value: 'in_person', label: 'Mostly in one place' },
 ];
+
 const meetingLengthOptions = [15, 30, 45, 60].map((minutes) => ({
   value: minutes,
   label: `${minutes} minutes`,
 }));
+
 const videoModeOptions = [
   { value: 'link', label: 'One shared room' },
   { value: 'zoom', label: 'A Zoom meeting each time' },
@@ -252,6 +258,7 @@ function ProgramMembers({ programId }: { programId: number }) {
       </div>
     );
   }
+
   return (
     <LoadingTransition pending={query.isPending}>
       {renderContent()}
@@ -335,6 +342,7 @@ function MessagePreview({ values }: { values: ProgramInput }) {
           </div>
         </CardContent>
       </Card>
+
       {values.post_stats && (
         <Card>
           <CardContent className="space-y-2 p-4 text-sm">
@@ -345,6 +353,7 @@ function MessagePreview({ values }: { values: ProgramInput }) {
           </CardContent>
         </Card>
       )}
+
       <p className="text-xs text-muted-foreground">
         Illustrative preview. Changes are only applied when you save.
       </p>
@@ -376,6 +385,7 @@ export function ProgramForm({ program }: { program?: Program }) {
       label: `#${channel.name}`,
     })),
   ];
+
   const { save } = useConnectMutations();
   const { canAdminister } = usePermissions();
   const editable = canAdminister('connect');
@@ -406,7 +416,10 @@ export function ProgramForm({ program }: { program?: Program }) {
         );
 
         if (!program && 'id' in result)
-          navigate(`/dashboard/connect/${result.id}`);
+          void navigate({
+            to: '/dashboard/connect/$programId',
+            params: { programId: String(result.id) },
+          });
       } catch (error) {
         applyApiErrors(error, form.setError);
       }
@@ -470,6 +483,7 @@ export function ProgramForm({ program }: { program?: Program }) {
               ))}
             </div>
           </ScrollArea>
+
           <form
             onSubmit={submit}
             onInvalidCapture={onInvalid}
@@ -661,6 +675,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                   />
                 </Field>
               </section>
+
               <section
                 role="tabpanel"
                 aria-labelledby={`${id}-Matching`}
@@ -728,6 +743,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                   Working hours use the timezone in each person’s Slack profile.
                 </p>
               </section>
+
               <section
                 role="tabpanel"
                 aria-labelledby={`${id}-Message`}
@@ -782,6 +798,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                   helps the team see how introductions are working.
                 </p>
               </section>
+
               <section
                 role="tabpanel"
                 aria-labelledby={`${id}-Meeting`}
@@ -917,6 +934,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 )}
               </section>
             </fieldset>
+
             {program && tab === 'Members' && (
               <section
                 role="tabpanel"
@@ -927,6 +945,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 <ProgramMembers programId={program.id} />
               </section>
             )}
+
             {Object.entries(form.formState.errors)
               .filter(([field]) => field !== 'root')
               .map(
@@ -950,12 +969,13 @@ export function ProgramForm({ program }: { program?: Program }) {
                   form.formState.errors.root.server?.message}
               </p>
             )}
+
             {editable && tab !== 'Members' && (
               <div className="flex justify-end gap-2 border-t pt-4">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/dashboard/connect')}
+                  onClick={() => void navigate({ to: '/dashboard/connect' })}
                 >
                   Cancel
                 </Button>
@@ -976,6 +996,7 @@ export function ProgramForm({ program }: { program?: Program }) {
           </form>
         </CardContent>
       </Card>
+
       <MessagePreview values={values} />
     </div>
   );

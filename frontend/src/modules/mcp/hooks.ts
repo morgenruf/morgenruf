@@ -1,19 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import { useServices } from '@/common/api/services-context';
 import { useSession } from '@/common/auth/use-session';
 
+import { mcpKeysOptions } from './queries';
+
 export function useMcp() {
+  const services = useServices();
+  const { api } = services;
   const { data: session } = useSession();
   const key = ['workspace', session?.team_id, 'mcp'];
 
   const client = useQueryClient();
 
-  const keys = useQuery({
-    queryKey: key,
-    enabled: !!session,
-    queryFn: async ({ signal }) => (await api.mcp.listKeys({ signal })).data,
-  });
+  const keys = useQuery(mcpKeysOptions(services, session?.team_id));
 
   const refresh = () => client.invalidateQueries({ queryKey: key });
 

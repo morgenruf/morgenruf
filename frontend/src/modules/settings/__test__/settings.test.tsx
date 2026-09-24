@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TestRouter } from '@/test/router';
 
 import { SettingsPage } from '../pages';
 
@@ -23,8 +24,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     standups: { listStandups: mock.list, updateStandup: mock.update },
     workspace: {
       listModules: mock.modules,
@@ -32,8 +34,14 @@ vi.mock('@/common/api/client', () => ({
       createFeedToken: mock.feed,
       deleteFeedToken: vi.fn(),
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 function view() {
   const client = new QueryClient({
@@ -42,9 +50,9 @@ function view() {
 
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <TestRouter routeId="/dashboard/_authenticated/settings">
         <SettingsPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 
@@ -106,8 +114,10 @@ describe('workspace settings permissions', () => {
   it('invalidates workspace settings after a workspace admin publishes the feed', async () => {
     mock.isAdmin = true;
     const user = userEvent.setup({ delay: null });
+
     const client = view();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
+
     await user.click(
       await screen.findByRole('switch', {
         name: 'Public standup feed enabled',

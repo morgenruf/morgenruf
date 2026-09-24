@@ -15,8 +15,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     automation: {
       listRules: vi.fn().mockResolvedValue({ data: [] }),
       createRule: mock.create,
@@ -27,8 +28,14 @@ vi.mock('@/common/api/client', () => ({
         .fn()
         .mockResolvedValue({ data: [{ id: 'C1', name: 'design' }] }),
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -62,12 +69,16 @@ it('keeps the low participation default and clears a channel target when changin
 
   await user.type(screen.getByLabelText('Slack user ID'), 'U1');
   await chooseOption(user, 'Action', 'Post to channel');
+
   expect(
     screen.getByRole('combobox', { name: 'Slack channel' }),
   ).toHaveTextContent('Choose a channel');
+
   await chooseOption(user, 'Slack channel', '#design');
   await chooseOption(user, 'Action', 'Send direct message');
+
   expect(screen.getByLabelText('Slack user ID')).toHaveValue('');
+
   await user.type(screen.getByLabelText('Slack user ID'), 'U2');
   await user.click(screen.getByRole('button', { name: 'Save rule' }));
 
@@ -85,6 +96,7 @@ it('keeps the low participation default and clears a channel target when changin
 
 it('updates trigger-dependent fields and resets selects when reopening from a template', async () => {
   const user = userEvent.setup({ delay: null });
+
   render(
     <QueryClientProvider
       client={
@@ -94,21 +106,27 @@ it('updates trigger-dependent fields and resets selects when reopening from a te
       <AutomationPage />
     </QueryClientProvider>,
   );
+
   await user.click(
     screen.getByRole('button', { name: /Notice a quiet standup/ }),
   );
+
   expect(screen.getByRole('combobox', { name: 'Trigger' })).toHaveTextContent(
     'Low participation',
   );
+
   await chooseOption(user, 'Trigger', 'Standup complete');
+
   expect(
     screen.queryByLabelText('Participation threshold (%)'),
   ).not.toBeInTheDocument();
+
   await chooseOption(user, 'Action', 'Call webhook');
   await user.click(screen.getByRole('button', { name: 'Cancel' }));
   await user.click(
     screen.getByRole('button', { name: /Notice a quiet standup/ }),
   );
+
   expect(screen.getByRole('combobox', { name: 'Trigger' })).toHaveTextContent(
     'Low participation',
   );

@@ -1,4 +1,13 @@
-import { useState, type ComponentType } from 'react';
+import { useState, type FunctionComponent } from 'react';
+import {
+  createLazyRoute,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router';
 import {
   act,
   fireEvent,
@@ -8,18 +17,16 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  createMemoryRouter,
-  RouterProvider,
-  type RouteObject,
-} from 'react-router';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+import { createApplicationServices } from '@/common/api/services';
+import { parseSearch, stringifySearch } from '@/common/routing/search';
 import { deferred } from '@/test/deferred';
 import { mockViewport } from '@/test/match-media';
 
 import { DashboardHydrateFallback, DashboardLayout } from '../dashboard-layout';
-import { dashboardRoutes } from '../dashboard-routes';
+import { dashboardViews } from '../dashboard-routes';
+import { AppProviders } from '../providers';
 
 const state = vi.hoisted(() => ({
   sessionPending: false,
@@ -29,6 +36,7 @@ const state = vi.hoisted(() => ({
     { name: 'standup', available: true, active: true, missing_scopes: [] },
   ],
 }));
+
 vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({
     isPending: state.sessionPending,
@@ -52,6 +60,7 @@ vi.mock('@/common/api/use-workspace-modules', () => ({
 
 function FormPage() {
   const [value, setValue] = useState('');
+
   return (
     <input
       aria-label="Unsaved note"
@@ -61,33 +70,71 @@ function FormPage() {
   );
 }
 
-function view(
-  initial: string,
-  overrides: Record<string, Partial<RouteObject>> = {},
-) {
-  const routes = dashboardRoutes
-    .filter((route) => route.path)
-    .map(
-      (route) =>
-        ({
-          ...route,
-          lazy: undefined,
-          Component: FormPage,
-          ...overrides[route.path!],
-        }) as RouteObject,
-    );
-  const router = createMemoryRouter(
-    [
-      {
-        path: '/dashboard',
-        Component: DashboardLayout,
-        HydrateFallback: DashboardHydrateFallback,
-        children: routes,
-      },
-    ],
-    { initialEntries: [initial] },
-  );
+type Override = {
+  Component?: FunctionComponent;
+  lazy?: () => Promise<{ Component: FunctionComponent }>;
+  loader?: () => unknown;
+};
+
+async function view(initial: string, overrides: Record<string, Override> = {}) {
+  const services = createApplicationServices();
+  const root = createRootRoute({ component: Outlet });
+  const dashboard = createRoute({
+    getParentRoute: () => root,
+    path: '/dashboard',
+    component: DashboardLayout,
+    pendingComponent: DashboardHydrateFallback,
+  });
+  const routes = Object.entries(dashboardViews).map(([name, metadata]) => {
+    const path =
+      (
+        {
+          connectNew: 'connect/new',
+          connectAttendance: 'connect/attendance',
+          connectDetail: 'connect/$programId',
+        } as Record<string, string>
+      )[name] ?? name;
+    const override = overrides[path];
+    const route = createRoute({
+      getParentRoute: () => dashboard,
+      path,
+      staticData: { workspace: metadata },
+      component: override?.Component ?? FormPage,
+      loader: override?.loader,
+      pendingComponent: metadata.Skeleton,
+      validateSearch: (search: Record<string, unknown>) => search,
+    });
+
+    if (override?.lazy)
+      route.lazy(async () =>
+        createLazyRoute(route.id)({
+          component: (await override.lazy!()).Component,
+        }),
+      );
+
+    return route;
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([dashboard.addChildren(routes)]),
+    history: createMemoryHistory({ initialEntries: [initial] }),
+    defaultPendingMs: 0,
+    defaultPendingMinMs: 0,
+    defaultPendingComponent: DashboardHydrateFallback,
+    parseSearch,
+    stringifySearch,
+    Wrap: ({ children }) => (
+      <AppProviders services={services}>{children}</AppProviders>
+    ),
+  });
+  const loading = router.load();
+
+  if (!overrides[initial.replace('/dashboard/', '').split('?')[0]]?.lazy)
+    await loading;
+
   const result = render(<RouterProvider router={router} />);
+
+  await screen.findByRole('main', { hidden: true });
+
   return { router, ...result };
 }
 
@@ -106,79 +153,101 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 it('uses the requested page inside the shell during cold lazy loading', async () => {
-  const page = deferred<{ Component: ComponentType }>();
-  view('/dashboard/members', {
+  const page = deferred<{ Component: FunctionComponent }>();
+
+  await view('/dashboard/members', {
     members: { Component: undefined, lazy: () => page.promise },
   });
+
   expect(
-    screen.getByRole('status', { name: 'Opening your workspace…' }),
+    screen.getByRole('status', { name: 'Loading members…' }),
   ).toBeInTheDocument();
-  expect(screen.getByText('Members')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Members' })).toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
   await act(async () => page.resolve({ Component: FormPage }));
+
   expect(await screen.findByRole('textbox')).toBeInTheDocument();
 });
 
 it('keeps page children unmounted while session or module availability is pending', async () => {
   state.sessionPending = true;
-  const { rerender, router } = view('/dashboard/standups');
+
+  const { rerender, router } = await view('/dashboard/standups');
+
   expect(
     screen.getByRole('status', { name: 'Opening your workspace…' }),
   ).toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
   state.sessionPending = false;
   state.modulesPending = true;
   rerender(<RouterProvider key="modules" router={router} />);
+
   expect(
     screen.getByRole('status', { name: 'Loading standups…' }),
   ).toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
   state.modulesPending = false;
   rerender(<RouterProvider key="ready" router={router} />);
+
   expect(screen.getByRole('textbox')).toBeInTheDocument();
 });
 
 it('shows the latest destination skeleton and preserves the collapsed shell through rapid navigation', async () => {
-  const members = deferred<{ Component: ComponentType }>();
-  const reports = deferred<{ Component: ComponentType }>();
-  const { router } = view('/dashboard/standups', {
+  const members = deferred<{ Component: FunctionComponent }>();
+  const reports = deferred<{ Component: FunctionComponent }>();
+  const { router } = await view('/dashboard/standups', {
     members: { Component: undefined, lazy: () => members.promise },
     reports: { Component: undefined, lazy: () => reports.promise },
   });
+
   await userEvent.click(
     screen.getByRole('button', { name: 'Collapse sidebar' }),
   );
+
   const shell = screen.getByRole('button', { name: 'Expand sidebar' });
   const main = screen.getByRole('main');
+
   main.scrollTop = 300;
+
   let first!: Promise<void>;
+
   act(() => {
-    first = router.navigate('/dashboard/members');
+    first = router.navigate({ to: '/dashboard/members' });
   });
+
   expect(
     await screen.findByRole('status', { name: 'Loading members…' }),
   ).toBeInTheDocument();
+
   let second!: Promise<void>;
+
   act(() => {
-    second = router.navigate('/dashboard/reports');
+    second = router.navigate({ to: '/dashboard/reports' });
   });
+
   expect(
     await screen.findByRole('status', { name: 'Loading reports…' }),
   ).toBeInTheDocument();
   expect(
     screen.queryByRole('status', { name: 'Loading members…' }),
   ).not.toBeInTheDocument();
+
   await act(async () => {
     members.resolve({ Component: FormPage });
-    await first;
   });
+
   expect(
     screen.getByRole('status', { name: 'Loading reports…' }),
   ).toBeInTheDocument();
+
   await act(async () => {
     reports.resolve({ Component: FormPage });
-    await second;
+    await Promise.all([first, second]);
   });
+
   expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBe(shell);
   expect(screen.getByRole('main')).toBe(main);
   expect(main.scrollTop).toBe(0);
@@ -188,43 +257,62 @@ it('shows the latest destination skeleton and preserves the collapsed shell thro
 it('preserves form state and focus during search-only navigation', async () => {
   const loader = deferred<null>();
   let delay = false;
-  const { router } = view('/dashboard/members', {
+  const { router } = await view('/dashboard/members', {
     members: { loader: () => (delay ? loader.promise : null) },
   });
   const input = await screen.findByRole('textbox');
   const main = screen.getByRole('main');
+
   main.scrollTop = 300;
   await userEvent.type(input, 'Keep this draft');
   delay = true;
+
   let navigation!: Promise<void>;
+
   act(() => {
-    navigation = router.navigate('/dashboard/members?q=alex');
+    navigation = router.navigate({
+      to: '/dashboard/members',
+      search: { q: 'alex' },
+      resetScroll: false,
+    });
   });
-  await waitFor(() => expect(router.state.navigation.state).toBe('loading'));
+  await waitFor(() => expect(router.state.status).toBe('pending'));
+
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
   expect(input).toHaveValue('Keep this draft');
   expect(input).toHaveFocus();
+
   await act(async () => {
     loader.resolve(null);
     await navigation;
   });
+
   expect(screen.getByRole('textbox')).toBe(input);
   expect(screen.getByRole('main')).toBe(main);
   expect(main.scrollTop).toBe(300);
 });
 
 it('toggles the sidebar with its button and both keyboard shortcuts', async () => {
-  view('/dashboard/members');
+  await view('/dashboard/members');
+
   const collapse = screen.getByRole('button', { name: 'Collapse sidebar' });
+
   expect(collapse).toHaveAttribute('aria-expanded', 'true');
+
   await userEvent.click(collapse);
+
   const expand = screen.getByRole('button', { name: 'Expand sidebar' });
+
   expect(expand).toHaveAttribute('aria-expanded', 'false');
+
   fireEvent.keyDown(window, { key: 'b', ctrlKey: true });
+
   expect(
     screen.getByRole('button', { name: 'Collapse sidebar' }),
   ).toBeInTheDocument();
+
   fireEvent.keyDown(window, { key: 'b', metaKey: true });
+
   expect(
     screen.getByRole('button', { name: 'Expand sidebar' }),
   ).toBeInTheDocument();
@@ -232,17 +320,19 @@ it('toggles the sidebar with its button and both keyboard shortcuts', async () =
   expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
 });
 
-it('filters unavailable modules and marks the current navigation link', () => {
+it('filters unavailable modules and marks the current navigation link', async () => {
   state.modules.push({
     name: 'kudos',
     available: false,
     active: false,
     missing_scopes: [],
   });
-  view('/dashboard/members');
+  await view('/dashboard/members');
+
   const navigation = within(
     screen.getByRole('navigation', { name: 'Main navigation' }),
   );
+
   expect(
     navigation.queryByRole('link', { name: 'Kudos' }),
   ).not.toBeInTheDocument();
@@ -252,7 +342,9 @@ it('filters unavailable modules and marks the current navigation link', () => {
   expect(
     navigation.getByRole('link', { name: 'Standups' }),
   ).toBeInTheDocument();
+
   const members = navigation.getByRole('link', { name: 'Members' });
+
   expect(members).toHaveAttribute('aria-current', 'page');
   expect(members).toHaveAttribute('data-active');
   expect(navigation.getByRole('link', { name: 'Reports' })).not.toHaveAttribute(
@@ -262,7 +354,7 @@ it('filters unavailable modules and marks the current navigation link', () => {
 
 it.each([true, false])(
   'keeps exact submenu matching with admin permission %s',
-  (canAdminister) => {
+  async (canAdminister) => {
     state.canAdminister = canAdminister;
     state.modules.push({
       name: 'connect',
@@ -270,10 +362,12 @@ it.each([true, false])(
       active: true,
       missing_scopes: [],
     });
-    view('/dashboard/connect/attendance');
+    await view('/dashboard/connect/attendance');
+
     const navigation = within(
       screen.getByRole('navigation', { name: 'Main navigation' }),
     );
+
     expect(
       navigation.getByRole('link', { name: 'Coffee chats' }),
     ).toHaveAttribute('data-active');
@@ -296,24 +390,30 @@ it.each([true, false])(
 );
 
 it('opens mobile navigation after a viewport change and closes it after selecting a route', async () => {
-  view('/dashboard/standups');
+  await view('/dashboard/standups');
   act(() => resizeViewport(390));
   await userEvent.click(
     screen.getByRole('button', { name: 'Open navigation' }),
   );
+
   const dialog = within(await screen.findByRole('dialog'));
+
   expect(
     dialog.getByRole('button', { name: 'Close navigation' }),
   ).toBeInTheDocument();
   expect(dialog.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+
   await userEvent.click(dialog.getByRole('link', { name: 'Members' }));
   await waitFor(() =>
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
   );
+
   expect(
     screen.getByRole('navigation', { name: 'Breadcrumb' }),
   ).toHaveTextContent('Members');
+
   act(() => resizeViewport(1024));
+
   expect(
     screen.getByRole('button', { name: 'Collapse sidebar' }),
   ).toBeInTheDocument();

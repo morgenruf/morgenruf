@@ -10,8 +10,9 @@ vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({ data: { team_id: 'T1' } }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     members: { listMembers: members },
     insights: {
       getInsights: async () => ({
@@ -37,8 +38,14 @@ vi.mock('@/common/api/client', () => ({
         },
       }),
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -61,7 +68,9 @@ it('resolves both insight identities from the same directory', async () => {
       { id: 'U2', display_name: 'Sam', avatar: 'https://example.com/sam.png' },
     ],
   });
+
   const { container } = view();
+
   expect(await screen.findByText('Mina')).toBeInTheDocument();
   expect(await screen.findByText('Sam')).toBeInTheDocument();
   expect(container.querySelectorAll('img')).toHaveLength(2);
@@ -70,7 +79,9 @@ it('resolves both insight identities from the same directory', async () => {
 
 it('keeps insight content and response names visible when the directory fails', async () => {
   members.mockRejectedValue(new Error('Directory unavailable'));
+
   view();
+
   expect(await screen.findByText('Response name')).toBeInTheDocument();
   expect(screen.getByText('Another response name')).toBeInTheDocument();
   expect(screen.getByText('Waiting for access')).toBeInTheDocument();

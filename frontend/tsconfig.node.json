@@ -15,7 +15,9 @@
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
+    "playwright*.config.ts",
     "config/**/*.ts",
+    "e2e/production/**/*.ts",
     "src/test/__test__/*.test.ts"
   ]
 }

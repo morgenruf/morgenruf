@@ -1,20 +1,17 @@
 import type { ReactNode } from 'react';
+import { Navigate, Outlet, useLocation } from '@tanstack/react-router';
 import { ChevronLeft, LayoutDashboard } from 'lucide-react';
-import { Navigate, Outlet, useLocation } from 'react-router';
 import { toast } from 'sonner';
 
-import { api, clearSession } from '@/common/api/client';
 import { errorMessage } from '@/common/api/errors';
+import { useServices, useSessionIdentity } from '@/common/api/services-context';
 import { useSession } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { ModuleGate } from '@/common/components/module-gate';
 import { ErrorState } from '@/common/components/page';
 import { ThemeToggle } from '@/common/components/theme-toggle';
 import { SidebarProvider } from '@/common/components/ui/sidebar';
-import {
-  isLegacyDashboardHash,
-  legacyDashboardPath,
-} from '@/common/lib/routes';
+import type { DashboardRouteMetadata } from '@/common/routing/metadata';
 
 import { AppMain } from './app-main';
 import { AppShellSkeleton } from './app-shell-skeleton';
@@ -24,24 +21,18 @@ export function AppLayout({
   loadingFallback,
   title,
   pendingView,
+  requirement,
 }: {
   loadingFallback: ReactNode;
   title: string;
   pendingView?: { title: string; content: ReactNode };
+  requirement: DashboardRouteMetadata;
 }) {
   const session = useSession();
+  const services = useServices();
+  const identity = useSessionIdentity();
   const location = useLocation();
   const current = pendingView?.title ?? title;
-  const section = location.pathname.split('/')[2];
-
-  const routeModule: Record<string, string> = {
-    standups: 'standup',
-    today: 'insights',
-    automation: 'standup',
-    kudos: 'kudos',
-    insights: 'insights',
-    mcp: 'mcp',
-  };
 
   if (session.isPending)
     return <AppShellSkeleton>{loadingFallback}</AppShellSkeleton>;
@@ -58,13 +49,10 @@ export function AppLayout({
 
   if (!session.data) return <Navigate to="/dashboard/login" replace />;
 
-  if (isLegacyDashboardHash(location.hash))
-    return <Navigate to={legacyDashboardPath(location.hash)} replace />;
-
   async function logout() {
     try {
-      await api.session.logout();
-      clearSession();
+      await services.api.session.logout();
+      services.clearSession();
       window.location.assign('/dashboard/login');
     } catch (error) {
       toast.error(errorMessage(error));
@@ -79,10 +67,12 @@ export function AppLayout({
       >
         Skip to content
       </a>
+
       <AppSidebar
         teamName={session.data.team_name}
         onLogout={() => void logout()}
       />
+
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="relative z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur">
           <AppSidebarTrigger />
@@ -100,19 +90,17 @@ export function AppLayout({
             <ThemeToggle />
           </div>
         </header>
-        <AppMain
-          key={`${session.data.team_id}:${session.data.user_id}`}
-          pathname={location.pathname}
-        >
+
+        <AppMain key={identity} pathname={location.pathname}>
           <LoadingTransition pending={!!pendingView}>
             {pendingView ? (
               pendingView.content
-            ) : routeModule[section] ? (
+            ) : requirement.module && !requirement.customGate ? (
               <ModuleGate
                 loadingFallback={loadingFallback}
-                module={routeModule[section]}
+                module={requirement.module}
                 label={current}
-                requireActive={section !== 'today'}
+                requireActive={requirement.requireActive}
               >
                 <Outlet />
               </ModuleGate>

@@ -15,7 +15,9 @@
     "format": "prettier --write frontend",
     "api:generate": "node scripts/api.mjs",
     "api:check": "node scripts/api.mjs --check",
-    "test:e2e": "pnpm --filter @morgenruf/frontend test:e2e"
+    "test:e2e": "pnpm --filter @morgenruf/frontend test:e2e",
+    "preview": "pnpm --filter @morgenruf/frontend preview",
+    "test:e2e:production": "pnpm --filter @morgenruf/frontend test:e2e:production"
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",

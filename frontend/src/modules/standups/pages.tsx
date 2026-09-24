@@ -1,5 +1,5 @@
+import { getRouteApi, useLocation } from '@tanstack/react-router';
 import { Plus, Search, X } from 'lucide-react';
-import { useSearchParams } from 'react-router';
 
 import { usePermissions } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
@@ -16,6 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/common/components/ui/tabs';
 import { sortedStandups } from './form-utils';
 import { useStandupHealth, useStandupResources, useStandups } from './hooks';
 import { StandupsSkeleton } from './loading';
+import { validateSearch, type Search as StandupsSearch } from './search';
 import { StandupEditor } from './standup-editor';
 import { StandupRow } from './standup-row';
 
@@ -23,23 +24,33 @@ export function StandupsPage() {
   const query = useStandups();
   const health = useStandupHealth();
   const { channels } = useStandupResources();
+
   const { canAdminister } = usePermissions();
   const editable = canAdminister('standup');
-  const [params, setParams] = useSearchParams();
-  const search = params.get('q') ?? '';
-  const status = ['active', 'paused'].includes(params.get('status') ?? '')
-    ? params.get('status')!
-    : '';
-  const selected = params.get('edit');
-  const creating = params.get('new') === 'true';
+
+  const route = getRouteApi('/dashboard/_authenticated/standups');
+  const params = route.useSearch();
+  const navigate = route.useNavigate();
+
+  // Route search commits after loaders; typing needs the latest URL immediately.
+  const search = useLocation({
+    select: (location) => validateSearch.shape.q.parse(location.search.q),
+  });
+
+  const status = params.status;
+  const selected = params.edit;
+  const creating = params.new;
+
   const editing = query.data?.find((item) => String(item.id) === selected);
   const all = query.data ?? [];
+
   const channelNames = new Map(
     channels.data?.map((channel) => [channel.id, channel.name]),
   );
   const metrics = new Map(
     health.data?.schedules?.map((row) => [row.schedule_id, row]),
   );
+
   const needle = search.trim().toLowerCase();
   const filtered = sortedStandups(all).filter(
     (standup) =>
@@ -48,21 +59,16 @@ export function StandupsPage() {
         .toLowerCase()
         .includes(needle),
   );
+
   const updateParams = (
-    values: Record<string, string | null>,
+    values: Partial<Record<keyof StandupsSearch, string | null>>,
     replace = false,
   ) =>
-    setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        for (const [key, value] of Object.entries(values)) {
-          if (value) next.set(key, value);
-          else next.delete(key);
-        }
-        return next;
-      },
-      { replace },
-    );
+    void navigate({
+      search: (previous) => validateSearch.parse({ ...previous, ...values }),
+      replace,
+      resetScroll: false,
+    });
   const openNew = () => updateParams({ new: 'true', edit: null });
 
   return (
@@ -80,6 +86,7 @@ export function StandupsPage() {
           )
         }
       />
+
       <LoadingTransition pending={query.isPending}>
         {query.isPending ? (
           <StandupsSkeleton />
@@ -219,6 +226,7 @@ export function StandupsPage() {
           </div>
         )}
       </LoadingTransition>
+
       {editable && query.data && (creating || editing) && (
         <StandupEditor
           key={editing?.id ?? 'new'}

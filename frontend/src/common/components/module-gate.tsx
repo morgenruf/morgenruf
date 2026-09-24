@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link } from '@tanstack/react-router';
 
 import { useWorkspaceModules } from '@/common/api/use-workspace-modules';
 import { usePermissions } from '@/common/auth/use-session';
@@ -86,7 +86,11 @@ export function ModuleGate({
           }
           action={
             isAdmin && (
-              <Button render={<Link to="/dashboard/settings" />}>
+              <Button
+                nativeButton={false}
+                role="link"
+                render={<Link to="/dashboard/settings" />}
+              >
                 Open workspace settings
               </Button>
             )

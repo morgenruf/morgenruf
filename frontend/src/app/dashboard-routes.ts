@@ -1,7 +1,4 @@
-import type { ComponentType } from 'react';
-import { redirect, type RouteObject } from 'react-router';
-
-import { legacyDashboardPath } from '@/common/lib/routes';
+import type { DashboardRouteMetadata } from '@/common/routing/metadata';
 import { AnalyticsPageSkeleton } from '@/modules/analytics/loading';
 import { AutomationPageSkeleton } from '@/modules/automation/loading';
 import {
@@ -20,166 +17,72 @@ import { StandupsPageSkeleton } from '@/modules/standups/loading';
 import { TodayPageSkeleton } from '@/modules/today/loading';
 import { WebhooksPageSkeleton } from '@/modules/webhooks/loading';
 
-export type LoadingRouteHandle = { title: string; Skeleton: ComponentType };
+export const dashboardViews = {
+  today: {
+    title: 'Today',
+    Skeleton: TodayPageSkeleton,
+    module: 'insights',
+    requireActive: false,
+  },
 
-export const dashboardRoutes: RouteObject[] = [
-  {
-    index: true,
-    loader: () => redirect(legacyDashboardPath(window.location.hash)),
+  standups: {
+    title: 'Standups',
+    Skeleton: StandupsPageSkeleton,
+    module: 'standup',
   },
-  {
-    path: 'today',
-    handle: {
-      title: 'Today',
-      Skeleton: TodayPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/today/pages/today-page')).default,
-    }),
+
+  connect: {
+    title: 'Coffee chats',
+    Skeleton: ConnectListPageSkeleton,
+    module: 'connect',
+    customGate: true,
   },
-  {
-    path: 'standups',
-    handle: {
-      title: 'Standups',
-      Skeleton: StandupsPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/standups/pages')).StandupsPage,
-    }),
+
+  connectNew: {
+    title: 'New coffee chat',
+    Skeleton: ConnectNewPageSkeleton,
+    module: 'connect',
+    customGate: true,
+    administration: 'connect',
   },
-  {
-    path: 'connect',
-    handle: {
-      title: 'Coffee chats',
-      Skeleton: ConnectListPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/connect/pages')).ConnectListPage,
-    }),
+
+  connectAttendance: {
+    title: 'Attendance',
+    Skeleton: ConnectAttendancePageSkeleton,
+    module: 'connect',
+    customGate: true,
   },
-  {
-    path: 'connect/new',
-    handle: {
-      title: 'New coffee chat',
-      Skeleton: ConnectNewPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/connect/pages')).ConnectNewPage,
-    }),
+
+  connectDetail: {
+    title: 'Coffee chat',
+    Skeleton: ConnectDetailPageSkeleton,
+    module: 'connect',
+    customGate: true,
   },
-  {
-    path: 'connect/attendance',
-    handle: {
-      title: 'Attendance',
-      Skeleton: ConnectAttendancePageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/connect/pages'))
-        .ConnectAttendancePage,
-    }),
+
+  settings: { title: 'Settings', Skeleton: SettingsPageSkeleton },
+
+  insights: {
+    title: 'Insights',
+    Skeleton: InsightsPageSkeleton,
+    module: 'insights',
   },
-  {
-    path: 'connect/:programId',
-    handle: {
-      title: 'Coffee chat',
-      Skeleton: ConnectDetailPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/connect/pages')).ConnectDetailPage,
-    }),
+
+  reports: { title: 'Reports', Skeleton: ReportsPageSkeleton },
+
+  analytics: { title: 'Analytics', Skeleton: AnalyticsPageSkeleton },
+
+  members: { title: 'Members', Skeleton: MembersPageSkeleton },
+
+  kudos: { title: 'Kudos', Skeleton: KudosPageSkeleton, module: 'kudos' },
+
+  automation: {
+    title: 'Automation',
+    Skeleton: AutomationPageSkeleton,
+    module: 'standup',
   },
-  {
-    path: 'settings',
-    handle: {
-      title: 'Settings',
-      Skeleton: SettingsPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/settings/pages')).SettingsPage,
-    }),
-  },
-  {
-    path: 'insights',
-    handle: {
-      title: 'Insights',
-      Skeleton: InsightsPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/insights/pages/insights-page'))
-        .default,
-    }),
-  },
-  {
-    path: 'reports',
-    handle: {
-      title: 'Reports',
-      Skeleton: ReportsPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/reports/pages/reports-page')).default,
-    }),
-  },
-  {
-    path: 'analytics',
-    handle: {
-      title: 'Analytics',
-      Skeleton: AnalyticsPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/analytics/pages/analytics-page'))
-        .default,
-    }),
-  },
-  {
-    path: 'members',
-    handle: {
-      title: 'Members',
-      Skeleton: MembersPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/members/pages/members-page')).default,
-    }),
-  },
-  {
-    path: 'kudos',
-    handle: {
-      title: 'Kudos',
-      Skeleton: KudosPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/kudos/pages/kudos-page')).default,
-    }),
-  },
-  {
-    path: 'automation',
-    handle: {
-      title: 'Automation',
-      Skeleton: AutomationPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/automation/pages/automation-page'))
-        .default,
-    }),
-  },
-  {
-    path: 'webhooks',
-    handle: {
-      title: 'Webhooks',
-      Skeleton: WebhooksPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/webhooks/pages/webhooks-page'))
-        .default,
-    }),
-  },
-  {
-    path: 'mcp',
-    handle: {
-      title: 'MCP',
-      Skeleton: McpPageSkeleton,
-    } satisfies LoadingRouteHandle,
-    lazy: async () => ({
-      Component: (await import('@/modules/mcp/pages/mcp-page')).default,
-    }),
-  },
-];
+
+  webhooks: { title: 'Webhooks', Skeleton: WebhooksPageSkeleton },
+
+  mcp: { title: 'MCP', Skeleton: McpPageSkeleton, module: 'mcp' },
+} satisfies Record<string, DashboardRouteMetadata>;

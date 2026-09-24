@@ -22,8 +22,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     webhooks: {
       listWebhooks: vi.fn().mockResolvedValue({
         data: [
@@ -50,8 +51,14 @@ vi.mock('@/common/api/client', () => ({
       listWebhookDeliveries: mock.deliveries,
       testWebhook: mock.test,
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 function view() {
   const client = new QueryClient({
@@ -79,6 +86,7 @@ beforeEach(() => {
 
 it('requires a confirmation to rotate and keeps the returned secret out of cached results', async () => {
   const user = userEvent.setup({ delay: null });
+
   const client = view();
 
   await user.click(
@@ -88,6 +96,7 @@ it('requires a confirmation to rotate and keeps the returned secret out of cache
   expect(mock.rotate).not.toHaveBeenCalled();
 
   const buttons = screen.getAllByRole('button', { name: 'Rotate secret' });
+
   await user.click(buttons[buttons.length - 1]);
 
   expect(await screen.findByTestId('one-time-secret')).toHaveTextContent(

@@ -1,9 +1,15 @@
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.tanstack/
+
+frontend/src/routeTree.gen.ts
 frontend/src/common/api/generated/
 app/openapi.json
 pnpm-lock.yaml
 
 frontend/playwright-report/
 frontend/test-results/
+
+frontend/playwright-report-production/
+frontend/test-results-production/

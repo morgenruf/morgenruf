@@ -1,5 +1,6 @@
 .env
 teams.yaml
+
 __pycache__/
 *.pyc
 *.pyo
@@ -8,15 +9,18 @@ __pycache__/
 venv/
 dist/
 *.egg-info/
+
 .DS_Store
 .netlify/
 app/helm/morgenruf/charts/
 morgenruf-prod-values.yaml
+
 .superpowers/
 
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.tanstack/
 *.tsbuildinfo
 coverage/
 frontend/.env.local
@@ -27,3 +31,6 @@ frontend/test-results/
 # Local Tilt preferences and stable development session key.
 tilt_config.json
 .local/
+
+frontend/playwright-report-production/
+frontend/test-results-production/
