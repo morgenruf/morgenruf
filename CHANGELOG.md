@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.11] - 2026-09-24
+
+### Added
+- **The dashboard shows when each coffee chat runs next.** Programme cards read
+  "Next round: Monday, 28 September", worked out the same way as the scheduler
+  and the Slack App Home, so the three always agree. A pinned date is marked,
+  and a paused programme shows none.
+
+### Fixed
+- A pinned next round date no longer shows a day early for timezones west of
+  UTC.
+
 ## [1.8.10] - 2026-09-24
 
 ### Fixed
