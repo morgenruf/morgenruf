@@ -466,6 +466,11 @@
           "timezone": {
             "type": "string"
           },
+          "upcoming_round": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
           "use_icebreaker": {
             "type": "boolean"
           },

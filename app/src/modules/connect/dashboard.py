@@ -47,9 +47,14 @@ def register_routes(flask_app) -> None:
         except Exception as exc:
             logger.warning("connect list_programs: %s", exc)
             return []
+        from src.modules.connect.rounds import programme_today, upcoming_round_date  # noqa: PLC0415
+
         for p in programs:
             p["created_at"] = p["created_at"].isoformat() if p.get("created_at") else None
             p["last_round"] = p["last_round"].isoformat() if p.get("last_round") else None
+            # Worked out the way the job decides it, so the dashboard, Slack and
+            # the scheduler name the same day. A paused programme has no next round.
+            p["upcoming_round"] = upcoming_round_date(p, programme_today(p)).isoformat() if p.get("enabled") else None
             p["next_round_date"] = p["next_round_date"].isoformat() if p.get("next_round_date") else None
             try:
                 # The same intersection the round itself does: people in the

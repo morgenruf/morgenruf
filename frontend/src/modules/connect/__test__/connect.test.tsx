@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { formatDate } from '@/common/lib/format';
 import { TestRouter } from '@/test/router';
 import { chooseOption } from '@/test/select';
 
@@ -544,4 +545,47 @@ it('changes member participation through the status popup and blocks edits while
 
   await waitFor(() => expect(status).toHaveTextContent('Snoozed 2 weeks'));
   expect(status).toBeEnabled();
+});
+
+it('shows the next round the scheduler will run, marking a pinned date', async () => {
+  mock.admin = true;
+  const shown = (iso: string) =>
+    `Next round: ${formatDate(iso, { weekday: 'long', day: 'numeric', month: 'long' })}`;
+  const program = {
+    ...programDefaults(),
+    id: 2,
+    channel_id: 'C1',
+    created_at: null,
+    team_id: 'T1',
+    enabled: true,
+    upcoming_round: '2026-09-28',
+    next_round_date: null,
+  } as Program;
+  mock.modules.mockResolvedValue({
+    data: [
+      { name: 'connect', available: true, active: true, missing_scopes: [] },
+    ],
+  });
+  mock.programs.mockResolvedValue({ data: [program] });
+
+  const { unmount } = view();
+
+  expect(await screen.findByText(shown('2026-09-28'))).toBeInTheDocument();
+  expect(screen.queryByText(/pinned date/)).not.toBeInTheDocument();
+
+  unmount();
+  mock.programs.mockResolvedValue({
+    data: [
+      {
+        ...program,
+        upcoming_round: '2026-10-12',
+        next_round_date: '2026-10-07',
+      },
+    ],
+  });
+  view();
+
+  expect(
+    await screen.findByText(`${shown('2026-10-12')} (pinned date)`),
+  ).toBeInTheDocument();
 });
