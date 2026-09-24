@@ -52,7 +52,7 @@ export function AppLayout({
   async function logout() {
     try {
       await services.api.session.logout();
-      services.clearSession();
+      services.signOut();
       window.location.assign('/dashboard/login');
     } catch (error) {
       toast.error(errorMessage(error));

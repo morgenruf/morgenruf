@@ -207,6 +207,39 @@ it('redirects only once for concurrent private unauthorized responses', async ()
   );
 });
 
+it('signs out without refreshing guards or redirecting back with next', async () => {
+  const assign = vi.fn();
+  const invalidate = vi.fn();
+  const instance = createApplicationServices({
+    getLocation: () => ({
+      origin: 'https://morgenruf.test',
+      pathname: '/dashboard/members',
+      search: '',
+      assign,
+    }),
+    fetch: vi
+      .fn()
+      .mockResolvedValueOnce(json(session()))
+      .mockImplementation(() =>
+        Promise.resolve(json({ error: 'Expired' }, 401)),
+      ),
+  });
+  instance.setRouterInvalidator(invalidate);
+
+  await instance.api.session.getSession();
+  instance.signOut();
+
+  expect(instance.getIdentity()).toBe('');
+  await expect(instance.api.session.getSession()).rejects.toHaveProperty(
+    'status',
+    401,
+  );
+  await Promise.resolve();
+
+  expect(invalidate).not.toHaveBeenCalled();
+  expect(assign).not.toHaveBeenCalled();
+});
+
 it('notifies identity subscribers and router guards when identity or privileges change', async () => {
   const invalidate = vi.fn();
   const changed = vi.fn();

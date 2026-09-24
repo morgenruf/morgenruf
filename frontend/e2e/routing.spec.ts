@@ -153,6 +153,59 @@ for (const { path, label, endpoint, age } of [
   });
 }
 
+test('report date filters keep every typed digit while stale me refreshes', async ({
+  page,
+  context,
+}) => {
+  await context.request.post(`${backend}/__test__/session?role=admin`);
+  await page.goto('/dashboard/reports');
+
+  const input = page.getByLabel('From');
+
+  await expect(input).toBeVisible();
+  await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
+
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const pattern = '**/dashboard/api/me';
+
+  await page.route(pattern, async (route) => {
+    await ready;
+    await route.continue();
+  });
+  await page.clock.setFixedTime(Date.now() + 61_000);
+
+  const refreshed = page.waitForResponse(pattern);
+
+  try {
+    // Chrome emits a change per year digit; each must stick before the next.
+    for (const value of [
+      '0002-01-15',
+      '0020-01-15',
+      '0202-01-15',
+      '2026-01-15',
+    ]) {
+      await input.fill(value);
+      await expect(input).toHaveValue(value);
+    }
+
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get('date_from') === '2026-01-15',
+    );
+  } finally {
+    release();
+    await refreshed;
+  }
+
+  await expect(input).toHaveValue('2026-01-15');
+
+  await page.reload();
+
+  await expect(input).toHaveValue('2026-01-15');
+});
+
 test('unknown dashboard paths and result routes never bootstrap a private session', async ({
   page,
 }) => {

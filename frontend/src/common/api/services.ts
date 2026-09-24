@@ -93,6 +93,14 @@ export function createApplicationServices(
     }
   }
 
+  // Logout leaves the page, so skip the router refresh and any 401 redirect
+  // that would race the navigation to the login page.
+  function signOut() {
+    redirecting = true;
+    signedOut = true;
+    clearSession();
+  }
+
   const api = createApi({
     ...options,
     getCsrfToken: () => csrfToken,
@@ -158,6 +166,7 @@ export function createApplicationServices(
     queryClient,
     api,
     clearSession,
+    signOut,
     invalidateRouter,
     setRouterInvalidator(fn: () => void | Promise<void>) {
       invalidate = fn;

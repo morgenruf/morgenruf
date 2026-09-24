@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getRouteApi } from '@tanstack/react-router';
+import { getRouteApi, useLocation } from '@tanstack/react-router';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,6 +42,7 @@ import { formatDate } from '@/common/lib/format';
 
 import { exportReports, useReports } from '../hooks';
 import { ReportsSkeleton } from '../loading';
+import { validateSearch } from '../search';
 
 export default function ReportsPage() {
   const api = useApi();
@@ -54,6 +55,16 @@ export default function ReportsPage() {
   const dateFrom = params.date_from ?? '';
   const dateTo = params.date_to ?? '';
   const userId = params.user_id ?? '';
+
+  // Route search commits after loaders; date inputs need the latest URL immediately.
+  const inputFrom = useLocation({
+    select: (location) =>
+      validateSearch.shape.date_from.parse(location.search.date_from),
+  });
+  const inputTo = useLocation({
+    select: (location) =>
+      validateSearch.shape.date_to.parse(location.search.date_to),
+  });
 
   const [dayLimit, setDayLimit] = useState(7);
   const [allParticipation, setAllParticipation] = useState(false);
@@ -185,8 +196,8 @@ export default function ReportsPage() {
             <Input
               id="report-from"
               type="date"
-              value={dateFrom}
-              max={dateTo || undefined}
+              value={inputFrom}
+              max={inputTo || undefined}
               onChange={(event) => filter('date_from', event.target.value)}
             />
           </div>
@@ -195,8 +206,8 @@ export default function ReportsPage() {
             <Input
               id="report-to"
               type="date"
-              value={dateTo}
-              min={dateFrom || undefined}
+              value={inputTo}
+              min={inputFrom || undefined}
               onChange={(event) => filter('date_to', event.target.value)}
             />
           </div>
