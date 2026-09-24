@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getRouteApi } from '@tanstack/react-router';
 import { Download } from 'lucide-react';
-import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
 import type { StandupResponse } from '@/common/api/generated/data-contracts';
+import { useApi } from '@/common/api/services-context';
 import { useSession } from '@/common/auth/use-session';
 import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
@@ -43,11 +44,16 @@ import { exportReports, useReports } from '../hooks';
 import { ReportsSkeleton } from '../loading';
 
 export default function ReportsPage() {
+  const api = useApi();
   const { data: session } = useSession();
-  const [params, setParams] = useSearchParams();
-  const dateFrom = params.get('date_from') ?? '';
-  const dateTo = params.get('date_to') ?? '';
-  const userId = params.get('user_id') ?? '';
+
+  const route = getRouteApi('/dashboard/_authenticated/reports');
+  const params = route.useSearch();
+  const navigate = route.useNavigate();
+
+  const dateFrom = params.date_from ?? '';
+  const dateTo = params.date_to ?? '';
+  const userId = params.user_id ?? '';
 
   const [dayLimit, setDayLimit] = useState(7);
   const [allParticipation, setAllParticipation] = useState(false);
@@ -60,6 +66,7 @@ export default function ReportsPage() {
     date_to: dateTo || undefined,
     user_id: userId || undefined,
   };
+
   const { reports, members } = useReports(filters, !invalidRange);
 
   const names = useMemo(
@@ -79,6 +86,7 @@ export default function ReportsPage() {
     for (const row of reports.data?.standups ?? []) {
       const date =
         row.standup_date || row.submitted_at?.slice(0, 10) || 'Unknown';
+
       groups.set(date, [...(groups.get(date) ?? []), row]);
     }
 
@@ -91,46 +99,37 @@ export default function ReportsPage() {
     setAllParticipation(false);
   }, [dateFrom, dateTo, userId]);
 
-  function filter(name: string, value: string) {
-    // Keep controlled inputs in sync before another edit reads the URL filters.
-    setParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-
-        if (value) next.set(name, value);
-        else next.delete(name);
-
-        return next;
-      },
-      { flushSync: true },
-    );
+  function filter(name: 'date_from' | 'date_to' | 'user_id', value: string) {
+    void navigate({
+      search: (previous) => ({ ...previous, [name]: value }),
+      resetScroll: false,
+    });
   }
 
   function preset(days: number) {
     const end = new Date();
     const start = new Date();
+
     start.setDate(end.getDate() - days + 1);
 
     const iso = (date: Date) =>
       `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-    setParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        next.set('date_from', iso(start));
-        next.set('date_to', iso(end));
-
-        return next;
-      },
-      { flushSync: true },
-    );
+    void navigate({
+      search: (previous) => ({
+        ...previous,
+        date_from: iso(start),
+        date_to: iso(end),
+      }),
+      resetScroll: false,
+    });
   }
 
   async function exportCsv() {
     setExporting(true);
 
     try {
-      const exported = await exportReports({
+      const exported = await exportReports(api, {
         from: dateFrom || undefined,
         to: dateTo || undefined,
       });
@@ -178,6 +177,7 @@ export default function ReportsPage() {
           </Button>
         }
       />
+
       <Card>
         <CardContent className="grid gap-4 pt-1 sm:grid-cols-3">
           <div className="field">
@@ -250,7 +250,7 @@ export default function ReportsPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setParams({}, { flushSync: true })}
+              onClick={() => void navigate({ search: {}, resetScroll: false })}
             >
               Reset filters
             </Button>
@@ -260,6 +260,7 @@ export default function ReportsPage() {
           </div>
         </CardContent>
       </Card>
+
       {invalidRange ? (
         <p role="alert" className="text-sm text-destructive">
           The start date must be on or before the end date.
@@ -358,6 +359,7 @@ export default function ReportsPage() {
                     )}
                   </CardContent>
                 </Card>
+
                 {!grouped.length ? (
                   <EmptyState
                     title="No responses in this window"
@@ -450,6 +452,7 @@ export default function ReportsPage() {
                     </Card>
                   ))
                 )}
+
                 {grouped.length > dayLimit && (
                   <Button
                     variant="outline"

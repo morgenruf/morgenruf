@@ -1,92 +1,69 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import type { Api } from '@/common/api/client';
+import { channelsOptions, modulesOptions } from '@/common/api/queries';
+import { useServices } from '@/common/api/services-context';
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
+import {
+  connectMatchesOptions,
+  connectMembersOptions,
+  connectParticipationOptions,
+  connectProgramsOptions,
+  connectRoundsOptions,
+  connectZoomOptions,
+} from './queries';
+
 export type Program = Awaited<
-  ReturnType<typeof api.connect.listPrograms>
+  ReturnType<Api['connect']['listPrograms']>
 >['data'][number];
-export type ProgramInput = Parameters<typeof api.connect.createProgram>[0];
+export type ProgramInput = Parameters<Api['connect']['createProgram']>[0];
 export type ProgramMemberInput = Parameters<
-  typeof api.connect.updateProgramMember
+  Api['connect']['updateProgramMember']
 >[1];
 
 export function useConnect() {
+  const services = useServices();
   const { data: session } = useSession();
 
-  return useQuery({
-    queryKey: ['workspace', session?.team_id, 'connect', 'programs'],
-    queryFn: ({ signal }) =>
-      api.connect.listPrograms({ signal }).then((r) => r.data),
-    enabled: !!session,
-  });
+  return useQuery(connectProgramsOptions(services, session?.team_id));
 }
 
 export function useConnectCapabilities() {
+  const services = useServices();
   const { data: session } = useSession();
 
-  const modules = useQuery({
-    queryKey: ['workspace', session?.team_id, 'modules'],
-    queryFn: ({ signal }) =>
-      api.workspace.listModules({ signal }).then((r) => r.data),
-    enabled: !!session,
-  });
+  const modules = useQuery(modulesOptions(services, session?.team_id));
 
   return modules;
 }
 
 export function useConnectResources() {
+  const services = useServices();
   const { data: session } = useSession();
 
-  const channels = useQuery({
-    queryKey: ['workspace', session?.team_id, 'channels'],
-    queryFn: ({ signal }) =>
-      api.workspace.listChannels({ signal }).then((r) => r.data),
-    enabled: !!session,
-  });
-
-  const zoom = useQuery({
-    queryKey: ['workspace', session?.team_id, 'connect', 'zoom'],
-    queryFn: ({ signal }) =>
-      api.connect.getZoom({ signal }).then((r) => r.data),
-    enabled: !!session,
-  });
+  const channels = useQuery(channelsOptions(services, session?.team_id));
+  const zoom = useQuery(connectZoomOptions(services, session?.team_id));
 
   return { channels, zoom };
 }
 
 export function useProgramMembers(id: number) {
+  const services = useServices();
   const { data: session } = useSession();
 
-  return useQuery({
-    queryKey: ['workspace', session?.team_id, 'connect', id, 'members'],
-    queryFn: ({ signal }) =>
-      api.connect
-        .listProgramMembers({ programId: id }, { signal })
-        .then((r) => r.data),
-    enabled: !!session && !!id,
-  });
+  return useQuery(connectMembersOptions(services, session?.team_id, id));
 }
 
 export function useAttendance(id: number) {
+  const services = useServices();
   const { data: session } = useSession();
 
-  const rounds = useQuery({
-    queryKey: ['workspace', session?.team_id, 'connect', id, 'rounds'],
-    queryFn: ({ signal }) =>
-      api.connect.listRounds({ programId: id }, { signal }).then((r) => r.data),
-    enabled: !!session && !!id,
-  });
-
-  const participation = useQuery({
-    queryKey: ['workspace', session?.team_id, 'connect', id, 'participation'],
-    queryFn: ({ signal }) =>
-      api.connect
-        .listParticipation({ programId: id, rounds: 6 }, { signal })
-        .then((r) => r.data),
-    enabled: !!session && !!id,
-  });
+  const rounds = useQuery(connectRoundsOptions(services, session?.team_id, id));
+  const participation = useQuery(
+    connectParticipationOptions(services, session?.team_id, id),
+  );
 
   const members = useMemberDirectory({ enabled: !!id });
 
@@ -94,17 +71,15 @@ export function useAttendance(id: number) {
 }
 
 export function useRoundMatches(roundId: number) {
+  const services = useServices();
   const { data: session } = useSession();
 
-  return useQuery({
-    queryKey: ['workspace', session?.team_id, 'connect', 'matches', roundId],
-    queryFn: ({ signal }) =>
-      api.connect.listMatches({ roundId }, { signal }).then((r) => r.data),
-    enabled: !!session && !!roundId,
-  });
+  return useQuery(connectMatchesOptions(services, session?.team_id, roundId));
 }
 
 export function useConnectMutations() {
+  const services = useServices();
+  const { api } = services;
   const client = useQueryClient();
   const { data: session } = useSession();
 
@@ -155,6 +130,8 @@ export function useConnectMutations() {
           queryKey: ['workspace', session?.team_id, 'modules'],
         }),
       ]);
+
+      services.invalidateRouter();
     },
   });
 

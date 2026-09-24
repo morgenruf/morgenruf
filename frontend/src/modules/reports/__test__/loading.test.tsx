@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 import { deferred } from '@/test/deferred';
+import { TestRouter } from '@/test/router';
 
 import ReportsPage from '../pages/reports-page';
 
@@ -11,15 +11,24 @@ const { reports, members } = vi.hoisted(() => ({
   reports: vi.fn(),
   members: vi.fn(),
 }));
+
 vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({ data: { team_id: 'T1' } }),
 }));
-vi.mock('@/common/api/client', () => ({
-  api: {
+
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     reports: { getReports: reports },
     members: { listMembers: members },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -56,19 +65,25 @@ it('shows response identities while the directory loads and upgrades them when a
       ],
     },
   });
+
   const { container } = render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter initialEntries={['/dashboard/reports']}>
+      <TestRouter
+        routeId="/dashboard/_authenticated/reports"
+        initialEntries={['/dashboard/reports']}
+      >
         <ReportsPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
+
   expect(await screen.findAllByText('Response name')).toHaveLength(2);
   expect(screen.getByText('Shipped')).toBeInTheDocument();
+
   await act(async () =>
     directory.resolve({
       data: [
@@ -80,6 +95,7 @@ it('shows response identities while the directory loads and upgrades them when a
       ],
     }),
   );
+
   expect(await screen.findAllByText('Directory name')).toHaveLength(2);
   expect(screen.queryByText('Response name')).not.toBeInTheDocument();
   expect(
@@ -94,16 +110,18 @@ it('shows validation rather than a skeleton for a disabled invalid-range query',
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter
+      <TestRouter
+        routeId="/dashboard/_authenticated/reports"
         initialEntries={[
           '/dashboard/reports?date_from=2026-09-20&date_to=2026-09-01',
         ]}
       >
         <ReportsPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
-  expect(screen.getByRole('alert')).toHaveTextContent(
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
     'The start date must be on or before the end date.',
   );
   await screen.findByRole('combobox', { name: 'Member' });

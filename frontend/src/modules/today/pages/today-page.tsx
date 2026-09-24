@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   CircleAlert,
   CircleCheck,
@@ -7,7 +8,6 @@ import {
   Heart,
   MessagesSquare,
 } from 'lucide-react';
-import { Link } from 'react-router';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { LoadingTransition } from '@/common/components/loading-transition';
@@ -52,6 +52,7 @@ export default function TodayPage() {
           </LoadingTransition>
         }
       />
+
       <LoadingTransition pending={query.isPending}>
         {query.isPending ? (
           <TodaySkeleton />
@@ -97,6 +98,7 @@ export default function TodayPage() {
                   }
                 />
               </div>
+
               {data.blocked.length > 0 && (
                 <Card className="ring-destructive/30">
                   <CardHeader>
@@ -132,6 +134,7 @@ export default function TodayPage() {
                   </CardContent>
                 </Card>
               )}
+
               <div className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
                 <Card>
                   <CardHeader>
@@ -216,6 +219,7 @@ export default function TodayPage() {
                     )}
                   </CardContent>
                 </Card>
+
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
@@ -263,6 +267,7 @@ export default function TodayPage() {
                       )}
                     </CardContent>
                   </Card>
+
                   {data.next_chat && (
                     <Card>
                       <CardHeader>
@@ -281,7 +286,10 @@ export default function TodayPage() {
                       <CardContent>
                         <Link
                           className="font-medium hover:underline"
-                          to={`/dashboard/connect/${data.next_chat.program_id}`}
+                          to="/dashboard/connect/$programId"
+                          params={{
+                            programId: String(data.next_chat.program_id),
+                          }}
                         >
                           {data.next_chat.name}
                         </Link>

@@ -1,4 +1,4 @@
-import { useParams } from 'react-router';
+import { getRouteApi } from '@tanstack/react-router';
 
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
@@ -17,7 +17,7 @@ import { usePublicFeed } from '../hooks';
 import { FeedSkeleton } from '../loading';
 
 export default function FeedPage() {
-  const { token = '' } = useParams();
+  const { token } = getRouteApi('/feed/$token').useParams();
   const query = usePublicFeed(token);
 
   return (
@@ -36,6 +36,7 @@ export default function FeedPage() {
         </a>
         <ThemeToggle />
       </header>
+
       <LoadingTransition pending={query.isPending}>
         {query.isPending ? (
           <FeedSkeleton />
@@ -48,6 +49,7 @@ export default function FeedPage() {
                 title={query.data.title || 'Standup report'}
                 description={formatDate(query.data.date)}
               />
+
               {query.data.standups.length ? (
                 query.data.standups.map((row, index) => (
                   <Card key={`${row.user_id}-${index}`}>

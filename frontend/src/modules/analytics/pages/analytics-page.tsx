@@ -1,5 +1,5 @@
+import { getRouteApi } from '@tanstack/react-router';
 import { CircleAlert, CircleCheck, UserMinus, Users } from 'lucide-react';
-import { useSearchParams } from 'react-router';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { LoadingField } from '@/common/components/loading-skeleton';
@@ -46,13 +46,17 @@ import { useAnalytics } from '../hooks';
 import { AnalyticsSkeleton } from '../loading';
 
 export default function AnalyticsPage() {
-  const [params, setParams] = useSearchParams();
-  const days = params.get('days') === '30' ? 30 : 7;
-  const scheduleId = params.get('schedule') ?? '';
-  const includeUnenrolled = params.get('unenrolled') === 'true';
+  const route = getRouteApi('/dashboard/_authenticated/analytics');
+  const params = route.useSearch();
+  const navigate = route.useNavigate();
+
+  const days = params.days;
+  const scheduleId = params.schedule ?? '';
+  const includeUnenrolled = params.unenrolled;
 
   const query = useAnalytics(days);
   const directory = useMemberDirectory();
+
   const data = query.data;
   const view = data ? analyticsView(data, scheduleId, includeUnenrolled) : null;
 
@@ -64,14 +68,17 @@ export default function AnalyticsPage() {
     })),
   ];
 
-  function filter(key: string, value: string) {
-    setParams((current) => {
-      const next = new URLSearchParams(current);
-
-      if (value) next.set(key, value);
-      else next.delete(key);
-
-      return next;
+  function filter(key: 'schedule' | 'days' | 'unenrolled', value: string) {
+    void navigate({
+      search: (current) => ({
+        ...current,
+        ...(key === 'days'
+          ? { days: value === '30' ? 30 : 7 }
+          : key === 'unenrolled'
+            ? { unenrolled: value === 'true' }
+            : { schedule: value }),
+      }),
+      resetScroll: false,
     });
   }
 
@@ -82,6 +89,7 @@ export default function AnalyticsPage() {
         reserveActionSpace
         description="Participation, blockers, and standup health."
       />
+
       <div
         role="group"
         aria-label="Analytics filters"
@@ -155,6 +163,7 @@ export default function AnalyticsPage() {
           />
         </div>
       </div>
+
       <LoadingTransition pending={query.isPending}>
         {query.isPending ? (
           <AnalyticsSkeleton />
@@ -224,6 +233,7 @@ export default function AnalyticsPage() {
                       description="Members in no active standup"
                     />
                   </div>
+
                   <Card>
                     <CardHeader>
                       <CardTitle>Completion over time</CardTitle>
@@ -261,6 +271,7 @@ export default function AnalyticsPage() {
                       </details>
                     </CardContent>
                   </Card>
+
                   <Card>
                     <CardHeader>
                       <CardTitle>By member</CardTitle>
@@ -347,6 +358,7 @@ export default function AnalyticsPage() {
                       )}
                     </CardContent>
                   </Card>
+
                   {data.schedules.length > 0 && (
                     <Card>
                       <CardHeader>
@@ -408,6 +420,7 @@ export default function AnalyticsPage() {
                       </CardContent>
                     </Card>
                   )}
+
                   {!includeUnenrolled && view.unenrolled.length > 0 && (
                     <p className="text-xs text-muted-foreground">
                       {view.unenrolled.length} members in no standup are hidden.

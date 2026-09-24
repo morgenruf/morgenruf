@@ -1,45 +1,65 @@
-import { matchRoutes, useLocation, useNavigation } from 'react-router';
+import { useRouter, useRouterState } from '@tanstack/react-router';
 
 import { AppLayout } from '@/common/components/layout/app-layout';
 import { AppShellSkeleton } from '@/common/components/layout/app-shell-skeleton';
-import { StandupsPageSkeleton } from '@/modules/standups/loading';
+import type { DashboardRouteMetadata } from '@/common/routing/metadata';
 
-import { dashboardRoutes, type LoadingRouteHandle } from './dashboard-routes';
+import { dashboardViews } from './dashboard-routes';
 
-function dashboardLoadingView(pathname: string) {
-  const handle = matchRoutes(dashboardRoutes, pathname, '/dashboard')?.at(-1)
-    ?.route.handle as LoadingRouteHandle | undefined;
-  const Skeleton = handle?.Skeleton ?? StandupsPageSkeleton;
-
-  return { title: handle?.title ?? 'Standups', content: <Skeleton /> };
+function view(
+  matches: ReadonlyArray<{
+    staticData: { workspace?: DashboardRouteMetadata };
+  }>,
+) {
+  return (
+    matches.filter((match) => match.staticData.workspace).at(-1)?.staticData
+      .workspace ?? dashboardViews.standups
+  );
 }
 
 export function DashboardHydrateFallback() {
-  const location = useLocation();
+  const router = useRouter();
+  const location = useRouterState({ select: (state) => state.location });
+  const { Skeleton } = view(
+    router.matchRoutes(location.pathname, location.search),
+  );
+
   return (
     <AppShellSkeleton>
-      {dashboardLoadingView(location.pathname).content}
+      <Skeleton />
     </AppShellSkeleton>
   );
 }
 
 export function DashboardLayout() {
-  const location = useLocation();
-  const navigation = useNavigation();
-  const current = dashboardLoadingView(location.pathname);
-  const destination = navigation.location;
-  // Filter and dialog URL changes should preserve the current form and page.
-  const pending =
-    destination &&
-    destination.pathname !== location.pathname &&
-    matchRoutes(dashboardRoutes, destination, '/dashboard');
+  const router = useRouter();
+  const state = useRouterState({
+    select: (state) => ({
+      matches: state.matches,
+      status: state.status,
+      location: state.location,
+      resolvedLocation: state.resolvedLocation,
+    }),
+  });
+
+  const current = view(state.matches);
+  const destination =
+    state.status === 'pending' &&
+    state.location.pathname !== state.resolvedLocation?.pathname
+      ? view(router.matchRoutes(state.location.pathname, state.location.search))
+      : undefined;
+  const Skeleton = current.Skeleton;
+  const PendingSkeleton = destination?.Skeleton;
 
   return (
     <AppLayout
       title={current.title}
-      loadingFallback={current.content}
+      loadingFallback={<Skeleton />}
+      requirement={current}
       pendingView={
-        pending ? dashboardLoadingView(destination.pathname) : undefined
+        destination && PendingSkeleton
+          ? { title: destination.title, content: <PendingSkeleton /> }
+          : undefined
       }
     />
   );

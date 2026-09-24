@@ -1,6 +1,6 @@
+import { getRouteApi } from '@tanstack/react-router';
 import { Heart } from 'lucide-react';
 import { useForm, useWatch } from 'react-hook-form';
-import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
@@ -41,10 +41,10 @@ const periodOptions = [7, 30, 90].map((days) => ({
 }));
 
 export default function KudosPage() {
-  const [params, setParams] = useSearchParams();
-  const days = [7, 30, 90].includes(Number(params.get('days')))
-    ? Number(params.get('days'))
-    : 30;
+  const route = getRouteApi('/dashboard/_authenticated/kudos');
+  const params = route.useSearch();
+  const navigate = route.useNavigate();
+  const days = params.days;
 
   const { feed, receivers, givers, config, save, canEdit } = useKudos(days);
   const directory = useMemberDirectory();
@@ -82,7 +82,11 @@ export default function KudosPage() {
             items={periodOptions}
             value={days}
             onValueChange={(value) => {
-              if (value !== null) setParams({ days: String(value) });
+              if (value !== null)
+                void navigate({
+                  search: { days: Number(value) },
+                  resetScroll: false,
+                });
             }}
           >
             <SelectTrigger aria-label="Leaderboard period" className="w-full">
@@ -98,6 +102,7 @@ export default function KudosPage() {
           </Select>
         }
       />
+
       <Card>
         <CardHeader>
           <CardTitle>How it works</CardTitle>
@@ -112,6 +117,7 @@ export default function KudosPage() {
           </CardDescription>
         </CardHeader>
       </Card>
+
       <div className="grid gap-5 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -153,6 +159,7 @@ export default function KudosPage() {
             </LoadingTransition>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Most encouraging</CardTitle>
@@ -196,6 +203,7 @@ export default function KudosPage() {
           </CardContent>
         </Card>
       </div>
+
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Recent appreciation</h2>
         <LoadingTransition pending={feed.isPending}>
@@ -241,6 +249,7 @@ export default function KudosPage() {
           )}
         </LoadingTransition>
       </section>
+
       {canEdit && (
         <Card>
           <CardHeader>
@@ -309,6 +318,7 @@ export default function KudosPage() {
                         />
                       </div>
                     </div>
+
                     <div
                       aria-label="Kudos message preview"
                       className="max-w-lg space-y-2 rounded-lg border bg-muted/30 p-4 text-sm"
@@ -337,6 +347,7 @@ export default function KudosPage() {
                           </p>
                         )}
                     </div>
+
                     {Object.entries(form.formState.errors).map(
                       ([field, error]) =>
                         field !== 'root' &&
@@ -355,6 +366,7 @@ export default function KudosPage() {
                         {form.formState.errors.root.server.message}
                       </p>
                     )}
+
                     <p className="text-xs text-muted-foreground">
                       {config.data?.token_auto
                         ? 'Your token is selected automatically. Choosing a different token turns automatic selection off.'

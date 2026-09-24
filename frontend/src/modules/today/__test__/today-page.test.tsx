@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 import type { Today } from '@/common/api/generated/data-contracts';
+import { TestRouter } from '@/test/router';
 
 import TodayPage from '../pages/today-page';
 
@@ -13,12 +13,19 @@ vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({ data: { team_id: 'T1' } }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     insights: { getToday: mock.today },
     members: { listMembers: mock.members },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -44,9 +51,9 @@ function renderToday(overrides: Partial<Today> = {}) {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter>
+      <TestRouter routeId="/dashboard/_authenticated/today">
         <TodayPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 }
@@ -78,6 +85,7 @@ it('uses directory identities across responses, blockers, awaiting badges, and r
       { id: 'U2', name: 'Marcus Chen', avatar: '/marcus.jpg' },
     ],
   });
+
   const { container } = renderToday({
     counts: { answered: 1, expected: 2, awaiting: 1, blocked: 1 },
     responses: [

@@ -1,5 +1,5 @@
+import { Link, useLocation, useSearch } from '@tanstack/react-router';
 import { CircleCheck, CircleX } from 'lucide-react';
-import { Link, useLocation, useSearchParams } from 'react-router';
 
 import { Button } from '@/common/components/ui/button';
 import {
@@ -63,9 +63,10 @@ const messages: Record<
 };
 
 export default function ResultPage() {
-  const [params] = useSearchParams();
+  const params = useSearch({ strict: false });
   const location = useLocation();
-  const status = params.get('status') ?? params.get('result') ?? 'error';
+
+  const status = params.status ?? params.result ?? 'error';
   const result = messages[status] ?? messages.error;
 
   return (
@@ -81,6 +82,7 @@ export default function ResultPage() {
             <h1>{result.title}</h1>
           </CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-5 text-center">
           <p className="text-sm text-muted-foreground">{result.description}</p>
           {location.pathname.startsWith('/connect/') && result.success && (
@@ -88,7 +90,11 @@ export default function ResultPage() {
               Your Zoom account can now be used for coffee chats.
             </p>
           )}
-          <Button render={<Link to="/dashboard/standups" />}>
+          <Button
+            nativeButton={false}
+            role="link"
+            render={<Link to="/dashboard/standups" />}
+          >
             Return to Morgenruf
           </Button>
         </CardContent>

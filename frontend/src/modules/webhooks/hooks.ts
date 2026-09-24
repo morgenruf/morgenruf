@@ -1,33 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from '@/common/api/client';
+import type { Api } from '@/common/api/client';
+import { useServices } from '@/common/api/services-context';
 import { useSession } from '@/common/auth/use-session';
 
-export type WebhookInput = Parameters<typeof api.webhooks.createWebhook>[0];
+import {
+  webhookDeliveriesOptions,
+  webhookEventsOptions,
+  webhooksOptions,
+} from './queries';
+
+export type WebhookInput = Parameters<Api['webhooks']['createWebhook']>[0];
 export type Webhook = Awaited<
-  ReturnType<typeof api.webhooks.listWebhooks>
+  ReturnType<Api['webhooks']['listWebhooks']>
 >['data'][number];
 
 export function useWebhooks() {
+  const services = useServices();
+  const { api } = services;
   const { data: session } = useSession();
   const team = session?.team_id;
 
   const client = useQueryClient();
   const key = ['workspace', team, 'webhooks'];
 
-  const webhooks = useQuery({
-    queryKey: [...key, 'list'],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.webhooks.listWebhooks({ signal })).data,
-  });
-
-  const catalog = useQuery({
-    queryKey: [...key, 'events'],
-    enabled: !!team,
-    queryFn: async ({ signal }) =>
-      (await api.webhooks.getWebhookEvents({ signal })).data,
-  });
+  const webhooks = useQuery(webhooksOptions(services, team));
+  const catalog = useQuery(webhookEventsOptions(services, team));
 
   const refresh = () => client.invalidateQueries({ queryKey: key });
 
@@ -83,22 +81,18 @@ export function useWebhooks() {
 }
 
 export function useWebhookDeliveries(id: string, open: boolean) {
+  const services = useServices();
   const { data: session } = useSession();
 
   return useQuery({
-    queryKey: ['workspace', session?.team_id, 'webhooks', 'deliveries', id],
+    ...webhookDeliveriesOptions(services, session?.team_id, id),
     enabled: !!session && open,
-    queryFn: async ({ signal }) =>
-      (
-        await api.webhooks.listWebhookDeliveries(
-          { hookId: id, limit: 20 },
-          { signal },
-        )
-      ).data,
   });
 }
 
 export function useWebhookTest(id: string) {
+  const services = useServices();
+  const { api } = services;
   const { data: session } = useSession();
   const client = useQueryClient();
 

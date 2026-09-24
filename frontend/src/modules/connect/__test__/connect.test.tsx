@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TestRouter } from '@/test/router';
 import { chooseOption } from '@/test/select';
 
 import { Attendance } from '../attendance';
@@ -34,8 +34,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     connect: {
       listPrograms: mock.programs,
       listRounds: mock.rounds,
@@ -59,8 +60,14 @@ vi.mock('@/common/api/client', () => ({
     members: {
       listMembers: mock.members,
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 function view(component = <ConnectListPage />, path = '/') {
   const client = new QueryClient({
@@ -69,7 +76,16 @@ function view(component = <ConnectListPage />, path = '/') {
 
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>{component}</MemoryRouter>
+      <TestRouter
+        routeId={
+          path.match(/^\/dashboard\/connect\/\d+$/)
+            ? '/dashboard/_authenticated/connect/$programId'
+            : '/dashboard/_authenticated/connect'
+        }
+        initialEntries={[path === '/' ? '/dashboard/connect' : path]}
+      >
+        {component}
+      </TestRouter>
     </QueryClientProvider>,
   );
 }
@@ -196,6 +212,7 @@ describe('coffee chats', () => {
     );
 
     await user.click(screen.getByRole('button', { expanded: true }));
+
     expect(screen.queryByText('Mina')).not.toBeInTheDocument();
   });
 
@@ -222,6 +239,7 @@ describe('coffee chats', () => {
       ],
     });
     const user = userEvent.setup();
+
     view(<Attendance programId={2} />);
 
     expect(
@@ -229,6 +247,7 @@ describe('coffee chats', () => {
         'Names are temporarily unavailable; Slack IDs are shown.',
       ),
     ).toBeInTheDocument();
+
     const rows = within(
       screen.getByRole('table', {
         name: 'Participation over the last 6 rounds',
@@ -236,7 +255,9 @@ describe('coffee chats', () => {
     ).getAllByRole('row');
     expect(rows[1]).toHaveTextContent('U2');
     expect(rows[2]).toHaveTextContent('U1');
+
     await user.click(screen.getByRole('button', { expanded: false }));
+
     expect(await screen.findAllByText('U1')).toHaveLength(2);
     expect(screen.getAllByText('U2')).toHaveLength(2);
     expect(screen.getByText('No answered outcomes yet')).toBeInTheDocument();
@@ -276,9 +297,15 @@ it('associates exact field labels without incorporating select options into thei
 it('requires a coffee chat channel and submits numeric choices across tabs', async () => {
   mock.admin = true;
   const user = userEvent.setup({ delay: null });
+
   view(<ProgramForm />);
-  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+
+  await user.click(
+    await screen.findByRole('button', { name: 'Create coffee chat' }),
+  );
+
   expect(await screen.findByText('Choose a channel.')).toBeInTheDocument();
+
   const channel = await screen.findByRole('combobox', {
     name: 'Draw people from',
   });
@@ -286,26 +313,37 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
     'Everyone eligible in this channel can be paired. People can opt out from Slack.',
   );
   await waitFor(() => expect(channel).toHaveFocus());
+
   // React Hook Form schedules a second focus pass after invalid submission.
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+
   expect(mock.create).not.toHaveBeenCalled();
+
   await chooseOption(user, 'Draw people from', '#engineering');
   await chooseOption(user, 'Repeat every', '3 weeks');
   await chooseOption(user, 'On', 'Friday');
   await chooseOption(user, 'On', 'Monday');
+
   await user.click(screen.getByRole('tab', { name: 'Matching' }));
   await chooseOption(user, 'People in each group', '4 people');
+
   await user.click(screen.getByRole('tab', { name: 'Message' }));
   await chooseOption(user, 'How your team works', 'Fully remote');
+
   await user.click(screen.getByRole('tab', { name: 'Meeting' }));
   await chooseOption(user, 'Meeting length', '45 minutes');
   await chooseOption(user, 'How they meet', 'They sort it out');
+
   expect(
     screen.queryByLabelText('Shared meeting link'),
   ).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+
+  await user.click(
+    await screen.findByRole('button', { name: 'Create coffee chat' }),
+  );
+
   await waitFor(() =>
     expect(mock.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -323,12 +361,15 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
 
 it('disables coffee chat choices for read-only members', async () => {
   const user = userEvent.setup({ delay: null });
+
   view(<ProgramForm />);
   const channel = await screen.findByRole('combobox', {
     name: 'Draw people from',
   });
   expect(channel).toBeDisabled();
+
   await user.click(channel);
+
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   expect(screen.getByRole('combobox', { name: 'Repeat every' })).toBeDisabled();
   expect(screen.getByRole('combobox', { name: 'On' })).toBeDisabled();
@@ -337,13 +378,18 @@ it('disables coffee chat choices for read-only members', async () => {
 it('reveals an invalid meeting link on its tab and allows saving after correction', async () => {
   mock.admin = true;
   const user = userEvent.setup({ delay: null });
+
   view(<ProgramForm />);
+
   await chooseOption(user, 'Draw people from', '#engineering');
   await user.click(screen.getByRole('tab', { name: 'Meeting' }));
+
   const link = screen.getByLabelText('Shared meeting link');
   await user.type(link, 'bad-url');
   await user.click(screen.getByRole('tab', { name: 'Basics' }));
-  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+  await user.click(
+    await screen.findByRole('button', { name: 'Create coffee chat' }),
+  );
 
   await waitFor(() => expect(link).toBeVisible());
   expect(link).toHaveFocus();
@@ -354,7 +400,10 @@ it('reveals an invalid meeting link on its tab and allows saving after correctio
 
   await user.clear(link);
   await user.type(link, 'https://example.com/meeting');
-  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+  await user.click(
+    await screen.findByRole('button', { name: 'Create coffee chat' }),
+  );
+
   await waitFor(() =>
     expect(mock.create).toHaveBeenCalledWith(
       expect.objectContaining({ meeting_link: 'https://example.com/meeting' }),
@@ -370,10 +419,16 @@ it('keeps the selected values and disables choices while saving a coffee chat', 
       resolveSave = resolve;
     }),
   );
+
   const user = userEvent.setup({ delay: null });
+
   view(<ProgramForm />);
+
   await chooseOption(user, 'Draw people from', '#engineering');
-  await user.click(screen.getByRole('button', { name: 'Create coffee chat' }));
+  await user.click(
+    await screen.findByRole('button', { name: 'Create coffee chat' }),
+  );
+
   await waitFor(() =>
     expect(
       screen.getByRole('combobox', { name: 'Draw people from' }),
@@ -385,6 +440,7 @@ it('keeps the selected values and disables choices while saving a coffee chat', 
   expect(mock.create).toHaveBeenCalledWith(
     expect.objectContaining({ channel_id: 'C1', day_of_week: 0 }),
   );
+
   await act(async () => resolveSave({ data: { id: 9 } }));
 });
 
@@ -411,18 +467,13 @@ it.each([
     mock.programs.mockImplementation(async () => ({ data: [{ ...program }] }));
     mock.update.mockImplementation(async (_params, body: ProgramInput) => {
       program = { ...program, ...body } as Program;
+
       return { data: { ...program } };
     });
+
     const user = userEvent.setup({ delay: null });
-    view(
-      <Routes>
-        <Route
-          path="/dashboard/connect/:programId"
-          element={<ConnectDetailPage />}
-        />
-      </Routes>,
-      '/dashboard/connect/2',
-    );
+    view(<ConnectDetailPage />, '/dashboard/connect/2');
+
     const name = await screen.findByRole('textbox', { name: 'Name' });
     await user.clear(name);
     await user.type(name, 'Updated coffee chat');
@@ -431,7 +482,9 @@ it.each([
       name: enabled ? 'Resume' : 'Pause',
     });
     expect(name).toHaveValue('Updated coffee chat');
+
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
     await waitFor(() => expect(mock.update).toHaveBeenCalledTimes(2));
     expect(program.name).toBe('Updated coffee chat');
     expect(program.enabled).toBe(!enabled);
@@ -447,6 +500,7 @@ it('changes member participation through the status popup and blocks edits while
       resolveUpdate = resolve;
     }),
   );
+
   const user = userEvent.setup({ delay: null });
   const program = {
     ...programDefaults(),
@@ -455,13 +509,16 @@ it('changes member participation through the status popup and blocks edits while
     created_at: null,
     team_id: 'T1',
   } as Program;
+
   view(<ProgramForm program={program} />);
-  await user.click(screen.getByRole('tab', { name: 'Members' }));
+  await user.click(await screen.findByRole('tab', { name: 'Members' }));
   const status = await screen.findByRole('combobox', {
     name: 'Status for Mina',
   });
   expect(status).toHaveTextContent('In the pool');
+
   await chooseOption(user, 'Status for Mina', 'Snoozed 2 weeks');
+
   await waitFor(() =>
     expect(mock.updateMember).toHaveBeenCalledWith(
       { programId: 2, userId: 'U1' },
@@ -469,6 +526,7 @@ it('changes member participation through the status popup and blocks edits while
     ),
   );
   expect(status).toBeDisabled();
+
   mock.programMembers.mockResolvedValue({
     data: [
       {
@@ -483,6 +541,7 @@ it('changes member participation through the status popup and blocks edits while
     ],
   });
   await act(async () => resolveUpdate({ data: { state: 'snoozed' } }));
+
   await waitFor(() => expect(status).toHaveTextContent('Snoozed 2 weeks'));
   expect(status).toBeEnabled();
 });

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import {
   ArrowLeft,
   CalendarDays,
@@ -8,7 +9,6 @@ import {
   Trash,
   Users,
 } from 'lucide-react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
@@ -138,6 +138,7 @@ function ProgramActions({ program }: { program: Program }) {
   const { canAdminister } = usePermissions();
   const { save, remove, run } = useConnectMutations();
   const navigate = useNavigate();
+
   const [runOpen, setRunOpen] = useState(false);
 
   if (!canAdminister('connect')) return null;
@@ -188,6 +189,7 @@ function ProgramActions({ program }: { program: Program }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <Button
         size="sm"
         variant="outline"
@@ -222,7 +224,7 @@ function ProgramActions({ program }: { program: Program }) {
             remove.mutate(program.id, {
               onSuccess: () => {
                 toast.success('Coffee chat deleted');
-                navigate('/dashboard/connect');
+                void navigate({ to: '/dashboard/connect' });
               },
               onError: (error) => toast.error(errorMessage(error)),
             });
@@ -276,7 +278,8 @@ function ProgramList() {
                 <div className="min-w-0 flex-1 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
-                      to={`/dashboard/connect/${program.id}`}
+                      to="/dashboard/connect/$programId"
+                      params={{ programId: String(program.id) }}
                       className="font-semibold hover:text-primary"
                     >
                       {program.name}
@@ -311,7 +314,8 @@ function ProgramList() {
                   )}
                   <div className="flex flex-wrap items-center gap-4">
                     <Link
-                      to={`/dashboard/connect/${program.id}`}
+                      to="/dashboard/connect/$programId"
+                      params={{ programId: String(program.id) }}
                       className="text-sm font-medium text-primary"
                     >
                       {canAdminister('connect')
@@ -319,7 +323,8 @@ function ProgramList() {
                         : 'View details'}
                     </Link>
                     <Link
-                      to={`/dashboard/connect/attendance?program=${program.id}`}
+                      to="/dashboard/connect/attendance"
+                      search={{ program: String(program.id) }}
                       className="text-sm font-medium text-primary"
                     >
                       Attendance
@@ -331,6 +336,7 @@ function ProgramList() {
             </Card>
           ))}
         </div>
+
         {zoom.data?.configured && (
           <p className="text-xs text-muted-foreground">
             {zoom.data.linked} people have linked Zoom
@@ -340,6 +346,7 @@ function ProgramList() {
             .
           </p>
         )}
+
         <div className="space-y-4">
           <h2 className="font-semibold">
             {query.data[0].name} · recent attendance
@@ -349,6 +356,7 @@ function ProgramList() {
       </div>
     );
   }
+
   return (
     <LoadingTransition pending={query.isPending}>
       {renderContent()}
@@ -368,13 +376,16 @@ export function ConnectListPage() {
         description="Small conversations that bring your team closer."
         actions={
           canAdminister('connect') && (
-            <Button onClick={() => navigate('/dashboard/connect/new')}>
+            <Button
+              onClick={() => void navigate({ to: '/dashboard/connect/new' })}
+            >
               <Plus className="size-4" />
               New coffee chat
             </Button>
           )
         }
       />
+
       <ConnectGate loadingFallback={<ConnectListSkeleton />}>
         <ProgramList />
       </ConnectGate>
@@ -400,6 +411,7 @@ export function ConnectNewPage() {
           </Link>
         }
       />
+
       <ConnectGate loadingFallback={<ProgramFormSkeleton />}>
         {canAdminister('connect') ? (
           <ProgramForm />
@@ -415,7 +427,9 @@ export function ConnectNewPage() {
 }
 
 function ProgramDetail() {
-  const { programId } = useParams();
+  const { programId } = getRouteApi(
+    '/dashboard/_authenticated/connect/$programId',
+  ).useParams();
   const query = useConnect();
 
   function renderContent() {
@@ -446,9 +460,12 @@ function ProgramDetail() {
           description={cadenceLabel(program)}
           actions={<ProgramActions program={program} />}
         />
+
         <ProgramForm key={program.id} program={program} />
+
         <Link
-          to={`/dashboard/connect/attendance?program=${program.id}`}
+          to="/dashboard/connect/attendance"
+          search={{ program: String(program.id) }}
           className="inline-block text-sm font-medium text-primary"
         >
           View attendance →
@@ -456,6 +473,7 @@ function ProgramDetail() {
       </div>
     );
   }
+
   return (
     <LoadingTransition pending={query.isPending}>
       {renderContent()}
@@ -473,6 +491,7 @@ export function ConnectDetailPage() {
         <ArrowLeft className="size-4" />
         All coffee chats
       </Link>
+
       <ConnectGate loadingFallback={<ConnectDetailSkeleton />}>
         <ProgramDetail />
       </ConnectGate>
@@ -482,16 +501,18 @@ export function ConnectDetailPage() {
 
 export function ConnectAttendancePage() {
   const query = useConnect();
-  const [params, setParams] = useSearchParams();
+  const route = getRouteApi('/dashboard/_authenticated/connect/attendance');
+  const params = route.useSearch();
+  const navigate = route.useNavigate();
+
   const programOptions =
     query.data?.map((program) => ({
       value: program.id,
       label: program.name,
     })) ?? [];
   const selected =
-    query.data?.find(
-      (program) => String(program.id) === params.get('program'),
-    ) ?? query.data?.[0];
+    query.data?.find((program) => String(program.id) === params.program) ??
+    query.data?.[0];
 
   function renderContent() {
     if (query.isPending) return <ConnectAttendanceSkeleton />;
@@ -521,7 +542,11 @@ export function ConnectAttendancePage() {
               items={programOptions}
               value={selected.id}
               onValueChange={(value) => {
-                if (value !== null) setParams({ program: String(value) });
+                if (value !== null)
+                  void navigate({
+                    search: { program: String(value) },
+                    resetScroll: false,
+                  });
               }}
             >
               <SelectTrigger aria-label="Coffee chat" className="w-40 sm:w-64">
@@ -538,6 +563,7 @@ export function ConnectAttendancePage() {
           )
         }
       />
+
       <ConnectGate loadingFallback={<ConnectAttendanceSkeleton />}>
         <LoadingTransition pending={query.isPending}>
           {renderContent()}

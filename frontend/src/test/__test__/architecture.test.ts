@@ -58,4 +58,24 @@ describe('frontend architecture boundaries', () => {
       ),
     ).toHaveLength(0);
   });
+
+  it.each([
+    "import { Route } from '@/routes/dashboard/_authenticated/route';",
+    "import { getRouter } from '@/router';",
+    "import { routeTree } from '@/routeTree.gen';",
+    "const page = import('@/routes/dashboard/_authenticated/standups');",
+    "export { Route } from '../../../routes/dashboard/_authenticated/route';",
+  ])('prevents shared code and features importing routes: %s', (code) => {
+    expect(check('common/lib/util.ts', code)).toHaveLength(1);
+    expect(check('modules/reports/pages/page.tsx', code)).toHaveLength(1);
+  });
+
+  it('allows file routes to compose feature pages and queries', () => {
+    expect(
+      check(
+        'routes/dashboard/_authenticated/standups.tsx',
+        "import { x } from '@/modules/standups/hooks';",
+      ),
+    ).toHaveLength(0);
+  });
 });

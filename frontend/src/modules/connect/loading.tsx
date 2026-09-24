@@ -22,6 +22,7 @@ export function AttendanceSkeleton() {
           <Skeleton className="h-64 w-full rounded-lg sm:h-72" />
           <Skeleton className="mt-4 h-12 w-full rounded-lg" />
         </SkeletonCard>
+
         <div className="grid gap-5 xl:grid-cols-2">
           <SkeletonCard>
             <SkeletonPeople rows={3} />
@@ -41,6 +42,7 @@ export function ConnectListSkeleton() {
       <div className="space-y-6">
         <SkeletonRows rows={2} />
         <Skeleton className="h-5 w-60 max-w-full" />
+
         <AttendanceSkeleton />
       </div>
     </SkeletonRegion>
@@ -63,6 +65,7 @@ export function ProgramFormSkeleton() {
             <Skeleton className="h-9 w-36" />
           </div>
         </SkeletonCard>
+
         <SkeletonCard>
           <div className="space-y-5">
             <SkeletonPeople rows={1} />
@@ -82,6 +85,7 @@ export function ConnectDetailSkeleton() {
           <Skeleton className="h-7 w-64 max-w-full" />
           <Skeleton className="h-4 w-48" />
         </div>
+
         <ProgramFormSkeleton />
       </div>
     </SkeletonRegion>
@@ -99,13 +103,15 @@ export function ConnectListPageSkeleton() {
     </SkeletonPage>
   );
 }
+
 export function ConnectNewPageSkeleton() {
   return (
-    <SkeletonPage title="New coffee chat">
+    <SkeletonPage title="New coffee chat" label="Loading coffee chat form…">
       <ProgramFormSkeleton />
     </SkeletonPage>
   );
 }
+
 export function ConnectDetailPageSkeleton() {
   return (
     <div className="page">
@@ -114,6 +120,7 @@ export function ConnectDetailPageSkeleton() {
     </div>
   );
 }
+
 export function ConnectAttendancePageSkeleton() {
   return (
     <div className="page">

@@ -1,13 +1,22 @@
-import { Link, useRouteError } from 'react-router';
+import {
+  Link,
+  useRouter,
+  type ErrorComponentProps,
+} from '@tanstack/react-router';
 
 import { ErrorState } from '@/common/components/page';
 
-export function RouteError() {
-  const error = useRouteError();
+export function RouteError({ error, reset }: ErrorComponentProps) {
+  const router = useRouter();
 
   return (
     <div className="page">
-      <ErrorState error={error} retry={() => window.location.reload()} />
+      <ErrorState
+        error={error}
+        retry={() => {
+          void router.invalidate().then(reset);
+        }}
+      />
     </div>
   );
 }

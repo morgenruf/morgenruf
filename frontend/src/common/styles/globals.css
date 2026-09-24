@@ -1,11 +1,27 @@
 @import '@fontsource-variable/geist';
-@import 'tailwindcss';
+
+/* Client and shell builds must scan the same sources, never generated dist files. */
+@import 'tailwindcss' source('../../');
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
+/* The same static document serves every URL; its inline script selects before paint. */
+[data-startup-dashboard] {
+  display: none;
+}
+
+html[data-startup-view='dashboard'] [data-startup-dashboard] {
+  display: block;
+}
+
+html[data-startup-view='dashboard'] [data-startup-public] {
+  display: none;
+}
+
 :root {
   color-scheme: light;
+
   --background: #faf9f6;
   --foreground: #292c42;
   --card: #ffffff;
@@ -25,6 +41,7 @@
   --input: #d8d5ce;
   --ring: #4b54e0;
   --radius: 0.625rem;
+
   --sidebar: #f3f2ef;
   --sidebar-foreground: #292c42;
   --sidebar-primary: var(--primary);
@@ -33,17 +50,20 @@
   --sidebar-accent-foreground: #363db0;
   --sidebar-border: #e8e6e1;
   --sidebar-ring: var(--ring);
+
   --chart-1: #5030d0;
   --chart-2: #007fac;
   --chart-3: #ae7605;
   --chart-4: #e03131;
   --chart-5: #12907a;
+
   --success: #127145;
   --warning: #9a5b00;
 }
 
 .dark {
   color-scheme: dark;
+
   --background: #14161b;
   --foreground: #ebeaf2;
   --card: #1c1f27;
@@ -62,6 +82,7 @@
   --border: #343744;
   --input: #454958;
   --ring: #a4a9ff;
+
   --sidebar: #191c23;
   --sidebar-foreground: #ebeaf2;
   --sidebar-primary: var(--primary);
@@ -70,17 +91,20 @@
   --sidebar-accent-foreground: #c6c9ff;
   --sidebar-border: #343744;
   --sidebar-ring: var(--ring);
+
   --chart-1: #b39bff;
   --chart-2: #53c6f1;
   --chart-3: #f0bd54;
   --chart-4: #ff8795;
   --chart-5: #55c8ae;
+
   --success: #7cdeb0;
   --warning: #f0bd54;
 }
 
 @theme inline {
   --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -99,6 +123,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -107,8 +132,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
   --color-success: var(--success);
   --color-warning: var(--warning);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);

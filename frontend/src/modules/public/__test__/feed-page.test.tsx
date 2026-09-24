@@ -1,14 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
 import { expect, it, vi } from 'vitest';
+
+import { TestRouter } from '@/test/router';
 
 import FeedPage from '../pages/feed-page';
 
 const members = vi.hoisted(() => vi.fn());
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     public: {
       getFeed: async () => ({
         data: {
@@ -27,8 +29,14 @@ vi.mock('@/common/api/client', () => ({
       }),
     },
     members: { listMembers: members },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 vi.mock('@/common/components/theme-toggle', () => ({
   ThemeToggle: () => null,
@@ -41,13 +49,15 @@ it('shows public-feed initials without requesting a private directory', async ()
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter initialEntries={['/feed/public-token']}>
-        <Routes>
-          <Route path="/feed/:token" element={<FeedPage />} />
-        </Routes>
-      </MemoryRouter>
+      <TestRouter
+        routeId="/feed/$token"
+        initialEntries={['/feed/public-token']}
+      >
+        <FeedPage />
+      </TestRouter>
     </QueryClientProvider>,
   );
+
   expect(await screen.findByText('Mina Park')).toBeInTheDocument();
   expect(screen.getByText('MP')).toHaveAttribute('aria-hidden', 'true');
   expect(screen.getByText('Shipped')).toBeInTheDocument();

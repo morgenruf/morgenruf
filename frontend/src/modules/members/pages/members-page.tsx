@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { getRouteApi } from '@tanstack/react-router';
 import { RefreshCw, UserPlus } from 'lucide-react';
-import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 
 import {
@@ -36,6 +36,7 @@ import { Skeleton } from '@/common/components/ui/skeleton';
 
 import { useMembers } from '../hooks';
 import { MembersSkeleton } from '../loading';
+import { validateSearch, type Search } from '../search';
 
 const moduleLabels: Record<string, string> = {
   standup: 'Standups',
@@ -49,11 +50,13 @@ const roleOptions = [
   { value: 'admin', label: 'Admins' },
   { value: 'member', label: 'Members' },
 ];
+
 const trackingOptions = [
   { value: '', label: 'Everyone in Slack' },
   { value: 'tracked', label: 'In Morgenruf' },
   { value: 'untracked', label: 'Not in Morgenruf' },
 ];
+
 const sortOptions = [
   { value: '', label: 'Sort by name' },
   { value: 'role', label: 'Sort by role' },
@@ -61,12 +64,16 @@ const sortOptions = [
 ];
 
 export default function MembersPage() {
-  const [params, setParams] = useSearchParams();
+  const route = getRouteApi('/dashboard/_authenticated/members');
+  const params = route.useSearch();
+  const navigate = route.useNavigate();
+
   const [inviting, setInviting] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
   const [inviteId, setInviteId] = useState('');
 
-  const channel = params.get('channel') ?? '';
+  const channel = params.channel ?? '';
+
   const {
     members,
     inviteMembers,
@@ -89,7 +96,7 @@ export default function MembersPage() {
 
   const isAdmin = session?.role === 'admin';
   const all = members.data ?? [];
-  const q = (params.get('q') ?? '').trim().toLowerCase();
+  const q = (params.q ?? '').trim().toLowerCase();
 
   const filtered = all
     .filter((member) => {
@@ -98,9 +105,9 @@ export default function MembersPage() {
 
       return (
         text.includes(q) &&
-        (!params.get('role') || member.role === params.get('role')) &&
-        (!params.get('tracking') ||
-          (params.get('tracking') === 'tracked'
+        (!params.role || member.role === params.role) &&
+        (!params.tracking ||
+          (params.tracking === 'tracked'
             ? member.tracked !== false
             : member.tracked === false))
       );
@@ -110,29 +117,24 @@ export default function MembersPage() {
         b.name || b.display_name || b.id,
       );
 
-      if (params.get('sort') === 'role')
+      if (params.sort === 'role')
         return (
           Number(b.role === 'admin') - Number(a.role === 'admin') || nameOrder
         );
 
-      if (params.get('sort') === 'timezone')
+      if (params.sort === 'timezone')
         return (a.tz ?? 'UTC').localeCompare(b.tz ?? 'UTC') || nameOrder;
 
       return nameOrder;
     });
 
-  function filter(name: string, value: string) {
-    setParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-
-        if (value) next.set(name, value);
-        else next.delete(name);
-
-        return next;
-      },
-      { replace: true },
-    );
+  function filter(name: keyof Search, value: string) {
+    void navigate({
+      search: (previous) =>
+        validateSearch.parse({ ...previous, [name]: value }),
+      replace: true,
+      resetScroll: false,
+    });
   }
 
   const grantable = (modules.data ?? []).filter(
@@ -170,11 +172,12 @@ export default function MembersPage() {
           </>
         }
       />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Input
           aria-label="Search members"
           placeholder="Search name, handle or email"
-          value={params.get('q') ?? ''}
+          value={params.q ?? ''}
           onChange={(event) => filter('q', event.target.value)}
         />
         <LoadingField
@@ -200,7 +203,7 @@ export default function MembersPage() {
         </LoadingField>
         <Select
           items={roleOptions}
-          value={params.get('role') ?? ''}
+          value={params.role ?? ''}
           onValueChange={(value) => filter('role', value ?? '')}
         >
           <SelectTrigger aria-label="Filter by role" className="w-full">
@@ -216,7 +219,7 @@ export default function MembersPage() {
         </Select>
         <Select
           items={trackingOptions}
-          value={params.get('tracking') ?? ''}
+          value={params.tracking ?? ''}
           onValueChange={(value) => filter('tracking', value ?? '')}
         >
           <SelectTrigger aria-label="Filter by tracking" className="w-full">
@@ -232,7 +235,7 @@ export default function MembersPage() {
         </Select>
         <Select
           items={sortOptions}
-          value={params.get('sort') ?? ''}
+          value={params.sort ?? ''}
           onValueChange={(value) => filter('sort', value ?? '')}
         >
           <SelectTrigger aria-label="Sort members" className="w-full">
@@ -247,6 +250,7 @@ export default function MembersPage() {
           </SelectContent>
         </Select>
       </div>
+
       <LoadingTransition pending={members.isPending}>
         {members.isPending ? (
           <MembersSkeleton />
@@ -406,6 +410,7 @@ export default function MembersPage() {
           </>
         )}
       </LoadingTransition>
+
       <Dialog open={inviting} onOpenChange={setInviting}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -415,6 +420,7 @@ export default function MembersPage() {
               access.
             </DialogDescription>
           </DialogHeader>
+
           <DialogBody>
             <Input
               aria-label="Find a member to invite"
@@ -473,6 +479,7 @@ export default function MembersPage() {
               )}
             </LoadingTransition>
           </DialogBody>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviting(false)}>
               Cancel

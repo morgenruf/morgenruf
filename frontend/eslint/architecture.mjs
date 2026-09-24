@@ -49,7 +49,11 @@ export default {
       const ownFeature = importer[0] === 'modules' ? importer[1] : null;
       const crossesFeature =
         imported?.[0] === 'modules' && imported[1] !== ownFeature;
-      const importsApp = imported?.[0] === 'app';
+      const importsApp =
+        imported?.[0] === 'app' ||
+        imported?.[0] === 'routes' ||
+        /^router(?:\.[cm]?[jt]sx?)?$/.test(imported?.[0] ?? '') ||
+        imported?.[0]?.startsWith('routeTree.gen');
 
       if (crossesFeature || importsApp || !imported) {
         context.report({

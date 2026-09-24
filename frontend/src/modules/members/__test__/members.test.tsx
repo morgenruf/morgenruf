@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TestRouter } from '@/test/router';
 import { chooseOption } from '@/test/select';
 
 import MembersPage from '../pages/members-page';
@@ -26,8 +26,9 @@ vi.mock('@/common/auth/use-session', () => ({
   }),
 }));
 
-vi.mock('@/common/api/client', () => ({
-  api: {
+vi.mock('@/common/api/services-context', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  const api = {
     members: {
       listMembers: mock.members,
       inviteMember: mock.invite,
@@ -50,8 +51,14 @@ vi.mock('@/common/api/client', () => ({
         .fn()
         .mockResolvedValue({ data: [{ id: 1, participants: [] }] }),
     },
-  },
-}));
+  };
+
+  return {
+    ...actual,
+    useApi: () => api,
+    useServices: () => ({ api, invalidateRouter: vi.fn() }),
+  };
+});
 
 const mina = {
   id: 'U1',
@@ -82,9 +89,12 @@ function view(path = '/dashboard/members') {
 
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <TestRouter
+        routeId="/dashboard/_authenticated/members"
+        initialEntries={[path]}
+      >
         <MembersPage />
-      </MemoryRouter>
+      </TestRouter>
     </QueryClientProvider>,
   );
 }
@@ -122,6 +132,7 @@ describe('member management', () => {
 
     const samChoice = await screen.findByRole('button', { name: /Sam/ });
     expect(samChoice.querySelector('img')).toHaveAttribute('src', sam.avatar);
+
     await user.click(samChoice);
 
     expect(mock.invite).not.toHaveBeenCalled();
@@ -160,7 +171,9 @@ it('loads selected channel labels and clears filters without losing other choice
     }),
   );
   const user = userEvent.setup({ delay: null });
+
   view('/dashboard/members?channel=C1&role=admin');
+
   await waitFor(() =>
     expect(
       screen.getByRole('combobox', { name: 'Filter by channel' }),
@@ -169,7 +182,9 @@ it('loads selected channel labels and clears filters without losing other choice
   expect(
     screen.getByRole('combobox', { name: 'Filter by role' }),
   ).toHaveTextContent('Admins');
+
   await chooseOption(user, 'Filter by channel', 'All channels');
+
   await waitFor(() =>
     expect(mock.members).toHaveBeenCalledWith({}, expect.anything()),
   );
@@ -177,16 +192,24 @@ it('loads selected channel labels and clears filters without losing other choice
     screen.getByRole('combobox', { name: 'Filter by role' }),
   ).toHaveTextContent('Admins');
   expect(screen.queryByText('Sam')).not.toBeInTheDocument();
+
   await chooseOption(user, 'Filter by role', 'Members');
+
   expect(await screen.findByText('Sam')).toBeInTheDocument();
   expect(screen.queryByText('Mina')).not.toBeInTheDocument();
+
   await chooseOption(user, 'Filter by role', 'All roles');
   await chooseOption(user, 'Filter by tracking', 'Not in Morgenruf');
+
   expect(screen.queryByText('Mina')).not.toBeInTheDocument();
   expect(screen.getByText('Sam')).toBeInTheDocument();
+
   await chooseOption(user, 'Filter by tracking', 'Everyone in Slack');
+
   expect(screen.getByText('Mina')).toBeInTheDocument();
+
   await chooseOption(user, 'Sort members', 'Sort by role');
+
   expect(
     screen.getByRole('combobox', { name: 'Sort members' }),
   ).toHaveTextContent('Sort by role');
