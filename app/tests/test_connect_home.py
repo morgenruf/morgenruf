@@ -134,3 +134,38 @@ def test_a_forced_round_skips_only_the_cadence_check():
     src = inspect.getsource(jobs.run_round)
     assert "if not force and not is_round_due(" in src
     assert src.count("is_round_due(") == 1
+
+
+def test_a_manual_round_does_not_move_the_next_scheduled_one():
+    """A Monday programme tried by hand on a Thursday still runs that Monday."""
+    prog = {
+        "day_of_week": 0,
+        "interval_weeks": 1,
+        "last_round": THURSDAY,
+        "last_scheduled_round": None,
+    }
+    assert upcoming_round_date(prog, THURSDAY) == date(2026, 9, 21)
+
+
+def test_the_date_always_lands_on_the_programme_weekday():
+    """Counting a week from a Thursday run used to name a Thursday, a day the
+    Monday job never fires on."""
+    prog = {
+        "day_of_week": 0,
+        "interval_weeks": 1,
+        "last_round": date(2026, 9, 17),
+        "last_scheduled_round": date(2026, 9, 17),
+    }
+    nxt = upcoming_round_date(prog, date(2026, 9, 24))
+    assert nxt.weekday() == 0
+    assert nxt == date(2026, 9, 28)
+
+
+def test_a_pinned_date_holds_the_round_until_the_weekday_after_it():
+    prog = {
+        "day_of_week": 0,
+        "interval_weeks": 1,
+        "last_scheduled_round": date(2026, 9, 14),
+        "next_round_date": date(2026, 10, 7),
+    }
+    assert upcoming_round_date(prog, THURSDAY) == date(2026, 10, 12)

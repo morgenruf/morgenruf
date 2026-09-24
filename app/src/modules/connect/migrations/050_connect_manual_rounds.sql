@@ -1,0 +1,12 @@
+-- A round started with "Run now" is an extra round, not a move of the rhythm.
+--
+-- The cadence used to count from the latest round of any kind, so trying a
+-- weekly Monday programme on a Thursday made the following Monday "not due"
+-- and the team silently lost a week. Recording which rounds were manual lets
+-- the cadence count from scheduled rounds only. Moving the rhythm on purpose
+-- is what next_round_date is for.
+--
+-- Existing rounds default to scheduled. That only matters for a programme
+-- whose last round was a manual one, and at worst delays its next round by
+-- the one week the old behaviour already cost.
+ALTER TABLE connect_rounds ADD COLUMN IF NOT EXISTS manual BOOLEAN NOT NULL DEFAULT FALSE;

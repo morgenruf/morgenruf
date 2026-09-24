@@ -11,7 +11,7 @@ round late instead of losing it, which matters when the bot was down.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 def is_round_due(
@@ -69,23 +69,45 @@ def match_status(met, delivered_at) -> str:
 
 
 def upcoming_round_date(program: dict, today: date) -> date:
-    """When the next round falls for a programme, from its own weekday.
+    """When the next round falls for a programme, as the job will decide it.
+
+    The job only fires on the programme's weekday and then asks is_round_due,
+    so this walks those weekdays with the same question. Counting from the last
+    round alone named dates the job never fires on, such as a Thursday for a
+    Monday programme that was last run by hand.
 
     A programme that has never run is due on its next scheduled weekday, not
     today: telling someone who joins on a Thursday that their Monday coffee
     chat is about to happen is simply wrong.
     """
-    last = program.get("last_round")
-    if hasattr(last, "date"):
-        last = last.date()
-    if last:
-        try:
-            weeks = max(1, int(program.get("interval_weeks") or 1))
-        except (TypeError, ValueError):
-            weeks = 1
-        nxt = last + timedelta(weeks=weeks)
-        return nxt if nxt >= today else _next_weekday(today, program.get("day_of_week"))
-    return _next_weekday(today, program.get("day_of_week"))
+    last = _as_date(program.get("last_scheduled_round", program.get("last_round")))
+    pinned = _as_date(program.get("next_round_date"))
+    try:
+        weeks = max(1, int(program.get("interval_weeks") or 1))
+    except (TypeError, ValueError):
+        weeks = 1
+
+    day = _next_weekday(today, program.get("day_of_week"))
+    # Bounded so a pinned date years out cannot spin; ten years of weekdays.
+    for _ in range(520):
+        if is_round_due(weeks, last, day, pinned):
+            return day
+        day += timedelta(days=7)
+    return day
+
+
+def _as_date(value: object) -> date | None:
+    """Rounds come back as dates from some queries and timestamps from others."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
 
 
 def _next_weekday(today: date, day_of_week: object) -> date:
