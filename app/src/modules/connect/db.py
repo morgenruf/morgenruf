@@ -12,7 +12,9 @@ def get_programs(team_id: str) -> list[dict]:
     sql = """
         SELECT p.*,
                (SELECT COUNT(*) FROM connect_rounds r WHERE r.program_id = p.id) AS round_count,
-               (SELECT MAX(scheduled_for) FROM connect_rounds r WHERE r.program_id = p.id) AS last_round
+               (SELECT MAX(scheduled_for) FROM connect_rounds r WHERE r.program_id = p.id) AS last_round,
+               (SELECT MAX(scheduled_for)::date FROM connect_rounds r
+                WHERE r.program_id = p.id AND NOT r.manual) AS last_scheduled_round
         FROM connect_programs p
         WHERE p.team_id = %s
         ORDER BY p.created_at
@@ -140,7 +142,9 @@ def program_for_channel(team_id: str, channel_id: str) -> dict | None:
     """The enabled programme drawing from this channel, if there is one."""
     sql = """
         SELECT p.*,
-               (SELECT MAX(scheduled_for) FROM connect_rounds r WHERE r.program_id = p.id) AS last_round
+               (SELECT MAX(scheduled_for) FROM connect_rounds r WHERE r.program_id = p.id) AS last_round,
+               (SELECT MAX(scheduled_for)::date FROM connect_rounds r
+                WHERE r.program_id = p.id AND NOT r.manual) AS last_scheduled_round
         FROM connect_programs p
         WHERE p.team_id = %s AND p.channel_id = %s AND p.enabled
         LIMIT 1
@@ -275,7 +279,10 @@ def purge(team_id: str) -> None:
 def active_programs() -> list[dict]:
     """Every enabled programme across all workspaces, for job planning."""
     sql = """
-        SELECT p.*, (SELECT MAX(scheduled_for)::date FROM connect_rounds r WHERE r.program_id = p.id) AS last_round
+        SELECT p.*,
+               (SELECT MAX(scheduled_for)::date FROM connect_rounds r WHERE r.program_id = p.id) AS last_round,
+               (SELECT MAX(scheduled_for)::date FROM connect_rounds r
+                WHERE r.program_id = p.id AND NOT r.manual) AS last_scheduled_round
         FROM connect_programs p
         WHERE p.enabled IS TRUE
     """
@@ -287,7 +294,10 @@ def active_programs() -> list[dict]:
 
 def get_program(program_id: int) -> dict | None:
     sql = """
-        SELECT p.*, (SELECT MAX(scheduled_for)::date FROM connect_rounds r WHERE r.program_id = p.id) AS last_round
+        SELECT p.*,
+               (SELECT MAX(scheduled_for)::date FROM connect_rounds r WHERE r.program_id = p.id) AS last_round,
+               (SELECT MAX(scheduled_for)::date FROM connect_rounds r
+                WHERE r.program_id = p.id AND NOT r.manual) AS last_scheduled_round
         FROM connect_programs p WHERE p.id = %s
     """
     with db_conn() as conn:
@@ -297,22 +307,34 @@ def get_program(program_id: int) -> dict | None:
     return dict(row) if row else None
 
 
-def create_round(program_id: int, team_id: str, scheduled_for) -> dict | None:
-    """Start a round, or return None if one already exists for this slot.
+def create_round(program_id: int, team_id: str, scheduled_for, manual: bool = False) -> dict | None:
+    """Start a round, or return None if one already ran today for this programme.
 
-    The unique constraint is the idempotency guard: a duplicate job fire or a
-    scheduler restart cannot produce a second round, and therefore cannot
-    double-message anyone.
+    "Today" is the programme's own calendar day. The unique constraint on
+    (program_id, scheduled_for) only catches an identical timestamp, which two
+    clicks of "Run now" never produce, so the day check is what stops a second
+    set of introductions. The advisory lock makes that check and the insert
+    atomic against a concurrent click or a duplicate job fire.
     """
     sql = """
-        INSERT INTO connect_rounds (program_id, team_id, scheduled_for, state)
-        VALUES (%s, %s, %s, 'pending')
+        INSERT INTO connect_rounds (program_id, team_id, scheduled_for, state, manual)
+        SELECT %(program_id)s, %(team_id)s, %(scheduled_for)s, 'pending', %(manual)s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM connect_rounds r
+            JOIN connect_programs p ON p.id = r.program_id
+            WHERE r.program_id = %(program_id)s
+              AND (r.scheduled_for AT TIME ZONE COALESCE(NULLIF(p.timezone, ''), 'UTC'))::date
+                = (%(scheduled_for)s::timestamptz AT TIME ZONE COALESCE(NULLIF(p.timezone, ''), 'UTC'))::date
+        )
         ON CONFLICT (program_id, scheduled_for) DO NOTHING
         RETURNING *
     """
+    params = {"program_id": program_id, "team_id": team_id, "scheduled_for": scheduled_for, "manual": manual}
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (program_id, team_id, scheduled_for))
+            cur.execute("SELECT pg_advisory_xact_lock(hashtext('connect_rounds'), %s)", (program_id,))
+            cur.execute(sql, params)
             row = cur.fetchone()
     return dict(row) if row else None
 

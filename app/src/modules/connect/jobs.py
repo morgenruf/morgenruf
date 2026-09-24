@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -89,9 +90,15 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
     if not program or not program.get("enabled"):
         return
 
-    today = date.today()
+    # The programme's calendar day, not the server's: the cron fires in the
+    # programme's timezone and the same-day guard in create_round uses it too.
+    try:
+        today = datetime.now(ZoneInfo(program.get("timezone") or "UTC")).date()
+    except (ZoneInfoNotFoundError, ValueError):
+        today = date.today()
+    # Manual rounds are extras, so the cadence counts scheduled rounds only.
     if not force and not is_round_due(
-        program["interval_weeks"], program.get("last_round"), today, program.get("next_round_date")
+        program["interval_weeks"], program.get("last_scheduled_round"), today, program.get("next_round_date")
     ):
         logger.info("connect: programme %s not due today", program_id)
         return
@@ -119,7 +126,7 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         return
 
     scheduled_for = datetime.now(timezone.utc)
-    round_row = cdb.create_round(program_id, team_id, scheduled_for)
+    round_row = cdb.create_round(program_id, team_id, scheduled_for, manual=force)
     if round_row is None:
         logger.info("connect: a round already exists for programme %s today", program_id)
         return
@@ -149,7 +156,8 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
 
     capture("coffee_match_created", team_id, matches=len(groups), participants=len(pool))
     cdb.set_round_state(round_row["id"], "matched", len(pool))
-    if program.get("next_round_date"):
+    # A pinned date is the next scheduled round; a manual extra leaves it in place.
+    if program.get("next_round_date") and not force:
         try:
             cdb.update_program(team_id, program_id, next_round_date=None)
         except Exception:
