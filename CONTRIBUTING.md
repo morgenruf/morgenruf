@@ -160,17 +160,18 @@ Vite runs at <http://localhost:5173> and proxies APIs and authentication to the 
 
 ```bash
 pnpm format:check
-pnpm typecheck
 pnpm lint
-pnpm test
 pnpm build
+pnpm typecheck
+pnpm test
 pnpm --filter @morgenruf/frontend exec playwright install chromium
 pnpm --filter @morgenruf/frontend test:e2e
+pnpm --filter @morgenruf/frontend test:e2e:production
 ```
 
 Run `pnpm format` to apply the shared Prettier formatting rules to the frontend. Formatting commands also work from `frontend/`. See [Frontend formatting](frontend/README.md#formatting) for editor setup and excluded generated files.
 
-Browser tests start an isolated test backend with in-memory fixtures and mocked integrations; they do not contact Slack, Zoom, email providers, or your database. The Python test environment must be installed first. The fixture runner is test-only and is never packaged in the backend image.
+Browser tests start an isolated test backend with in-memory fixtures and mocked integrations; they do not contact Slack, Zoom, email providers, or your database. The Python test environment must be installed first. The fixture runner is test-only and is never packaged in the backend image. The production suite requires Docker and builds the frontend Nginx image, tests its static Start shell on port 5175, and uses the same isolated backend. Use `pnpm preview` for a manual Nginx preview on port 4173; see [Preview and production checks](frontend/README.md#preview-and-production-checks) for proxy and port overrides.
 
 ## API contracts
 
@@ -181,7 +182,7 @@ pnpm api:generate
 pnpm api:check
 ```
 
-Generation invokes the offline HTTP factory and needs neither running services nor credentials. `api:check` writes temporary artifacts and fails when either the OpenAPI document or TypeScript client differs. Frontend builds use the committed client and do not start Python or call a live backend. The deployed schema is available at `/openapi.json`.
+Generation invokes the offline HTTP factory and needs neither running services nor credentials. `api:check` writes temporary artifacts and fails when either the OpenAPI document or TypeScript client differs. Frontend builds use the committed client and do not start Python or call a live backend. TanStack Start prerenders only the request-free root shell to `frontend/dist/client/_shell.html`; session bootstrap belongs to the authenticated route layout, never the root. Start’s Vite plugin generates the committed `src/routeTree.gen.ts`, so build before TypeScript checking after route edits. CI rejects unexpected route-tree regeneration changes. The deployed schema is available at `/openapi.json`.
 
 Never edit generated TypeScript or handwrite duplicate API DTOs. Feature hooks call the generated client and return its types. Add fields to backend schemas before using them in React. See [Frontend architecture](frontend/README.md) for code organization and state conventions.
 
@@ -194,7 +195,9 @@ app/
   openapi.json    # Generated browser API contract
   helm/           # Backend and frontend Kubernetes resources
 frontend/
-  src/app/        # Bootstrap, router, root providers
+  src/router.tsx  # Router and per-router application services
+  src/routes/     # Typed file routes and root document
+  src/app/        # Root providers and dashboard layout
   src/common/     # API client, shared UI, auth, theme, utilities
   src/modules/    # Feature pages, hooks, forms, and tests
   e2e/            # Playwright tests and isolated test backend
