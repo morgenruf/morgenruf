@@ -1,4 +1,4 @@
-FROM node:25-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /workspace
 
 # Node 25 dropped the bundled corepack, so install it rather than relying on the
