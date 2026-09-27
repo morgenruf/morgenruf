@@ -2,9 +2,13 @@
 
 <img src="brand/logo.png" alt="Morgenruf logo: a rooster in sunglasses holding a mug of coffee" width="240">
 
-### Async standups, coffee chats and kudos for Slack. Self-hosted, open source, free for every seat.
+### Async standups, coffee chats and kudos for Slack. Free for every seat, hosted or self-hosted, MIT licensed.
 
-An open-source alternative to Donut, Geekbot, Standuply and HeyTaco, in one app you run yourself. Morgenruf collects async daily standups, pairs people for random coffee chats, handles peer recognition, and answers the questions that need all three at once. Postgres, Docker or Helm, MIT licensed, no per-seat subscription and no data leaving your infrastructure.
+An open-source alternative to Geekbot, Donut, Standuply and HeyTaco, in one app. Morgenruf collects async daily standups, pairs people for random coffee chats, handles peer recognition, and answers the questions that need all three at once. Add it to Slack on the free hosted instance in about two minutes, or run the same MIT code yourself on Docker or Helm and keep every answer in your own Postgres.
+
+<a href="https://api.morgenruf.dev/install?utm_source=github&utm_medium=readme"><img alt="Add to Slack" height="40" width="139" src="https://platform.slack-edge.com/img/add_to_slack.png" srcset="https://platform.slack-edge.com/img/add_to_slack.png 1x, https://platform.slack-edge.com/img/add_to_slack@2x.png 2x"></a>
+
+<sub>Free on the hosted instance CloudDrove runs, at any team size. Prefer your own servers? See [Quick Start](#quick-start).</sub>
 
 [![Release](https://img.shields.io/github/v/release/morgenruf/morgenruf?label=release&color=2ea043)](https://github.com/morgenruf/morgenruf/releases) [![Tests](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml/badge.svg)](https://github.com/morgenruf/morgenruf/actions/workflows/test.yml) [![codecov](https://codecov.io/gh/morgenruf/morgenruf/branch/main/graph/badge.svg)](https://codecov.io/gh/morgenruf/morgenruf) [![Docker pulls](https://img.shields.io/docker/pulls/morgenruf/morgenruf?color=2496ed&logo=docker&logoColor=white)](https://hub.docker.com/r/morgenruf/morgenruf) [![Helm chart](https://img.shields.io/badge/helm-charts.morgenruf.dev-0f1689?logo=helm&logoColor=white)](https://charts.morgenruf.dev) [![Status](https://img.shields.io/badge/status-live-2ea043)](https://status.morgenruf.dev) [![License: MIT](https://img.shields.io/github/license/morgenruf/morgenruf?color=blue)](LICENSE)
 
@@ -20,21 +24,21 @@ An open-source alternative to Donut, Geekbot, Standuply and HeyTaco, in one app 
 
 <img src="docs/screenshots/today.jpg" alt="The Morgenruf dashboard: who has answered today's standup, who is blocked, recent kudos and the next coffee chat" width="100%">
 
-## Why self-host your standup bot
+## Why Morgenruf
 
-Standup tools charge per person per month to send a message and collect a reply. Pairing tools charge again for the introductions. Recognition tools charge a third time. Morgenruf does all three on your own infrastructure, for nothing, and the data never leaves it.
+Standup tools charge per person per month to send a message and collect a reply. Pairing tools charge again for the introductions. Recognition tools charge a third time. Morgenruf does all three for nothing: on the free hosted instance, or on your own infrastructure where the data never leaves it.
 
 | | Morgenruf | Hosted SaaS |
 |---|---|---|
-| Cost per seat | none, any team size | a per-person monthly fee, per product |
-| Where standup data lives | your Postgres | the vendor's |
+| Cost per seat | none, any team size, hosted or self-hosted | a per-person monthly fee, per product |
+| Where standup data lives | your Postgres, or the free hosted instance | the vendor's |
 | Source | MIT, all of it | closed |
 | Standups, pairing and recognition | one app | usually three subscriptions |
 | Kubernetes and Helm | first class | rarely offered |
 | AI assistant access | MCP server included | not offered |
 | Leaving | it is already yours | export and migrate |
 
-This table sticks to what is structural, because feature-by-feature comparisons age badly. If a hosted tool does something you need and Morgenruf does not, [open an issue](https://github.com/morgenruf/morgenruf/issues/new/choose).
+This table sticks to what is structural. For free plan limits and prices of eleven standup bots, each read from the vendor's own pricing page, see the [Slack standup bots comparison](https://morgenruf.dev/compare/standup-bots/?utm_source=github&utm_medium=readme). If a hosted tool does something you need and Morgenruf does not, [open an issue](https://github.com/morgenruf/morgenruf/issues/new/choose).
 
 ## What you get
 
@@ -65,16 +69,16 @@ Morgenruf ships as four modules over one deployment and one database. Each one i
 | Module | What it does | On by default |
 |---|---|---|
 | **Standups** | Async daily standups, summaries, mood, blockers, webhooks | Yes |
-| **Coffee chats** | Random 1:1 pairings from a channel on a cadence, history-aware so the same two people are not matched twice in a row | No — needs extra scopes |
+| **Coffee chats** | Random 1:1 pairings from a channel on a cadence, history-aware so the same two people are not matched twice in a row | No, needs extra scopes |
 | **Kudos** | Peer recognition with a daily allowance, a custom token, and leaderboards for receivers *and* givers | Yes |
 | **Insights** | Questions that need two signals at once: blockers nobody has cleared in days, people who answer every standup and are thanked by nobody | Yes |
 
 A module is only live when all four gates pass, checked in order:
 
-1. **Deploy allowlist** — `MORGENRUF_MODULES=standup,kudos` ships a build with the others present but dark. Unset means no restriction.
-2. **Granted scopes** — Coffee chats needs `mpim:write`, `mpim:history` and `users.profile:read`. A workspace that installed before those scopes existed stays dark until it re-authorises, rather than erroring at runtime.
-3. **Workspace toggle** — per-workspace, from the dashboard.
-4. **Module default** — what a workspace that has never chosen gets.
+1. **Deploy allowlist**: `MORGENRUF_MODULES=standup,kudos` ships a build with the others present but dark. Unset means no restriction.
+2. **Granted scopes**: Coffee chats needs `mpim:write`, `mpim:history` and `users.profile:read`. A workspace that installed before those scopes existed stays dark until it re-authorises, rather than erroring at runtime.
+3. **Workspace toggle**: per-workspace, from the dashboard.
+4. **Module default**: what a workspace that has never chosen gets.
 
 ### Coffee chats
 
@@ -98,7 +102,7 @@ Three days later the bot nudges pairs that have not met, and closes the round on
 
 ### Kudos
 
-`kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over — that is what makes people spend them.
+`kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over. That is what makes people spend them.
 
 **Using the Morgenruf icon as your kudos token:** download it from **Kudos → The token your team gives**, add it in Slack under **Customize workspace → Add custom emoji** with the name `morgenruf`, and the bot picks it up within a day on its own. It falls back if the emoji is ever removed, so a workspace never ends up posting `:morgenruf:` as literal text.
 
@@ -122,6 +126,8 @@ Setting the token by hand switches that off and keeps whatever you choose. Chang
 ---
 
 ## Quick Start
+
+**Don't want to run anything?** [Add to Slack](https://api.morgenruf.dev/install?utm_source=github&utm_medium=readme) installs Morgenruf on the free hosted instance. Invite `@Morgenruf` to a channel and create a standup from the dashboard. Everything below is for running it yourself.
 
 **1. Create the Slack app.** [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → *From manifest*, and paste [`slack-manifest.yaml`](./slack-manifest.yaml). Add `https://<your-domain>/oauth/callback` under **OAuth & Permissions**, then copy the client id, client secret and signing secret.
 
@@ -251,7 +257,7 @@ Then posts a formatted summary to the configured channel:
 | `kudos @teammate <reason>` | Give someone recognition (also `/kudos`) |
 | `help` | Show available commands |
 
-Coffee chat replies are buttons rather than typed commands — **We met**, **Not this time**, **Skip this round** and **Pause** appear on the messages the bot sends, so nothing there can collide with `skip`.
+Coffee chat replies are buttons rather than typed commands: **We met**, **Not this time**, **Skip this round** and **Pause** appear on the messages the bot sends, so nothing there can collide with `skip`.
 
 ---
 
@@ -304,7 +310,7 @@ The fastest way to run Morgenruf locally or on a Mac server.
 
 ### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Mac/Linux/Windows)
-- A Slack app — [create one](https://api.slack.com/apps) using the manifest at `slack-manifest.yaml`
+- A Slack app: [create one](https://api.slack.com/apps) using the manifest at `slack-manifest.yaml`
 
 ### 1. Clone and configure
 
@@ -327,7 +333,7 @@ That's it. The bot is now running at `http://localhost:3000`.
 
 Slack needs to reach your bot. Options:
 
-**Cloudflare Tunnel (recommended — free, no port forwarding):**
+**Cloudflare Tunnel (recommended: free, no port forwarding):**
 ```bash
 brew install cloudflare/cloudflare/cloudflared
 cloudflared tunnel --url http://localhost:3000
@@ -408,7 +414,7 @@ helm upgrade --install morgenruf morgenruf/morgenruf \
   --set app.url="https://api.your-domain.com"
 ```
 
-> **Migrations** run automatically as an init container on every pod start — idempotent and safe.
+> **Migrations** run automatically as an init container on every pod start, and are idempotent and safe.
 
 ### Cloudflare Zero Trust (no ingress controller)
 
@@ -476,7 +482,7 @@ httpRoute:
     namespace: morgenruf
 ```
 
-> ⚠️ **Common mistake:** `slack.clientSecret` and `slack.signingSecret` are **different values**. Both are found on your Slack app's **Basic Information** page. — Client Secret: 32 hex chars (e.g. `346a428c78b0d8c84b70e74d12a58ab5`) — Signing Secret: 32 hex chars, listed separately under "App Credentials"
+> ⚠️ **Common mistake:** `slack.clientSecret` and `slack.signingSecret` are **different values**. Both are found on your Slack app's **Basic Information** page. Client Secret: 32 hex chars (e.g. `346a428c78b0d8c84b70e74d12a58ab5`). Signing Secret: 32 hex chars, listed separately under "App Credentials"
 
 ---
 
@@ -549,17 +555,17 @@ Morgenruf supports Google Chat via the Chat REST API and a service account.
 ### Setup
 
 1. **Create a GCP project** at [console.cloud.google.com](https://console.cloud.google.com)
-2. **Enable the Chat API** — _APIs & Services → Library → Google Chat API → Enable_
-3. **Create a service account** — _IAM & Admin → Service Accounts → Create_
+2. **Enable the Chat API**: _APIs & Services → Library → Google Chat API → Enable_
+3. **Create a service account**: _IAM & Admin → Service Accounts → Create_
 4. **Download the JSON key** for the service account
-5. **Set the env var** — paste the entire JSON as a single line:
+5. **Set the env var**: paste the entire JSON as a single line:
    ```bash
    GOOGLE_CREDENTIALS='{"type":"service_account","project_id":"...","private_key":"...","client_email":"...",...}'
    ```
-6. **Configure the bot in Google Chat Admin** — _admin.google.com → Apps → Google Chat → Manage bots_
+6. **Configure the bot in Google Chat Admin**: _admin.google.com → Apps → Google Chat → Manage bots_
    - Set the **Webhook URL** to: `https://your-domain.com/google/events`
    - Enable _Direct messages_ and _Space messages_
-7. **Restart Morgenruf** — the Google Chat blueprint is registered automatically when `GOOGLE_CREDENTIALS` is set.
+7. **Restart Morgenruf**: the Google Chat blueprint is registered automatically when `GOOGLE_CREDENTIALS` is set.
 
 ### Commands (in Google Chat DM or Space)
 
@@ -575,7 +581,7 @@ Morgenruf supports Google Chat via the Chat REST API and a service account.
 
 ### Is Morgenruf really free?
 
-Yes, and for any number of people. It is MIT licensed and there is no hosted tier to upsell you: you run it, so you pay for the server and the database and nothing else. There is no per-seat pricing to grow into.
+Yes, for any number of people, and there are no paid plans. The hosted instance CloudDrove runs is free, and self-hosted you pay only for your own server and database. It is MIT licensed, so every feature is in this repository.
 
 ### Can I run it without Kubernetes?
 
@@ -583,7 +589,7 @@ Yes. Docker Compose is a `cp .env.example .env` and a `docker compose up -d` awa
 
 ### Where is my standup data stored?
 
-In your own Postgres, and nowhere else. No telemetry is sent anywhere. The only outbound calls are to Slack, to whichever AI provider you configure for summaries (optional, off by default), and to Resend if you turn on digest email.
+Self-hosted, in your own Postgres. The install talks to Slack only, plus Zoom, email (Resend), an AI provider or PostHog analytics if the operator turns those on; all are off by default. On the free hosted instance, answers are stored on servers CloudDrove operates in a Canadian data centre, as the [privacy policy](https://morgenruf.dev/privacy/) sets out.
 
 ### Is this a Donut alternative? A Geekbot alternative?
 
@@ -615,7 +621,7 @@ Both. Delivery is per-person and resumable, so a large channel is a queue rather
 
 Morgenruf was written over a weekend at a Tim Hortons in Kitchener, Ontario, which is also where the name comes from: *Morgenruf* is German for *morning call*, and Kitchener was Berlin, Ontario until 1916. The rooster in the logo is holding a double-double.
 
-Canadian open source, MIT licensed, no venture funding, no per-seat pricing and no hosted tier waiting to charge you once your team grows. Built and maintained by [Anmol Nagpal](https://github.com/anmolnagpal) at [CloudDrove](https://clouddrove.com) in Waterloo Region, with [commercial support](#commercial-support) for teams who would rather not run it themselves. If you are also building open-source developer tools in Canada, [say hello](https://github.com/morgenruf/morgenruf/discussions).
+Canadian open source, MIT licensed, no venture funding, no per-seat pricing and no paid tier waiting to charge you once your team grows: the hosted instance is free too. Built and maintained by [Anmol Nagpal](https://github.com/anmolnagpal) at [CloudDrove](https://clouddrove.com) in Waterloo Region, with [commercial support](#commercial-support) for teams who would rather not run it themselves. If you are also building open-source developer tools in Canada, [say hello](https://github.com/morgenruf/morgenruf/discussions).
 
 ---
 
