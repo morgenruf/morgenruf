@@ -56,6 +56,7 @@ export function standupDefaults(
     post_to_thread: value?.post_to_thread ?? false,
     post_summary: value?.post_summary ?? true,
     notify_on_report: value?.notify_on_report ?? true,
+    sync_with_channel: value?.sync_with_channel ?? false,
     edit_window:
       workspace?.edit_window === '4h' || workspace?.edit_window === 'none'
         ? workspace.edit_window

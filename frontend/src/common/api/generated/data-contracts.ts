@@ -800,6 +800,7 @@ export interface Standup {
   schedule_time: string;
   schedule_tz: string;
   sort_order: string;
+  sync_with_channel: boolean;
   zendesk_base_url: string;
 }
 
@@ -835,6 +836,7 @@ export interface StandupInput {
   schedule_days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
   schedule_time?: string;
   schedule_tz?: string;
+  sync_with_channel?: boolean;
 }
 
 export interface StandupResponse {
