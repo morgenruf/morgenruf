@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.13] - 2026-09-27
+
+### Fixed
+- **A workspace that revoked Morgenruf is no longer retried every minute.**
+  When the pre-standup token check failed, the run re-queued itself in 60
+  seconds with no limit, so a revoked workspace was retried hundreds of times
+  an hour until the pod restarted. Errors no retry can fix (token revoked,
+  workspace inactive or disabled) now skip that run with one warning, and
+  anything else is retried three times, after one, five and fifteen minutes.
+
 ## [1.8.12] - 2026-09-27
 
 ### Fixed
