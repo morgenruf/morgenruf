@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.12] - 2026-09-27
+
+### Fixed
+- **Removing someone from a standup in the dashboard now sticks.** A standup
+  created from Slack with "sync with channel" on replaces its participants
+  with the channel's members before every run, and the dashboard never showed
+  that setting, so a removed person came back the next morning. The editor now
+  has a "Sync with channel members" checkbox; while it is on, the participant
+  picker is hidden. Turn it off to choose people yourself.
+
+### Changed
+- Dependency updates: psycopg2-binary 2.9.13, posthog 7.59.0, resend 2.47.0,
+  sentry-sdk 2.70.0, marshmallow 4.3.1, frontend build image node 26-alpine.
+
 ## [1.8.11] - 2026-09-24
 
 ### Added
