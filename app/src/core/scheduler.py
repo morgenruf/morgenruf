@@ -31,6 +31,17 @@ _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
 # Error substrings Slack returns when a bot token is no longer usable.
 _AUTH_ERROR_MARKERS = ("token_expired", "invalid_auth", "token_revoked", "not_authed")
 
+# Slack errors that no retry can fix: the workspace uninstalled the app, revoked
+# the token, or no longer exists. A standup that hits one of these (after the
+# token refresh has already been tried) is skipped until the next scheduled run.
+_PERMANENT_AUTH_ERRORS = ("token_revoked", "invalid_auth", "account_inactive", "team_disabled", "not_authed")
+
+# Delays before each retry of a standup that failed for any other reason
+# (network, rate limit, a Slack outage). Three tries, then wait for the next
+# scheduled run. Unbounded retries once re-queued a revoked workspace every
+# minute for as long as the pod stayed up.
+_STANDUP_RETRY_DELAYS = (60, 300, 900)
+
 logger = logging.getLogger(__name__)
 
 # Module-level scheduler reference so oauth.py can access it after startup
@@ -180,6 +191,19 @@ def _alert_token_refresh_failure(team_id: str, reason: str) -> None:
         logger.warning("Failed to send ops alert email for %s: %s", team_id, exc)
 
 
+def _slack_error_code(exc: Exception) -> str:
+    """The Slack error code behind an exception, such as "token_revoked", or "" if none."""
+    response = getattr(exc, "response", None)
+    try:
+        code = response.get("error") if response is not None else None
+    except Exception:
+        code = None
+    if code:
+        return str(code)
+    msg = str(exc).lower()
+    return next((marker for marker in _PERMANENT_AUTH_ERRORS if marker in msg), "")
+
+
 def _call_with_auth_retry(team_id: str, client: WebClient, func):
     """Invoke func(client); on auth error, refresh the token and retry once with the same client.
 
@@ -199,7 +223,12 @@ def _call_with_auth_retry(team_id: str, client: WebClient, func):
 
 
 def _schedule_standup_retry(
-    team_id: str, bot_token: str, channel_id: str, schedule_id: int | None, delay_seconds: int = 60
+    team_id: str,
+    bot_token: str,
+    channel_id: str,
+    schedule_id: int | None,
+    delay_seconds: int = 60,
+    attempt: int = 1,
 ) -> None:
     """Enqueue a one-shot retry of a failed standup run after the token has been refreshed."""
     if _scheduler is None:
@@ -210,11 +239,12 @@ def _schedule_standup_retry(
             _send_standup_to_workspace,
             trigger=DateTrigger(run_date=datetime.now(tz=timezone.utc) + timedelta(seconds=delay_seconds)),
             args=[team_id, bot_token, channel_id, schedule_id],
+            kwargs={"retry_attempt": attempt},
             id=retry_id,
-            name=f"Retry standup — {team_id}/{schedule_id or 'workspace'}",
+            name=f"Retry standup {attempt} for {team_id}/{schedule_id or 'workspace'}",
             replace_existing=False,
         )
-        logger.info("Queued retry for standup %s/%s in %ss", team_id, schedule_id, delay_seconds)
+        logger.info("Queued retry %s for standup %s/%s in %ss", attempt, team_id, schedule_id, delay_seconds)
     except Exception as exc:
         logger.warning("Could not queue standup retry for %s/%s: %s", team_id, schedule_id, exc)
 
@@ -293,7 +323,9 @@ def _notify_delivery_failure(client: WebClient, channel_id: str, failed_count: i
         logger.warning("Could not post delivery failure notice to %s: %s", channel_id, exc)
 
 
-def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None) -> None:
+def _send_standup_to_workspace(
+    team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None, retry_attempt: int = 0
+) -> None:
     """DM participants of a standup schedule (or all active members if no schedule)."""
     bot_token = _fresh_bot_token(team_id, bot_token)
     try:
@@ -347,8 +379,27 @@ def _send_standup_to_workspace(team_id: str, bot_token: str, channel_id: str, sc
     try:
         _call_with_auth_retry(team_id, client, lambda c: c.auth_test())
     except Exception as exc:
-        logger.error("Bot token invalid for team %s — skipping standup: %s", team_id, exc)
-        _schedule_standup_retry(team_id, bot_token, channel_id, schedule_id)
+        code = _slack_error_code(exc)
+        if code in _PERMANENT_AUTH_ERRORS:
+            logger.warning(
+                "Skipping standup %s/%s: Slack says %s, so the workspace must reinstall Morgenruf",
+                team_id,
+                schedule_id,
+                code,
+            )
+            return
+        if retry_attempt >= len(_STANDUP_RETRY_DELAYS):
+            logger.error("Giving up on standup %s/%s after %s retries: %s", team_id, schedule_id, retry_attempt, exc)
+            return
+        logger.error("Bot token check failed for team %s, will retry: %s", team_id, exc)
+        _schedule_standup_retry(
+            team_id,
+            bot_token,
+            channel_id,
+            schedule_id,
+            delay_seconds=_STANDUP_RETRY_DELAYS[retry_attempt],
+            attempt=retry_attempt + 1,
+        )
         return
     bot_token = client.token  # pick up any refreshed token
 
