@@ -88,6 +88,7 @@ const standup: Standup = {
   post_to_thread: false,
   notify_on_report: true,
   post_summary: true,
+  sync_with_channel: false,
   registration_error: null,
   next_run: '',
 };
@@ -294,6 +295,37 @@ describe('standup management', () => {
       expect(mock.update).toHaveBeenCalledWith(
         { standupId: 7 },
         expect.objectContaining({ participants: [] }),
+      ),
+    );
+  });
+
+  it('hides the participant picker while synced and saves the toggle off', async () => {
+    mock.list.mockResolvedValue({
+      data: [{ ...standup, participants: ['U1'], sync_with_channel: true }],
+    });
+    const user = userEvent.setup();
+
+    view('/dashboard/standups?edit=7');
+    const sync = await screen.findByRole('checkbox', {
+      name: 'Sync with channel members',
+    });
+
+    expect(sync).toBeChecked();
+    expect(
+      screen.queryByRole('checkbox', { name: 'Mina' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(sync);
+    await user.click(await screen.findByRole('checkbox', { name: 'Mina' }));
+    await user.click(screen.getByRole('button', { name: 'Save standup' }));
+
+    await waitFor(() =>
+      expect(mock.update).toHaveBeenCalledWith(
+        { standupId: 7 },
+        expect.objectContaining({
+          participants: [],
+          sync_with_channel: false,
+        }),
       ),
     );
   });

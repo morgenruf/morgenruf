@@ -616,6 +616,25 @@ class TestScheduleTimingValidation:
         assert resp.status_code == 200
         _db_mock.update_standup_schedule.assert_called_once()
 
+    def test_update_standup_can_turn_off_channel_sync(self, authed_client):
+        """With sync on, the next run puts removed people back, so the form must be able to turn it off."""
+        _db_mock.update_standup_schedule.reset_mock()
+        _db_mock.update_standup_schedule.return_value = _schedule_row(sync_with_channel=False)
+        resp = authed_client.put(
+            "/dashboard/api/standups/1",
+            json={"participants": ["U1"], "sync_with_channel": False},
+        )
+        assert resp.status_code == 200
+        kwargs = _db_mock.update_standup_schedule.call_args.kwargs
+        assert kwargs["sync_with_channel"] is False
+        assert kwargs["participants"] == ["U1"]
+        assert resp.get_json()["sync_with_channel"] is False
+
+    def test_standup_reports_channel_sync(self, authed_client):
+        _db_mock.get_standup_schedules.return_value = [_schedule_row(sync_with_channel=True)]
+        resp = authed_client.get("/dashboard/api/standups")
+        assert resp.get_json()[0]["sync_with_channel"] is True
+
     def test_create_schedule_with_bad_timezone_returns_400(self, authed_client):
         _db_mock.create_standup_schedule.reset_mock()
         resp = authed_client.post("/dashboard/api/standups", json={"name": "Daily", "schedule_tz": "IST"})

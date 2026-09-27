@@ -130,6 +130,7 @@ Standup = model(
                 "post_to_thread",
                 "notify_on_report",
                 "post_summary",
+                "sync_with_channel",
             )
         },
         "id": integer(),
@@ -166,6 +167,7 @@ class StandupInput(ApiSchema):
     post_to_thread = fields.Boolean()
     notify_on_report = fields.Boolean()
     post_summary = fields.Boolean()
+    sync_with_channel = fields.Boolean()
     ai_summary_enabled = fields.Boolean()
     ai_provider = fields.String(validate=validate.OneOf(["openai", "anthropic"]))
     jira_base_url = fields.String()

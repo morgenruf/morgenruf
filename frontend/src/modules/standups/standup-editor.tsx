@@ -148,6 +148,7 @@ function ToggleField({
     | 'post_to_thread'
     | 'post_summary'
     | 'notify_on_report'
+    | 'sync_with_channel'
     | 'ai_summary_enabled';
   label: string;
   help?: string;
@@ -243,6 +244,7 @@ const fieldTabs: Record<string, (typeof tabs)[number]> = {
   name: 'Basics',
   channel_id: 'Basics',
   participants: 'Basics',
+  sync_with_channel: 'Basics',
   schedule_time: 'Schedule',
   schedule_tz: 'Schedule',
   schedule_days: 'Schedule',
@@ -322,6 +324,7 @@ export function StandupEditor({
   const { save } = useStandupMutations();
 
   const participants = values.participants ?? [];
+  const syncWithChannel = !!values.sync_with_channel;
   const memberQuery = memberSearch.trim().toLowerCase();
   const members = resources.members.data ?? [];
   const matchingMembers = members.filter((member) =>
@@ -557,141 +560,150 @@ export function StandupEditor({
                       {errors.participants.message}
                     </p>
                   )}
-                  <p className="text-sm text-muted-foreground">
-                    Leave everyone unselected to include the whole channel.
-                  </p>
-                  <InputGroup className="h-9">
-                    <InputGroupAddon>
-                      <Search aria-hidden="true" />
-                    </InputGroupAddon>
-                    <InputGroupInput
-                      ref={memberSearchInput}
-                      aria-describedby={
-                        errors.participants?.message
-                          ? `${id}-participants-error`
-                          : undefined
-                      }
-                      placeholder="Search participants…"
-                      aria-label="Search participants"
-                      value={memberSearch}
-                      onChange={(event) => setMemberSearch(event.target.value)}
-                    />
-                    {memberSearch && (
-                      <InputGroupAddon align="inline-end">
-                        <InputGroupButton
-                          aria-label="Clear participant search"
-                          size="icon-xs"
-                          onClick={() => {
-                            setMemberSearch('');
-                            memberSearchInput.current?.focus();
+                  <ToggleField
+                    name="sync_with_channel"
+                    label="Sync with channel members"
+                    help="Before each run, participants are replaced with everyone in the channel. Turn this off to choose people yourself."
+                  />
+                  <div hidden={syncWithChannel} className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Leave everyone unselected to include the whole channel.
+                    </p>
+                    <InputGroup className="h-9">
+                      <InputGroupAddon>
+                        <Search aria-hidden="true" />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        ref={memberSearchInput}
+                        aria-describedby={
+                          errors.participants?.message
+                            ? `${id}-participants-error`
+                            : undefined
+                        }
+                        placeholder="Search participants…"
+                        aria-label="Search participants"
+                        value={memberSearch}
+                        onChange={(event) =>
+                          setMemberSearch(event.target.value)
+                        }
+                      />
+                      {memberSearch && (
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupButton
+                            aria-label="Clear participant search"
+                            size="icon-xs"
+                            onClick={() => {
+                              setMemberSearch('');
+                              memberSearchInput.current?.focus();
+                            }}
+                          >
+                            <X aria-hidden="true" />
+                          </InputGroupButton>
+                        </InputGroupAddon>
+                      )}
+                    </InputGroup>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          resources.members.isPending ||
+                          !!resources.members.error ||
+                          !matchingMembers.length
+                        }
+                        onClick={() =>
+                          setValue(
+                            'participants',
+                            [
+                              ...new Set([
+                                ...participants,
+                                ...matchingMembers.map((member) => member.id),
+                              ]),
+                            ],
+                            { shouldDirty: true },
+                          )
+                        }
+                      >
+                        {memberQuery
+                          ? 'Select results'
+                          : 'Select all participants'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setValue('participants', [], { shouldDirty: true })
+                        }
+                      >
+                        Use whole channel
+                      </Button>
+                      <p
+                        className="text-xs text-muted-foreground sm:ml-auto"
+                        role="status"
+                      >
+                        {participants.length
+                          ? `${participants.length} selected`
+                          : 'Everyone in the channel'}
+                      </p>
+                    </div>
+                    <LoadingTransition pending={resources.members.isPending}>
+                      {resources.members.isPending ? (
+                        <SkeletonRegion label="Loading participants…">
+                          <SkeletonPeople />
+                        </SkeletonRegion>
+                      ) : resources.members.error ? (
+                        <ErrorState
+                          error={resources.members.error}
+                          retry={() => resources.members.refetch()}
+                        />
+                      ) : (
+                        <ScrollArea
+                          className="max-h-52 rounded-lg border"
+                          contentClassName="grid gap-2 p-2 sm:grid-cols-2"
+                          viewportProps={{
+                            role: 'region',
+                            'aria-label': 'Participants',
                           }}
                         >
-                          <X aria-hidden="true" />
-                        </InputGroupButton>
-                      </InputGroupAddon>
-                    )}
-                  </InputGroup>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={
-                        resources.members.isPending ||
-                        !!resources.members.error ||
-                        !matchingMembers.length
-                      }
-                      onClick={() =>
-                        setValue(
-                          'participants',
-                          [
-                            ...new Set([
-                              ...participants,
-                              ...matchingMembers.map((member) => member.id),
-                            ]),
-                          ],
-                          { shouldDirty: true },
-                        )
-                      }
-                    >
-                      {memberQuery
-                        ? 'Select results'
-                        : 'Select all participants'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setValue('participants', [], { shouldDirty: true })
-                      }
-                    >
-                      Use whole channel
-                    </Button>
-                    <p
-                      className="text-xs text-muted-foreground sm:ml-auto"
-                      role="status"
-                    >
-                      {participants.length
-                        ? `${participants.length} selected`
-                        : 'Everyone in the channel'}
-                    </p>
+                          {!matchingMembers.length && (
+                            <p className="px-3 py-5 text-center text-sm text-muted-foreground sm:col-span-2">
+                              {members.length
+                                ? 'No participants match your search.'
+                                : 'No participants available.'}
+                            </p>
+                          )}
+                          {matchingMembers.map((member) => (
+                            <label
+                              key={member.id}
+                              className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/60 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/30 has-data-checked:border-primary has-data-checked:bg-primary/5"
+                            >
+                              <Checkbox
+                                className="after:inset-0"
+                                checked={participants.includes(member.id)}
+                                onCheckedChange={(checked) =>
+                                  setValue(
+                                    'participants',
+                                    checked
+                                      ? [...participants, member.id]
+                                      : participants.filter(
+                                          (value) => value !== member.id,
+                                        ),
+                                    { shouldDirty: true },
+                                  )
+                                }
+                              />
+                              <Person
+                                {...resources.members.person(member.id)}
+                                size="compact"
+                              />
+                            </label>
+                          ))}
+                        </ScrollArea>
+                      )}
+                    </LoadingTransition>
                   </div>
-                  <LoadingTransition pending={resources.members.isPending}>
-                    {resources.members.isPending ? (
-                      <SkeletonRegion label="Loading participants…">
-                        <SkeletonPeople />
-                      </SkeletonRegion>
-                    ) : resources.members.error ? (
-                      <ErrorState
-                        error={resources.members.error}
-                        retry={() => resources.members.refetch()}
-                      />
-                    ) : (
-                      <ScrollArea
-                        className="max-h-52 rounded-lg border"
-                        contentClassName="grid gap-2 p-2 sm:grid-cols-2"
-                        viewportProps={{
-                          role: 'region',
-                          'aria-label': 'Participants',
-                        }}
-                      >
-                        {!matchingMembers.length && (
-                          <p className="px-3 py-5 text-center text-sm text-muted-foreground sm:col-span-2">
-                            {members.length
-                              ? 'No participants match your search.'
-                              : 'No participants available.'}
-                          </p>
-                        )}
-                        {matchingMembers.map((member) => (
-                          <label
-                            key={member.id}
-                            className="flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/60 has-focus-visible:border-ring has-focus-visible:ring-2 has-focus-visible:ring-ring/30 has-data-checked:border-primary has-data-checked:bg-primary/5"
-                          >
-                            <Checkbox
-                              className="after:inset-0"
-                              checked={participants.includes(member.id)}
-                              onCheckedChange={(checked) =>
-                                setValue(
-                                  'participants',
-                                  checked
-                                    ? [...participants, member.id]
-                                    : participants.filter(
-                                        (value) => value !== member.id,
-                                      ),
-                                  { shouldDirty: true },
-                                )
-                              }
-                            />
-                            <Person
-                              {...resources.members.person(member.id)}
-                              size="compact"
-                            />
-                          </label>
-                        ))}
-                      </ScrollArea>
-                    )}
-                  </LoadingTransition>
                 </fieldset>
               </section>
               <section

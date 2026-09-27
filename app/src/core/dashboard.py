@@ -248,6 +248,9 @@ def _schedule_to_standup(row: dict, workspace: dict | None = None) -> dict:
         "digest_email": row.get("digest_email") or "",
         "digest_enabled": bool(row.get("digest_enabled")),
         "nudge_missing": bool(row.get("nudge_missing")),
+        # Set from the Slack modal. While on, every run replaces participants
+        # with the channel's members, so the form must show it.
+        "sync_with_channel": bool(row.get("sync_with_channel")),
         "nudge_minutes_before": row.get("nudge_minutes_before") or 20,
         "report_time": row.get("report_time") or "",
         "group_by": row.get("group_by") or "member",
@@ -408,6 +411,7 @@ def api_create_standup(data):
                     "nudge_missing",
                     "nudge_minutes_before",
                     "group_by",
+                    "sync_with_channel",
                 )
                 if key in data
             },
@@ -450,6 +454,7 @@ def api_update_standup(data, standup_id: str):
             "nudge_missing",
             "nudge_minutes_before",
             "group_by",
+            "sync_with_channel",
         ):
             if field in data:
                 kwargs[field] = data[field]

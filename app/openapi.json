@@ -1752,6 +1752,9 @@
           "sort_order": {
             "type": "string"
           },
+          "sync_with_channel": {
+            "type": "boolean"
+          },
           "zendesk_base_url": {
             "type": "string"
           }
@@ -1792,6 +1795,7 @@
           "schedule_time",
           "schedule_tz",
           "sort_order",
+          "sync_with_channel",
           "zendesk_base_url"
         ],
         "type": "object"
@@ -1913,6 +1917,9 @@
           },
           "schedule_tz": {
             "type": "string"
+          },
+          "sync_with_channel": {
+            "type": "boolean"
           }
         },
         "type": "object"
