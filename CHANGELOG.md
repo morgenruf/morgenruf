@@ -31,6 +31,26 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   update the `/morgenruf` entry from `slack-manifest.yaml` to get the new
   usage hint in Slack; the command works without it.
 
+## [1.8.14] - 2026-09-28
+
+### Fixed
+- **Coffee chats now send the day 3 nudge and the day 6 "did you meet?"
+  question.** Both were queued as one-off jobs on the in-memory scheduler, and
+  the module job sync that runs every two minutes removed them as jobs no
+  module had asked for, so no round was ever nudged or closed. A restart would
+  have lost them too. They are now stored in the database (migration 052) and
+  a sweep every five minutes sends what is due, safely with more than one pod
+  running. Rounds left open by the old behaviour are picked up on the first
+  sweep after deploy: a follow-up that is still recent is sent, a nudge more
+  than a day late or a closing question more than three days late is skipped,
+  and a round whose closing question is skipped is marked closed without
+  messaging anyone.
+- **The Helm chart stays on Postgres 16.** A dependency bump had moved the
+  bundled database to Postgres 18, which cannot start on a Postgres 16 data
+  directory and keeps its data in a different path, so `helm upgrade` would
+  have broken existing installs. Moving to 18 needs a planned upgrade and
+  will come separately.
+
 ## [1.8.13] - 2026-09-27
 
 ### Fixed
