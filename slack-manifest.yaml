@@ -50,6 +50,7 @@ oauth_config:
       - users:read.email
       - users.profile:read
       - emoji:read
+      - reactions:write
       - team:read
 
 settings:

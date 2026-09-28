@@ -72,6 +72,7 @@ class TestEveryScopeIsUsed:
         "users:read.email": [r"users_list", r"users_info"],
         "users.profile:read": [r"users_profile_get", r"users_info"],
         "emoji:read": [r"emoji_list"],
+        "reactions:write": [r"reactions_add"],
         "team:read": [r"team_info"],
     }
 

@@ -10,6 +10,8 @@
  * ---------------------------------------------------------------
  */
 
+export type AddHolidayError = ApiError;
+
 export interface AnalyticsData {
   completed: number;
   completion_rate: number;
@@ -27,6 +29,18 @@ export interface AnalyticsData {
 export interface ApiError {
   details?: Record<string, string[]>;
   error: string;
+}
+
+export type AskForDatesError = ApiError;
+
+export interface AskForDatesPreview {
+  count: number;
+  message: string;
+  ready: boolean;
+}
+
+export interface AskForDatesResult {
+  count: number;
 }
 
 export interface AutomationRule {
@@ -63,6 +77,19 @@ export interface BlockedResponse {
   /** @format date-time */
   submitted_at: string | null;
   user_id: string;
+}
+
+export interface CelebrationSettings {
+  anniversaries: boolean;
+  birthdays: boolean;
+  can_react: boolean;
+  channel_id: string | null;
+  post_time: string;
+  ready: boolean;
+  timezone: string | null;
+  /** @format date-time */
+  updated_at: string | null;
+  working_days: string[];
 }
 
 export interface Channel {
@@ -196,6 +223,13 @@ export interface CreatedId {
 
 export type DeleteFeedTokenError = ApiError;
 
+export type DeleteHolidayError = ApiError;
+
+export interface DeleteHolidayParams {
+  /** @minLength 1 */
+  day: string;
+}
+
 export type DeleteProgramError = ApiError;
 
 export interface DeleteProgramParams {
@@ -249,6 +283,8 @@ export interface GetAnalyticsParams {
    */
   days?: number;
 }
+
+export type GetCelebrationSettingsError = ApiError;
 
 export type GetConfigError = ApiError;
 
@@ -331,6 +367,51 @@ export interface GrantModuleAdminParams {
   userId: string;
 }
 
+export interface Holiday {
+  /** @format date */
+  date: string;
+  name: string;
+}
+
+export interface HolidayImportInput {
+  /**
+   * @minLength 1
+   * @maxLength 200000
+   */
+  csv: string;
+  /** @default true */
+  preview?: boolean;
+}
+
+export interface HolidayImportResult {
+  invalid: number;
+  preview: boolean;
+  ready: number;
+  rows: HolidayImportRow[];
+  written: number;
+}
+
+export interface HolidayImportRow {
+  /** @format date */
+  date: string | null;
+  error: string | null;
+  line: number;
+  name: string;
+  status: "ready" | "invalid";
+}
+
+export interface HolidayInput {
+  /** @format date */
+  date: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  name: string;
+}
+
+export type ImportHolidaysError = ApiError;
+
 export type ImportProfilesError = ApiError;
 
 export interface InsightsData {
@@ -397,6 +478,8 @@ export interface KudosReceiver {
 
 export type ListChannelsError = ApiError;
 
+export type ListHolidaysError = ApiError;
+
 export type ListKeysError = ApiError;
 
 export type ListKudosError = ApiError;
@@ -459,6 +542,8 @@ export type ListRulesError = ApiError;
 export type ListStandupsError = ApiError;
 
 export type ListTemplatesError = ApiError;
+
+export type ListUpcomingCelebrationsError = ApiError;
 
 export type ListWebhookDeliveriesError = ApiError;
 
@@ -668,6 +753,8 @@ export interface PersistentBlocker {
   user_id: string;
 }
 
+export type PreviewAskForDatesError = ApiError;
+
 export interface ProfileImportInput {
   /**
    * @minLength 1
@@ -847,6 +934,33 @@ export interface SessionInfo {
   user_id: string;
 }
 
+export interface SettingsInput {
+  /** @default true */
+  anniversaries?: boolean;
+  /** @default true */
+  birthdays?: boolean;
+  /**
+   * @minLength 1
+   * @maxLength 40
+   */
+  channel_id: string;
+  /**
+   * @default "09:00"
+   * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$
+   */
+  post_time?: string;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  timezone: string;
+  /**
+   * @maxItems 7
+   * @minItems 1
+   */
+  working_days: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+}
+
 export interface Standup {
   active: boolean;
   ai_provider: string;
@@ -998,6 +1112,18 @@ export interface UnrecognisedContributor {
   standups: number;
   user_id: string;
 }
+
+export interface UpcomingCelebration {
+  /** @format date */
+  date: string;
+  kind: "birthday" | "anniversary";
+  /** @format date */
+  posted_on: string;
+  user_id: string;
+  years: number | null;
+}
+
+export type UpdateCelebrationSettingsError = ApiError;
 
 export type UpdateConfigError = ApiError;
 
