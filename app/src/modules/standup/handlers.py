@@ -153,6 +153,19 @@ def _schedule_next_run(schedule: dict) -> str:
     return moment.isoformat() if moment else ""
 
 
+def _report_time(schedule: dict) -> str:
+    """When a schedules row posts its channel report, as HH:MM in its own timezone.
+
+    The same fallback the scheduler registers the report job with, so App Home
+    cannot promise a time the job does not fire at. App Home used to show
+    `schedule_time` here, which is when the DMs go out, and told a standup
+    reporting at 10:00 that it "Reports at 09:00 today".
+    """
+    from src.core.scheduler import _default_report_time  # noqa: PLC0415
+
+    return schedule.get("report_time") or _default_report_time(schedule.get("schedule_time") or "09:00")
+
+
 def _next_run_text(schedule: dict) -> str:
     """Human readable next fire time for a schedule, or "" if it cannot be computed."""
     try:
@@ -886,7 +899,8 @@ def register_handlers(app: App) -> None:
                     "standup_id": str(s["id"]),
                     "standup_name": s.get("name", "Team Standup"),
                     "channel_id": s.get("channel_id", ""),
-                    "report_time": s.get("schedule_time", "09:00"),
+                    "standup_time": s.get("schedule_time", "09:00"),
+                    "report_time": _report_time(s),
                     "timezone": s.get("schedule_tz", "UTC"),
                     "days": days,
                     "members": participants,
@@ -1127,7 +1141,8 @@ def register_handlers(app: App) -> None:
                         "standup_id": str(s["id"]),
                         "standup_name": s.get("name", "Team Standup"),
                         "channel_id": s.get("channel_id", ""),
-                        "report_time": s.get("schedule_time", "09:00"),
+                        "standup_time": s.get("schedule_time", "09:00"),
+                        "report_time": _report_time(s),
                         "timezone": s.get("schedule_tz", "UTC"),
                         "days": days,
                         "members": participants,

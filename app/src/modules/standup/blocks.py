@@ -1179,7 +1179,11 @@ def app_home_view(
             standup_id = standup.get("standup_id") or standup.get("id", "")
             name = standup.get("standup_name") or standup.get("name") or "Team Standup"
             channel = standup.get("channel_id", "")
-            report_time = standup.get("report_time") or standup.get("schedule_time", "09:00")
+            # When the channel report posts, not when the DMs go out. Without an
+            # explicit report time that is an hour after the standup, as the
+            # scheduler registers it.
+            report_time = standup.get("report_time") or _plus_an_hour(standup.get("schedule_time") or "09:00")
+            standup_tz = standup.get("timezone") or standup.get("schedule_tz") or ""
             active = standup.get("active", True)
             responded_today = standup.get("user_responded_today", False)
             response_time = standup.get("user_last_response_time")
@@ -1206,7 +1210,10 @@ def app_home_view(
             if responded_today and response_time:
                 detail_lines.append(f"Reported at {response_time} today.")
             elif active:
-                detail_lines.append(f"Reports at {report_time} today.")
+                # The time is in the standup's timezone. Name it when the reader
+                # is somewhere else, or "10:00" means a different hour to them.
+                zone_note = f" ({standup_tz})" if standup_tz and standup_tz != user_tz else ""
+                detail_lines.append(f"Reports at {report_time}{zone_note} today.")
 
             # Streak
             if streak > 0:
@@ -1404,7 +1411,8 @@ def app_home_configure_view(
             standup_id = standup.get("standup_id") or standup.get("id", "")
             name = standup.get("standup_name") or standup.get("name") or "Team Standup"
             channel = standup.get("channel_id", "")
-            report_time = standup.get("report_time") or standup.get("schedule_time", "09:00")
+            # This line says when the standup runs, so it shows the DM time.
+            standup_time = standup.get("standup_time") or standup.get("schedule_time", "09:00")
             tz = standup.get("timezone") or standup.get("schedule_tz", "UTC")
             members = standup.get("members") or standup.get("participants") or []
             days = standup.get("days") or []
@@ -1425,7 +1433,7 @@ def app_home_configure_view(
             detail_lines = [
                 f"<#{channel}>{ws} | {name} |",
                 f"{member_count} participant{'s' if member_count != 1 else ''} · {q_count} question{'s' if q_count != 1 else ''}",
-                f"{days_label} @ {report_time} ({tz})",
+                f"{days_label} @ {standup_time} ({tz})",
             ]
             # #119: without this the list cannot tell a standup that fires apart
             # from one that is Active and silently never registered.
