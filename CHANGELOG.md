@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.16] - 2026-09-28
+
 ### Fixed
 - **The install alert says who installed and where.** It mentioned the
   installer as `<@U...>`, which only resolves inside the installing workspace,
