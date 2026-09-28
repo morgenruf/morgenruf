@@ -1848,9 +1848,10 @@ def register_handlers(app: App) -> None:
 
 
 def on_channel_join(event, client):  # noqa: ANN001
-    """Welcome new members and register them for standups.
+    """Register new members, and welcome those who join a standup channel.
 
-    Called by core's single member_joined_channel listener (see
+    The welcome DM goes only to a join in a channel with an active standup
+    schedule for the workspace. Called by core's single member_joined_channel listener (see
     main.register_channel_join_listener) rather than registered here, because
     Bolt runs only the first listener matching an event.
     """
@@ -1875,6 +1876,13 @@ def on_channel_join(event, client):  # noqa: ANN001
             email=profile.get("email", ""),
             tz=user_info.get("tz", "UTC"),
         )
+        # Core offers every join in every channel the bot is in, including the
+        # celebrations channel and coffee chat channels, which may hold the
+        # whole company. Only a channel with an active standup is a standup
+        # team, so only a join there gets the standup welcome.
+        channel_id: str = event.get("channel", "")
+        if not channel_id or not db.get_standup_schedule_for_channel(team_id, channel_id):
+            return
         client.chat_postMessage(
             channel=user_id,
             text=(

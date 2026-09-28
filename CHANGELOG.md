@@ -68,6 +68,11 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   them, and standup's welcome was registered first, so the coffee chat one
   never ran. One listener now offers each channel join to every feature;
   standup's welcome is unchanged.
+- **The standup welcome DM is sent only for a standup channel.** Joining
+  any channel the bot was in (the celebrations channel, a coffee chat
+  channel, or any other) sent "Welcome to the team! I'm Morgenruf, your
+  daily standup bot". It now goes only to someone joining a channel with an
+  active standup in that workspace.
 
 ## [1.8.14] - 2026-09-28
 

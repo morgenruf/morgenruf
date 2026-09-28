@@ -103,19 +103,97 @@ def test_standup_connect_and_celebrations_all_have_a_hook():
     assert hooked == ["standup", "connect", "celebrations"]
 
 
-def test_standup_still_welcomes_and_registers_whoever_joins(monkeypatch):
-    """Standup's behaviour is unchanged: it answers every join, as before."""
+STANDUP_CHANNEL = "C_STANDUP"
+CELEBRATIONS_CHANNEL = "C_CELEBRATE"
+COFFEE_CHANNEL = "C_COFFEE"
+UNRELATED_CHANNEL = "C_RANDOM"
+
+
+def _standup_join(monkeypatch, channel):
+    """Run standup's hook for a join to `channel` in a workspace whose only
+    active standup is in STANDUP_CHANNEL. Celebrations and coffee chats have
+    their own channels, which are not standup channels."""
     import src.core.db as db
     from src.modules.standup.handlers import on_channel_join
 
     registered = []
+    lookups = []
     monkeypatch.setattr(db, "upsert_member", lambda **kw: registered.append(kw["user_id"]))
+
+    def schedule_for_channel(team_id, channel_id):
+        lookups.append((team_id, channel_id))
+        if team_id == "T1" and channel_id == STANDUP_CHANNEL:
+            return {"id": 1, "team_id": "T1", "channel_id": STANDUP_CHANNEL, "active": True}
+        return None
+
+    monkeypatch.setattr(db, "get_standup_schedule_for_channel", schedule_for_channel)
     client = MagicMock()
     client.users_info.return_value = {"user": {"id": "U1", "tz": "UTC", "profile": {"real_name": "Priya"}}}
-    on_channel_join({"user": "U1", "team": "T1", "channel": "C1"}, client)
+    on_channel_join({"user": "U1", "team": "T1", "channel": channel}, client)
+    return client, registered, lookups
+
+
+def test_standup_welcomes_a_join_to_a_standup_channel(monkeypatch):
+    client, registered, lookups = _standup_join(monkeypatch, STANDUP_CHANNEL)
     assert registered == ["U1"]
+    assert lookups == [("T1", STANDUP_CHANNEL)]
+    client.chat_postMessage.assert_called_once()
     assert client.chat_postMessage.call_args.kwargs["channel"] == "U1"
-    assert "your daily standup bot" in client.chat_postMessage.call_args.kwargs["text"]
+    assert client.chat_postMessage.call_args.kwargs["text"] == (
+        "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
+        "I'll DM you each morning with a few quick questions to share with your team. "
+        "Use `/standup` to try a standup now, or `/help` to learn more."
+    )
+
+
+def test_standup_does_not_welcome_a_join_to_the_celebrations_channel(monkeypatch):
+    client, registered, _ = _standup_join(monkeypatch, CELEBRATIONS_CHANNEL)
+    assert registered == ["U1"]
+    client.chat_postMessage.assert_not_called()
+
+
+def test_standup_does_not_welcome_a_join_to_a_coffee_chat_channel(monkeypatch):
+    client, registered, _ = _standup_join(monkeypatch, COFFEE_CHANNEL)
+    assert registered == ["U1"]
+    client.chat_postMessage.assert_not_called()
+
+
+def test_standup_does_not_welcome_a_join_to_an_unrelated_channel(monkeypatch):
+    client, registered, _ = _standup_join(monkeypatch, UNRELATED_CHANNEL)
+    assert registered == ["U1"]
+    client.chat_postMessage.assert_not_called()
+
+
+def test_standup_does_not_welcome_a_join_without_a_channel(monkeypatch):
+    client, _, lookups = _standup_join(monkeypatch, "")
+    assert lookups == []
+    client.chat_postMessage.assert_not_called()
+
+
+def test_the_standup_channel_lookup_counts_only_active_schedules_in_that_workspace(monkeypatch):
+    """A paused standup, or one in another workspace, does not make a channel
+    a standup channel."""
+    from contextlib import contextmanager
+
+    import src.core.db as db
+
+    calls = []
+    cur = MagicMock()
+    cur.__enter__.return_value = cur
+    cur.execute.side_effect = lambda sql, params=(): calls.append((" ".join(sql.split()), tuple(params)))
+    cur.fetchall.return_value = []
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+
+    @contextmanager
+    def fake_conn():
+        yield conn
+
+    monkeypatch.setattr(db, "db_conn", fake_conn)
+    assert db.get_standup_schedule_for_channel("T1", STANDUP_CHANNEL) is None
+    sql, params = calls[0]
+    assert "FROM standup_schedules WHERE team_id = %s AND channel_id = %s AND active = TRUE" in sql
+    assert params == ("T1", STANDUP_CHANNEL)
 
 
 def test_connect_stays_quiet_where_it_is_switched_off(monkeypatch):
