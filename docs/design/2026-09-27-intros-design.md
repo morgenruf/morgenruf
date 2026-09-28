@@ -133,7 +133,7 @@ The module contract gains one defaulted field, like `home_blocks` and
 
 ```python
 # app/src/core/modules.py
-on_member_joined: Optional[Callable] = None   # (team_id, user, kind) -> None
+on_member_joined: Optional[Callable] = None  # (team_id, user, kind) -> None
 ```
 
 The listener resolves active modules exactly as the DM listener does
@@ -147,8 +147,7 @@ their turn. Intros (this release) and Buddies (release 4) implement it.
 the event, the stored `members` row (if any) and the profile (if any):
 
 ```python
-def classify(user: dict, stored: dict | None, profile: dict | None,
-             workspace_team_id: str, now: datetime) -> str:
+def classify(user: dict, stored: dict | None, profile: dict | None, workspace_team_id: str, now: datetime) -> str:
     """One of: new, guest, bot, external, returning."""
 ```
 
@@ -194,14 +193,14 @@ MODULE = ModuleSpec(
     name="intros",
     required_scopes=("users:read",),
     migrations_dir=Path(__file__).parent / "migrations",
-    register_slack=register_handlers,    # buttons on the DM and the card
-    register_routes=register_routes,     # settings page, pending list
-    plan_jobs=plan_jobs,                 # the sweep
+    register_slack=register_handlers,  # buttons on the DM and the card
+    register_routes=register_routes,  # settings page, pending list
+    plan_jobs=plan_jobs,  # the sweep
     claim_dm=None,
     purge=purge,
     nav=(NavItem(label="Intros", path="#intros"),),
     default_enabled=False,
-    delegable=True,                      # HR can run it without workspace admin
+    delegable=True,  # HR can run it without workspace admin
     on_member_joined=on_member_joined,
 )
 ```

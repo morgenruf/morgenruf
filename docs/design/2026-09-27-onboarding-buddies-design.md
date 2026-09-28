@@ -478,16 +478,16 @@ MODULE = ModuleSpec(
     name="buddies",
     required_scopes=("users:read", "im:write", "mpim:write"),
     migrations_dir=Path(__file__).parent / "migrations",
-    register_slack=register_handlers,    # buttons, /morgenruf buddy
-    register_routes=register_routes,     # settings, template, pairings
-    plan_jobs=plan_jobs,                 # the sweep
+    register_slack=register_handlers,  # buttons, /morgenruf buddy
+    register_routes=register_routes,  # settings, template, pairings
+    plan_jobs=plan_jobs,  # the sweep
     claim_dm=None,
     purge=purge,
     nav=(NavItem(label="Buddies", path="#buddies"),),
     default_enabled=False,
     delegable=True,
     home_blocks=home_blocks,
-    on_member_joined=on_member_joined,   # contract field added by Intros
+    on_member_joined=on_member_joined,  # contract field added by Intros
 )
 ```
 
