@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.15] - 2026-09-28
+
 ### Fixed
 - **Kudos are saved again, from both `/kudos` and a DM.** No kudos had ever
   reached the database. `/kudos` and `/morgenruf-kudos` were declared without
