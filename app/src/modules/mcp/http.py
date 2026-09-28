@@ -61,6 +61,20 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
+        "name": "get_member_profiles",
+        "description": (
+            "What members say about themselves: role, location, what to ask them about, "
+            "birthday (day and month only, never a year) and start date. People who have "
+            "left the workspace are not included."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "description": "Only this member's profile (optional)"},
+            },
+        },
+    },
+    {
         "name": "search_standups",
         "description": "Full-text search across standup responses.",
         "inputSchema": {
@@ -155,6 +169,9 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         members = db.get_active_members(team_id)
         return _fmt(members) if members else "No members found."
 
+    if name == "get_member_profiles":
+        return _member_profiles(team_id, (args.get("user_id") or "").strip())
+
     if name == "search_standups":
         query = args.get("query", "")
         days = args.get("days", 30)
@@ -195,6 +212,37 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         return _fmt(handler(args, team_id))
 
     return f"Unknown tool: {name}"
+
+
+def _member_profiles(team_id: str, user_id: str = "") -> str:
+    """Profile fields for the workspace's current members, read only.
+
+    Which admin or member last wrote a row, and the job bookkeeping
+    (nudged_at, left_at), stay out: an assistant needs what people said about
+    themselves, not the audit trail.
+    """
+    rows = db.list_member_profiles(team_id)
+    if user_id:
+        rows = [r for r in rows if r.get("user_id") == user_id]
+    names = {m["user_id"]: m.get("real_name") or "" for m in db.get_all_members(team_id)}
+    profiles = [
+        {
+            "user_id": r["user_id"],
+            "name": names.get(r["user_id"], ""),
+            "role": r.get("role"),
+            "location": r.get("location"),
+            "ask_me_about": r.get("ask_me_about"),
+            "birthday": (
+                f"{r['birth_month']:02d}-{r['birth_day']:02d}" if r.get("birth_month") and r.get("birth_day") else None
+            ),
+            "start_date": r.get("start_date"),
+            "celebrate": bool(r.get("celebrate", True)),
+        }
+        for r in rows
+    ]
+    if not profiles:
+        return "No profile found for that member." if user_id else "No member profiles filled in yet."
+    return _fmt(profiles)
 
 
 def _module_tool_list(team_id: str) -> list[dict]:
