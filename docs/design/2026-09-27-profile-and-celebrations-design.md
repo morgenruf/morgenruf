@@ -216,8 +216,19 @@ it**. Examples with Monday to Friday working days:
 Working days cover teams whose week is not Monday to Friday (for example
 Sunday to Thursday).
 
-`celebration_holidays` table: `team_id`, `date`, `name`,
-`PRIMARY KEY (team_id, date)`. Past holidays older than a year are purged.
+Working days and holidays are a **core workspace calendar**, not
+Celebrations data, because Onboarding buddies reads the same calendar (see
+`2026-09-27-onboarding-buddies-design.md`, decision 4) and one module must
+not read another's settings. Core owns:
+
+- `workspace_holidays`: `team_id`, `date`, `name`,
+  `PRIMARY KEY (team_id, date)`. Holidays older than a year are purged.
+- `working_days` on the workspace config, default Monday to Friday.
+
+It is edited from the Celebrations settings page in this release, by a
+workspace admin or a Celebrations admin. Core exposes
+`is_working_day(team_id, date)` and `previous_working_day` /
+`next_working_day` helpers; Celebrations uses the previous one.
 
 ### Job
 
@@ -229,7 +240,10 @@ only on working days:
    between today and the next working day.
 2. Skip start dates less than one year ago.
 3. Post one message per kind per day (birthdays grouped, anniversaries
-   grouped), then add the 🎉 reaction as the bot so people pile on.
+   grouped), then add the 🎉 reaction as the bot so people pile on. The
+   reaction needs `reactions:write`, a new scope: it is added to the
+   manifest, and the bot reacts only when the installation has granted it.
+   The post goes out either way, so no workspace is forced to reinstall.
 4. Record what was posted (`celebration_posts`: team, kind, date, ts) so a
    restart or a second pod never posts twice. This avoids the in-memory job
    problem Connect follow-ups still have.
@@ -304,11 +318,14 @@ all of you". Text is not customisable in the first version.
 
 | Surface | Change |
 |---|---|
-| App | module (delegable to HR), settings page with timezone, working days and holiday list, daily job, `celebration_posts` and `celebration_holidays` tables, nudge DM, Ask for dates button, channel join prompt |
+| App | module (delegable to HR), settings page with timezone, working days and holiday list, daily job, `celebration_posts` table, core workspace calendar (`workspace_holidays`, working days), nudge DM, Ask for dates button, channel join prompt |
 | Docs | README, CHANGELOG, docs.morgenruf.dev Celebrations page |
 | Website | new `/celebrations` product page, Donut alternative and compare pages updated |
 
 Intros (release 2) and Buddies (release 4) are specified separately.
+
+The Celebrations release also deletes the stale `app/slack-manifest.yaml`
+and `app/slack-manifest.json`; the root pair is the only manifest.
 
 The website deploys only through the Netlify CLI; merging to main does not
 deploy it.
