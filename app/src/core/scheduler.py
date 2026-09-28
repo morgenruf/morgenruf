@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import pytz
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -1665,10 +1666,45 @@ def sync_members_from_slack() -> None:
             logger.warning("Member sync failed for %s: %s", team_id, exc)
 
 
+class ClaimingExecutor(ThreadPoolExecutor):
+    """Run each cron firing on one pod only.
+
+    Every pod runs its own in-memory scheduler, and during a rollout the old
+    and new pods overlap for up to a minute, so a standup, report or reminder
+    due in that window used to go out twice. Before a cron job runs, its
+    (job id, scheduled time) is claimed in scheduler_runs, and a pod that loses
+    the claim skips that firing.
+
+    Only cron jobs are claimed. Interval jobs are the per-pod reconcile loops,
+    which must run on every pod, and their run times differ per pod anyway.
+    If the claim cannot be made (database down) the job runs, as it always did.
+    """
+
+    def submit_job(self, job, run_times):  # noqa: ANN001
+        if isinstance(job.trigger, CronTrigger):
+            run_times = [t for t in run_times if _claim_run(job.id, t)]
+            if not run_times:
+                return
+        super().submit_job(job, run_times)
+
+
+def _claim_run(job_id: str, run_at: datetime) -> bool:
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        claimed = db.claim_scheduler_run(job_id, run_at)
+    except Exception:
+        logger.exception("Could not claim %s at %s; running it anyway", job_id, run_at)
+        return True
+    if not claimed:
+        logger.info("Skipping %s at %s: another pod claimed it", job_id, run_at)
+    return claimed
+
+
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:
     """Build scheduler from a list of (team_id, bot_token, config) tuples."""
     global _scheduler
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(executors={"default": ClaimingExecutor()})
     _synced_schedule_fps.clear()
     _synced_workspace_fps.clear()
 
@@ -1773,8 +1809,26 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        _purge_scheduler_runs,
+        trigger=CronTrigger(hour=3, minute=37, timezone="UTC"),
+        id="scheduler_run_purge",
+        name="Remove week-old cron claims",
+        replace_existing=True,
+    )
+
     _scheduler = scheduler
     return scheduler
+
+
+def _purge_scheduler_runs() -> None:
+    """Nightly: delete cron claims more than a week old."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        db.purge_scheduler_runs(7)
+    except Exception:
+        logger.exception("Scheduler claim purge failed")
 
 
 def _purge_old_holidays() -> None:

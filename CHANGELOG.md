@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Fixed
+- **A report date far in the past no longer restarts the server.** Typing a
+  year into the Reports date picker sends 0002, 0020 and 0202 on the way to
+  2026, and each asked for hundreds of thousands of days of participation,
+  which ran the backend out of memory. Report and participation windows are now
+  capped at a year, the same cap the analytics endpoint already had.
+- **No duplicate standups, reports or reminders during a deploy.** Each pod
+  runs its own scheduler, and while the old and new pods overlapped both
+  fired anything due in that minute. Every cron firing is now claimed in the
+  database first (migration 056) and runs on one pod only. Claims older than
+  a week are removed nightly.
+
 ## [1.9.0] - 2026-09-28
 
 ### Added
