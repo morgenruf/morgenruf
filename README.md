@@ -64,13 +64,14 @@ Press a chip to put the team lead in charge of standups and someone in HR in cha
 
 ## Modules
 
-Morgenruf ships as four modules over one deployment and one database. Each one is independent: it owns its own migrations, Slack handlers, dashboard routes and scheduled jobs, and can be switched off without touching the others.
+Morgenruf ships as five modules over one deployment and one database. Each one is independent: it owns its own migrations, Slack handlers, dashboard routes and scheduled jobs, and can be switched off without touching the others.
 
 | Module | What it does | On by default |
 |---|---|---|
 | **Standups** | Async daily standups, summaries, mood, blockers, webhooks | Yes |
 | **Coffee chats** | Random 1:1 pairings from a channel on a cadence, history-aware so the same two people are not matched twice in a row | No, needs extra scopes |
 | **Kudos** | Peer recognition with a daily allowance, a custom token, and leaderboards for receivers *and* givers | Yes |
+| **Celebrations** | Birthdays and work anniversaries posted in a channel, around your working days and company holidays | No, an admin turns it on |
 | **Insights** | Questions that need two signals at once: blockers nobody has cleared in days, people who answer every standup and are thanked by nobody | Yes |
 
 A module is only live when all four gates pass, checked in order:
@@ -108,9 +109,24 @@ Three days later the bot nudges pairs that have not met, and closes the round on
 
 Setting the token by hand switches that off and keeps whatever you choose. Changing the daily allowance does not: the settings form submits every field, and treating any save as a token choice used to opt workspaces out of the emoji they had just imported.
 
+### Celebrations
+
+Birthdays and work anniversaries, posted in a channel you choose, from the dates in the member profile. Off until a workspace admin turns it on.
+
+- **One post per kind per day.** Two birthdays on the same day are one message, a birthday double; three or more are listed together. Anniversaries count the years, and a start date less than a year ago is skipped.
+- **Around your calendar.** Set the working days (Monday to Friday by default, Sunday to Thursday, or any other week) and keep a list of company holidays, typed in or imported as `date,name`. A celebration on a weekend or a holiday is posted on the last working day before it: on Friday, "Tomorrow is..." for Saturday and "On Sunday it's..." for Sunday; before a run of holidays, "On 25 December it's...".
+- **Its own clock.** Posts go out at a time you pick (09:00 by default) in a timezone you pick, separate from any standup's.
+- **Never twice.** Each post is recorded before it is sent, so a restart or a second pod does not repeat it. If the bot was down at post time, it catches up within the next few hours.
+- **🎉 on every post**, added by the bot so people pile on. That needs the `reactions:write` scope. A workspace that installed before the scope existed still gets the posts, and gets the reaction once an admin re-authorises Slack.
+- **Asking for dates.** Once Celebrations is on, each person with neither date on file gets one DM asking for them, with **Add my dates** (opens the profile form) and **Skip me** (turns celebrating off for them). **Ask for dates**, on the Celebrations and Members pages, sends it again to whoever is still missing dates, at most once per person every 30 days, and shows how many people and the message first. Joining the celebrations channel asks too.
+- **HR can run it.** Celebrations is delegable: a workspace admin gives someone the Celebrations grant from **Members**, and they look after the settings, the holidays and asking for dates without being a workspace admin.
+- Nobody who chose "Don't celebrate me publicly", nobody who has left and no deactivated member is ever posted.
+
+Invite @Morgenruf to the channel so it can post there.
+
 ### Member profile
 
-Every member has a short profile: birthday, start date, role, location and "ask me about". It is part of the core rather than a module, because the features coming next (intros, celebrations, onboarding buddies) all read it.
+Every member has a short profile: birthday, start date, role, location and "ask me about". It is part of the core rather than a module, because several features read it: Celebrations now, and intros and onboarding buddies next.
 
 People fill it in themselves from the **Your profile** section of the Slack App Home, with `/morgenruf profile`, or on **My profile** in the dashboard. All three open the same form and go through the same validation.
 
@@ -234,6 +250,7 @@ Two roles, plus a grant per feature.
 | Standups: create, edit, delete, automation rules | yes | with the standups grant | no |
 | Coffee chats: programmes, members, run a round now | yes | with the coffee chats grant | no |
 | Kudos: allowance and token | yes | with the kudos grant | no |
+| Celebrations: settings, working days, holidays, asking for dates | yes | with the celebrations grant | no |
 | Member profiles: edit anyone's, import dates | yes | no | their own only |
 | Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
 | Reading any page | yes | yes | yes |
@@ -631,7 +648,7 @@ Google Chat is in beta: standups collected and posted, `/standup` and `/kudos` c
 
 ### What Slack permissions does it need?
 
-The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list. Coffee chats need three extra scopes (`mpim:write`, `mpim:history`, `users.profile:read`), and a workspace that installed before those existed keeps the feature dark until it re-authorises rather than failing at runtime.
+The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list. Coffee chats need three extra scopes (`mpim:write`, `mpim:history`, `users.profile:read`), and a workspace that installed before those existed keeps the feature dark until it re-authorises rather than failing at runtime. Celebrations uses `reactions:write` for its 🎉, and posts without it until a workspace re-authorises.
 
 ### Can I let someone run standups without making them an admin?
 
@@ -682,7 +699,6 @@ Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discu
 | Coming | What it is | State |
 |---|---|---|
 | **Intros** | A welcome card for each new joiner, built from their member profile | Designed |
-| **Celebrations** | Birthdays and work anniversaries, announced in a channel on the day, read from the member profile rather than a spreadsheet | Next module |
 | **Onboarding buddies** | A new hire paired with a buddy by the coffee chat matcher, with a checklist for their first weeks | Planned |
 | **Calendar** | Hold the hour a coffee chat pair agreed on their calendars, not just in the message. Google Calendar first | Designed |
 | **Meet and Teams rooms** | Created for a pairing the way Zoom already is. A pasted room link works today | Designed |
