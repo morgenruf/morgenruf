@@ -108,6 +108,32 @@ Three days later the bot nudges pairs that have not met, and closes the round on
 
 Setting the token by hand switches that off and keeps whatever you choose. Changing the daily allowance does not: the settings form submits every field, and treating any save as a token choice used to opt workspaces out of the emoji they had just imported.
 
+### Member profile
+
+Every member has a short profile: birthday, start date, role, location and "ask me about". It is part of the core rather than a module, because the features coming next (intros, celebrations, onboarding buddies) all read it.
+
+People fill it in themselves from the **Your profile** section of the Slack App Home, with `/morgenruf profile`, or on **My profile** in the dashboard. All three open the same form and go through the same validation.
+
+A workspace admin can edit anyone's profile from **Members**, and import dates for the whole company from the HR tool's export:
+
+```csv
+email,birthday,start_date
+priya@example.com,03-14,2023-03-01
+tom@example.com,1990-07-04,2021-09-13
+```
+
+People are matched by email. The import shows a preview first (matched, unmatched, invalid) and saves nothing until you confirm, and it never replaces what someone entered themselves unless you tick **Overwrite entries members made themselves**.
+
+What is stored, and for how long:
+
+- **Birthdays are day and month only.** A full date in the CSV has its year dropped before it is saved. There is no column for a year.
+- **Start dates keep their year**, because anniversaries count years.
+- **Removed when someone leaves.** When the Slack sync sees a person has gone, their profile is marked, and a nightly job deletes it 30 days later. Coming back within those 30 days keeps it.
+- **Uninstalling** removes every profile along with the rest of the workspace's data.
+- Anyone can clear their own dates at any time, and "Don't celebrate me publicly" is one checkbox.
+
+Profiles are readable over MCP with `get_member_profiles`.
+
 ### The smaller things
 
 | | |
@@ -208,6 +234,7 @@ Two roles, plus a grant per feature.
 | Standups: create, edit, delete, automation rules | yes | with the standups grant | no |
 | Coffee chats: programmes, members, run a round now | yes | with the coffee chats grant | no |
 | Kudos: allowance and token | yes | with the kudos grant | no |
+| Member profiles: edit anyone's, import dates | yes | no | their own only |
 | Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
 | Reading any page | yes | yes | yes |
 
@@ -257,6 +284,8 @@ Then posts a formatted summary to the configured channel:
 | `kudos @teammate <reason>` | Give someone recognition (also `/kudos`) |
 | `help` | Show available commands |
 
+`/morgenruf profile` opens your member profile, and `/morgenruf help` (or `/morgenruf` on its own) lists what Morgenruf can do in your workspace, following which features are switched on.
+
 Coffee chat replies are buttons rather than typed commands: **We met**, **Not this time**, **Skip this round** and **Pause** appear on the messages the bot sends, so nothing there can collide with `skip`.
 
 ---
@@ -270,6 +299,7 @@ Morgenruf exposes its data to AI assistants over MCP, so you can ask questions i
 | Area | Tools |
 |---|---|
 | Standups | `get_standups`, `get_today_standups`, `get_blockers`, `get_participation`, `get_members`, `search_standups`, `get_workspace_summary`, `get_mood_summary` |
+| Member profiles | `get_member_profiles` (read only; birthdays as MM-DD, never a year) |
 | Kudos | `get_kudos_leaderboard`, `get_recent_kudos`, `get_kudos_settings` |
 | Coffee chats | `list_coffee_chat_programs`, `get_coffee_chat_rounds`, `get_coffee_chat_attendance`, `get_coffee_chat_pairs` |
 | Insights | `get_stuck_blockers`, `get_unrecognised_contributors` |
@@ -651,12 +681,13 @@ Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discu
 
 | Coming | What it is | State |
 |---|---|---|
-| **Celebrations** | Birthdays and work anniversaries, announced in a channel on the day, with the roster kept in Morgenruf rather than a spreadsheet | Next module |
+| **Intros** | A welcome card for each new joiner, built from their member profile | Designed |
+| **Celebrations** | Birthdays and work anniversaries, announced in a channel on the day, read from the member profile rather than a spreadsheet | Next module |
+| **Onboarding buddies** | A new hire paired with a buddy by the coffee chat matcher, with a checklist for their first weeks | Planned |
 | **Calendar** | Hold the hour a coffee chat pair agreed on their calendars, not just in the message. Google Calendar first | Designed |
 | **Meet and Teams rooms** | Created for a pairing the way Zoom already is. A pasted room link works today | Designed |
 | **Microsoft Teams** | Teams as a platform alongside Slack: standups collected and posted, commands, Adaptive Cards | In progress |
 | **Public REST API** | Read and write what the dashboard can, for teams that want to script it. The MCP server already covers reading | Planned |
-| **Onboarding journeys** | A sequence of messages over someone's first fortnight, with the manager nudged at the right points | Planned |
 
 Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking: [ROADMAP.md](ROADMAP.md).
 

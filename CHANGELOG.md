@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Member profiles.** Each person can keep a birthday, start date, role,
+  location and "ask me about" in Morgenruf, from a new "Your profile"
+  section on the Slack App Home, with `/morgenruf profile`, or on a new
+  **My profile** page in the dashboard. Birthdays are day and month only;
+  no year is ever stored. Intros, Celebrations and Onboarding buddies will
+  read this profile.
+- **Admins can fill in dates for the whole workspace.** The Members page
+  shows each person's profile, lets a workspace admin edit it, and imports
+  `email,birthday,start_date` from a CSV. The import previews matched,
+  unmatched and invalid rows before saving anything, drops the year from a
+  full birthday date, and leaves profiles people wrote themselves alone
+  unless "Overwrite entries members made themselves" is ticked.
+- **Profiles are removed when someone leaves.** When the Slack sync sees a
+  person has gone, their profile is marked and deleted 30 days later by a
+  nightly job. Returning within 30 days keeps it.
+- `get_member_profiles` MCP tool, read only.
+
+### Changed
+- `/morgenruf` now has subcommands: `/morgenruf profile` opens your profile
+  and `/morgenruf help` (or `/morgenruf` alone) lists what Morgenruf can do
+  in your workspace, based on which features are switched on. `/help`,
+  `/standup`, `/skip` and `/kudos` are unchanged. Self-hosted installs:
+  update the `/morgenruf` entry from `slack-manifest.yaml` to get the new
+  usage hint in Slack; the command works without it.
+
 ## [1.8.13] - 2026-09-27
 
 ### Fixed
