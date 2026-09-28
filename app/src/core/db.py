@@ -614,6 +614,123 @@ def purge_departed_profiles(days: int = PROFILE_RETENTION_DAYS) -> int:
             return cur.rowcount or 0
 
 
+def claim_profile_nudges(team_id: str, user_ids, cooldown_days: int | None = None) -> list[str]:
+    """Stamp nudged_at for whoever may be asked for their dates now, and return them.
+
+    With no cooldown, only people never asked before are claimed: the one-time
+    DM. With a cooldown, anyone not asked in that many days is claimed too:
+    the admin's "Ask for dates". Either way people who opted out of being
+    celebrated, or who already have a birthday or start date, are never
+    claimed.
+
+    The stamp is written before any DM is sent, in one statement, so two pods
+    running the same pass cannot both claim the same person. A person with no
+    profile row yet gets one holding only nudged_at.
+    """
+    ids = sorted({u for u in (user_ids or ()) if u})
+    if not ids:
+        return []
+    if cooldown_days is None:
+        may_ask = "member_profiles.nudged_at IS NULL"
+        params: tuple = (team_id, ids)
+    else:
+        may_ask = "(member_profiles.nudged_at IS NULL OR member_profiles.nudged_at < NOW() - make_interval(days => %s))"
+        params = (team_id, ids, int(cooldown_days))
+    sql = f"""
+        INSERT INTO member_profiles (team_id, user_id, nudged_at)
+        SELECT %s, u, NOW() FROM unnest(%s::text[]) AS u
+        ON CONFLICT (team_id, user_id) DO UPDATE SET nudged_at = NOW()
+        WHERE {may_ask}
+          AND member_profiles.celebrate
+          AND member_profiles.birth_month IS NULL
+          AND member_profiles.start_date IS NULL
+        RETURNING user_id
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return [r[0] for r in cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Workspace calendar: working days and holidays
+# ---------------------------------------------------------------------------
+
+
+def get_working_days(team_id: str) -> str:
+    """The workspace's working week as "mon,tue,...", Monday to Friday by default."""
+    from src.core.workspace_calendar import DEFAULT_WORKING_DAYS  # noqa: PLC0415
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT working_days FROM workspace_config WHERE team_id = %s", (team_id,))
+            row = cur.fetchone()
+    return (row[0] if row and row[0] else None) or DEFAULT_WORKING_DAYS
+
+
+def set_working_days(team_id: str, working_days: str) -> str:
+    """Store the working week. The caller validates; this only writes.
+
+    Inserts a default config row when the workspace has none, which is what
+    the OAuth callback does on install, so standup sees the same row either
+    way.
+    """
+    sql = """
+        INSERT INTO workspace_config (team_id, working_days, updated_at)
+        VALUES (%s, %s, NOW())
+        ON CONFLICT (team_id) DO UPDATE SET working_days = EXCLUDED.working_days, updated_at = NOW()
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, working_days))
+    return working_days
+
+
+def list_holidays(team_id: str) -> list[dict]:
+    """Every stored holiday for a workspace, oldest first."""
+    sql = "SELECT date, name FROM workspace_holidays WHERE team_id = %s ORDER BY date"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def upsert_holidays(team_id: str, holidays) -> int:
+    """Add holidays, renaming any date already on the list. Returns how many."""
+    rows = [(team_id, h["date"], h["name"]) for h in holidays or ()]
+    if not rows:
+        return 0
+    sql = """
+        INSERT INTO workspace_holidays (team_id, date, name)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (team_id, date) DO UPDATE SET name = EXCLUDED.name
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            for row in rows:
+                cur.execute(sql, row)
+    return len(rows)
+
+
+def delete_holiday(team_id: str, day) -> bool:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM workspace_holidays WHERE team_id = %s AND date = %s", (team_id, day))
+            return (cur.rowcount or 0) > 0
+
+
+def purge_old_holidays(days: int = 365) -> int:
+    """Delete holidays more than `days` in the past, in every workspace.
+
+    Idempotent, so every pod may run it; the second finds nothing to do.
+    """
+    sql = "DELETE FROM workspace_holidays WHERE date < CURRENT_DATE - %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (int(days),))
+            return cur.rowcount or 0
+
+
 # ---------------------------------------------------------------------------
 # Standups
 # ---------------------------------------------------------------------------

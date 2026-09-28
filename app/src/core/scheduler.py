@@ -1762,8 +1762,32 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # Holidays more than a year old are deleted: nothing plans backwards, and
+    # the list HR keeps should not grow forever. Idempotent, so every pod may
+    # run it.
+    scheduler.add_job(
+        _purge_old_holidays,
+        trigger=CronTrigger(hour=3, minute=27, timezone="UTC"),
+        id="holiday_purge",
+        name="Remove holidays more than a year old",
+        replace_existing=True,
+    )
+
     _scheduler = scheduler
     return scheduler
+
+
+def _purge_old_holidays() -> None:
+    """Nightly: delete workspace holidays more than a year in the past."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+        from src.core.workspace_calendar import HOLIDAY_RETENTION_DAYS  # noqa: PLC0415
+
+        removed = db.purge_old_holidays(HOLIDAY_RETENTION_DAYS)
+        if removed:
+            logger.info("Removed %d holidays more than a year old", removed)
+    except Exception:
+        logger.exception("Holiday purge failed")
 
 
 def _purge_departed_profiles() -> None:
