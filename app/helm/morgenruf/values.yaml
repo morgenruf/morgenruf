@@ -97,7 +97,7 @@ postgresql:
       storageClass: ""     # "" uses the cluster default
   image:
     repository: postgres
-    tag: "16-alpine"
+    tag: "18"
     pullPolicy: IfNotPresent
   resources: {}
 
