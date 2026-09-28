@@ -60,7 +60,10 @@ def tools() -> list[dict[str, Any]]:
         },
         {
             "name": "get_kudos_settings",
-            "description": "The workspace's kudos token and how many each person may give per day.",
+            "description": (
+                "The workspace's kudos token, how many each person may give per day, "
+                "and the channel kudos are shared in (empty when there is none)."
+            ),
             "inputSchema": {"type": "object", "properties": {}},
             "handler": _config,
         },

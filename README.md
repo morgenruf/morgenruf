@@ -104,6 +104,8 @@ Three days later the bot nudges pairs that have not met, and closes the round on
 
 `kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over. That is what makes people spend them.
 
+The person you thank gets a DM with who it is from and why. To share kudos with everyone too, pick a **Kudos channel** under **Kudos → The token your team gives**. Only channels Morgenruf is in are listed, so invite it to the channel first.
+
 **Using the Morgenruf icon as your kudos token:** download it from **Kudos → The token your team gives**, add it in Slack under **Customize workspace → Add custom emoji** with the name `morgenruf`, and the bot picks it up within a day on its own. It falls back if the emoji is ever removed, so a workspace never ends up posting `:morgenruf:` as literal text.
 
 Setting the token by hand switches that off and keeps whatever you choose. Changing the daily allowance does not: the settings form submits every field, and treating any save as a token choice used to opt workspaces out of the emoji they had just imported.
@@ -207,7 +209,7 @@ Two roles, plus a grant per feature.
 |---|---|---|---|
 | Standups: create, edit, delete, automation rules | yes | with the standups grant | no |
 | Coffee chats: programmes, members, run a round now | yes | with the coffee chats grant | no |
-| Kudos: allowance and token | yes | with the kudos grant | no |
+| Kudos: allowance, token and channel | yes | with the kudos grant | no |
 | Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
 | Reading any page | yes | yes | yes |
 

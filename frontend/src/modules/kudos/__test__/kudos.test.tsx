@@ -17,6 +17,7 @@ const mock = vi.hoisted(() => ({
   givers: vi.fn(),
   feed: vi.fn(),
   members: vi.fn(),
+  channels: vi.fn(),
 }));
 
 vi.mock('@/common/auth/use-session', () => ({
@@ -36,6 +37,7 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
       getGivers: mock.givers,
     },
     members: { listMembers: mock.members },
+    workspace: { listChannels: mock.channels },
   };
 
   return {
@@ -52,9 +54,20 @@ beforeEach(() => {
   mock.givers.mockResolvedValue({ data: [] });
   mock.feed.mockResolvedValue({ data: [] });
   mock.members.mockResolvedValue({ data: [] });
+  mock.channels.mockResolvedValue({
+    data: [
+      { id: 'C1', name: 'general' },
+      { id: 'C2', name: 'kudos' },
+    ],
+  });
 
   mock.config.mockResolvedValue({
-    data: { emoji: ':morgenruf:', daily_allowance: 5, token_auto: true },
+    data: {
+      emoji: ':morgenruf:',
+      daily_allowance: 5,
+      token_auto: true,
+      channel_id: '',
+    },
   });
 
   mock.save.mockImplementation((data) => Promise.resolve({ data }));
@@ -96,6 +109,7 @@ it('previews the chosen token and disabled allowance, preserving unsaved edits d
     expect(mock.save).toHaveBeenCalledWith({
       emoji: ':custom:',
       daily_allowance: 0,
+      channel_id: '',
     }),
   );
 });
@@ -286,5 +300,98 @@ it('lets independently loaded sections appear while a leaderboard is pending', a
 
   await waitFor(() =>
     expect(screen.queryByRole('status')).not.toBeInTheDocument(),
+  );
+});
+
+it('saves a kudos channel chosen from the channels the bot is in', async () => {
+  const user = userEvent.setup({ delay: null });
+
+  renderKudos();
+
+  await screen.findByLabelText('Emoji or Slack token');
+  const channel = await screen.findByRole('combobox', {
+    name: 'Kudos channel',
+  });
+  expect(channel).toHaveTextContent('No channel, only a DM to the person');
+
+  await chooseOption(user, 'Kudos channel', '#kudos');
+  expect(channel).toHaveTextContent('#kudos');
+
+  await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+  await waitFor(() =>
+    expect(mock.save).toHaveBeenCalledWith({
+      emoji: ':morgenruf:',
+      daily_allowance: 5,
+      channel_id: 'C2',
+    }),
+  );
+  expect(mock.channels).toHaveBeenCalledTimes(1);
+});
+
+it('shows the saved kudos channel and can clear it', async () => {
+  const user = userEvent.setup({ delay: null });
+  mock.config.mockResolvedValue({
+    data: {
+      emoji: '🍁',
+      daily_allowance: 5,
+      token_auto: false,
+      channel_id: 'C2',
+    },
+  });
+
+  renderKudos();
+
+  const channel = await screen.findByRole('combobox', {
+    name: 'Kudos channel',
+  });
+  await waitFor(() => expect(channel).toHaveTextContent('#kudos'));
+
+  await chooseOption(
+    user,
+    'Kudos channel',
+    'No channel, only a DM to the person',
+  );
+  await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+  await waitFor(() =>
+    expect(mock.save).toHaveBeenCalledWith({
+      emoji: '🍁',
+      daily_allowance: 5,
+      channel_id: '',
+    }),
+  );
+});
+
+it('asks for the bot to be invited when it is in no channel', async () => {
+  mock.channels.mockResolvedValue({ data: [] });
+
+  renderKudos();
+
+  expect(
+    await screen.findByText('Invite @Morgenruf to a channel first'),
+  ).toBeInTheDocument();
+  expect(
+    await screen.findByRole('combobox', { name: 'Kudos channel' }),
+  ).toHaveTextContent('No channel, only a DM to the person');
+});
+
+it('keeps a saved channel the bot has left visible instead of swapping it', async () => {
+  mock.config.mockResolvedValue({
+    data: {
+      emoji: '🍁',
+      daily_allowance: 5,
+      token_auto: false,
+      channel_id: 'C9',
+    },
+  });
+
+  renderKudos();
+
+  const channel = await screen.findByRole('combobox', {
+    name: 'Kudos channel',
+  });
+  await waitFor(() =>
+    expect(channel).toHaveTextContent('A channel Morgenruf is no longer in'),
   );
 });

@@ -99,7 +99,7 @@ class BrowserData:
                 "created_at": self.now,
             }
         ]
-        self.kudos_config = {"emoji": "🍁", "daily_allowance": 5, "token_auto": True}
+        self.kudos_config = {"emoji": "🍁", "daily_allowance": 5, "token_auto": True, "channel_id": ""}
         self.programs = [
             {
                 "id": 1,
@@ -463,8 +463,13 @@ def create_test_app(patcher=None):
             ],
             "get_giver_leaderboard": lambda team, days: [{"user_id": "U_MEMBER", "given": 5, "last_given": state.now}],
             "get_config": lambda team: deepcopy(state.kudos_config),
-            "set_config": lambda team, emoji, allowance: (
-                state.kudos_config.update(emoji=emoji, daily_allowance=allowance, token_auto=False)
+            "set_config": lambda team, emoji, allowance, channel_id=None: (
+                state.kudos_config.update(
+                    emoji=emoji,
+                    daily_allowance=allowance,
+                    token_auto=False,
+                    channel_id=state.kudos_config["channel_id"] if channel_id is None else channel_id,
+                )
                 or deepcopy(state.kudos_config)
             ),
         },

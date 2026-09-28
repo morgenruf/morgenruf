@@ -245,6 +245,7 @@ export function prefetchDashboard(
         .query(kudosGiversOptions(services, team, deps.days ?? 30))
         .catch(noop);
       void client.query(kudosConfigOptions(services, team)).catch(noop);
+      channels();
       directory();
       break;
 
