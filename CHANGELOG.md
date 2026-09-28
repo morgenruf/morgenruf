@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-09-28
+
 ### Added
 - **Member profiles.** Each person can keep a birthday, start date, role,
   location and "ask me about" in Morgenruf, from a new "Your profile"
@@ -49,6 +51,9 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   and holidays without being a workspace admin.
 
 ### Changed
+- Dependencies: slack-bolt 1.30.0, pyjwt 2.15.0, posthog 7.60.0, pytz 2026.4,
+  vite 8.3.1, @tanstack/react-query 5.103.2, @testing-library/jest-dom 7.0.1,
+  typescript-eslint 8.70.1, @types/node 26.6.2, github/codeql-action 4.38.2.
 - `/morgenruf` now has subcommands: `/morgenruf profile` opens your profile
   and `/morgenruf help` (or `/morgenruf` alone) lists what Morgenruf can do
   in your workspace, based on which features are switched on. `/help`,
