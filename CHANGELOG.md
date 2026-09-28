@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-09-28
+
+### Changed
+- **Sidebar icons have colours.** Each feature keeps its own icon colour
+  (Standups blue, Coffee chats amber, Kudos rose, Celebrations violet and so
+  on), in light and dark mode. Labels stay neutral.
+- **My profile shows your Slack name and photo** above the form.
+
 ### Fixed
 - **A report date far in the past no longer restarts the server.** Typing a
   year into the Reports date picker sends 0002, 0020 and 0202 on the way to

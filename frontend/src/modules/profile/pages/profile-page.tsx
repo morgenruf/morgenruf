@@ -1,7 +1,10 @@
 import { toast } from 'sonner';
 
+import { useMemberDirectory } from '@/common/api/use-member-directory';
+import { useSession } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { ErrorState, PageHeader } from '@/common/components/page';
+import { Person } from '@/common/components/person';
 import { ProfileForm } from '@/common/components/profile-form';
 import {
   Card,
@@ -16,6 +19,9 @@ import { ProfileFormSkeleton } from '../loading';
 
 export default function ProfilePage() {
   const { profile, save } = useMyProfile();
+  const { data: session } = useSession();
+  const directory = useMemberDirectory();
+  const me = session?.user_id ? directory.person(session.user_id) : null;
 
   return (
     <div className="page">
@@ -49,6 +55,14 @@ export default function ProfilePage() {
                 <ProfileFormSkeleton />
               ) : (
                 <div className="max-w-2xl space-y-4">
+                  {me && (
+                    <Person
+                      name={me.name}
+                      avatar={me.avatar}
+                      detail="Name and photo come from your Slack profile."
+                      size="large"
+                    />
+                  )}
                   {profile.data?.set_by_admin && (
                     <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                       An admin filled in some of this. Check it, and correct
