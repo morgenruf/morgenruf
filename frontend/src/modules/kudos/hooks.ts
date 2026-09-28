@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { Api } from '@/common/api/client';
+import { channelsOptions } from '@/common/api/queries';
 import { useServices } from '@/common/api/services-context';
 import { useSession } from '@/common/auth/use-session';
 
@@ -26,6 +27,7 @@ export function useKudos(days: number) {
   const receivers = useQuery(kudosReceiversOptions(services, team, days));
   const givers = useQuery(kudosGiversOptions(services, team, days));
   const config = useQuery(kudosConfigOptions(services, team));
+  const channels = useQuery(channelsOptions(services, team));
 
   const save = useMutation({
     mutationFn: (data: KudosConfigInput) => api.kudos.updateConfig(data),
@@ -37,6 +39,7 @@ export function useKudos(days: number) {
     receivers,
     givers,
     config,
+    channels,
     save,
     canEdit:
       session?.role === 'admin' || !!session?.module_admin?.includes('kudos'),

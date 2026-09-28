@@ -118,6 +118,7 @@ def register_routes(flask_app) -> None:
             return jsonify({"error": "Daily allowance must be a whole number"}), 400
         if allowance < 0 or allowance > 50:
             return jsonify({"error": "Daily allowance must be between 0 and 50"}), 400
-        return kudos_db.set_config(session["team_id"], emoji, allowance)
+        channel_id = data.get("channel_id")
+        return kudos_db.set_config(session["team_id"], emoji, allowance, channel_id)
 
     register_api_blueprint(flask_app, kudos_bp)
