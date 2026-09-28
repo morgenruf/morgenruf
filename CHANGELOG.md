@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Fixed
+- **Coffee chats now send the day 3 nudge and the day 6 "did you meet?"
+  question.** Both were queued as one-off jobs on the in-memory scheduler, and
+  the module job sync that runs every two minutes removed them as jobs no
+  module had asked for, so no round was ever nudged or closed. A restart would
+  have lost them too. They are now stored in the database (migration 052) and
+  a sweep every five minutes sends what is due, safely with more than one pod
+  running. Rounds left open by the old behaviour are picked up on the first
+  sweep after deploy: a follow-up that is still recent is sent, a nudge more
+  than a day late or a closing question more than three days late is skipped,
+  and a round whose closing question is skipped is marked closed without
+  messaging anyone.
+
 ## [1.8.13] - 2026-09-27
 
 ### Fixed

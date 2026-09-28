@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
 
 from src.core.scheduler import JobSpec
@@ -28,6 +28,21 @@ NUDGE_AFTER_DAYS = 3
 CLOSE_AFTER_DAYS = 6
 MIN_POOL = 2
 
+# How often each workspace's follow-ups are checked. Five minutes is well
+# inside the precision a "three days later" message needs.
+FOLLOWUP_SWEEP_MINUTES = 5
+# A claimed follow-up is left alone this long before another sweep may retry
+# it, so a pod that died mid-send does not strand it.
+FOLLOWUP_LEASE_MINUTES = 15
+FOLLOWUP_MAX_ATTEMPTS = 5
+# A follow-up this far past its due time is dropped rather than sent. A nudge
+# more than a day late lands next to the closing question, and "did you meet?"
+# days after the round ended reads as noise. This is also what the first sweep
+# after this release does with rounds the old in-memory jobs left open: old
+# ones close quietly instead of messaging every old group DM at once. Skipping
+# a close still marks the round closed, without the stats post.
+FOLLOWUP_STALE_AFTER = {"nudge": timedelta(days=1), "close": timedelta(days=3)}
+
 
 def plan_jobs(ctx: dict) -> list[JobSpec]:
     """One weekly trigger per programme for this workspace.
@@ -38,12 +53,23 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
     import src.modules.connect.db as cdb  # noqa: PLC0415
 
     team_id = ctx["team_id"]
-    jobs: list[JobSpec] = []
+    # The follow-up sweep is planned for every workspace with Connect active,
+    # with or without a programme: a round from a programme paused since still
+    # gets its nudge and closing question. Being planned here is also what
+    # keeps it through module job reconciliation.
+    jobs: list[JobSpec] = [
+        JobSpec(
+            key="followups",
+            trigger=IntervalTrigger(minutes=FOLLOWUP_SWEEP_MINUTES, jitter=60),
+            func=send_due_followups,
+            args=(team_id,),
+        )
+    ]
     try:
         programs = [p for p in cdb.active_programs() if p["team_id"] == team_id]
     except Exception as exc:
         logger.warning("connect could not plan jobs for %s: %s", team_id, exc)
-        return []
+        return jobs
 
     for p in programs:
         jobs.append(
@@ -164,7 +190,7 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
             logger.warning("connect: could not clear the pinned date on programme %s", program_id)
 
     deliver_round(round_row["id"], bot_token, team_id, program_id)
-    _schedule_followups(round_row["id"], bot_token, team_id)
+    _queue_followups(round_row["id"], team_id)
 
 
 def _member_timezones(team_id: str) -> dict[str, str]:
@@ -344,28 +370,64 @@ def _post_round_stats(client, round_id: int, team_id: str) -> None:
         logger.exception("connect: could not post round stats for %s", round_id)
 
 
-def _schedule_followups(round_id: int, bot_token: str, team_id: str) -> None:
-    """Queue the nudge and the closing question for this round."""
-    from src.core.scheduler import get_scheduler  # noqa: PLC0415
+def _queue_followups(round_id: int, team_id: str) -> None:
+    """Store this round's nudge and closing question for the sweep to send.
 
-    scheduler = get_scheduler()
-    if scheduler is None:
-        return
+    A failure here costs nothing permanent: the sweep creates missing rows for
+    every open round on each pass.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+
+    try:
+        cdb.queue_followups(team_id, NUDGE_AFTER_DAYS, CLOSE_AFTER_DAYS, round_id=round_id)
+    except Exception:
+        logger.exception("connect: could not queue follow-ups for round %s, the sweep will add them", round_id)
+
+
+def send_due_followups(team_id: str) -> int:
+    """Send this workspace's due nudges and closing questions.
+
+    Returns how many were finished (sent or skipped). Safe to run on several
+    pods at once and as often as wanted: rows are claimed atomically before
+    anything is sent, and a finished row is never taken again. The token is
+    read from the installation each time rather than stored in the job, so a
+    rotated token is picked up.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+
+    try:
+        cdb.queue_followups(team_id, NUDGE_AFTER_DAYS, CLOSE_AFTER_DAYS)
+    except Exception:
+        logger.exception("connect: could not backfill follow-ups for %s", team_id)
+    try:
+        due = cdb.claim_due_followups(team_id, FOLLOWUP_LEASE_MINUTES)
+    except Exception:
+        logger.exception("connect: could not claim follow-ups for %s", team_id)
+        return 0
+
+    finished = 0
     now = datetime.now(timezone.utc)
-    scheduler.add_job(
-        nudge_round,
-        trigger=DateTrigger(run_date=now + timedelta(days=NUDGE_AFTER_DAYS)),
-        args=(round_id, bot_token, team_id),
-        id=f"connect:{team_id}:nudge:{round_id}",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        close_round,
-        trigger=DateTrigger(run_date=now + timedelta(days=CLOSE_AFTER_DAYS)),
-        args=(round_id, bot_token, team_id),
-        id=f"connect:{team_id}:close:{round_id}",
-        replace_existing=True,
-    )
+    for f in due:
+        round_id, kind = f["round_id"], f["kind"]
+        try:
+            if now - f["due_at"] > FOLLOWUP_STALE_AFTER[kind]:
+                logger.info("connect: %s for round %s is too late to send, skipping", kind, round_id)
+                if kind == "close":
+                    cdb.set_round_state(round_id, "closed")
+                cdb.finish_followup(round_id, kind, "skipped_stale")
+            else:
+                (nudge_round if kind == "nudge" else close_round)(round_id, "", team_id)
+                cdb.finish_followup(round_id, kind, "sent")
+            finished += 1
+        except Exception:
+            logger.exception("connect: %s for round %s failed (attempt %s)", kind, round_id, f.get("attempts"))
+            # Left claimed, so it is retried once the lease runs out, up to a limit.
+            if int(f.get("attempts") or 0) >= FOLLOWUP_MAX_ATTEMPTS:
+                try:
+                    cdb.finish_followup(round_id, kind, "failed")
+                except Exception:
+                    logger.exception("connect: could not give up on %s for round %s", kind, round_id)
+    return finished
 
 
 def _offer_zoom(client, channel: str, team_id: str, members: list) -> None:
