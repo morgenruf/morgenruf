@@ -175,6 +175,11 @@ def create_app() -> tuple[App, Flask]:
 
     register_dm_listener(slack_app)
 
+    # Core's own Slack surface: /morgenruf and the member profile modal.
+    from src.core.profile_slack import register_slack as register_profile_slack
+
+    register_profile_slack(slack_app)
+
     workspace_jobs = _load_workspace_jobs()
     scheduler = build_scheduler(workspace_jobs)
     scheduler.start()

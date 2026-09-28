@@ -48,4 +48,5 @@ MODULE = ModuleSpec(
     delegable=True,
     mcp_tools=mcp_tools,
     home_blocks=home_blocks,
+    help_lines=("Snooze or pause your coffee chats from the *Home* tab",),
 )

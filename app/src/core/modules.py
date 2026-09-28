@@ -43,6 +43,10 @@ class ModuleSpec:
     # only reads, and MCP's keys are workspace-wide. Offering those as grants
     # would be two switches that change nothing.
     delegable: bool = False
+    # Lines `/morgenruf help` shows for this module while it is active, so the
+    # help lists what this workspace can actually do. Slack mrkdwn, one
+    # command or tip per line.
+    help_lines: tuple[str, ...] = ()
 
 
 def deploy_allowlist() -> Optional[set[str]]:

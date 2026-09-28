@@ -1507,8 +1507,9 @@ def register_handlers(app: App) -> None:
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
+    # /morgenruf moved to core (src/core/profile_slack.py): it is the product's
+    # command, with subcommands, and its help lists every active feature.
     @app.command("/help")
-    @app.command("/morgenruf")
     def handle_help_command(ack, body, client):  # noqa: ANN001
         """Slash command to show available commands and help."""
         ack()

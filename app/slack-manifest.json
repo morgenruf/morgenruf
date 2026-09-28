@@ -17,8 +17,8 @@
     "slash_commands": [
       {
         "command": "/morgenruf",
-        "description": "Create and manage standups",
-        "usage_hint": "[create | status | help]",
+        "description": "Your profile, and what Morgenruf can do",
+        "usage_hint": "[profile | help]",
         "should_escape": false
       }
     ]

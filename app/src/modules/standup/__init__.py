@@ -23,4 +23,9 @@ MODULE = ModuleSpec(
     nav=(NavItem(label="Standups", path="/"),),
     default_enabled=True,
     delegable=True,
+    help_lines=(
+        "`/standup`: start your standup now",
+        "`/skip`: skip today's standup",
+        "Reply to a standup DM at any time to start",
+    ),
 )

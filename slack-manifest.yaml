@@ -14,7 +14,8 @@ features:
     always_online: true
   slash_commands:
     - command: /morgenruf
-      description: Morgenruf commands and help
+      description: Your profile, and what Morgenruf can do
+      usage_hint: "[profile | help]"
     - command: /morgenruf-standup
       description: Start your daily standup now
     - command: /morgenruf-skip

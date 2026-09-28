@@ -38,6 +38,10 @@ features:
       description: Submit your daily standup manually
       type: global
   slash_commands:
+    - command: /morgenruf
+      description: Your profile, and what Morgenruf can do
+      usage_hint: "[profile | help]"
+      should_escape: false
     - command: /standup
       description: Start your daily standup
       usage_hint: ""
