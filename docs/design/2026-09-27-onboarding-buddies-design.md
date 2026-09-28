@@ -212,12 +212,12 @@ Default template, shipped so the module works on day one:
 | 20 | buddy | Introduce your new teammate to one person from another team. |
 | 30 | both | Last one: a quick chat about how the first month went. |
 
-### Day offsets and weekends
+### Day offsets, working days and holidays
 
 Due date is start date plus the offset in calendar days, in the hire's own
-timezone. A due date on Saturday or Sunday moves to the Monday after. No
-holiday calendar in v1; see open question 4 about sharing Celebrations'
-working days and holidays.
+timezone. A due date on a non-working day (outside the workspace's working
+days, or on a holiday in the core workspace calendar HR keeps) moves to the
+next working day. See decision 4.
 
 Each task is sent at 10:00 in the recipient's own timezone (`members.tz`),
 so a buddy in another zone is not nudged at night. There is no Buddies
@@ -525,7 +525,7 @@ Persistence and idempotency (real Postgres):
 
 - Duplicate `team_join` creates one pairing.
 - Two concurrent sweeps: one match per hire, load limit held.
-- Tasks created once per pairing, correct due dates, weekend moved to Monday,
+- Tasks created once per pairing, correct due dates, non-working day and holiday moved to the next working day,
   per-recipient 10:00 in their own timezone.
 - A restart between claim and send does not double-send; a sweep after
   3 days of downtime skips stale tasks and sends current ones.
@@ -555,45 +555,23 @@ The website deploys only through the Netlify CLI; merging to main does not
 deploy it. The release adds no scope and no event subscription, so the
 Slack app config does not change.
 
-## 14. Open questions
+## 14. Decisions (resolved 2026-09-27)
 
-Each has a recommendation; none blocks writing the implementation plan.
+The owner accepted recommendations 1, 2, 3, 5, 6 and 7, and changed 4:
 
-1. **Opt-in pool channel, or everyone with tenure and an opt-out?**
-   Opt-out gives a bigger pool on day one, but assigns a buddy to people who
-   never said yes, which is how buddy programmes get quietly ignored.
-   *Recommendation:* opt-in through a channel, as designed. The settings page
-   shows the eligible count so HR can recruit volunteers before hiring.
-
-2. **Can a buddy decline an assignment?** A "Swap me out" button is kind to
-   volunteers but means the hire might meet a buddy who then disappears.
-   *Recommendation:* no decline button in v1. Volunteers leave the channel to
-   stop future matches, and HR has Reassign for the rare case. Add the
-   button if HR asks for it.
-
-3. **Include the manager by default?** Managers already own onboarding;
-   adding them to the group DM can make the buddy chat feel supervised.
-   *Recommendation:* off by default, per workspace setting, and the manager
-   is set per pairing by HR (dashboard or later a profile field). No manager
-   field in the profile in v1.
-
-4. **Working days and holidays.** Celebrations has HR-kept working days and
-   a holiday list. Buddies could reuse them for due dates.
-   *Recommendation:* not in v1. Weekends move to Monday; a nudge on a public
-   holiday is harmless. Reading Celebrations settings would couple two
-   modules that can be enabled independently. If both are popular, move
-   working days and holidays to core later.
-
-5. **Where the shared matcher lives.** Buddies importing
-   `src.modules.connect.matcher` is one module importing another.
-   *Recommendation:* import directly in v1; both files are pure. Move
-   `matcher.py` and `hours.py` to `src/core/matching/` only when a third
-   module needs them, in a change that touches nothing else.
-
-6. **Default tenure.** 90 days is short in a slow company, long in a startup.
-   *Recommendation:* 90, editable. A startup can lower it to 30.
-
-7. **Programme length and the closing question.** 30 days matches the default
-   template; some teams run 60 or 90.
-   *Recommendation:* 30 by default, editable up to 120, with the closing
-   question always on the last day.
+1. **Pool:** opt-in through a channel. Settings show the eligible count.
+2. **Decline:** no "Swap me out" button in v1; HR reassigns.
+3. **Manager:** off by default, set per pairing by HR.
+4. **Working days and holidays: reused, not ignored.** HR should keep one
+   company calendar, not two. To avoid one module reading another's
+   settings, working days and the holiday list live in **core** as a
+   workspace calendar (built in the Celebrations release, edited from the
+   Celebrations settings page for now). Buddies reads the core calendar: a
+   checklist task due on a non-working day moves to the **next** working day
+   (Celebrations moves to the previous one, since a birthday greeting must
+   not be late, while a task should not be early).
+5. **Matcher:** imported from Connect in v1; moved to core only when a
+   third module needs it.
+6. **Tenure:** 90 days, editable.
+7. **Length:** 30 days by default, editable up to 120, closing question on
+   the last day.
