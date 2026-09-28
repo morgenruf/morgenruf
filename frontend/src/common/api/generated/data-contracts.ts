@@ -344,12 +344,15 @@ export interface InviteMemberInput {
 }
 
 export interface KudosConfig {
+  channel_id: string;
   daily_allowance: number;
   emoji: string;
   token_auto: boolean;
 }
 
 export interface KudosConfigInput {
+  /** @pattern ^([CG][A-Z0-9]+)?$ */
+  channel_id?: string;
   /**
    * @min 0
    * @max 50

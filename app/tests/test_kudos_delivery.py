@@ -66,6 +66,8 @@ def world(monkeypatch):
         posts=[],
         members=list(MEMBERS),
         workspace_config={"channel_id": ""},
+        kudos_config={"emoji": "\N{MAPLE LEAF}", "daily_allowance": 5, "token_auto": True, "channel_id": ""},
+        post_errors={},
         allowance={"emoji": "\N{MAPLE LEAF}", "allowance": 5, "used": 0, "remaining": 5, "can_give": True},
         settings={},
         save_error=None,
@@ -80,7 +82,7 @@ def world(monkeypatch):
 
     monkeypatch.setattr(kdb, "save_kudos", save_kudos)
     monkeypatch.setattr(kdb, "allowance_state", lambda *a, **k: dict(state.allowance))
-    monkeypatch.setattr(kdb, "get_config", lambda team_id: {"emoji": "\N{MAPLE LEAF}", "daily_allowance": 5})
+    monkeypatch.setattr(kdb, "get_config", lambda team_id: dict(state.kudos_config))
     monkeypatch.setattr(core_db, "get_all_members", lambda team_id: list(state.members))
     monkeypatch.setattr(core_db, "get_workspace_config", lambda team_id: dict(state.workspace_config))
     monkeypatch.setattr(core_db, "granted_scopes", lambda team_id: set())
@@ -88,6 +90,9 @@ def world(monkeypatch):
     monkeypatch.setattr(analytics, "capture", lambda *a, **k: True)
 
     def chat_postMessage(self, **kwargs):  # noqa: N802
+        error = state.post_errors.get(kwargs.get("channel"))
+        if error:
+            raise error
         state.posts.append(kwargs)
         return {"ok": True}
 
@@ -298,7 +303,7 @@ def test_the_command_posts_the_card_to_the_configured_channel(world):
     world.workspace_config = {"channel_id": "C0KUDOS"}
     _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
     channels = [p["channel"] for p in world.posts]
-    assert channels == ["C0KUDOS", GIVER]
+    assert channels == ["C0KUDOS", ANMOL, GIVER]
     assert f"*<@{ANMOL}>* got a" in _all_text(world.posts[:1])
 
 
@@ -308,6 +313,145 @@ def test_a_failed_save_does_not_pretend_it_worked(world):
     _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
     assert [p["channel"] for p in world.posts] == [GIVER]
     assert "did not go through" in world.posts[0]["text"]
+
+
+# The recipient is told, and the card goes where the kudos settings say.
+#
+# The card used to go only to workspace_config.channel_id, which nothing sets,
+# so for current workspaces the giver was the only person who saw anything.
+
+
+def _to(posts, channel):
+    return [p for p in posts if p["channel"] == channel]
+
+
+def test_a_dm_kudos_is_sent_to_the_recipient(world):
+    _dm(world.app, f"kudos <@{ANMOL}> for reviewing the fix")
+    dms = _to(world.posts, ANMOL)
+    assert len(dms) == 1
+    card = _all_text(dms)
+    assert f"<@{GIVER}>" in card
+    assert "sent you a" in card
+    assert "for reviewing the fix" in card
+
+
+def test_the_command_is_sent_to_the_recipient(world):
+    _slash(world.app, f"<@{ANMOL}|anmol> for reviewing the fix")
+    assert len(_to(world.posts, ANMOL)) == 1
+
+
+def test_the_recipient_does_not_see_the_givers_remaining_count(world):
+    world.allowance = {**world.allowance, "remaining": 3}
+    _dm(world.app, f"kudos <@{ANMOL}> for reviewing the fix")
+    card = _all_text(_to(world.posts, ANMOL))
+    assert "left today" not in card
+    assert "midnight" not in card
+    assert "left today" in _all_text(_to(world.posts, "D0GIVER"))
+
+
+def test_the_recipient_card_uses_no_gendered_pronouns(world):
+    _dm(world.app, f"kudos <@{ANMOL}> for reviewing the fix")
+    words = set(_all_text(_to(world.posts, ANMOL)).lower().replace("*", " ").split())
+    assert not words & {"he", "she", "him", "her", "his", "hers"}
+
+
+def test_no_dm_to_the_recipient_when_the_save_fails(world):
+    world.save_error = RuntimeError("database is down")
+    _dm(world.app, f"kudos <@{ANMOL}> for reviewing the fix")
+    assert _to(world.posts, ANMOL) == []
+
+
+def test_no_dm_to_the_recipient_when_the_allowance_is_spent(world):
+    world.allowance = {**world.allowance, "remaining": 0, "can_give": False}
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert _to(world.posts, ANMOL) == []
+
+
+def test_no_dm_for_a_self_kudos(world):
+    _dm(world.app, f"kudos <@{GIVER}> for being me")
+    _slash(world.app, f"<@{GIVER}|giver> for being me")
+    assert len(world.posts) == 2
+    assert all("other people" in p["text"] for p in world.posts)
+    assert "sent you a" not in _all_text(world.posts)
+
+
+def test_the_card_goes_to_the_kudos_channel(world):
+    world.kudos_config["channel_id"] = "C0KUDOS"
+    world.workspace_config = {"channel_id": "C0LEGACY"}
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert [p["channel"] for p in world.posts] == ["C0KUDOS", ANMOL, GIVER]
+    assert world.saved[0]["to_user"] == ANMOL
+
+
+def test_the_card_falls_back_to_the_legacy_workspace_channel(world):
+    world.workspace_config = {"channel_id": "C0LEGACY"}
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert [p["channel"] for p in world.posts] == ["C0LEGACY", ANMOL, GIVER]
+
+
+def test_no_channel_post_when_neither_channel_is_set(world):
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert [p["channel"] for p in world.posts] == [ANMOL, GIVER]
+    assert "got a" not in _all_text(world.posts)
+
+
+def test_the_giver_hears_it_was_sent_to_the_recipient(world):
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    reply = _to(world.posts, GIVER)[0]["text"]
+    assert reply == f"Sent to <@{ANMOL}>."
+
+
+def test_the_giver_hears_it_was_sent_and_posted(world):
+    world.kudos_config["channel_id"] = "C0KUDOS"
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    reply = _to(world.posts, GIVER)[0]["text"]
+    assert reply == f"Sent to <@{ANMOL}> and posted in <#C0KUDOS>."
+
+
+def test_a_channel_the_bot_cannot_post_in_still_reaches_the_recipient(world):
+    world.kudos_config["channel_id"] = "C0KUDOS"
+    world.post_errors["C0KUDOS"] = RuntimeError("not_in_channel")
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert [p["channel"] for p in world.posts] == [ANMOL, GIVER]
+    reply = _to(world.posts, GIVER)[0]
+    assert reply["text"] == f"Sent to <@{ANMOL}>."
+    assert "Invite @Morgenruf" in _all_text([reply])
+
+
+def test_a_recipient_dm_that_fails_is_not_reported_as_sent(world):
+    world.kudos_config["channel_id"] = "C0KUDOS"
+    world.post_errors[ANMOL] = RuntimeError("cannot_dm_bot")
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert len(world.saved) == 1
+    reply = _to(world.posts, GIVER)[0]["text"]
+    assert reply.startswith("Posted in <#C0KUDOS>.")
+    assert "Sent to" not in reply
+
+
+def test_an_unreadable_kudos_channel_does_not_lose_the_kudos(world, monkeypatch):
+    import src.modules.kudos.db as kdb
+
+    def broken(team_id):
+        raise RuntimeError("database is down")
+
+    monkeypatch.setattr(kdb, "get_config", broken)
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert len(world.saved) == 1
+    assert [p["channel"] for p in world.posts] == [ANMOL, GIVER]
+
+
+def test_the_saved_row_records_the_channel_it_was_posted_in(world, monkeypatch):
+    import src.modules.kudos.db as kdb
+
+    channels = []
+    monkeypatch.setattr(
+        kdb,
+        "save_kudos",
+        lambda team_id, from_user, to_user, message, channel_id="", emoji=None: channels.append(channel_id),
+    )
+    world.kudos_config["channel_id"] = "C0KUDOS"
+    _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
+    assert channels == ["C0KUDOS"]
 
 
 # The manifests.
