@@ -167,11 +167,52 @@ def parse_recipient(team_id: str, text: str) -> tuple[str, str] | None:
     return to_user, reason
 
 
+def recipient_card(from_user: str, message: str, emoji: str) -> tuple[str, list[dict]]:
+    """The DM the person being recognised gets.
+
+    Written to them rather than about them, with the reason quoted as the
+    giver wrote it. The giver's remaining allowance is theirs, not shown here.
+    """
+    text = f"{emoji} <@{from_user}> sent you a {emoji}"
+    blocks = [
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"{emoji} *<@{from_user}>* sent you a {emoji}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": _quote(message)}},
+        *_context("Pass one on with `kudos @someone` and a reason, or `/kudos`"),
+    ]
+    return text, blocks
+
+
+def kudos_channel(team_id: str) -> str:
+    """Where the card is shared: the kudos channel, else the legacy workspace
+    channel, else nowhere ("").
+
+    A lookup that fails means no channel post, never a lost kudos.
+    """
+    try:
+        import src.modules.kudos.db as kdb  # noqa: PLC0415
+
+        channel = (kdb.get_config(team_id) or {}).get("channel_id") or ""
+    except Exception as exc:
+        logger.warning("kudos: could not read the kudos channel for %s: %s", team_id, exc)
+        channel = ""
+    if channel:
+        return channel
+    try:
+        import src.core.db as core_db  # noqa: PLC0415
+
+        return (core_db.get_workspace_config(team_id) or {}).get("channel_id") or ""
+    except Exception as exc:
+        logger.warning("kudos: could not read the workspace channel for %s: %s", team_id, exc)
+        return ""
+
+
 def give_kudos(client, team_id: str, from_user: str, to_user: str, reason: str, reply_to: str, source: str) -> bool:
     """Check, save and announce one kudos. Returns True when it was saved.
 
-    Every reply to the giver goes to reply_to (their DM). The card is posted
-    only after the row is saved, so nobody sees a kudos that does not exist.
+    Every reply to the giver goes to reply_to (their DM). Once the row is
+    saved the recipient gets a DM, and the card is shared in the kudos channel
+    when there is one. Nothing is sent to anyone for a kudos that was not
+    saved.
     """
 
     def tell(text: str, blocks: list[dict] | None = None) -> None:
@@ -190,14 +231,10 @@ def give_kudos(client, team_id: str, from_user: str, to_user: str, reason: str, 
         return False
 
     emoji = state["emoji"]
+    post_channel = kudos_channel(team_id)
     try:
-        import src.core.db as core_db  # noqa: PLC0415
         import src.modules.kudos.db as db  # noqa: PLC0415
 
-        # Kudos has no channel setting of its own yet. The workspace-level
-        # channel is the only one there is.
-        config = core_db.get_workspace_config(team_id) or {}
-        post_channel = config.get("channel_id") or ""
         db.save_kudos(team_id, from_user, to_user, reason, post_channel, emoji)
     except Exception as exc:
         logger.warning("kudos: could not save a kudos in %s: %s", team_id, exc)
@@ -208,21 +245,43 @@ def give_kudos(client, team_id: str, from_user: str, to_user: str, reason: str, 
 
     capture("kudos_given", team_id, source=source)
 
-    card_text, card_blocks = kudos_card(from_user, to_user, reason, emoji)
-    left = _remaining_note(state)
-    try:
-        if post_channel:
-            client.chat_postMessage(channel=post_channel, text=card_text, blocks=card_blocks)
-            sent = f"Sent, and it is up in <#{post_channel}>."
-            tell(sent, [{"type": "section", "text": {"type": "mrkdwn", "text": sent}}, *_context(left)])
-        else:
-            tell(card_text, [*card_blocks, *_context("Saved. It shows on the Kudos page in the dashboard.", left)])
-    except Exception as exc:
-        logger.error("kudos: saved but could not post it: %s", exc)
+    posted = False
+    if post_channel:
+        card_text, card_blocks = kudos_card(from_user, to_user, reason, emoji)
         try:
-            tell(f"Saved. <@{to_user}> has been recognised. {left}".strip())
-        except Exception:
-            logger.exception("kudos: could not reply to %s", from_user)
+            client.chat_postMessage(channel=post_channel, text=card_text, blocks=card_blocks)
+            posted = True
+        except Exception as exc:
+            logger.warning("kudos: saved but could not post in %s: %s", post_channel, exc)
+
+    delivered = False
+    dm_text, dm_blocks = recipient_card(from_user, reason, emoji)
+    try:
+        client.chat_postMessage(channel=to_user, text=dm_text, blocks=dm_blocks)
+        delivered = True
+    except Exception as exc:
+        logger.warning("kudos: saved but could not DM %s: %s", to_user, exc)
+
+    if delivered and posted:
+        sent = f"Sent to <@{to_user}> and posted in <#{post_channel}>."
+    elif delivered:
+        sent = f"Sent to <@{to_user}>."
+    elif posted:
+        sent = f"Posted in <#{post_channel}>. I could not send <@{to_user}> a DM."
+    else:
+        sent = f"Saved. I could not reach <@{to_user}>, but it shows on the Kudos page in the dashboard."
+    missed = (
+        f"I could not post in <#{post_channel}>. Invite @Morgenruf to it so the next one shows up there."
+        if post_channel and not posted
+        else ""
+    )
+    try:
+        tell(
+            sent,
+            [{"type": "section", "text": {"type": "mrkdwn", "text": sent}}, *_context(missed, _remaining_note(state))],
+        )
+    except Exception:
+        logger.exception("kudos: could not reply to %s", from_user)
     return True
 
 
