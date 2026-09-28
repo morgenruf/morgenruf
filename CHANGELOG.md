@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Fixed
+- **The install alert says who installed and where.** It mentioned the
+  installer as `<@U...>`, which only resolves inside the installing workspace,
+  so the operator saw an empty name. The alert now looks up the workspace
+  domain and the installer's name, email, title, timezone and admin status
+  with the new install's bot token, writes them as plain text with the ids,
+  and counts only active workspaces. A lookup that fails leaves that detail
+  out and the alert still goes.
+
 ## [1.8.15] - 2026-09-28
 
 ### Fixed

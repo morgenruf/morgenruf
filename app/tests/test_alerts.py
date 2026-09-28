@@ -73,13 +73,52 @@ class TestTheInstallAlert:
         text = post.call_args.kwargs["json"]["text"]
         assert "Acme Inc" in text
         assert "U999" in text
-        assert "21 workspaces now." in text
+        assert "21 active workspaces now." in text
 
     def test_falls_back_to_team_id_when_the_name_is_missing(self, webhook):
         with patch("src.core.db.count_installations", return_value=1), patch("requests.post") as post:
             post.return_value = MagicMock(status_code=200)
             alerts.installed("T123", "")
         assert "T123" in post.call_args.kwargs["json"]["text"]
+
+    def test_details_come_from_the_new_install_not_a_mention(self, webhook):
+        """A <@U...> mention renders empty in the operator's workspace."""
+        client = MagicMock()
+        client.team_info.return_value = {"team": {"domain": "acme", "enterprise_name": ""}}
+        client.users_info.return_value = {
+            "user": {
+                "tz": "Europe/Berlin",
+                "is_admin": True,
+                "profile": {"real_name": "Jane Doe", "email": "jane@acme.com", "title": "Head of Eng"},
+            }
+        }
+        with (
+            patch("src.core.db.count_installations", return_value=11),
+            patch("slack_sdk.WebClient", return_value=client),
+            patch("requests.post") as post,
+        ):
+            post.return_value = MagicMock(status_code=200)
+            alerts.installed("T123", "Acme Inc", "U999", "xoxb-test")
+        text = post.call_args.kwargs["json"]["text"]
+        assert "<@" not in text
+        assert "Workspace: acme.slack.com · T123" in text
+        assert "Jane Doe · jane@acme.com · Head of Eng · Europe/Berlin · workspace admin · U999" in text
+        assert "11 active workspaces now." in text
+
+    def test_failed_lookups_still_send_the_ids(self, webhook):
+        client = MagicMock()
+        client.team_info.side_effect = RuntimeError("missing_scope")
+        client.users_info.side_effect = RuntimeError("user_not_found")
+        with (
+            patch("src.core.db.count_installations", return_value=2),
+            patch("slack_sdk.WebClient", return_value=client),
+            patch("requests.post") as post,
+        ):
+            post.return_value = MagicMock(status_code=200)
+            assert alerts.installed("T123", "Acme Inc", "U999", "xoxb-test") is True
+        text = post.call_args.kwargs["json"]["text"]
+        assert "Workspace: T123" in text
+        assert "Installed by: U999" in text
 
     def test_a_broken_database_still_sends_the_alert(self, webhook):
         with (
