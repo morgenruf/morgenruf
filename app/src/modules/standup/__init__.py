@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
-from src.modules.standup.handlers import claim_dm, register_handlers
+from src.modules.standup.handlers import claim_dm, claim_dm_command, register_handlers
 
 MODULE = ModuleSpec(
     name="standup",
@@ -19,6 +19,7 @@ MODULE = ModuleSpec(
     register_routes=None,
     plan_jobs=None,
     claim_dm=claim_dm,
+    claim_dm_command=claim_dm_command,
     purge=None,
     nav=(NavItem(label="Standups", path="/"),),
     default_enabled=True,
