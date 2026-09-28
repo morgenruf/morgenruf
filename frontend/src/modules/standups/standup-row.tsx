@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/common/components/ui/dropdown-menu';
 import { Skeleton } from '@/common/components/ui/skeleton';
+import { enoughToJudge } from '@/common/lib/participation';
 import { cn } from '@/common/lib/utils';
 
 import { healthLabel } from './form-utils';
@@ -76,8 +77,12 @@ function Participation({
       </div>
     );
   const rate = metrics.completion_rate;
-  const tone =
-    rate >= 75
+  // A standup with only a handful of expected answers gets no colour and no
+  // trend line: one reply swings the rate too far for either to mean much.
+  const judged = enoughToJudge(metrics.expected);
+  const tone = !judged
+    ? 'text-muted-foreground'
+    : rate >= 75
       ? 'text-success'
       : rate >= 40
         ? 'text-warning'
@@ -89,12 +94,16 @@ function Participation({
           {rate}%
         </span>
         <span className={cn('text-xs font-medium', tone)}>
-          {healthLabel(rate)}
+          {healthLabel(rate, metrics.expected)}
         </span>
-        <ParticipationSparkline
-          series={metrics.series ?? []}
-          tone={rate >= 75 ? 'success' : rate >= 40 ? 'warning' : 'destructive'}
-        />
+        {judged && (
+          <ParticipationSparkline
+            series={metrics.series ?? []}
+            tone={
+              rate >= 75 ? 'success' : rate >= 40 ? 'warning' : 'destructive'
+            }
+          />
+        )}
       </div>
       <p className="text-xs text-muted-foreground">
         {metrics.completed} of {metrics.expected} filed · last 14 days

@@ -8,7 +8,7 @@ from src.core.dm_router import DMContext, route_dm
 from src.core.modules import ModuleSpec
 
 
-def spec(name, claim):
+def spec(name, claim, command=None):
     return ModuleSpec(
         name=name,
         required_scopes=(),
@@ -20,6 +20,7 @@ def spec(name, claim):
         purge=None,
         nav=(),
         default_enabled=True,
+        claim_dm_command=command,
     )
 
 
@@ -57,3 +58,25 @@ def test_a_raising_module_does_not_block_the_others():
 
     modules = [spec("broken", boom), spec("standup", lambda c: True)]
     assert route_dm(modules, ctx(), fallback=None) == "standup"
+
+
+def test_a_dm_command_is_offered_before_any_conversation():
+    """Standup comes first in the registry, but a kudos command must not be
+    recorded as a standup answer."""
+    standup = MagicMock(return_value=True)
+    modules = [spec("standup", standup), spec("kudos", None, command=lambda c: True)]
+    assert route_dm(modules, ctx("kudos <@U2> thanks"), fallback=None) == "kudos"
+    standup.assert_not_called()
+
+
+def test_a_declined_dm_command_falls_through_to_the_conversation():
+    modules = [spec("standup", lambda c: True), spec("kudos", None, command=lambda c: False)]
+    assert route_dm(modules, ctx("my answer"), fallback=None) == "standup"
+
+
+def test_a_raising_dm_command_does_not_block_the_conversation():
+    def boom(c):
+        raise RuntimeError("kudos is broken")
+
+    modules = [spec("standup", lambda c: True), spec("kudos", None, command=boom)]
+    assert route_dm(modules, ctx("my answer"), fallback=None) == "standup"

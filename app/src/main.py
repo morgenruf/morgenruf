@@ -115,6 +115,23 @@ def register_modules(flask_app, bolt_app, registry) -> list[str]:
     return registered
 
 
+def register_slack_listeners(flask_app, bolt_app, modules) -> list[str]:
+    """Core's DM listener first, then every module's routes and listeners.
+
+    The order is load bearing: Bolt runs only the first listener matching an
+    event, so registering the DM listener first is what makes it the one owner
+    of message events. Tests register through here to get the same order.
+    """
+    register_dm_listener(bolt_app)
+    register_channel_join_listener(bolt_app)
+
+    # Core's own Slack surface: /morgenruf and the member profile modal.
+    from src.core.profile_slack import register_slack as register_profile_slack
+
+    register_profile_slack(bolt_app)
+    return register_modules(flask_app, bolt_app, modules)
+
+
 def _enabled_modules():
     """Registry members this deployment permits, before per-workspace gating."""
     allowlist = deploy_allowlist()
@@ -124,9 +141,10 @@ def _enabled_modules():
 def register_dm_listener(bolt_app) -> None:
     """Own the single catch-all message.im listener for every module.
 
-    Bolt fires every matching listener, so two modules registering their own
-    catch-all would both process the same DM. Modules expose claim_dm instead
-    and this offers each message to them in registry order.
+    Bolt runs only the first listener matching an event, and this one matches
+    every message, so it must be the only message listener that does real
+    work. Modules expose claim_dm_command and claim_dm instead, and this offers
+    each DM to them in registry order (see core.dm_router).
     """
 
     @bolt_app.event("message")
@@ -211,14 +229,6 @@ def create_app() -> tuple[App, Flask]:
         oauth_settings=oauth_settings,
     )
 
-    register_dm_listener(slack_app)
-    register_channel_join_listener(slack_app)
-
-    # Core's own Slack surface: /morgenruf and the member profile modal.
-    from src.core.profile_slack import register_slack as register_profile_slack
-
-    register_profile_slack(slack_app)
-
     workspace_jobs = _load_workspace_jobs()
     scheduler = build_scheduler(workspace_jobs)
     scheduler.start()
@@ -228,7 +238,7 @@ def create_app() -> tuple[App, Flask]:
 
     flask_app = create_http_app(modules=[])
     flask_app.secret_key = _resolve_secret_key()
-    registered = register_modules(flask_app, slack_app, _enabled_modules())
+    registered = register_slack_listeners(flask_app, slack_app, _enabled_modules())
     logger.info("Modules registered: %s", ", ".join(registered) or "none")
 
     handler = SlackRequestHandler(slack_app)

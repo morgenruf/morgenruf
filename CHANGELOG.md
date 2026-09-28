@@ -59,8 +59,6 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   Celebrations posts. Existing workspaces keep working without it and get
   the reaction after re-authorising. Self-hosted installs: add it to your
   Slack app from `slack-manifest.yaml`.
-- The stale `app/slack-manifest.yaml` and `app/slack-manifest.json` are
-  removed. The pair at the repository root is the only manifest.
 
 ### Fixed
 - **The coffee chat welcome is sent when someone joins a programme's
@@ -73,6 +71,75 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   channel, or any other) sent "Welcome to the team! I'm Morgenruf, your
   daily standup bot". It now goes only to someone joining a channel with an
   active standup in that workspace.
+
+## [1.8.16] - 2026-09-28
+
+### Fixed
+- **The install alert says who installed and where.** It mentioned the
+  installer as `<@U...>`, which only resolves inside the installing workspace,
+  so the operator saw an empty name. The alert now looks up the workspace
+  domain and the installer's name, email, title, timezone and admin status
+  with the new install's bot token, writes them as plain text with the ids,
+  and counts only active workspaces. A lookup that fails leaves that detail
+  out and the alert still goes.
+
+## [1.8.15] - 2026-09-28
+
+### Fixed
+- **Kudos are saved again, from both `/kudos` and a DM.** No kudos had ever
+  reached the database. `/kudos` and `/morgenruf-kudos` were declared without
+  `should_escape`, so Slack sent `@Anmol Nagpal` as plain text, the handler
+  found nobody, saved nothing, and still showed a "wants to recognise someone"
+  card. Both commands now ask Slack to escape mentions, `<@U123>` and
+  `<@U123|name>` are both understood, and a plain `@name` is matched against
+  the workspace roster when exactly one person has that display or real name.
+  When nobody can be found the giver gets a short usage hint instead of a
+  card. `kudos @someone ...` sent by DM never ran at all: Bolt runs only the
+  first listener that matches an event, and core's DM listener is registered
+  before every module, so kudos' own listener was never reached. Kudos now
+  takes its DM through the core DM router, ahead of standup's answer
+  collection, which is otherwise unchanged. The slash command now applies the
+  same self-kudos and daily allowance checks as the DM, and a kudos that fails
+  to save says so instead of posting a card. Hosted installs need "Escape
+  channels, users, and links" ticked for both commands in the Slack app
+  config.
+- **Standup's DM keywords work.** `help`, `standup`, `skip`, `I'm away`,
+  `I'm back` and `timezone <tz>` never ran in production, even though the
+  welcome DM says "Type `help`" and App Home advertises `standup`, `skip` and
+  `I'm away`. Their listeners were registered after core's catch-all DM
+  listener, and Bolt runs only the first listener that matches. They now go
+  through the core DM router like kudos, and only a message that is the whole
+  keyword counts (any case, trailing punctuation ignored), so an answer such
+  as "need help with the deploy" is still an answer. While a standup is being
+  answered, `skip` stays an answer, `pass` leaves the question blank as the
+  standup DM always promised, `help` shows help without using up the answer,
+  `standup` says one is already in progress instead of restarting it, and
+  `I'm away` closes the open standup like the **I'm away** button. App Home's
+  help no longer lists an `edit` keyword that never existed, and the vacation
+  banner asks for `I'm back` rather than "just send me a message".
+- **The person you give kudos to is told.** The kudos card only went to
+  the legacy workspace channel, which nothing in the dashboard or the API
+  sets, so in current workspaces only the giver saw it. Every kudos that is
+  saved now sends the recipient a DM with who it is from and why. Nothing is
+  sent for a kudos that was refused or failed to save. The giver's reply says
+  where it went ("Sent to @x", or "Sent to @x and posted in #kudos"), and says
+  so when a DM or the channel post could not be delivered.
+- **Empty channel pickers explain themselves.** When the bot is in no channel yet, every dashboard channel picker says to `/invite @Morgenruf` and offers a Refresh channels button.
+- **Participation only counts days a standup existed.** Days before a schedule was created are no longer expected, and a rate built on fewer than five expected answers reads "Too early to judge" instead of "Needs a look".
+- **Insights no longer says "Everyone has been recognised" with zero kudos.** Every contributor without kudos is listed, and a workspace with no standups gets a neutral "No standups yet" state.
+- **App Home shows the report time.** Cards said "Reports at" the standup time; they now show the report time (or the default an hour later), naming the standup's timezone when it differs from the reader's.
+- **The Slack manifests agree on the interactivity URL.** `slack-manifest.yaml` now uses `/slack/interactions` like the JSON, and the unused copies in `app/` are gone.
+
+### Added
+- **A kudos channel.** Kudos has a channel setting of its own (migration
+  055), on the Kudos page next to the token and daily allowance and in
+  `/dashboard/api/kudos/config`. The list shows only channels Morgenruf is in,
+  and says "Invite @Morgenruf to a channel first" when there are none. The
+  card is posted there when it is set, falls back to the legacy workspace
+  channel when that is set, and otherwise only the DMs go out. A save that
+  leaves the channel out keeps the one already chosen. The same people who can
+  change the token can change the channel: workspace admins and anyone with
+  the kudos grant.
 
 ## [1.8.14] - 2026-09-28
 

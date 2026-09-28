@@ -1,9 +1,9 @@
 """Button handlers for the coffee chat messages.
 
-Opt-out is a button rather than a DM keyword on purpose: standup registers
-@app.message("skip") as a substring match, so any Connect command containing
-"skip" would fire standup's handler instead. Action ids are namespaced so two
-modules cannot collide.
+Opt-out is a button rather than a DM keyword on purpose: standup claims a DM
+that is exactly "skip" (see standup's claim_dm_command), and a button cannot
+collide with any typed keyword. Action ids are namespaced so two modules
+cannot collide.
 """
 
 from __future__ import annotations

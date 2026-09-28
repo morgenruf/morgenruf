@@ -99,7 +99,7 @@ class BrowserData:
                 "created_at": self.now,
             }
         ]
-        self.kudos_config = {"emoji": "🍁", "daily_allowance": 5, "token_auto": True}
+        self.kudos_config = {"emoji": "🍁", "daily_allowance": 5, "token_auto": True, "channel_id": ""}
         self.programs = [
             {
                 "id": 1,
@@ -599,8 +599,13 @@ def create_test_app(patcher=None):
             ],
             "get_giver_leaderboard": lambda team, days: [{"user_id": "U_MEMBER", "given": 5, "last_given": state.now}],
             "get_config": lambda team: deepcopy(state.kudos_config),
-            "set_config": lambda team, emoji, allowance: (
-                state.kudos_config.update(emoji=emoji, daily_allowance=allowance, token_auto=False)
+            "set_config": lambda team, emoji, allowance, channel_id=None: (
+                state.kudos_config.update(
+                    emoji=emoji,
+                    daily_allowance=allowance,
+                    token_auto=False,
+                    channel_id=state.kudos_config["channel_id"] if channel_id is None else channel_id,
+                )
                 or deepcopy(state.kudos_config)
             ),
         },
@@ -608,14 +613,21 @@ def create_test_app(patcher=None):
     install(
         insights_db,
         {
-            "unrecognised_contributors": lambda team, **kwargs: [
+            "contributor_recognition": lambda team, **kwargs: [
                 {
                     "user_id": "U_LEAD",
                     "real_name": "Sam Rivera",
                     "standups": 12,
                     "last_standup": state.today,
                     "kudos": 0,
-                }
+                },
+                {
+                    "user_id": "U_ADMIN",
+                    "real_name": "Alex Morgan",
+                    "standups": 9,
+                    "last_standup": state.today,
+                    "kudos": 5,
+                },
             ],
             "blocker_rows": lambda team, **kwargs: {
                 "U_ADMIN": [

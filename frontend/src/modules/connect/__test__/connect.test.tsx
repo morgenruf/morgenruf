@@ -14,6 +14,7 @@ import { ConnectDetailPage, ConnectListPage, ConnectNewPage } from '../pages';
 import { ProgramForm } from '../program-form';
 
 const mock = vi.hoisted(() => ({
+  channels: vi.fn(),
   admin: false,
   modules: vi.fn(),
   programs: vi.fn(),
@@ -53,9 +54,7 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
     },
     workspace: {
       listModules: mock.modules,
-      listChannels: vi
-        .fn()
-        .mockResolvedValue({ data: [{ id: 'C1', name: 'engineering' }] }),
+      listChannels: mock.channels,
       updateModule: vi.fn(),
     },
     members: {
@@ -95,6 +94,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   mock.admin = false;
+  mock.channels.mockResolvedValue({
+    data: [{ id: 'C1', name: 'engineering' }],
+  });
   mock.members.mockResolvedValue({
     data: [
       { id: 'U1', name: 'Mina', avatar: 'https://example.com/mina.jpg' },
@@ -293,6 +295,32 @@ it('associates exact field labels without incorporating select options into thei
   expect(
     screen.getByRole('combobox', { name: 'Repeat every' }),
   ).toBeInTheDocument();
+});
+
+it('explains an empty channel list on a new coffee chat and refetches it', async () => {
+  mock.admin = true;
+  mock.channels.mockResolvedValue({ data: [] });
+  const user = userEvent.setup({ delay: null });
+
+  view(<ProgramForm />);
+
+  expect(
+    await screen.findByText(
+      'Invite @Morgenruf to a channel first: type /invite @Morgenruf in the channel, then refresh this list.',
+    ),
+  ).toBeInTheDocument();
+
+  mock.channels.mockResolvedValue({
+    data: [{ id: 'C1', name: 'engineering' }],
+  });
+  await user.click(screen.getByRole('button', { name: 'Refresh channels' }));
+
+  await waitFor(() =>
+    expect(
+      screen.queryByText(/Invite @Morgenruf to a channel first/),
+    ).not.toBeInTheDocument(),
+  );
+  await chooseOption(user, 'Draw people from', '#engineering');
 });
 
 it('requires a coffee chat channel and submits numeric choices across tabs', async () => {

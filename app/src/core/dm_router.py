@@ -1,13 +1,15 @@
-"""Single catch-all message.im listener, shared by every module.
+"""Single catch-all message listener, shared by every module.
 
-Bolt fires every listener that matches an event. Standup's keyword listeners
-(`@app.message("standup")` and friends) self-filter by pattern, so they do not
-need arbitration. The catch-all is different: a second module registering its
-own catch-all would process the same DM standup is already handling, and
-standup would treat another module's command as a standup answer.
+Bolt runs only the first listener that matches an event, and core registers
+this one before any module. Every message event therefore ends here, and a
+module's own @app.message listener never sees a DM.
 
-So modules expose claim_dm instead of registering their own catch-all, and
-core offers each message to them in registry order. First claim wins.
+So modules expose hooks instead of listeners, and core offers each DM to them
+in registry order. First claim wins. claim_dm_command is for explicit
+commands such as `kudos @sam thanks` or standup's `help`, and is offered to
+every module before any claim_dm, so a command still works while standup is
+waiting for an answer. A module decides for itself which of its commands still
+count as answers mid-conversation (standup keeps `skip` and `pass` as answers).
 """
 
 from __future__ import annotations
@@ -38,19 +40,23 @@ def route_dm(
 ) -> Optional[str]:
     """Offer a DM to each module in order. Returns the claiming module's name.
 
-    A module that raises is logged and skipped, so one broken module cannot
-    stop the others from seeing their own messages.
+    Explicit commands (claim_dm_command) are offered first, then the
+    conversational claim_dm. A module that raises is logged and skipped, so one
+    broken module cannot stop the others from seeing their own messages.
     """
-    for spec in modules:
-        if spec.claim_dm is None:
-            continue
-        try:
-            claimed = spec.claim_dm(ctx)
-        except Exception:
-            logger.exception("module %s raised while claiming a DM", spec.name)
-            continue
-        if claimed:
-            return spec.name
+    modules = list(modules)
+    for attr in ("claim_dm_command", "claim_dm"):
+        for spec in modules:
+            claim = getattr(spec, attr)
+            if claim is None:
+                continue
+            try:
+                claimed = claim(ctx)
+            except Exception:
+                logger.exception("module %s raised while claiming a DM", spec.name)
+                continue
+            if claimed:
+                return spec.name
     if fallback is not None:
         fallback(ctx)
     return None

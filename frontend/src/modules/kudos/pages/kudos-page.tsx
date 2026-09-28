@@ -1,9 +1,10 @@
 import { getRouteApi } from '@tanstack/react-router';
 import { Heart } from 'lucide-react';
-import { useForm, useWatch } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
+import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Person } from '@/common/components/person';
@@ -46,7 +47,8 @@ export default function KudosPage() {
   const navigate = route.useNavigate();
   const days = params.days;
 
-  const { feed, receivers, givers, config, save, canEdit } = useKudos(days);
+  const { feed, receivers, givers, config, channels, save, canEdit } =
+    useKudos(days);
   const directory = useMemberDirectory();
 
   const form = useForm<KudosConfigInput>({
@@ -55,9 +57,26 @@ export default function KudosPage() {
       ? {
           emoji: config.data.emoji,
           daily_allowance: config.data.daily_allowance,
+          channel_id: config.data.channel_id,
         }
-      : { emoji: '☕', daily_allowance: 5 },
+      : { emoji: '☕', daily_allowance: 5, channel_id: '' },
   });
+
+  // Only channels the bot is in come back, which are the only ones it can
+  // post to. A saved channel it has since left stays visible so the choice
+  // is not silently swapped for another.
+  const savedChannel = config.data?.channel_id ?? '';
+  const joined = (channels.data ?? []).map((channel) => ({
+    value: channel.id,
+    label: `#${channel.name}`,
+  }));
+  const channelOptions = [
+    { value: '', label: 'No channel, only a DM to the person' },
+    ...joined,
+    ...(savedChannel && !joined.some((item) => item.value === savedChannel)
+      ? [{ value: savedChannel, label: 'A channel Morgenruf is no longer in' }]
+      : []),
+  ];
 
   const preview = useWatch({ control: form.control });
   const token =
@@ -111,7 +130,12 @@ export default function KudosPage() {
             <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">
               kudos @teammate Great work on the deploy!
             </code>{' '}
-            in a DM to the bot. Everyone has{' '}
+            in a DM to the bot, or use{' '}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">
+              /kudos
+            </code>
+            . The person you thank gets a DM, and it is shared in your kudos
+            channel when one is set. Everyone has{' '}
             {config.data?.daily_allowance ?? '…'} to give per day; unused kudos
             reset at midnight in each person’s timezone.
           </CardDescription>
@@ -255,8 +279,8 @@ export default function KudosPage() {
           <CardHeader>
             <CardTitle>The token your team gives</CardTitle>
             <CardDescription>
-              Choose a token and the daily allowance. An allowance of zero
-              switches giving off.
+              Choose a token, the daily allowance, and a channel to share kudos
+              in. An allowance of zero switches giving off.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -278,6 +302,7 @@ export default function KudosPage() {
                           form.reset({
                             emoji: response.data.emoji,
                             daily_allowance: response.data.daily_allowance,
+                            channel_id: response.data.channel_id,
                           });
 
                           toast.success('Kudos settings saved');
@@ -317,6 +342,61 @@ export default function KudosPage() {
                           })}
                         />
                       </div>
+                      <Controller
+                        control={form.control}
+                        name="channel_id"
+                        render={({ field }) => (
+                          <LoadingField
+                            className="sm:col-span-2"
+                            pending={channels.isPending}
+                            label="Loading channels…"
+                            fieldLabel="Kudos channel"
+                          >
+                            <div className="space-y-2">
+                              <Label htmlFor="kudos-channel">
+                                Kudos channel
+                              </Label>
+                              <Select
+                                name={field.name}
+                                value={field.value ?? ''}
+                                items={channelOptions}
+                                disabled={save.isPending}
+                                onValueChange={(value) => {
+                                  if (value !== null) field.onChange(value);
+                                }}
+                              >
+                                <SelectTrigger
+                                  id="kudos-channel"
+                                  className="w-full"
+                                  ref={field.ref}
+                                  onBlur={field.onBlur}
+                                  aria-describedby="kudos-channel-help"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {channelOptions.map((item) => (
+                                    <SelectItem
+                                      key={item.value}
+                                      value={item.value}
+                                    >
+                                      {item.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p
+                                id="kudos-channel-help"
+                                className="text-xs text-muted-foreground"
+                              >
+                                {!channels.isError && joined.length === 0
+                                  ? 'Invite @Morgenruf to a channel first'
+                                  : 'The person you thank always gets a DM. Pick a channel to share kudos with everyone too.'}
+                              </p>
+                            </div>
+                          </LoadingField>
+                        )}
+                      />
                     </div>
 
                     <div

@@ -1,3 +1,5 @@
+import { enoughToJudge } from '@/common/lib/participation';
+
 import type { Standup, StandupInput } from './hooks';
 
 export const weekdays = [
@@ -84,14 +86,19 @@ export function sortedStandups(items: Standup[]) {
   );
 }
 
-export function healthLabel(rate: number | null | undefined) {
+export function healthLabel(
+  rate: number | null | undefined,
+  expected?: number | null,
+) {
   return rate == null
     ? 'No data yet'
-    : rate >= 75
-      ? 'Healthy'
-      : rate >= 40
-        ? 'Slipping'
-        : 'Needs a look';
+    : expected != null && !enoughToJudge(expected)
+      ? 'Too early to judge'
+      : rate >= 75
+        ? 'Healthy'
+        : rate >= 40
+          ? 'Slipping'
+          : 'Needs a look';
 }
 
 export function validTimezone(value: string) {

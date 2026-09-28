@@ -105,6 +105,8 @@ Three days later the bot nudges pairs that have not met, and closes the round on
 
 `kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over. That is what makes people spend them.
 
+The person you thank gets a DM with who it is from and why. To share kudos with everyone too, pick a **Kudos channel** under **Kudos → The token your team gives**. Only channels Morgenruf is in are listed, so invite it to the channel first.
+
 **Using the Morgenruf icon as your kudos token:** download it from **Kudos → The token your team gives**, add it in Slack under **Customize workspace → Add custom emoji** with the name `morgenruf`, and the bot picks it up within a day on its own. It falls back if the emoji is ever removed, so a workspace never ends up posting `:morgenruf:` as literal text.
 
 Setting the token by hand switches that off and keeps whatever you choose. Changing the daily allowance does not: the settings form submits every field, and treating any save as a token choice used to opt workspaces out of the emoji they had just imported.
@@ -249,7 +251,7 @@ Two roles, plus a grant per feature.
 |---|---|---|---|
 | Standups: create, edit, delete, automation rules | yes | with the standups grant | no |
 | Coffee chats: programmes, members, run a round now | yes | with the coffee chats grant | no |
-| Kudos: allowance and token | yes | with the kudos grant | no |
+| Kudos: allowance, token and channel | yes | with the kudos grant | no |
 | Celebrations: settings, working days, holidays, asking for dates | yes | with the celebrations grant | no |
 | Member profiles: edit anyone's, import dates | yes | no | their own only |
 | Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
@@ -297,9 +299,12 @@ Then posts a formatted summary to the configured channel:
 |---------|-------------|
 | `standup` | Start your standup now |
 | `skip` | Skip today's standup |
+| `I'm away` / `I'm back` | Go on vacation (no standup DMs) / return from it |
 | `timezone <tz>` | Set your personal timezone (e.g. `timezone Europe/London`) |
 | `kudos @teammate <reason>` | Give someone recognition (also `/kudos`) |
 | `help` | Show available commands |
+
+A keyword only counts when it is the whole message (any case, trailing punctuation ignored), so "I need help with the deploy" is an ordinary message. While you are answering a standup, `skip` and `pass` are answers (`pass` leaves the question blank), `help` shows help without using up the answer, and `standup` tells you one is already in progress. `I'm away` closes the open standup, like the **I'm away** button.
 
 `/morgenruf profile` opens your member profile, and `/morgenruf help` (or `/morgenruf` on its own) lists what Morgenruf can do in your workspace, following which features are switched on.
 

@@ -70,54 +70,60 @@ DEFAULT_ALLOWANCE = 5
 
 
 def get_config(team_id: str) -> dict:
-    """The workspace's token and daily allowance, with defaults applied.
+    """The workspace's token, daily allowance and channel, with defaults applied.
 
     A workspace that has never opened the settings has no row, which is not an
-    error: it means the defaults.
+    error: it means the defaults. An empty channel_id means no kudos channel.
     """
-    sql = "SELECT emoji, daily_allowance, token_auto FROM kudos_config WHERE team_id = %s"
+    defaults = {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE, "token_auto": True, "channel_id": ""}
+    sql = "SELECT emoji, daily_allowance, token_auto, channel_id FROM kudos_config WHERE team_id = %s"
     try:
         with db_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, (team_id,))
                 row = cur.fetchone()
     except Exception:
-        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE, "token_auto": True}
+        return defaults
     if not row:
-        return {"emoji": DEFAULT_EMOJI, "daily_allowance": DEFAULT_ALLOWANCE, "token_auto": True}
+        return defaults
     return {
         "emoji": row[0] or DEFAULT_EMOJI,
         "daily_allowance": row[1],
         "token_auto": bool(row[2]) if row[2] is not None else True,
+        "channel_id": row[3] or "",
     }
 
 
-def set_config(team_id: str, emoji: str, daily_allowance: int) -> dict:
+def set_config(team_id: str, emoji: str, daily_allowance: int, channel_id: str | None = None) -> dict:
     """Save the settings form.
 
     Choosing a token turns off the automatic one for good. Changing only the
     allowance must not: the form submits every field, so treating any save as
     a token choice quietly opted people out of the branded emoji for editing
     an unrelated number.
+
+    channel_id None leaves the saved channel as it is, so a caller that does
+    not know about the channel cannot clear it. An empty string clears it.
     """
     sql = """
-        INSERT INTO kudos_config (team_id, emoji, daily_allowance, token_auto, updated_at)
-        VALUES (%s, %s, %s, FALSE, NOW())
+        INSERT INTO kudos_config (team_id, emoji, daily_allowance, channel_id, token_auto, updated_at)
+        VALUES (%s, %s, %s, %s, FALSE, NOW())
         ON CONFLICT (team_id) DO UPDATE SET
             emoji = EXCLUDED.emoji,
             daily_allowance = EXCLUDED.daily_allowance,
+            channel_id = COALESCE(EXCLUDED.channel_id, kudos_config.channel_id),
             token_auto = CASE
                 WHEN kudos_config.emoji IS DISTINCT FROM EXCLUDED.emoji THEN FALSE
                 ELSE kudos_config.token_auto
             END,
             updated_at = NOW()
-        RETURNING emoji, daily_allowance, token_auto
+        RETURNING emoji, daily_allowance, token_auto, channel_id
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, emoji, daily_allowance))
+            cur.execute(sql, (team_id, emoji, daily_allowance, channel_id))
             row = cur.fetchone()
-    return {"emoji": row[0], "daily_allowance": row[1], "token_auto": bool(row[2])}
+    return {"emoji": row[0], "daily_allowance": row[1], "token_auto": bool(row[2]), "channel_id": row[3] or ""}
 
 
 def set_token_automatically(team_id: str, emoji: str) -> None:

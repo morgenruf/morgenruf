@@ -415,6 +415,7 @@ export type ImportHolidaysError = ApiError;
 export type ImportProfilesError = ApiError;
 
 export interface InsightsData {
+  contributors: number;
   stuck: PersistentBlocker[];
   unrecognised: UnrecognisedContributor[];
   window_days: number;
@@ -429,12 +430,15 @@ export interface InviteMemberInput {
 }
 
 export interface KudosConfig {
+  channel_id: string;
   daily_allowance: number;
   emoji: string;
   token_auto: boolean;
 }
 
 export interface KudosConfigInput {
+  /** @pattern ^([CG][A-Z0-9]+)?$ */
+  channel_id?: string;
   /**
    * @min 0
    * @max 50

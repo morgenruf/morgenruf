@@ -23,6 +23,12 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies]
+    ignore:
+      # A Postgres major version cannot start on the previous major's data
+      # directory, so helm upgrade would break every existing install. Major
+      # upgrades are planned by hand with a dump and restore path.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /

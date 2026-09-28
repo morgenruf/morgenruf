@@ -10,7 +10,7 @@ from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.kudos.dashboard import register_routes
-from src.modules.kudos.handlers import register_handlers
+from src.modules.kudos.handlers import claim_dm_command, register_handlers
 from src.modules.kudos.home import home_blocks
 from src.modules.kudos.jobs import plan_jobs
 from src.modules.kudos.mcp import tools as mcp_tools
@@ -23,6 +23,7 @@ MODULE = ModuleSpec(
     register_routes=register_routes,
     plan_jobs=plan_jobs,
     claim_dm=None,
+    claim_dm_command=claim_dm_command,
     purge=None,
     nav=(NavItem(label="Kudos", path="#kudos"),),
     default_enabled=True,

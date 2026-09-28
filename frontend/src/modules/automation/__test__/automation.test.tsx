@@ -7,7 +7,7 @@ import { chooseOption } from '@/test/select';
 
 import AutomationPage from '../pages/automation-page';
 
-const mock = vi.hoisted(() => ({ create: vi.fn() }));
+const mock = vi.hoisted(() => ({ create: vi.fn(), channels: vi.fn() }));
 
 vi.mock('@/common/auth/use-session', () => ({
   useSession: () => ({
@@ -23,11 +23,7 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
       createRule: mock.create,
       deleteRule: vi.fn(),
     },
-    workspace: {
-      listChannels: vi
-        .fn()
-        .mockResolvedValue({ data: [{ id: 'C1', name: 'design' }] }),
-    },
+    workspace: { listChannels: mock.channels },
   };
 
   return {
@@ -41,6 +37,42 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   mock.create.mockResolvedValue({ data: { id: 2 } });
+  mock.channels.mockResolvedValue({ data: [{ id: 'C1', name: 'design' }] });
+});
+
+it('explains an empty channel list and refetches it on request', async () => {
+  mock.channels.mockResolvedValue({ data: [] });
+  const user = userEvent.setup({ delay: null });
+
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <AutomationPage />
+    </QueryClientProvider>,
+  );
+
+  await user.click(
+    screen.getByRole('button', { name: /Notice a quiet standup/ }),
+  );
+
+  expect(
+    await screen.findByText(
+      'Invite @Morgenruf to a channel first: type /invite @Morgenruf in the channel, then refresh this list.',
+    ),
+  ).toBeInTheDocument();
+
+  mock.channels.mockResolvedValue({ data: [{ id: 'C1', name: 'design' }] });
+  await user.click(screen.getByRole('button', { name: 'Refresh channels' }));
+
+  await waitFor(() =>
+    expect(
+      screen.queryByText(/Invite @Morgenruf to a channel first/),
+    ).not.toBeInTheDocument(),
+  );
+  await chooseOption(user, 'Slack channel', '#design');
 });
 
 it('keeps the low participation default and clears a channel target when changing action', async () => {

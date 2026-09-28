@@ -824,6 +824,9 @@
       },
       "InsightsData": {
         "properties": {
+          "contributors": {
+            "type": "integer"
+          },
           "stuck": {
             "items": {
               "$ref": "#/components/schemas/PersistentBlocker"
@@ -841,6 +844,7 @@
           }
         },
         "required": [
+          "contributors",
           "stuck",
           "unrecognised",
           "window_days"
@@ -868,6 +872,9 @@
       },
       "KudosConfig": {
         "properties": {
+          "channel_id": {
+            "type": "string"
+          },
           "daily_allowance": {
             "type": "integer"
           },
@@ -879,6 +886,7 @@
           }
         },
         "required": [
+          "channel_id",
           "daily_allowance",
           "emoji",
           "token_auto"
@@ -887,6 +895,10 @@
       },
       "KudosConfigInput": {
         "properties": {
+          "channel_id": {
+            "pattern": "^([CG][A-Z0-9]+)?$",
+            "type": "string"
+          },
           "daily_allowance": {
             "default": 5,
             "maximum": 50,

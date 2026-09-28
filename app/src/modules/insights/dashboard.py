@@ -41,10 +41,15 @@ def register_routes(flask_app) -> None:
         days = max(7, min(90, int(query.get("days", 30))))
         min_days = max(2, min(10, int(query.get("min_blocker_days", 3))))
 
-        unrecognised = idb.unrecognised_contributors(team_id, days=days)
+        # Every contributor, so the page can tell three states apart: nobody
+        # filed a standup, everyone who did was thanked, or some were not. The
+        # list used to require eight standups before anyone appeared, so a new
+        # workspace with no kudos at all read "Everyone has been recognised".
+        contributors = idb.contributor_recognition(team_id, days=days)
+        unrecognised = [row for row in contributors if not int(row.get("kudos") or 0)]
         for row in unrecognised:
             if row.get("last_standup"):
-                row["last_standup"] = row["last_standup"].isoformat()
+                row["last_standup"] = _iso(row["last_standup"])
 
         stuck = []
         for user_id, rows in idb.blocker_rows(team_id, days=min(days, 21)).items():
@@ -63,6 +68,7 @@ def register_routes(flask_app) -> None:
 
         return {
             "window_days": days,
+            "contributors": len(contributors),
             "unrecognised": unrecognised,
             "stuck": stuck,
         }

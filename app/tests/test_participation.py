@@ -729,3 +729,100 @@ class TestScheduleSeries:
     def test_a_fully_answered_day_reads_as_one_hundred(self):
         by_name = {s["name"]: s for s in _result()["schedules"]}
         assert 100 in by_name["Evening"]["series"]
+
+
+# ---------------------------------------------------------------------------
+# A schedule is only expected to have run after it existed
+# ---------------------------------------------------------------------------
+
+
+class TestDaysBeforeTheScheduleExisted:
+    """A standup made a few minutes ago read "5%, needs a look, 1 of 20 filed".
+
+    The window was expanded back fourteen days whatever the schedule's age, so
+    two participants on a mon-fri standup were owed ten days each before the
+    first DM had gone out. Only days on or after `created_at`, in the
+    schedule's own timezone, are expected now.
+    """
+
+    def _new(self, created_at, tz="UTC", participants=("U1", "U2")):
+        sched = _schedule(1, "New", list(participants), tz=tz)
+        sched["created_at"] = created_at
+        return sched
+
+    def test_created_today_expects_only_today(self):
+        """Created Fri 03-13 11:55 UTC, one of two people answered: 1 of 2, not 1 of 20."""
+        sched = self._new(dt.datetime(2026, 3, 13, 11, 55, tzinfo=UTC))
+        members = [_member("U1"), _member("U2")]
+        result = db.compute_participation([sched], members, [_submission("U1", FRI)], days=14, now=NOW)
+        assert result["expected"] == 2
+        assert result["completed"] == 1
+        assert result["completion_rate"] == 50
+        assert _by_schedule(result)[1]["occurrence_days"] == 1
+
+    def test_created_mid_window_counts_from_that_day(self):
+        """Created Wed 03-11: Wed, Thu, Fri count, so 3 days x 2 people = 6."""
+        sched = self._new(dt.datetime(2026, 3, 11, 8, 0, tzinfo=UTC))
+        result = db.compute_participation([sched], [_member("U1"), _member("U2")], [], days=7, now=NOW)
+        assert result["expected"] == 6
+        assert _by_schedule(result)[1]["occurrence_days"] == 3
+
+    def test_days_before_creation_are_blank_in_the_grid_and_the_series(self):
+        sched = self._new(dt.datetime(2026, 3, 11, 8, 0, tzinfo=UTC))
+        result = db.compute_participation([sched], [_member("U1"), _member("U2")], [], days=7, now=NOW)
+        row = _by_user(result)["U1"]
+        before = [d for d in row["days"] if d["date"] < WED]
+        assert before and all(d["expected"] == 0 for d in before)
+        series = dict(zip(result["window_days"], _by_schedule(result)[1]["series"]))
+        assert series[MON] is None and series[TUE] is None
+        assert series[WED] == 0
+
+    def test_an_answer_filed_before_the_schedule_existed_is_not_credited(self):
+        """A stray ad-hoc standup from Monday cannot count towards a schedule made on Wednesday."""
+        sched = self._new(dt.datetime(2026, 3, 11, 8, 0, tzinfo=UTC), participants=("U1",))
+        result = db.compute_participation([sched], [_member("U1")], [_submission("U1", MON)], days=7, now=NOW)
+        assert result["expected"] == 3
+        assert result["completed"] == 0
+
+    def test_creation_date_is_read_in_the_schedules_timezone(self):
+        """Thu 03-12 23:30 in New York is Fri 03-13 03:30 UTC.
+
+        The standup was made on Thursday evening local time, so Thursday is
+        its first day, not Friday.
+        """
+        sched = self._new(dt.datetime(2026, 3, 13, 3, 30, tzinfo=UTC), tz="America/New_York", participants=("U1",))
+        result = db.compute_participation([sched], [_member("U1")], [], days=7, now=NOW)
+        assert result["expected"] == 2  # Thu 03-12 and Fri 03-13, New York dates
+
+    def test_iso_string_and_naive_timestamps_are_accepted(self):
+        for created in ("2026-03-11T08:00:00+00:00", "2026-03-11", dt.datetime(2026, 3, 11, 8, 0)):
+            sched = self._new(created, participants=("U1",))
+            result = db.compute_participation([sched], [_member("U1")], [], days=7, now=NOW)
+            assert result["expected"] == 3, created
+
+    def test_an_older_schedule_is_unchanged(self):
+        """Created long before the window: every occurrence in it still counts."""
+        sched = self._new(dt.datetime(2025, 1, 1, tzinfo=UTC), participants=("U1",))
+        result = db.compute_participation([sched], [_member("U1")], [], days=14, now=NOW)
+        assert result["expected"] == 10
+
+    def test_no_created_at_keeps_the_whole_window(self):
+        sched = _schedule(1, "Legacy", ["U1"])
+        result = db.compute_participation([sched], [_member("U1")], [], days=7, now=NOW)
+        assert result["expected"] == 5
+
+    def test_the_fetch_selects_created_at(self):
+        cur = MagicMock()
+        cur.__enter__ = lambda s: s
+        cur.__exit__ = MagicMock(return_value=False)
+        cur.fetchall.return_value = []
+        conn = MagicMock()
+        conn.__enter__ = lambda s: s
+        conn.__exit__ = MagicMock(return_value=False)
+        conn.cursor.return_value = cur
+        pool = MagicMock()
+        pool.getconn.return_value = conn
+        with patch.object(db, "_pool", pool):
+            db.get_participation_overview("T1", days=7)
+        schedules_sql = cur.execute.call_args_list[0].args[0]
+        assert "created_at" in schedules_sql

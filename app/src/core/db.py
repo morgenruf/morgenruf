@@ -1272,12 +1272,46 @@ def _percentage(part: int, whole: int) -> int:
     return int(part * 100 / whole + 0.5)
 
 
+def _local_creation_date(schedule: dict, zone) -> date | None:
+    """Return the date a schedule was created on, in its own timezone.
+
+    `created_at` is a TIMESTAMPTZ, so psycopg2 hands back an aware datetime. A
+    naive one (a test fixture, an old export) is read as UTC. A bare date or an
+    ISO string is accepted too. None when the row has no usable value, which
+    leaves the schedule counted across the whole window as before.
+    """
+    value = schedule.get("created_at")
+    if isinstance(value, str) and value.strip():
+        try:
+            value = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return _as_date(value)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(zone).date()
+    if isinstance(value, date):
+        return value
+    return None
+
+
 def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
-    """Return the dates a schedule fired on in the last N days, in its own timezone."""
-    local_today = now.astimezone(_resolve_zone(schedule.get("schedule_tz"))).date()
+    """Return the dates a schedule fired on in the last N days, in its own timezone.
+
+    Days before the schedule existed are dropped. Counting them asked a
+    standup created a few minutes ago for two weeks of answers nobody was ever
+    sent, and reported it as "5%, needs a look" on its first afternoon. The day
+    it was created on still counts, so a standup set up in the morning and run
+    that day is judged on that day. Per-participant join dates are not
+    recorded (`participants` is a plain array), so someone added to an older
+    standup is still expected from the schedule's creation onwards.
+    """
+    zone = _resolve_zone(schedule.get("schedule_tz"))
+    local_today = now.astimezone(zone).date()
     weekdays = parse_schedule_days(schedule.get("schedule_days"))
     window = [local_today - timedelta(days=offset) for offset in range(days)]
-    return sorted(day for day in window if day.weekday() in weekdays)
+    created = _local_creation_date(schedule, zone)
+    return sorted(day for day in window if day.weekday() in weekdays and (created is None or day >= created))
 
 
 def compute_participation(
@@ -1544,7 +1578,7 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
     tested against hand-computed numbers without a live database.
     """
     sql_schedules = """
-        SELECT id, name, schedule_time, schedule_tz, schedule_days, participants, active
+        SELECT id, name, schedule_time, schedule_tz, schedule_days, participants, active, created_at
         FROM standup_schedules
         WHERE team_id = %s AND active = TRUE
         ORDER BY schedule_time, id
