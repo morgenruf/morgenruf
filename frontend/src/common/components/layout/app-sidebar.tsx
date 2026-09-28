@@ -10,6 +10,7 @@ import {
   Plug,
   Settings2,
   Sunrise,
+  UserRound,
   Users,
   Webhook,
   Workflow,
@@ -257,6 +258,18 @@ export function AppSidebar({
 
       <SidebarGroup className="shrink-0 py-2">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={<Link to="/dashboard/profile" />}
+              isActive={isActive('/dashboard/profile')}
+              aria-label="My profile"
+              tooltip="My profile"
+              onClick={closeMobile}
+            >
+              <UserRound />
+              <span>My profile</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={onLogout}

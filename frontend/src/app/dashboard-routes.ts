@@ -11,6 +11,7 @@ import { InsightsPageSkeleton } from '@/modules/insights/loading';
 import { KudosPageSkeleton } from '@/modules/kudos/loading';
 import { McpPageSkeleton } from '@/modules/mcp/loading';
 import { MembersPageSkeleton } from '@/modules/members/loading';
+import { ProfilePageSkeleton } from '@/modules/profile/loading';
 import { ReportsPageSkeleton } from '@/modules/reports/loading';
 import { SettingsPageSkeleton } from '@/modules/settings/loading';
 import { StandupsPageSkeleton } from '@/modules/standups/loading';
@@ -73,6 +74,8 @@ export const dashboardViews = {
   analytics: { title: 'Analytics', Skeleton: AnalyticsPageSkeleton },
 
   members: { title: 'Members', Skeleton: MembersPageSkeleton },
+
+  profile: { title: 'My profile', Skeleton: ProfilePageSkeleton },
 
   kudos: { title: 'Kudos', Skeleton: KudosPageSkeleton, module: 'kudos' },
 

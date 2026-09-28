@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getRouteApi, useLocation } from '@tanstack/react-router';
-import { RefreshCw, UserPlus } from 'lucide-react';
+import { CalendarPlus, RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -33,9 +33,11 @@ import {
   SelectValue,
 } from '@/common/components/ui/select';
 import { Skeleton } from '@/common/components/ui/skeleton';
+import { hasDates, profileFacts } from '@/common/lib/profile';
 
 import { useMembers } from '../hooks';
 import { MembersSkeleton } from '../loading';
+import { EditProfileDialog, ImportDatesDialog } from '../profile-dialogs';
 import { validateSearch, type Search } from '../search';
 
 const moduleLabels: Record<string, string> = {
@@ -76,6 +78,10 @@ export default function MembersPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
   const [inviteId, setInviteId] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(
+    null,
+  );
 
   const channel = params.channel ?? '';
 
@@ -89,7 +95,14 @@ export default function MembersPage() {
     grant,
     invite,
     session,
+    profiles,
+    saveProfile,
+    importDates,
   } = useMembers(channel, inviting);
+
+  const profileById = new Map(
+    (profiles.data ?? []).map((profile) => [profile.user_id, profile]),
+  );
 
   const channelOptions = [
     { value: '', label: 'All channels' },
@@ -163,6 +176,11 @@ export default function MembersPage() {
             >
               <RefreshCw /> Refresh
             </Button>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => setImporting(true)}>
+                <CalendarPlus /> Import dates
+              </Button>
+            )}
             {isAdmin && (
               <Button
                 onClick={() => {
@@ -271,6 +289,16 @@ export default function MembersPage() {
               {all.filter((member) => member.tracked !== false).length} in
               Morgenruf. People not tracked by Morgenruf do not appear in
               participation figures.
+              {isAdmin && profiles.isSuccess && (
+                <>
+                  {' '}
+                  {
+                    all.filter((member) => hasDates(profileById.get(member.id)))
+                      .length
+                  }{' '}
+                  of {all.length} have a birthday or start date on file.
+                </>
+              )}
             </p>
             {!filtered.length ? (
               <EmptyState
@@ -387,6 +415,34 @@ export default function MembersPage() {
                             </div>
                           </div>
                         )}
+                        {isAdmin && profiles.isSuccess && (
+                          <div className="space-y-2 border-t pt-3">
+                            <p className="text-xs text-muted-foreground">
+                              Profile
+                            </p>
+                            <p className="text-sm">
+                              {profileFacts(profileById.get(member.id)).join(
+                                ' · ',
+                              ) || 'Nothing on file yet'}
+                            </p>
+                            {profileById.get(member.id)?.celebrate ===
+                              false && (
+                              <p className="text-xs text-muted-foreground">
+                                Asked not to be celebrated publicly
+                              </p>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              aria-label={`Edit ${name}’s profile`}
+                              onClick={() =>
+                                setEditing({ id: member.id, name })
+                              }
+                            >
+                              Edit profile
+                            </Button>
+                          </div>
+                        )}
                         {isAdmin && member.id !== session?.user_id && (
                           <Button
                             size="sm"
@@ -415,6 +471,21 @@ export default function MembersPage() {
           </>
         )}
       </LoadingTransition>
+
+      <EditProfileDialog
+        member={editing}
+        profile={editing ? profileById.get(editing.id) : undefined}
+        pending={saveProfile.isPending}
+        onSave={(id, data) => saveProfile.mutateAsync({ id, data })}
+        onClose={() => setEditing(null)}
+      />
+
+      <ImportDatesDialog
+        open={importing}
+        onOpenChange={setImporting}
+        run={(input) => importDates.mutateAsync(input)}
+        pending={importDates.isPending}
+      />
 
       <Dialog open={inviting} onOpenChange={setInviting}>
         <DialogContent className="sm:max-w-md">

@@ -6,6 +6,8 @@ import {
   channelsOptions,
   memberDirectoryOptions,
   modulesOptions,
+  myProfileOptions,
+  profilesOptions,
   standupsOptions,
 } from '@/common/api/queries';
 import type { DashboardRouteMetadata } from '@/common/routing/metadata';
@@ -234,6 +236,12 @@ export function prefetchDashboard(
       channels();
       void client.query(modulesOptions(services, team)).catch(noop);
       void client.query(standupsOptions(services, team)).catch(noop);
+      if (session.role === 'admin')
+        void client.query(profilesOptions(services, team)).catch(noop);
+      break;
+
+    case 'profile':
+      void client.query(myProfileOptions(services, team)).catch(noop);
       break;
 
     case 'kudos':

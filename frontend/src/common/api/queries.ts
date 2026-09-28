@@ -70,3 +70,26 @@ export function analyticsOptions(
     enabled: !!team,
   });
 }
+
+export function myProfileOptions({ api }: QueryServices, team?: string) {
+  return queryOptions({
+    queryKey: queryKeys.feature(team, 'profile', 'mine'),
+    queryFn: async ({ signal }) =>
+      (await api.profile.getMyProfile({ signal })).data,
+    enabled: !!team,
+  });
+}
+
+/** Every profile in the workspace. The endpoint answers workspace admins only. */
+export function profilesOptions(
+  { api }: QueryServices,
+  team?: string,
+  enabled = true,
+) {
+  return queryOptions({
+    queryKey: queryKeys.feature(team, 'profile', 'all'),
+    queryFn: async ({ signal }) =>
+      (await api.profile.listProfiles({ signal })).data,
+    enabled: !!team && enabled,
+  });
+}
