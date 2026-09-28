@@ -1,5 +1,6 @@
 import { Analytics } from './generated/Analytics';
 import { Automation } from './generated/Automation';
+import { Celebrations } from './generated/Celebrations';
 import { Connect } from './generated/Connect';
 import type { SessionInfo } from './generated/data-contracts';
 import { HttpClient, type FullRequestParams } from './generated/http-client';
@@ -7,6 +8,7 @@ import { Insights } from './generated/Insights';
 import { Kudos } from './generated/Kudos';
 import { Mcp } from './generated/Mcp';
 import { Members } from './generated/Members';
+import { Profile } from './generated/Profile';
 import { Public } from './generated/Public';
 import { Reports } from './generated/Reports';
 import { Session } from './generated/Session';
@@ -107,6 +109,7 @@ export function createApi(options: TransportOptions) {
     session: new Session(httpClient),
     standups: new Standups(httpClient),
     members: new Members(httpClient),
+    profile: new Profile(httpClient),
     reports: new Reports(httpClient),
     analytics: new Analytics(httpClient),
     workspace: new Workspace(httpClient),
@@ -115,6 +118,7 @@ export function createApi(options: TransportOptions) {
     mcp: new Mcp(httpClient),
     connect: new Connect(httpClient),
     kudos: new Kudos(httpClient),
+    celebrations: new Celebrations(httpClient),
     insights: new Insights(httpClient),
     public: new Public(httpClient),
   };

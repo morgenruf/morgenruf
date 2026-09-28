@@ -18,13 +18,25 @@ def extra_home_blocks(team_id: str, user_id: str, exclude: str = "") -> list[dic
 
     A module that raises is skipped rather than taking the whole tab down with
     it: a broken leaderboard should not cost someone their standup.
+
+    The member profile comes first. It belongs to core, not to a module, so it
+    is there whichever features the workspace runs, and the renderer trims
+    from the end when the tab runs out of room.
     """
+    blocks: list[dict] = []
+    try:
+        from src.core.profile_slack import home_blocks as profile_blocks  # noqa: PLC0415
+
+        blocks.extend(profile_blocks(team_id, user_id) or [])
+    except Exception:
+        logger.exception("the profile section failed to render on the App Home")
+
     try:
         from src.core import db  # noqa: PLC0415
         from src.core.modules import active_modules, deploy_allowlist  # noqa: PLC0415
         from src.modules import REGISTRY  # noqa: PLC0415
     except Exception:
-        return []
+        return blocks
 
     try:
         mods = active_modules(
@@ -35,9 +47,8 @@ def extra_home_blocks(team_id: str, user_id: str, exclude: str = "") -> list[dic
         )
     except Exception as exc:
         logger.warning("app home could not resolve modules for %s: %s", team_id, exc)
-        return []
+        return blocks
 
-    blocks: list[dict] = []
     for spec in mods:
         if spec.name == exclude or spec.home_blocks is None:
             continue

@@ -1,9 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { Api } from '@/common/api/client';
+import type {
+  MemberProfile,
+  ProfileImportInput,
+} from '@/common/api/generated/data-contracts';
 import {
   channelsOptions,
   modulesOptions,
+  profilesOptions,
   standupsOptions,
 } from '@/common/api/queries';
 import { useServices } from '@/common/api/services-context';
@@ -63,6 +68,27 @@ export function useMembers(channel?: string, loadInviteRoster = false) {
     onSuccess: invalidate,
   });
 
+  // Birthdays and start dates are for workspace admins only; the endpoint
+  // refuses everyone else, so the query is not even sent for them.
+  const isAdmin = session?.role === 'admin';
+  const profiles = useQuery(profilesOptions(services, team, isAdmin));
+
+  const invalidateProfiles = () =>
+    client.invalidateQueries({ queryKey: ['workspace', team, 'profile'] });
+
+  const saveProfile = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: MemberProfile }) =>
+      api.profile.updateProfile({ userId: id }, data),
+    onSuccess: invalidateProfiles,
+  });
+
+  const importDates = useMutation({
+    mutationFn: (data: ProfileImportInput) => api.profile.importProfiles(data),
+    onSuccess: (response) => {
+      if (!response.data.preview) void invalidateProfiles();
+    },
+  });
+
   return {
     members,
     inviteMembers,
@@ -73,5 +99,8 @@ export function useMembers(channel?: string, loadInviteRoster = false) {
     grant,
     invite,
     session,
+    profiles,
+    saveProfile,
+    importDates,
   };
 }

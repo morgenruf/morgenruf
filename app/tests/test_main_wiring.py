@@ -121,6 +121,8 @@ def test_create_app_registers_the_dm_listener_before_the_modules():
 
     calls = []
     bolt = MagicMock()
-    bolt.event.side_effect = lambda *a, **k: calls.append("dm") or (lambda f: f)
+    bolt.event.side_effect = lambda *a, **k: calls.append(a[0]) or (lambda f: f)
     main.register_slack_listeners(MagicMock(), bolt, [spec("demo", slack=lambda app: calls.append("demo"))])
-    assert calls == ["dm", "demo"]
+    assert calls[0] == "message"
+    assert calls[-1] == "demo"
+    assert "member_joined_channel" in calls

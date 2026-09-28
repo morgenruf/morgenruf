@@ -20,11 +20,13 @@ import { Route as ConnectZoomResultRouteImport } from './routes/connect.zoom.res
 import { Route as DashboardAuthenticatedIndexRouteImport } from './routes/dashboard/_authenticated/index'
 import { Route as DashboardAuthenticatedAnalyticsRouteImport } from './routes/dashboard/_authenticated/analytics'
 import { Route as DashboardAuthenticatedAutomationRouteImport } from './routes/dashboard/_authenticated/automation'
+import { Route as DashboardAuthenticatedCelebrationsRouteImport } from './routes/dashboard/_authenticated/celebrations'
 import { Route as DashboardAuthenticatedConnectRouteRouteImport } from './routes/dashboard/_authenticated/connect/route'
 import { Route as DashboardAuthenticatedInsightsRouteImport } from './routes/dashboard/_authenticated/insights'
 import { Route as DashboardAuthenticatedKudosRouteImport } from './routes/dashboard/_authenticated/kudos'
 import { Route as DashboardAuthenticatedMcpRouteImport } from './routes/dashboard/_authenticated/mcp'
 import { Route as DashboardAuthenticatedMembersRouteImport } from './routes/dashboard/_authenticated/members'
+import { Route as DashboardAuthenticatedProfileRouteImport } from './routes/dashboard/_authenticated/profile'
 import { Route as DashboardAuthenticatedReportsRouteImport } from './routes/dashboard/_authenticated/reports'
 import { Route as DashboardAuthenticatedSettingsRouteImport } from './routes/dashboard/_authenticated/settings'
 import { Route as DashboardAuthenticatedStandupsRouteImport } from './routes/dashboard/_authenticated/standups'
@@ -93,6 +95,12 @@ const DashboardAuthenticatedAutomationRoute =
     path: '/automation',
     getParentRoute: () => DashboardAuthenticatedRouteRoute,
   } as any)
+const DashboardAuthenticatedCelebrationsRoute =
+  DashboardAuthenticatedCelebrationsRouteImport.update({
+    id: '/celebrations',
+    path: '/celebrations',
+    getParentRoute: () => DashboardAuthenticatedRouteRoute,
+  } as any)
 const DashboardAuthenticatedConnectRouteRoute =
   DashboardAuthenticatedConnectRouteRouteImport.update({
     id: '/connect',
@@ -121,6 +129,12 @@ const DashboardAuthenticatedMembersRoute =
   DashboardAuthenticatedMembersRouteImport.update({
     id: '/members',
     path: '/members',
+    getParentRoute: () => DashboardAuthenticatedRouteRoute,
+  } as any)
+const DashboardAuthenticatedProfileRoute =
+  DashboardAuthenticatedProfileRouteImport.update({
+    id: '/profile',
+    path: '/profile',
     getParentRoute: () => DashboardAuthenticatedRouteRoute,
   } as any)
 const DashboardAuthenticatedReportsRoute =
@@ -189,10 +203,12 @@ export interface FileRoutesByFullPath {
   '/connect/zoom/result': typeof ConnectZoomResultRoute
   '/dashboard/analytics': typeof DashboardAuthenticatedAnalyticsRoute
   '/dashboard/automation': typeof DashboardAuthenticatedAutomationRoute
+  '/dashboard/celebrations': typeof DashboardAuthenticatedCelebrationsRoute
   '/dashboard/insights': typeof DashboardAuthenticatedInsightsRoute
   '/dashboard/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/mcp': typeof DashboardAuthenticatedMcpRoute
   '/dashboard/members': typeof DashboardAuthenticatedMembersRoute
+  '/dashboard/profile': typeof DashboardAuthenticatedProfileRoute
   '/dashboard/reports': typeof DashboardAuthenticatedReportsRoute
   '/dashboard/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/standups': typeof DashboardAuthenticatedStandupsRoute
@@ -214,10 +230,12 @@ export interface FileRoutesByTo {
   '/connect/zoom/result': typeof ConnectZoomResultRoute
   '/dashboard/analytics': typeof DashboardAuthenticatedAnalyticsRoute
   '/dashboard/automation': typeof DashboardAuthenticatedAutomationRoute
+  '/dashboard/celebrations': typeof DashboardAuthenticatedCelebrationsRoute
   '/dashboard/insights': typeof DashboardAuthenticatedInsightsRoute
   '/dashboard/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/mcp': typeof DashboardAuthenticatedMcpRoute
   '/dashboard/members': typeof DashboardAuthenticatedMembersRoute
+  '/dashboard/profile': typeof DashboardAuthenticatedProfileRoute
   '/dashboard/reports': typeof DashboardAuthenticatedReportsRoute
   '/dashboard/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/standups': typeof DashboardAuthenticatedStandupsRoute
@@ -241,10 +259,12 @@ export interface FileRoutesById {
   '/connect/zoom/result': typeof ConnectZoomResultRoute
   '/dashboard/_authenticated/analytics': typeof DashboardAuthenticatedAnalyticsRoute
   '/dashboard/_authenticated/automation': typeof DashboardAuthenticatedAutomationRoute
+  '/dashboard/_authenticated/celebrations': typeof DashboardAuthenticatedCelebrationsRoute
   '/dashboard/_authenticated/insights': typeof DashboardAuthenticatedInsightsRoute
   '/dashboard/_authenticated/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/_authenticated/mcp': typeof DashboardAuthenticatedMcpRoute
   '/dashboard/_authenticated/members': typeof DashboardAuthenticatedMembersRoute
+  '/dashboard/_authenticated/profile': typeof DashboardAuthenticatedProfileRoute
   '/dashboard/_authenticated/reports': typeof DashboardAuthenticatedReportsRoute
   '/dashboard/_authenticated/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/_authenticated/standups': typeof DashboardAuthenticatedStandupsRoute
@@ -269,10 +289,12 @@ export interface FileRouteTypes {
     | '/connect/zoom/result'
     | '/dashboard/analytics'
     | '/dashboard/automation'
+    | '/dashboard/celebrations'
     | '/dashboard/insights'
     | '/dashboard/kudos'
     | '/dashboard/mcp'
     | '/dashboard/members'
+    | '/dashboard/profile'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/standups'
@@ -294,10 +316,12 @@ export interface FileRouteTypes {
     | '/connect/zoom/result'
     | '/dashboard/analytics'
     | '/dashboard/automation'
+    | '/dashboard/celebrations'
     | '/dashboard/insights'
     | '/dashboard/kudos'
     | '/dashboard/mcp'
     | '/dashboard/members'
+    | '/dashboard/profile'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/standups'
@@ -320,10 +344,12 @@ export interface FileRouteTypes {
     | '/connect/zoom/result'
     | '/dashboard/_authenticated/analytics'
     | '/dashboard/_authenticated/automation'
+    | '/dashboard/_authenticated/celebrations'
     | '/dashboard/_authenticated/insights'
     | '/dashboard/_authenticated/kudos'
     | '/dashboard/_authenticated/mcp'
     | '/dashboard/_authenticated/members'
+    | '/dashboard/_authenticated/profile'
     | '/dashboard/_authenticated/reports'
     | '/dashboard/_authenticated/settings'
     | '/dashboard/_authenticated/standups'
@@ -424,6 +450,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAuthenticatedAutomationRouteImport
       parentRoute: typeof DashboardAuthenticatedRouteRoute
     }
+    '/dashboard/_authenticated/celebrations': {
+      id: '/dashboard/_authenticated/celebrations'
+      path: '/celebrations'
+      fullPath: '/dashboard/celebrations'
+      preLoaderRoute: typeof DashboardAuthenticatedCelebrationsRouteImport
+      parentRoute: typeof DashboardAuthenticatedRouteRoute
+    }
     '/dashboard/_authenticated/connect': {
       id: '/dashboard/_authenticated/connect'
       path: '/connect'
@@ -457,6 +490,13 @@ declare module '@tanstack/react-router' {
       path: '/members'
       fullPath: '/dashboard/members'
       preLoaderRoute: typeof DashboardAuthenticatedMembersRouteImport
+      parentRoute: typeof DashboardAuthenticatedRouteRoute
+    }
+    '/dashboard/_authenticated/profile': {
+      id: '/dashboard/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/dashboard/profile'
+      preLoaderRoute: typeof DashboardAuthenticatedProfileRouteImport
       parentRoute: typeof DashboardAuthenticatedRouteRoute
     }
     '/dashboard/_authenticated/reports': {
@@ -553,10 +593,12 @@ interface DashboardAuthenticatedRouteRouteChildren {
   DashboardAuthenticatedConnectRouteRoute: typeof DashboardAuthenticatedConnectRouteRouteWithChildren
   DashboardAuthenticatedAnalyticsRoute: typeof DashboardAuthenticatedAnalyticsRoute
   DashboardAuthenticatedAutomationRoute: typeof DashboardAuthenticatedAutomationRoute
+  DashboardAuthenticatedCelebrationsRoute: typeof DashboardAuthenticatedCelebrationsRoute
   DashboardAuthenticatedInsightsRoute: typeof DashboardAuthenticatedInsightsRoute
   DashboardAuthenticatedKudosRoute: typeof DashboardAuthenticatedKudosRoute
   DashboardAuthenticatedMcpRoute: typeof DashboardAuthenticatedMcpRoute
   DashboardAuthenticatedMembersRoute: typeof DashboardAuthenticatedMembersRoute
+  DashboardAuthenticatedProfileRoute: typeof DashboardAuthenticatedProfileRoute
   DashboardAuthenticatedReportsRoute: typeof DashboardAuthenticatedReportsRoute
   DashboardAuthenticatedSettingsRoute: typeof DashboardAuthenticatedSettingsRoute
   DashboardAuthenticatedStandupsRoute: typeof DashboardAuthenticatedStandupsRoute
@@ -572,10 +614,13 @@ const DashboardAuthenticatedRouteRouteChildren: DashboardAuthenticatedRouteRoute
     DashboardAuthenticatedAnalyticsRoute: DashboardAuthenticatedAnalyticsRoute,
     DashboardAuthenticatedAutomationRoute:
       DashboardAuthenticatedAutomationRoute,
+    DashboardAuthenticatedCelebrationsRoute:
+      DashboardAuthenticatedCelebrationsRoute,
     DashboardAuthenticatedInsightsRoute: DashboardAuthenticatedInsightsRoute,
     DashboardAuthenticatedKudosRoute: DashboardAuthenticatedKudosRoute,
     DashboardAuthenticatedMcpRoute: DashboardAuthenticatedMcpRoute,
     DashboardAuthenticatedMembersRoute: DashboardAuthenticatedMembersRoute,
+    DashboardAuthenticatedProfileRoute: DashboardAuthenticatedProfileRoute,
     DashboardAuthenticatedReportsRoute: DashboardAuthenticatedReportsRoute,
     DashboardAuthenticatedSettingsRoute: DashboardAuthenticatedSettingsRoute,
     DashboardAuthenticatedStandupsRoute: DashboardAuthenticatedStandupsRoute,

@@ -5,6 +5,73 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Member profiles.** Each person can keep a birthday, start date, role,
+  location and "ask me about" in Morgenruf, from a new "Your profile"
+  section on the Slack App Home, with `/morgenruf profile`, or on a new
+  **My profile** page in the dashboard. Birthdays are day and month only;
+  no year is ever stored. Intros, Celebrations and Onboarding buddies will
+  read this profile.
+- **Admins can fill in dates for the whole workspace.** The Members page
+  shows each person's profile, lets a workspace admin edit it, and imports
+  `email,birthday,start_date` from a CSV. The import previews matched,
+  unmatched and invalid rows before saving anything, drops the year from a
+  full birthday date, and leaves profiles people wrote themselves alone
+  unless "Overwrite entries members made themselves" is ticked.
+- **Profiles are removed when someone leaves.** When the Slack sync sees a
+  person has gone, their profile is marked and deleted 30 days later by a
+  nightly job. Returning within 30 days keeps it.
+- `get_member_profiles` MCP tool, read only.
+- **Celebrations.** Birthdays and work anniversaries are posted in a
+  channel you choose, one message per kind per day, with a 🎉 from the
+  bot. Off by default; a workspace admin turns it on once a channel and a
+  timezone are set. It has its own timezone and post time (09:00 by
+  default), separate from standups. A start date less than a year ago is
+  skipped, 29 February birthdays are celebrated on 28 February in other
+  years, and nobody who opted out or has left is posted. Each post is
+  recorded before it is sent, so a restart or a second pod never posts it
+  twice, and a pod that was down at post time catches up within a few
+  hours.
+- **Working days and company holidays.** Set the working week (Monday to
+  Friday by default) and keep a holiday list, added one by one or
+  imported as `date,name` with a preview first. A celebration on a
+  weekend or a holiday is posted on the last working day before it
+  ("Tomorrow is...", "On Sunday it's...", "On 25 December it's...").
+  The calendar belongs to the workspace, so later features can plan
+  around it too. Holidays more than a year old are removed nightly.
+- **Asking people for their dates.** With Celebrations on, everyone with
+  no birthday and no start date gets one DM asking for them, with "Add my
+  dates" (opens the profile form) and "Skip me" (no public celebration).
+  "Ask for dates" on the Celebrations and Members pages sends it again,
+  at most once per person every 30 days, after showing the count and the
+  message. Joining the celebrations channel asks too.
+- A **Celebrations admin** grant, so HR can run celebrations, working days
+  and holidays without being a workspace admin.
+
+### Changed
+- `/morgenruf` now has subcommands: `/morgenruf profile` opens your profile
+  and `/morgenruf help` (or `/morgenruf` alone) lists what Morgenruf can do
+  in your workspace, based on which features are switched on. `/help`,
+  `/standup`, `/skip` and `/kudos` are unchanged. Self-hosted installs:
+  update the `/morgenruf` entry from `slack-manifest.yaml` to get the new
+  usage hint in Slack; the command works without it.
+- The app asks for one new Slack scope, `reactions:write`, for the 🎉 on
+  Celebrations posts. Existing workspaces keep working without it and get
+  the reaction after re-authorising. Self-hosted installs: add it to your
+  Slack app from `slack-manifest.yaml`.
+
+### Fixed
+- **The coffee chat welcome is sent when someone joins a programme's
+  channel.** Slack events reach only the first listener registered for
+  them, and standup's welcome was registered first, so the coffee chat one
+  never ran. One listener now offers each channel join to every feature;
+  standup's welcome is unchanged.
+- **The standup welcome DM is sent only for a standup channel.** Joining
+  any channel the bot was in (the celebrations channel, a coffee chat
+  channel, or any other) sent "Welcome to the team! I'm Morgenruf, your
+  daily standup bot". It now goes only to someone joining a channel with an
+  active standup in that workspace.
+
 ## [1.8.16] - 2026-09-28
 
 ### Fixed

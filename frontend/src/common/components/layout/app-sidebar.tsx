@@ -1,6 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router';
 import {
   BarChart3,
+  Cake,
   CalendarCheck,
   Coffee,
   FileChartColumn,
@@ -10,6 +11,7 @@ import {
   Plug,
   Settings2,
   Sunrise,
+  UserRound,
   Users,
   Webhook,
   Workflow,
@@ -43,6 +45,7 @@ type DashboardPath =
   | '/dashboard/standups'
   | '/dashboard/connect'
   | '/dashboard/kudos'
+  | '/dashboard/celebrations'
   | '/dashboard/members'
   | '/dashboard/insights'
   | '/dashboard/reports'
@@ -91,6 +94,12 @@ const groups: { label: string; items: NavItem[] }[] = [
         path: '/dashboard/kudos',
         icon: HeartHandshake,
         module: 'kudos',
+      },
+      {
+        label: 'Celebrations',
+        path: '/dashboard/celebrations',
+        icon: Cake,
+        module: 'celebrations',
       },
       { label: 'Members', path: '/dashboard/members', icon: Users },
     ],
@@ -257,6 +266,18 @@ export function AppSidebar({
 
       <SidebarGroup className="shrink-0 py-2">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              render={<Link to="/dashboard/profile" />}
+              isActive={isActive('/dashboard/profile')}
+              aria-label="My profile"
+              tooltip="My profile"
+              onClick={closeMobile}
+            >
+              <UserRound />
+              <span>My profile</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={onLogout}

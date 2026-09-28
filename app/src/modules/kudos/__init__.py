@@ -30,4 +30,5 @@ MODULE = ModuleSpec(
     delegable=True,
     home_blocks=home_blocks,
     mcp_tools=mcp_tools,
+    help_lines=("`/kudos @teammate message`: give someone a shoutout",),
 )

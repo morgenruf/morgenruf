@@ -56,6 +56,13 @@ PUBLIC_BY_DESIGN = {
     "/webhooks/resend",
 }
 
+# Mutating routes any signed-in member may use, because they change only the
+# caller's own data. The user id comes from the session, never the request,
+# which test_member_profile_api proves.
+SELF_SERVICE = {
+    "/dashboard/api/profile",
+}
+
 # Every mutating route a member must be refused, with what it would let them do.
 GUARDED = [
     ("POST", "/dashboard/api/feed-token", "publish the team's standups publicly"),
@@ -72,6 +79,9 @@ GUARDED = [
     ("DELETE", "/dashboard/api/webhooks/1", "delete a webhook"),
     ("POST", "/dashboard/api/webhooks/1/rotate", "rotate a signing secret and break the consumer"),
     ("POST", "/dashboard/api/webhooks/1/test", "send data to an external url"),
+    ("PUT", "/dashboard/api/profiles/U_OTHER", "change someone else's profile"),
+    ("POST", "/dashboard/api/profiles/import", "import birthdays for the whole workspace"),
+    ("GET", "/dashboard/api/profiles", "read everyone's birthday"),
 ]
 
 
@@ -147,6 +157,8 @@ class TestNoMutatingRouteIsLeftOpen:
                 if path in PUBLIC_BY_DESIGN:
                     continue
                 if path == "/dashboard/api/logout" and "_login_required" in decorators:
+                    continue
+                if path in SELF_SERVICE and "_login_required" in decorators:
                     continue
                 if "_admin_required" not in decorators:
                     out.append(f"{sorted(methods & MUTATING)} {path} ({fn})")

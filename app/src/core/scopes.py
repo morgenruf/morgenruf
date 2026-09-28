@@ -3,7 +3,8 @@
 The manifest and the install URL disagreed twice: once when coffee chats
 shipped and the three mpim scopes were never added to the install URL, so the
 feature installed and stayed dark, and again when reactions:write and
-channels:history sat in the manifest without a single caller.
+channels:history sat in the manifest without a single caller. reactions:write
+is back now that Celebrations reacts to its own post.
 
 Both now come from here, and a test fails if the manifest drifts. Each scope
 carries the reason it exists, because Slack's reviewers ask for exactly that
@@ -29,6 +30,8 @@ BOT_SCOPES: dict[str, str] = {
     "users:read.email": "The address a per-standup digest email is sent to.",
     "users.profile:read": "Working hours, for suggesting a time both people in a pairing can make.",
     "emoji:read": "Checking a workspace's custom emoji, so kudos can use your own token.",
+    "reactions:write": "Adding a 🎉 to the Celebrations post, so people pile on. Optional: without it "
+    "the post still goes out, just without the reaction.",
     "team:read": "The workspace name, shown in the dashboard and the digest.",
 }
 

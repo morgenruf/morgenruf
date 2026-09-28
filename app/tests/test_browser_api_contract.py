@@ -62,6 +62,12 @@ GET_PATHS = [
     "/dashboard/api/connect/programs/1/participation",
     "/dashboard/api/insights",
     "/dashboard/api/today",
+    "/dashboard/api/profile",
+    "/dashboard/api/profiles",
+    "/dashboard/api/celebrations/settings",
+    "/dashboard/api/celebrations/holidays",
+    "/dashboard/api/celebrations/upcoming",
+    "/dashboard/api/celebrations/ask-dates",
     "/api/public/feed/public-browser-feed",
 ]
 
@@ -105,6 +111,37 @@ MUTATIONS = [
     ("DELETE", "/dashboard/api/connect/programs/1", None),
     ("POST", "/dashboard/api/connect/programs/1/run", None),
     ("POST", "/dashboard/api/connect/programs/1/members/U_MEMBER", {"state": "snoozed", "weeks": 2}),
+    (
+        "PUT",
+        "/dashboard/api/profile",
+        {"birth_month": 2, "birth_day": 29, "start_date": "2023-03-01", "role": "Designer", "celebrate": True},
+    ),
+    ("PUT", "/dashboard/api/profiles/U_MEMBER", {"location": "Berlin"}),
+    (
+        "POST",
+        "/dashboard/api/profiles/import",
+        {"csv": "email,birthday,start_date\nu_member@example.test,1990-07-04,2022-05-01\n", "preview": True},
+    ),
+    (
+        "PUT",
+        "/dashboard/api/celebrations/settings",
+        {
+            "channel_id": "C_GENERAL",
+            "timezone": "Asia/Dubai",
+            "post_time": "10:30",
+            "birthdays": True,
+            "anniversaries": False,
+            "working_days": ["sun", "mon", "tue", "wed", "thu"],
+        },
+    ),
+    ("POST", "/dashboard/api/celebrations/holidays", {"date": "2027-12-25", "name": "Christmas Day"}),
+    ("DELETE", "/dashboard/api/celebrations/holidays/2027-12-25", None),
+    (
+        "POST",
+        "/dashboard/api/celebrations/holidays/import",
+        {"csv": "date,name\n2027-01-01,New Year's Day\nnot-a-date,Oops\n", "preview": True},
+    ),
+    ("POST", "/dashboard/api/celebrations/ask-dates", None),
     ("POST", "/dashboard/api/logout", None),
 ]
 
@@ -286,7 +323,7 @@ print(json.dumps(spec, sort_keys=True))
         for method, operation in path.items()
         if method in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == 54
+    assert len(operations) == 68
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
 

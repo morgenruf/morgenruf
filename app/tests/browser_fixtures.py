@@ -182,6 +182,36 @@ class BrowserData:
             }
         ]
         self.module_settings = {"standup": True, "connect": True, "kudos": True, "insights": True}
+        self.profiles = {
+            "U_LEAD": {
+                "team_id": self.team_id,
+                "user_id": "U_LEAD",
+                "birth_month": 3,
+                "birth_day": 14,
+                "start_date": self.today.replace(year=self.today.year - 3, month=1, day=9),
+                "role": "Engineering lead",
+                "location": "Toronto",
+                "ask_me_about": "Rust, bouldering",
+                "celebrate": True,
+                "nudged_at": None,
+                "left_at": None,
+                "updated_by": "U_ADMIN",
+                "updated_at": self.now,
+            }
+        }
+
+        self.celebration_settings = {
+            "team_id": self.team_id,
+            "channel_id": "C_GENERAL",
+            "timezone": "Europe/Berlin",
+            "post_time": "09:00",
+            "birthdays": True,
+            "anniversaries": True,
+            "updated_by": "U_ADMIN",
+            "updated_at": self.now,
+        }
+        self.working_days = "mon,tue,wed,thu,fri"
+        self.holidays = {self.today + timedelta(days=12): "Company day off"}
 
     def overview(self, days=7):
         dates = [(self.today - timedelta(days=i)).isoformat() for i in reversed(range(days))]
@@ -292,6 +322,84 @@ class BrowserData:
         )
         return f"mrn_browser_secret_{key_id}"
 
+    def upsert_profile(self, validate, team_id, user_id, fields, updated_by):
+        """The real validation, stored in memory, like db.upsert_member_profile."""
+        clean = validate(fields)
+        row = self.profiles.setdefault(
+            user_id,
+            {
+                "team_id": team_id,
+                "user_id": user_id,
+                "birth_month": None,
+                "birth_day": None,
+                "start_date": None,
+                "role": None,
+                "location": None,
+                "ask_me_about": None,
+                "celebrate": True,
+                "nudged_at": None,
+                "left_at": None,
+            },
+        )
+        row.update(clean, updated_by=updated_by, updated_at=self.now)
+        return deepcopy(row)
+
+    def holiday_rows(self):
+        return [{"date": day, "name": name} for day, name in sorted(self.holidays.items())]
+
+    def add_holidays(self, rows):
+        for row in rows:
+            self.holidays[row["date"]] = row["name"]
+        return len(rows)
+
+    def save_celebrations(self, fields, updated_by):
+        self.celebration_settings.update(fields, updated_by=updated_by, updated_at=self.now)
+        return deepcopy(self.celebration_settings)
+
+    def celebrants(self):
+        names = {m["user_id"]: m for m in self.members}
+        return [
+            {
+                "user_id": p["user_id"],
+                "birth_month": p["birth_month"],
+                "birth_day": p["birth_day"],
+                "start_date": p["start_date"],
+                "real_name": names.get(p["user_id"], {}).get("real_name"),
+                "display_name": names.get(p["user_id"], {}).get("display_name"),
+            }
+            for p in self.profiles.values()
+            if p.get("celebrate", True) and not p.get("left_at") and (p.get("birth_month") or p.get("start_date"))
+        ]
+
+    def claim_nudges(self, user_ids, cooldown_days=None):
+        claimed = []
+        for uid in user_ids:
+            row = self.profiles.get(uid) or {}
+            if row.get("birth_month") or row.get("start_date") or not row.get("celebrate", True):
+                continue
+            asked = row.get("nudged_at")
+            if asked and (cooldown_days is None or (self.now - asked).days < cooldown_days):
+                continue
+            self.profiles.setdefault(
+                uid,
+                {
+                    "team_id": self.team_id,
+                    "user_id": uid,
+                    "birth_month": None,
+                    "birth_day": None,
+                    "start_date": None,
+                    "role": None,
+                    "location": None,
+                    "ask_me_about": None,
+                    "celebrate": True,
+                    "left_at": None,
+                    "updated_by": None,
+                    "updated_at": self.now,
+                },
+            )["nudged_at"] = self.now
+            claimed.append(uid)
+        return claimed
+
     def delete(self, collection, row_id):
         old = len(collection)
         collection[:] = [r for r in collection if r["id"] != int(row_id)]
@@ -305,6 +413,8 @@ def create_test_app(patcher=None):
     import src.core.db as db
     import src.core.oauth as oauth
     import src.core.roster as roster
+    import src.modules.celebrations.dashboard as celebrations_dashboard
+    import src.modules.celebrations.db as celebrations_db
     import src.modules.connect.db as connect_db
     import src.modules.connect.jobs as connect_jobs
     import src.modules.connect.slack_api as connect_slack
@@ -331,6 +441,7 @@ def create_test_app(patcher=None):
 
     patch(dashboard, "db", db)
     patch(oauth, "db", db)
+    validate_profile = db.validate_member_profile
     patch(dashboard, "verify_login_token", oauth.verify_login_token)
     install(
         db,
@@ -404,8 +515,33 @@ def create_test_app(patcher=None):
             "suppress_email": lambda email: None,
             "revoke_email_consent": lambda email: None,
             "grant_email_consent": lambda email, **kwargs: None,
+            "get_member_profile": lambda team, user: deepcopy(state.profiles.get(user)),
+            "list_member_profiles": lambda team, include_departed=False: [
+                deepcopy(p) for p in state.profiles.values() if include_departed or not p.get("left_at")
+            ],
+            "upsert_member_profile": lambda team, user, fields, updated_by: state.upsert_profile(
+                validate_profile, team, user, fields, updated_by
+            ),
+            "claim_profile_nudges": lambda team, user_ids, cooldown_days=None: state.claim_nudges(
+                user_ids, cooldown_days
+            ),
+            "get_working_days": lambda team: state.working_days,
+            "set_working_days": lambda team, days: setattr(state, "working_days", days) or days,
+            "list_holidays": lambda team: state.holiday_rows(),
+            "upsert_holidays": lambda team, rows: state.add_holidays(rows),
+            "delete_holiday": lambda team, day: state.holidays.pop(day, None) is not None,
         },
     )
+    install(
+        celebrations_db,
+        {
+            "get_settings": lambda team: deepcopy(state.celebration_settings),
+            "save_settings": lambda team, fields, updated_by: state.save_celebrations(fields, updated_by),
+            "celebrants": lambda team: state.celebrants(),
+        },
+    )
+    # "Ask for dates" sends its DMs on a thread; the browser tests stop at the claim.
+    patch(celebrations_dashboard, "start_background", lambda *args: None)
     patch(roster, "db", db)
     install(
         connect_db,

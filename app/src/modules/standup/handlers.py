@@ -1361,41 +1361,6 @@ def register_handlers(app: App) -> None:
             "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
         )
 
-    @app.event("member_joined_channel")
-    def handle_member_joined(event, client):  # noqa: ANN001
-        """Welcome new members and register them for standups."""
-        user_id: str = event.get("user", "")
-        team_id: str = event.get("team", "")
-        if not user_id or not team_id:
-            return
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            user_info = client.users_info(user=user_id).get("user", {})
-            if not is_human(user_info):
-                # Another bot joined the channel. It can't do a standup and
-                # DMing it would fail on every run.
-                logger.debug("Ignoring non-human join by %s in %s", user_id, team_id)
-                return
-            profile = user_info.get("profile", {})
-            db.upsert_member(
-                team_id=team_id,
-                user_id=user_id,
-                real_name=profile.get("real_name", ""),
-                email=profile.get("email", ""),
-                tz=user_info.get("tz", "UTC"),
-            )
-            client.chat_postMessage(
-                channel=user_id,
-                text=(
-                    "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
-                    "I'll DM you each morning with a few quick questions to share with your team. "
-                    "Use `/standup` to try a standup now, or `/help` to learn more."
-                ),
-            )
-        except Exception as exc:
-            logger.warning("member_joined_channel error: %s", exc)
-
     @app.action(re.compile(r"submit_answer_\d+"))
     def handle_submit_answer(ack, body, client):  # noqa: ANN001
         """Handle Submit button click for each standup question.
@@ -1497,8 +1462,9 @@ def register_handlers(app: App) -> None:
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
+    # /morgenruf moved to core (src/core/profile_slack.py): it is the product's
+    # command, with subcommands, and its help lists every active feature.
     @app.command("/help")
-    @app.command("/morgenruf")
     def handle_help_command(ack, body, client):  # noqa: ANN001
         """Slash command to show available commands and help."""
         ack()
@@ -1794,6 +1760,54 @@ def register_handlers(app: App) -> None:
             text="✏️ Let's update your standup — your previous answers are pre-filled, edit what you need.",
         )
         _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
+
+
+def on_channel_join(event, client):  # noqa: ANN001
+    """Register new members, and welcome those who join a standup channel.
+
+    The welcome DM goes only to a join in a channel with an active standup
+    schedule for the workspace. Called by core's single member_joined_channel listener (see
+    main.register_channel_join_listener) rather than registered here, because
+    Bolt runs only the first listener matching an event.
+    """
+    user_id: str = event.get("user", "")
+    team_id: str = event.get("team", "")
+    if not user_id or not team_id:
+        return
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        user_info = client.users_info(user=user_id).get("user", {})
+        if not is_human(user_info):
+            # Another bot joined the channel. It can't do a standup and
+            # DMing it would fail on every run.
+            logger.debug("Ignoring non-human join by %s in %s", user_id, team_id)
+            return
+        profile = user_info.get("profile", {})
+        db.upsert_member(
+            team_id=team_id,
+            user_id=user_id,
+            real_name=profile.get("real_name", ""),
+            email=profile.get("email", ""),
+            tz=user_info.get("tz", "UTC"),
+        )
+        # Core offers every join in every channel the bot is in, including the
+        # celebrations channel and coffee chat channels, which may hold the
+        # whole company. Only a channel with an active standup is a standup
+        # team, so only a join there gets the standup welcome.
+        channel_id: str = event.get("channel", "")
+        if not channel_id or not db.get_standup_schedule_for_channel(team_id, channel_id):
+            return
+        client.chat_postMessage(
+            channel=user_id,
+            text=(
+                "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
+                "I'll DM you each morning with a few quick questions to share with your team. "
+                "Use `/standup` to try a standup now, or `/help` to learn more."
+            ),
+        )
+    except Exception as exc:
+        logger.warning("member_joined_channel error: %s", exc)
 
 
 def claim_dm(ctx) -> bool:

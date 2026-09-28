@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
-from src.modules.standup.handlers import claim_dm, claim_dm_command, register_handlers
+from src.modules.standup.handlers import claim_dm, claim_dm_command, on_channel_join, register_handlers
 
 MODULE = ModuleSpec(
     name="standup",
@@ -20,8 +20,14 @@ MODULE = ModuleSpec(
     plan_jobs=None,
     claim_dm=claim_dm,
     claim_dm_command=claim_dm_command,
+    on_channel_join=on_channel_join,
     purge=None,
     nav=(NavItem(label="Standups", path="/"),),
     default_enabled=True,
     delegable=True,
+    help_lines=(
+        "`/standup`: start your standup now",
+        "`/skip`: skip today's standup",
+        "Reply to a standup DM at any time to start",
+    ),
 )

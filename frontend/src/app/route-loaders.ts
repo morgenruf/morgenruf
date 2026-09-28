@@ -6,10 +6,17 @@ import {
   channelsOptions,
   memberDirectoryOptions,
   modulesOptions,
+  myProfileOptions,
+  profilesOptions,
   standupsOptions,
 } from '@/common/api/queries';
 import type { DashboardRouteMetadata } from '@/common/routing/metadata';
 import { automationOptions } from '@/modules/automation/queries';
+import {
+  celebrationSettingsOptions,
+  holidaysOptions,
+  upcomingCelebrationsOptions,
+} from '@/modules/celebrations/queries';
 import {
   connectParticipationOptions,
   connectProgramsOptions,
@@ -234,6 +241,12 @@ export function prefetchDashboard(
       channels();
       void client.query(modulesOptions(services, team)).catch(noop);
       void client.query(standupsOptions(services, team)).catch(noop);
+      if (session.role === 'admin')
+        void client.query(profilesOptions(services, team)).catch(noop);
+      break;
+
+    case 'profile':
+      void client.query(myProfileOptions(services, team)).catch(noop);
       break;
 
     case 'kudos':
@@ -248,6 +261,24 @@ export function prefetchDashboard(
       channels();
       directory();
       break;
+
+    case 'celebrations': {
+      const canEdit =
+        session.role === 'admin' ||
+        session.module_admin.includes('celebrations');
+
+      void client.query(celebrationSettingsOptions(services, team)).catch(noop);
+      void client.query(holidaysOptions(services, team)).catch(noop);
+      void client.query(modulesOptions(services, team)).catch(noop);
+      channels();
+      if (canEdit) {
+        void client
+          .query(upcomingCelebrationsOptions(services, team, true))
+          .catch(noop);
+        directory();
+      }
+      break;
+    }
 
     case 'automation':
       void client.query(automationOptions(services, team)).catch(noop);

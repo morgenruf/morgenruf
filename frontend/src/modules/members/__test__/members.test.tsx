@@ -14,6 +14,9 @@ const mock = vi.hoisted(() => ({
   invite: vi.fn(),
   role: vi.fn(),
   grant: vi.fn(),
+  profiles: vi.fn(),
+  updateProfile: vi.fn(),
+  importProfiles: vi.fn(),
 }));
 
 vi.mock('@/common/auth/use-session', () => ({
@@ -35,6 +38,11 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
       updateMemberRole: mock.role,
       grantModuleAdmin: mock.grant,
       revokeModuleAdmin: vi.fn(),
+    },
+    profile: {
+      listProfiles: mock.profiles,
+      updateProfile: mock.updateProfile,
+      importProfiles: mock.importProfiles,
     },
     workspace: {
       listChannels: vi
@@ -106,6 +114,153 @@ beforeEach(() => {
     Promise.resolve({ data: query.channel_id ? [mina] : [mina, sam] }),
   );
   mock.invite.mockResolvedValue({ data: { ok: true } });
+  mock.profiles.mockResolvedValue({ data: [samProfile] });
+  mock.updateProfile.mockImplementation(({ userId }, data) =>
+    Promise.resolve({ data: { ...samProfile, ...data, user_id: userId } }),
+  );
+});
+
+const samProfile = {
+  user_id: 'U2',
+  birth_month: 3,
+  birth_day: 14,
+  start_date: '2023-03-01',
+  role: 'Engineer',
+  location: 'Berlin',
+  ask_me_about: null,
+  celebrate: true,
+  updated_by: 'U2',
+  updated_at: null,
+  set_by_admin: false,
+  left_at: null,
+};
+
+const importResult = (preview: boolean) => ({
+  data: {
+    preview,
+    overwrite: false,
+    rows_read: 2,
+    ready: 1,
+    written: preview ? 0 : 1,
+    unchanged: 0,
+    kept: 0,
+    unmatched: 1,
+    invalid: 0,
+    rows: [
+      {
+        line: 2,
+        email: 'mina@example.com',
+        user_id: 'U1',
+        status: 'ready',
+        birth_month: 7,
+        birth_day: 4,
+        start_date: null,
+        error: null,
+      },
+      {
+        line: 3,
+        email: 'nobody@example.com',
+        user_id: null,
+        status: 'unmatched',
+        birth_month: 1,
+        birth_day: 1,
+        start_date: null,
+        error: 'No active member has this email.',
+      },
+    ],
+  },
+});
+
+describe('member profiles', () => {
+  it('shows each profile and how many have dates on file', async () => {
+    view();
+
+    expect(
+      await screen.findByText(
+        'Engineer · Birthday 14 March · Joined Mar 2023 · Berlin',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Nothing on file yet')).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 of 2 have a birthday or start date on file/),
+    ).toBeInTheDocument();
+  });
+
+  it('lets an admin edit someone else’s profile', async () => {
+    const user = userEvent.setup({ delay: null });
+
+    view();
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit Sam’s profile' }),
+    );
+
+    expect(
+      screen.getByText(/They filled this in themselves/),
+    ).toBeInTheDocument();
+
+    const location = screen.getByLabelText('Location');
+    await user.clear(location);
+    await user.type(location, 'Lisbon');
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    await waitFor(() =>
+      expect(mock.updateProfile).toHaveBeenCalledWith(
+        { userId: 'U2' },
+        expect.objectContaining({ location: 'Lisbon', birth_month: 3 }),
+      ),
+    );
+  });
+
+  it('previews an import before saving anything', async () => {
+    mock.importProfiles.mockImplementation((input) =>
+      Promise.resolve(importResult(input.preview)),
+    );
+    const user = userEvent.setup({ delay: null });
+
+    view();
+    await user.click(
+      await screen.findByRole('button', { name: 'Import dates' }),
+    );
+
+    const save = screen.getByRole('button', { name: /^Save \d+ member/ });
+    expect(save).toBeDisabled();
+
+    await user.type(
+      screen.getByLabelText('CSV'),
+      'email,birthday{enter}mina@example.com,1990-07-04{enter}nobody@example.com,01-01',
+    );
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    expect(
+      await screen.findByText('No member with this email'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('4 July')).toBeInTheDocument();
+    expect(mock.importProfiles).toHaveBeenCalledTimes(1);
+    expect(mock.importProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({ preview: true, overwrite: false }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save 1 member' }));
+
+    await waitFor(() =>
+      expect(mock.importProfiles).toHaveBeenLastCalledWith(
+        expect.objectContaining({ preview: false, overwrite: false }),
+      ),
+    );
+  });
+
+  it('keeps birthdays away from regular members', async () => {
+    mock.admin = false;
+
+    view();
+    await screen.findByText('Sam');
+
+    expect(
+      screen.queryByRole('button', { name: 'Import dates' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Birthday 14 March/)).not.toBeInTheDocument();
+    expect(mock.profiles).not.toHaveBeenCalled();
+  });
 });
 
 describe('member management', () => {

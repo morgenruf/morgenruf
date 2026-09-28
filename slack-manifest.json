@@ -18,7 +18,8 @@
     "slash_commands": [
       {
         "command": "/morgenruf",
-        "description": "Morgenruf commands and help",
+        "description": "Your profile, and what Morgenruf can do",
+        "usage_hint": "[profile | help]",
         "should_escape": false
       },
       {
@@ -75,6 +76,7 @@
         "users:read.email",
         "users.profile:read",
         "emoji:read",
+        "reactions:write",
         "team:read"
       ]
     },

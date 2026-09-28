@@ -64,13 +64,14 @@ Press a chip to put the team lead in charge of standups and someone in HR in cha
 
 ## Modules
 
-Morgenruf ships as four modules over one deployment and one database. Each one is independent: it owns its own migrations, Slack handlers, dashboard routes and scheduled jobs, and can be switched off without touching the others.
+Morgenruf ships as five modules over one deployment and one database. Each one is independent: it owns its own migrations, Slack handlers, dashboard routes and scheduled jobs, and can be switched off without touching the others.
 
 | Module | What it does | On by default |
 |---|---|---|
 | **Standups** | Async daily standups, summaries, mood, blockers, webhooks | Yes |
 | **Coffee chats** | Random 1:1 pairings from a channel on a cadence, history-aware so the same two people are not matched twice in a row | No, needs extra scopes |
 | **Kudos** | Peer recognition with a daily allowance, a custom token, and leaderboards for receivers *and* givers | Yes |
+| **Celebrations** | Birthdays and work anniversaries posted in a channel, around your working days and company holidays | No, an admin turns it on |
 | **Insights** | Questions that need two signals at once: blockers nobody has cleared in days, people who answer every standup and are thanked by nobody | Yes |
 
 A module is only live when all four gates pass, checked in order:
@@ -109,6 +110,47 @@ The person you thank gets a DM with who it is from and why. To share kudos with 
 **Using the Morgenruf icon as your kudos token:** download it from **Kudos → The token your team gives**, add it in Slack under **Customize workspace → Add custom emoji** with the name `morgenruf`, and the bot picks it up within a day on its own. It falls back if the emoji is ever removed, so a workspace never ends up posting `:morgenruf:` as literal text.
 
 Setting the token by hand switches that off and keeps whatever you choose. Changing the daily allowance does not: the settings form submits every field, and treating any save as a token choice used to opt workspaces out of the emoji they had just imported.
+
+### Celebrations
+
+Birthdays and work anniversaries, posted in a channel you choose, from the dates in the member profile. Off until a workspace admin turns it on.
+
+- **One post per kind per day.** Two birthdays on the same day are one message, a birthday double; three or more are listed together. Anniversaries count the years, and a start date less than a year ago is skipped.
+- **Around your calendar.** Set the working days (Monday to Friday by default, Sunday to Thursday, or any other week) and keep a list of company holidays, typed in or imported as `date,name`. A celebration on a weekend or a holiday is posted on the last working day before it: on Friday, "Tomorrow is..." for Saturday and "On Sunday it's..." for Sunday; before a run of holidays, "On 25 December it's...".
+- **Its own clock.** Posts go out at a time you pick (09:00 by default) in a timezone you pick, separate from any standup's.
+- **Never twice.** Each post is recorded before it is sent, so a restart or a second pod does not repeat it. If the bot was down at post time, it catches up within the next few hours.
+- **🎉 on every post**, added by the bot so people pile on. That needs the `reactions:write` scope. A workspace that installed before the scope existed still gets the posts, and gets the reaction once an admin re-authorises Slack.
+- **Asking for dates.** Once Celebrations is on, each person with neither date on file gets one DM asking for them, with **Add my dates** (opens the profile form) and **Skip me** (turns celebrating off for them). **Ask for dates**, on the Celebrations and Members pages, sends it again to whoever is still missing dates, at most once per person every 30 days, and shows how many people and the message first. Joining the celebrations channel asks too.
+- **HR can run it.** Celebrations is delegable: a workspace admin gives someone the Celebrations grant from **Members**, and they look after the settings, the holidays and asking for dates without being a workspace admin.
+- Nobody who chose "Don't celebrate me publicly", nobody who has left and no deactivated member is ever posted.
+
+Invite @Morgenruf to the channel so it can post there.
+
+### Member profile
+
+Every member has a short profile: birthday, start date, role, location and "ask me about". It is part of the core rather than a module, because several features read it: Celebrations now, and intros and onboarding buddies next.
+
+People fill it in themselves from the **Your profile** section of the Slack App Home, with `/morgenruf profile`, or on **My profile** in the dashboard. All three open the same form and go through the same validation.
+
+A workspace admin can edit anyone's profile from **Members**, and import dates for the whole company from the HR tool's export:
+
+```csv
+email,birthday,start_date
+priya@example.com,03-14,2023-03-01
+tom@example.com,1990-07-04,2021-09-13
+```
+
+People are matched by email. The import shows a preview first (matched, unmatched, invalid) and saves nothing until you confirm, and it never replaces what someone entered themselves unless you tick **Overwrite entries members made themselves**.
+
+What is stored, and for how long:
+
+- **Birthdays are day and month only.** A full date in the CSV has its year dropped before it is saved. There is no column for a year.
+- **Start dates keep their year**, because anniversaries count years.
+- **Removed when someone leaves.** When the Slack sync sees a person has gone, their profile is marked, and a nightly job deletes it 30 days later. Coming back within those 30 days keeps it.
+- **Uninstalling** removes every profile along with the rest of the workspace's data.
+- Anyone can clear their own dates at any time, and "Don't celebrate me publicly" is one checkbox.
+
+Profiles are readable over MCP with `get_member_profiles`.
 
 ### The smaller things
 
@@ -210,6 +252,8 @@ Two roles, plus a grant per feature.
 | Standups: create, edit, delete, automation rules | yes | with the standups grant | no |
 | Coffee chats: programmes, members, run a round now | yes | with the coffee chats grant | no |
 | Kudos: allowance, token and channel | yes | with the kudos grant | no |
+| Celebrations: settings, working days, holidays, asking for dates | yes | with the celebrations grant | no |
+| Member profiles: edit anyone's, import dates | yes | no | their own only |
 | Roles, invitations, API keys, webhooks, the public feed, feature switches | yes | no | no |
 | Reading any page | yes | yes | yes |
 
@@ -262,6 +306,8 @@ Then posts a formatted summary to the configured channel:
 
 A keyword only counts when it is the whole message (any case, trailing punctuation ignored), so "I need help with the deploy" is an ordinary message. While you are answering a standup, `skip` and `pass` are answers (`pass` leaves the question blank), `help` shows help without using up the answer, and `standup` tells you one is already in progress. `I'm away` closes the open standup, like the **I'm away** button.
 
+`/morgenruf profile` opens your member profile, and `/morgenruf help` (or `/morgenruf` on its own) lists what Morgenruf can do in your workspace, following which features are switched on.
+
 Coffee chat replies are buttons rather than typed commands: **We met**, **Not this time**, **Skip this round** and **Pause** appear on the messages the bot sends, so nothing there can collide with `skip`.
 
 ---
@@ -275,6 +321,7 @@ Morgenruf exposes its data to AI assistants over MCP, so you can ask questions i
 | Area | Tools |
 |---|---|
 | Standups | `get_standups`, `get_today_standups`, `get_blockers`, `get_participation`, `get_members`, `search_standups`, `get_workspace_summary`, `get_mood_summary` |
+| Member profiles | `get_member_profiles` (read only; birthdays as MM-DD, never a year) |
 | Kudos | `get_kudos_leaderboard`, `get_recent_kudos`, `get_kudos_settings` |
 | Coffee chats | `list_coffee_chat_programs`, `get_coffee_chat_rounds`, `get_coffee_chat_attendance`, `get_coffee_chat_pairs` |
 | Insights | `get_stuck_blockers`, `get_unrecognised_contributors` |
@@ -606,7 +653,7 @@ Google Chat is in beta: standups collected and posted, `/standup` and `/kudos` c
 
 ### What Slack permissions does it need?
 
-The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list. Coffee chats need three extra scopes (`mpim:write`, `mpim:history`, `users.profile:read`), and a workspace that installed before those existed keeps the feature dark until it re-authorises rather than failing at runtime.
+The manifest in [`slack-manifest.yaml`](./slack-manifest.yaml) is the full list. Coffee chats need three extra scopes (`mpim:write`, `mpim:history`, `users.profile:read`), and a workspace that installed before those existed keeps the feature dark until it re-authorises rather than failing at runtime. Celebrations uses `reactions:write` for its 🎉, and posts without it until a workspace re-authorises.
 
 ### Can I let someone run standups without making them an admin?
 
@@ -656,12 +703,12 @@ Announcements land in [Discussions](https://github.com/morgenruf/morgenruf/discu
 
 | Coming | What it is | State |
 |---|---|---|
-| **Celebrations** | Birthdays and work anniversaries, announced in a channel on the day, with the roster kept in Morgenruf rather than a spreadsheet | Next module |
+| **Intros** | A welcome card for each new joiner, built from their member profile | Designed |
+| **Onboarding buddies** | A new hire paired with a buddy by the coffee chat matcher, with a checklist for their first weeks | Planned |
 | **Calendar** | Hold the hour a coffee chat pair agreed on their calendars, not just in the message. Google Calendar first | Designed |
 | **Meet and Teams rooms** | Created for a pairing the way Zoom already is. A pasted room link works today | Designed |
 | **Microsoft Teams** | Teams as a platform alongside Slack: standups collected and posted, commands, Adaptive Cards | In progress |
 | **Public REST API** | Read and write what the dashboard can, for teams that want to script it. The MCP server already covers reading | Planned |
-| **Onboarding journeys** | A sequence of messages over someone's first fortnight, with the manager nudged at the right points | Planned |
 
 Shipped so far, by release: [CHANGELOG.md](CHANGELOG.md). Longer-range thinking: [ROADMAP.md](ROADMAP.md).
 

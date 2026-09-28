@@ -119,59 +119,6 @@ def register_handlers(app) -> None:
         except Exception:
             logger.exception("connect: could not resume %s from the App Home", user_id)
 
-    @app.event("member_joined_channel")
-    def handle_joined_coffee_channel(event, client):  # noqa: ANN001
-        """Tell someone joining a coffee chat channel what they just signed up for.
-
-        Slack shows nothing about a bot's schedule, so without this a person
-        joins and waits, with no idea whether anything is coming or when.
-        """
-        from datetime import date  # noqa: PLC0415
-
-        user_id = event.get("user", "")
-        channel_id = event.get("channel", "")
-        team_id = event.get("team", "") or ""
-        if not user_id or not channel_id:
-            return
-        try:
-            import src.modules.connect.db as cdb  # noqa: PLC0415
-            from src.modules.connect.rounds import cadence_phrase, upcoming_round_date  # noqa: PLC0415
-
-            program = cdb.program_for_channel(team_id, channel_id)
-            if not program:
-                return
-            nxt = upcoming_round_date(program, date.today())
-            message = (
-                f"Thanks for joining <#{channel_id}>. "
-                f"I introduce you to someone else from this channel {cadence_phrase(program.get('interval_weeks'))}.\n"
-                f"Your next introduction is on *{nxt.strftime('%A, %d %B')}*."
-            )
-            # Both, and for different reasons. The channel message is the one
-            # that reaches someone in the moment they joined; the DM is the one
-            # still there next week when they wonder what they signed up for.
-            try:
-                client.chat_postEphemeral(channel=channel_id, user=user_id, text=message)
-            except Exception:
-                logger.info("connect: no channel welcome for %s", user_id)
-            client.chat_postMessage(
-                channel=user_id,
-                text=message,
-                blocks=[
-                    {"type": "section", "text": {"type": "mrkdwn", "text": message}},
-                    {
-                        "type": "context",
-                        "elements": [
-                            {
-                                "type": "mrkdwn",
-                                "text": "Snooze yourself or check the date any time on the *Home* tab of this app.",
-                            }
-                        ],
-                    },
-                ],
-            )
-        except Exception:
-            logger.info("connect: no welcome sent for %s in %s", user_id, channel_id)
-
     # The action id carries the match and the slot, so one regex handler serves
     # every proposed time without the message having to hold state.
     # One overflow carries every secondary action, so the message keeps a single
@@ -558,3 +505,66 @@ def _pause_for(client, channel_id: str, user_id: str, team_id: str, program_id: 
         user_id,
         "You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
     )
+
+
+def on_channel_join(event, client):  # noqa: ANN001
+    """Tell someone joining a coffee chat channel what they just signed up for.
+
+    Called by core's single member_joined_channel listener. While this was a
+    listener of its own it never ran: Bolt stops at the first matching
+    listener, and standup's was registered first.
+
+    Slack shows nothing about a bot's schedule, so without this a person
+    joins and waits, with no idea whether anything is coming or when.
+    """
+    from datetime import date  # noqa: PLC0415
+
+    user_id = event.get("user", "")
+    channel_id = event.get("channel", "")
+    team_id = event.get("team", "") or ""
+    if not user_id or not channel_id:
+        return
+    from src.core.modules import is_active_for  # noqa: PLC0415
+
+    # Core offers every join to every module, so a workspace with coffee chats
+    # switched off must not hear about a programme it paused that way.
+    if not is_active_for(team_id, "connect"):
+        return
+    try:
+        import src.modules.connect.db as cdb  # noqa: PLC0415
+        from src.modules.connect.rounds import cadence_phrase, upcoming_round_date  # noqa: PLC0415
+
+        program = cdb.program_for_channel(team_id, channel_id)
+        if not program:
+            return
+        nxt = upcoming_round_date(program, date.today())
+        message = (
+            f"Thanks for joining <#{channel_id}>. "
+            f"I introduce you to someone else from this channel {cadence_phrase(program.get('interval_weeks'))}.\n"
+            f"Your next introduction is on *{nxt.strftime('%A, %d %B')}*."
+        )
+        # Both, and for different reasons. The channel message is the one
+        # that reaches someone in the moment they joined; the DM is the one
+        # still there next week when they wonder what they signed up for.
+        try:
+            client.chat_postEphemeral(channel=channel_id, user=user_id, text=message)
+        except Exception:
+            logger.info("connect: no channel welcome for %s", user_id)
+        client.chat_postMessage(
+            channel=user_id,
+            text=message,
+            blocks=[
+                {"type": "section", "text": {"type": "mrkdwn", "text": message}},
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "Snooze yourself or check the date any time on the *Home* tab of this app.",
+                        }
+                    ],
+                },
+            ],
+        )
+    except Exception:
+        logger.info("connect: no welcome sent for %s in %s", user_id, channel_id)
