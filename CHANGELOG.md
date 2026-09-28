@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Fixed
+- **Kudos are saved again, from both `/kudos` and a DM.** No kudos had ever
+  reached the database. `/kudos` and `/morgenruf-kudos` were declared without
+  `should_escape`, so Slack sent `@Anmol Nagpal` as plain text, the handler
+  found nobody, saved nothing, and still showed a "wants to recognise someone"
+  card. Both commands now ask Slack to escape mentions, `<@U123>` and
+  `<@U123|name>` are both understood, and a plain `@name` is matched against
+  the workspace roster when exactly one person has that display or real name.
+  When nobody can be found the giver gets a short usage hint instead of a
+  card. `kudos @someone ...` sent by DM never ran at all: Bolt runs only the
+  first listener that matches an event, and core's DM listener is registered
+  before every module, so kudos' own listener was never reached. Kudos now
+  takes its DM through the core DM router, ahead of standup's answer
+  collection, which is otherwise unchanged. The slash command now applies the
+  same self-kudos and daily allowance checks as the DM, and a kudos that fails
+  to save says so instead of posting a card. Hosted installs need "Escape
+  channels, users, and links" ticked for both commands in the Slack app
+  config.
+
 ## [1.8.14] - 2026-09-28
 
 ### Fixed

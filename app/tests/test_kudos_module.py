@@ -73,8 +73,14 @@ def test_core_db_no_longer_defines_them():
 
 
 def test_kudos_has_no_catch_all():
-    """Kudos only has anchored patterns, so it never needs the DM router."""
+    """Kudos never claims an ordinary DM, only one shaped like a kudos."""
     assert MODULE.claim_dm is None
+
+
+def test_kudos_takes_its_dm_command_through_the_router():
+    """Core's DM listener is the only message listener Bolt runs (it stops at
+    the first match), so an @app.message listener in kudos would never fire."""
+    assert MODULE.claim_dm_command is not None
 
 
 def test_kudos_registers_its_own_slack_listeners():
@@ -82,7 +88,7 @@ def test_kudos_registers_its_own_slack_listeners():
     bolt_app = MagicMock()
     MODULE.register_slack(bolt_app)
     assert bolt_app.command.called, "kudos did not register its slash command"
-    assert bolt_app.message.called, "kudos did not register its message listener"
+    assert not bolt_app.message.called, "a kudos message listener would be shadowed by core's DM listener"
 
 
 def test_kudos_owns_its_http_routes():

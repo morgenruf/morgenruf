@@ -105,3 +105,22 @@ def test_main_itself_is_clean():
     """Whatever core still does, the entrypoint must not name a module."""
     source = (pathlib.Path(__file__).resolve().parents[1] / "src" / "main.py").read_text()
     assert "src.modules." not in source
+
+
+def test_create_app_registers_the_dm_listener_before_the_modules():
+    """Bolt runs only the first matching listener. create_app goes through
+    register_slack_listeners, which the kudos delivery tests use too."""
+    import inspect
+
+    import src.main as main
+
+    source = inspect.getsource(main.create_app)
+    assert "register_slack_listeners(" in source
+    assert "register_dm_listener(" not in source
+    assert "register_modules(" not in source
+
+    calls = []
+    bolt = MagicMock()
+    bolt.event.side_effect = lambda *a, **k: calls.append("dm") or (lambda f: f)
+    main.register_slack_listeners(MagicMock(), bolt, [spec("demo", slack=lambda app: calls.append("demo"))])
+    assert calls == ["dm", "demo"]
