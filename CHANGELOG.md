@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.8.14] - 2026-09-28
+
 ### Fixed
 - **Coffee chats now send the day 3 nudge and the day 6 "did you meet?"
   question.** Both were queued as one-off jobs on the in-memory scheduler, and
@@ -17,6 +19,11 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   than a day late or a closing question more than three days late is skipped,
   and a round whose closing question is skipped is marked closed without
   messaging anyone.
+- **The Helm chart stays on Postgres 16.** A dependency bump had moved the
+  bundled database to Postgres 18, which cannot start on a Postgres 16 data
+  directory and keeps its data in a different path, so `helm upgrade` would
+  have broken existing installs. Moving to 18 needs a planned upgrade and
+  will come separately.
 
 ## [1.8.13] - 2026-09-27
 
