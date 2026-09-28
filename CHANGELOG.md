@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Changed
+- **Sidebar icons have colours.** Each feature keeps its own icon colour
+  (Standups blue, Coffee chats amber, Kudos rose, Celebrations violet and so
+  on), in light and dark mode. Labels stay neutral.
+- **My profile shows your Slack name and photo** above the form.
+
 ## [1.9.0] - 2026-09-28
 
 ### Added
