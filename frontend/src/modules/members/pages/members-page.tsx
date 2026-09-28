@@ -177,11 +177,6 @@ export default function MembersPage() {
               <RefreshCw /> Refresh
             </Button>
             {isAdmin && (
-              <Button variant="outline" onClick={() => setImporting(true)}>
-                <CalendarPlus /> Import dates
-              </Button>
-            )}
-            {isAdmin && (
               <Button
                 onClick={() => {
                   setInviteId('');
@@ -289,17 +284,28 @@ export default function MembersPage() {
               {all.filter((member) => member.tracked !== false).length} in
               Morgenruf. People not tracked by Morgenruf do not appear in
               participation figures.
-              {isAdmin && profiles.isSuccess && (
-                <>
-                  {' '}
-                  {
-                    all.filter((member) => hasDates(profileById.get(member.id)))
-                      .length
-                  }{' '}
-                  of {all.length} have a birthday or start date on file.
-                </>
-              )}
             </p>
+            {isAdmin && (
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                {profiles.isSuccess && (
+                  <p>
+                    {
+                      all.filter((member) =>
+                        hasDates(profileById.get(member.id)),
+                      ).length
+                    }{' '}
+                    of {all.length} have a birthday or start date on file.
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setImporting(true)}
+                >
+                  <CalendarPlus /> Import dates
+                </Button>
+              </div>
+            )}
             {!filtered.length ? (
               <EmptyState
                 title={
