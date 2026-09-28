@@ -183,7 +183,7 @@ def oauth_callback():
         try:
             from src.core.alerts import installed  # noqa: PLC0415
 
-            installed(team_id, team_name, authed_user_id)
+            installed(team_id, team_name, authed_user_id, bot_token)
         except Exception as exc:
             logger.warning("Could not post install alert for %s: %s", team_id, exc)
 

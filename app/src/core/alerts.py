@@ -53,7 +53,57 @@ def notify(text: str) -> bool:
         return False
 
 
-def installed(team_id: str, team_name: str, installed_by: str = "") -> bool:
+def _describe_install(bot_token: str, team_id: str, installed_by: str) -> tuple[str, str]:
+    """Workspace and installer details, looked up with the new install's bot token.
+
+    The alert lands in the operator's workspace, where a mention of the
+    installer's user id renders as an empty pill: that id only means something
+    inside the installing workspace. So the name, email and domain are fetched
+    here and written out as plain text. Any lookup that fails is left out.
+    """
+    workspace = ""
+    person = ""
+    if not bot_token:
+        return workspace, person
+    try:
+        from slack_sdk import WebClient  # noqa: PLC0415
+
+        client = WebClient(token=bot_token, timeout=TIMEOUT)
+    except Exception:
+        return workspace, person
+
+    try:
+        team = client.team_info(team=team_id).get("team") or {}
+        domain = team.get("domain") or ""
+        parts = [f"{domain}.slack.com" if domain else "", team_id]
+        enterprise = team.get("enterprise_name") or team.get("enterprise_id") or ""
+        if enterprise:
+            parts.append(f"Enterprise Grid: {enterprise}")
+        workspace = " · ".join(p for p in parts if p)
+    except Exception as exc:
+        logger.info("Install alert: team.info failed for %s: %s", team_id, exc)
+
+    if installed_by:
+        try:
+            user = client.users_info(user=installed_by).get("user") or {}
+            profile = user.get("profile") or {}
+            name = profile.get("real_name") or user.get("real_name") or user.get("name") or ""
+            parts = [
+                name,
+                profile.get("email") or "",
+                profile.get("title") or "",
+                user.get("tz") or "",
+                installed_by,
+            ]
+            if user.get("is_admin") or user.get("is_owner"):
+                parts.insert(4, "workspace admin")
+            person = " · ".join(p for p in parts if p)
+        except Exception as exc:
+            logger.info("Install alert: users.info failed for %s: %s", installed_by, exc)
+    return workspace, person
+
+
+def installed(team_id: str, team_name: str, installed_by: str = "", bot_token: str = "") -> bool:
     """Somebody installed the app."""
     try:
         import src.core.db as db  # noqa: PLC0415
@@ -62,13 +112,18 @@ def installed(team_id: str, team_name: str, installed_by: str = "") -> bool:
     except Exception:
         total = 0
 
+    workspace, person = _describe_install(bot_token, team_id, installed_by)
+
     name = team_name or team_id
-    line = f":tada: *{name}* installed Morgenruf"
-    if installed_by:
-        line += f" (by <@{installed_by}>)"
+    lines = [f":tada: *{name}* installed Morgenruf"]
+    lines.append(f"Workspace: {workspace or team_id}")
+    if person:
+        lines.append(f"Installed by: {person}")
+    elif installed_by:
+        lines.append(f"Installed by: {installed_by}")
     if total:
-        line += f"\n{total} workspace{'s' if total != 1 else ''} now."
-    return notify(line)
+        lines.append(f"{total} active workspace{'s' if total != 1 else ''} now.")
+    return notify("\n".join(lines))
 
 
 def uninstalled(team_id: str, team_name: str, days: int = 0, standups: int = 0) -> bool:
