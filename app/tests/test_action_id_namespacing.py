@@ -77,15 +77,13 @@ def test_the_guard_actually_finds_action_ids():
 def test_no_two_modules_share_a_bare_string_message_pattern():
     """Bolt's @app.message with a plain string does a SUBSTRING match.
 
-    standup registers @app.message("skip"). Any other module whose command
-    contains the word skip, including "connect skip" or "skip this round",
-    would also fire standup's handler. Prefixing does not avoid it.
-
-    Decision of 2026-09-16: standup's patterns stay as they are, because
-    anchoring them would narrow what live users can type. Connect therefore
-    must not use a DM command containing help, standup or skip, and uses
-    button-only opt-out instead. This guard makes a future violation fail
-    loudly rather than silently stealing another module's messages.
+    Standup used to register @app.message("skip"), so any other module whose
+    command contained the word skip, including "connect skip", would also
+    have fired standup's handler. Standup's keywords now go through the DM
+    router as whole-message matches, and core's catch-all shadows every
+    @app.message listener anyway, but a module adding one must still not
+    collide. This guard makes a future violation fail loudly rather than
+    silently stealing another module's messages.
     """
     by_module = {}
     for d in module_dirs():
@@ -107,11 +105,19 @@ def test_no_two_modules_share_a_bare_string_message_pattern():
 
 
 def test_standups_reserved_words_are_recorded():
-    """Pins the words Connect must avoid, so the constraint cannot be forgotten."""
+    """Pins the words Connect must avoid, so the constraint cannot be forgotten.
+
+    Standup no longer has any @app.message listener (core's catch-all would
+    shadow it). Its keywords are whole-message matches in claim_dm_command,
+    so a Connect DM must not be exactly one of these.
+    """
+    from src.modules.standup.handlers import match_dm_command
+
     standup = SRC / "modules" / "standup"
     pats = set()
     for py in standup.rglob("*.py"):
         pats.update(bare_message_patterns(py))
-    assert pats == {"help", "standup", "skip"}, (
-        f"standup's bare message patterns changed to {sorted(pats)}; update the Connect design constraint to match"
-    )
+    assert pats == set(), f"standup registers message listeners again: {sorted(pats)}"
+    reserved = {w for w in ("help", "standup", "skip", "i'm away", "i'm back") if match_dm_command(w)}
+    assert reserved == {"help", "standup", "skip", "i'm away", "i'm back"}
+    assert match_dm_command("connect skip") is None
