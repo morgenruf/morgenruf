@@ -354,14 +354,31 @@ def set_members_active(team_id: str, user_ids: list[str], active: bool) -> int:
 
     Rows are never deleted. A person who left keeps their standup history, and
     reactivating them if they return is a single flag.
+
+    Their profile is different: birthdays and start dates should not outlive
+    the person's time in the workspace. Leaving stamps `left_at`, and the
+    nightly purge deletes profiles gone for 30 days. Coming back clears the
+    stamp, so a Slack deactivate and reactivate loses nothing. Both happen in
+    the same transaction as the flag, so the two can never disagree.
     """
     if not user_ids:
         return 0
+    ids = list(user_ids)
     sql = "UPDATE members SET active = %s WHERE team_id = %s AND user_id = ANY(%s) AND active <> %s"
+    if active:
+        profile_sql = (
+            "UPDATE member_profiles SET left_at = NULL WHERE team_id = %s AND user_id = ANY(%s) AND left_at IS NOT NULL"
+        )
+    else:
+        profile_sql = (
+            "UPDATE member_profiles SET left_at = NOW() WHERE team_id = %s AND user_id = ANY(%s) AND left_at IS NULL"
+        )
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (active, team_id, list(user_ids), active))
-            return cur.rowcount or 0
+            cur.execute(sql, (active, team_id, ids, active))
+            changed = cur.rowcount or 0
+            cur.execute(profile_sql, (team_id, ids))
+            return changed
 
 
 def remove_participants_everywhere(team_id: str, user_ids: list[str]) -> int:
@@ -422,6 +439,179 @@ def upsert_member(
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id, real_name, email, tz, avatar_url, display_name))
+
+
+# ---------------------------------------------------------------------------
+# Member profiles
+# ---------------------------------------------------------------------------
+
+# Columns a write may set. nudged_at and left_at belong to jobs, never to a
+# form, so neither is here.
+PROFILE_FIELDS = ("birth_month", "birth_day", "start_date", "role", "location", "ask_me_about", "celebrate")
+
+# How long a profile outlives its owner leaving the workspace.
+PROFILE_RETENTION_DAYS = 30
+
+# pg_try_advisory_xact_lock key for the purge, so two pods running the nightly
+# job at the same minute do the work once. Any constant works; this one spells
+# "PROF" in ASCII.
+_PROFILE_PURGE_LOCK = 0x50524F46
+
+
+class ProfileValidationError(ValueError):
+    """A profile write was refused. `messages` maps field to reasons."""
+
+    def __init__(self, messages: dict):
+        self.messages = messages
+        first = next(iter(messages.values()), ["invalid profile"])
+        super().__init__(first[0] if isinstance(first, list) and first else str(first))
+
+
+def validate_member_profile(fields: dict) -> dict:
+    """Load `fields` through schemas.MemberProfile, or raise ProfileValidationError.
+
+    Unknown keys are dropped, which is how a birth year sent by any caller is
+    discarded before it could reach the database.
+    """
+    from marshmallow import ValidationError  # noqa: PLC0415
+
+    from src.core.api_schemas import MemberProfile  # noqa: PLC0415
+
+    try:
+        return MemberProfile().load(fields or {})
+    except ValidationError as exc:
+        messages = exc.messages if isinstance(exc.messages, dict) else {"_schema": exc.messages}
+        raise ProfileValidationError(messages) from None
+
+
+def upsert_member_profile(team_id: str, user_id: str, fields: dict, updated_by: str) -> dict:
+    """Create or change one profile. The only function that writes one.
+
+    Every entry point (App Home, /morgenruf profile, the dashboard, the admin
+    CSV import) comes through here, so they share one validation and all
+    record who wrote last. Only the fields present in `fields` change, which
+    is how an import sets dates without clearing someone's role.
+
+    Returns the stored row.
+    """
+    if not team_id or not user_id:
+        raise ProfileValidationError({"user_id": ["A profile needs a workspace and a person."]})
+    if not updated_by:
+        raise ProfileValidationError({"updated_by": ["Record who is making the change."]})
+    clean = validate_member_profile(fields)
+    columns = [c for c in PROFILE_FIELDS if c in clean]
+    names = ", ".join(["team_id", "user_id", *columns, "updated_by", "updated_at"])
+    placeholders = ", ".join(["%s"] * (len(columns) + 3) + ["NOW()"])
+    updates = ", ".join(
+        [f"{c} = EXCLUDED.{c}" for c in columns] + ["updated_by = EXCLUDED.updated_by", "updated_at = NOW()"]
+    )
+    sql = f"""
+        INSERT INTO member_profiles ({names})
+        VALUES ({placeholders})
+        ON CONFLICT (team_id, user_id) DO UPDATE SET {updates}
+        RETURNING *
+    """
+    params = (team_id, user_id, *[clean[c] for c in columns], updated_by)
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+    return dict(row) if row else {}
+
+
+def get_member_profile(team_id: str, user_id: str) -> dict | None:
+    """One person's profile, or None when they have never filled it in."""
+    sql = "SELECT * FROM member_profiles WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, user_id))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def list_member_profiles(team_id: str, include_departed: bool = False) -> list[dict]:
+    """Every profile in a workspace. People who left are excluded unless asked for."""
+    sql = "SELECT * FROM member_profiles WHERE team_id = %s"
+    if not include_departed:
+        sql += " AND left_at IS NULL"
+    sql += " ORDER BY user_id"
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+def sync_profile_departures(team_id: str, live_user_ids) -> tuple[int, int]:
+    """Stamp or clear left_at from who Slack says is in the workspace now.
+
+    set_members_active covers people with a members row. A profile can exist
+    without one: an admin imports dates for everyone in Slack, not only the
+    people on a standup. Without this, those profiles would never be marked
+    as left and never purged. Returns (left, returned).
+
+    The caller must pass a directory it trusts. The member sync already skips
+    a workspace whose user list failed or came back empty, and so must this.
+    """
+    live = sorted({u for u in (live_user_ids or ()) if u})
+    if not live:
+        return 0, 0
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE member_profiles SET left_at = NOW() "
+                "WHERE team_id = %s AND left_at IS NULL AND NOT (user_id = ANY(%s))",
+                (team_id, live),
+            )
+            left = cur.rowcount or 0
+            cur.execute(
+                "UPDATE member_profiles SET left_at = NULL "
+                "WHERE team_id = %s AND left_at IS NOT NULL AND user_id = ANY(%s)",
+                (team_id, live),
+            )
+            returned = cur.rowcount or 0
+    return left, returned
+
+
+def purge_departed_profiles(days: int = PROFILE_RETENTION_DAYS) -> int:
+    """Delete profiles of people who left more than `days` ago. Returns how many.
+
+    Safe to run from every pod at once: the advisory lock lets one of them do
+    the work and the others return 0, and the statements are idempotent
+    anyway, so a second run finds nothing left to do.
+
+    Someone marked active again by a path other than the sync (a DM to the
+    bot re-registers them) still carries a stale left_at. That stamp is
+    cleared here first, and the delete re-checks the members table, so an
+    active person's profile is never removed.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_xact_lock(%s)", (_PROFILE_PURGE_LOCK,))
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return 0
+            cur.execute(
+                """
+                UPDATE member_profiles p SET left_at = NULL
+                FROM members m
+                WHERE m.team_id = p.team_id AND m.user_id = p.user_id
+                  AND m.active = TRUE AND p.left_at IS NOT NULL
+                """
+            )
+            cur.execute(
+                """
+                DELETE FROM member_profiles p
+                WHERE p.left_at IS NOT NULL
+                  AND p.left_at < NOW() - make_interval(days => %s)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM members m
+                      WHERE m.team_id = p.team_id AND m.user_id = p.user_id AND m.active = TRUE
+                  )
+                """,
+                (int(days),),
+            )
+            return cur.rowcount or 0
 
 
 # ---------------------------------------------------------------------------

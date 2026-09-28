@@ -1,6 +1,8 @@
 """Backend-owned browser API contracts, shared by serialization and OpenAPI."""
 
-from marshmallow import EXCLUDE, Schema, fields, validate
+from datetime import date, timedelta
+
+from marshmallow import EXCLUDE, Schema, ValidationError, fields, pre_load, validate, validates_schema
 
 
 class ApiSchema(Schema):
@@ -409,3 +411,112 @@ DaysQuery = model("DaysQuery", days=fields.Integer(validate=validate.Range(min=1
 LimitQuery = model("LimitQuery", limit=fields.Integer(validate=validate.Range(min=1, max=200)))
 ReportQuery = model("ReportQuery", date_from=fields.String(), date_to=fields.String(), user_id=fields.String())
 ExportQuery = model("ExportQuery", **{"from": fields.String(), "to": fields.String()})
+
+
+# ── Member profile ──────────────────────────────────────────────────────────
+
+# Caps on the free-text fields, shared by the dashboard, the Slack modal and
+# the database CHECK constraints in 051_member_profiles.sql.
+PROFILE_TEXT_LIMITS = {"role": 80, "location": 80, "ask_me_about": 200}
+
+# 2000 was a leap year, so 29 February passes and 30 February does not.
+_LEAP_YEAR = 2000
+
+
+class MemberProfile(ApiSchema):
+    """The one validation every profile write goes through.
+
+    The dashboard, the Slack modal and the CSV import all call
+    db.upsert_member_profile, which loads the fields through this schema, so
+    no entry point can store what another would refuse. There is no year
+    field: an unknown key such as `birth_year` is dropped, never stored.
+    """
+
+    birth_month = fields.Integer(allow_none=True, validate=validate.Range(min=1, max=12))
+    birth_day = fields.Integer(allow_none=True, validate=validate.Range(min=1, max=31))
+    start_date = fields.Date(allow_none=True)
+    role = fields.String(allow_none=True, validate=validate.Length(max=PROFILE_TEXT_LIMITS["role"]))
+    location = fields.String(allow_none=True, validate=validate.Length(max=PROFILE_TEXT_LIMITS["location"]))
+    ask_me_about = fields.String(allow_none=True, validate=validate.Length(max=PROFILE_TEXT_LIMITS["ask_me_about"]))
+    celebrate = fields.Boolean()
+
+    @pre_load
+    def _blank_is_none(self, data, **kwargs):
+        """Trim text, and treat an emptied field as cleared rather than as ''."""
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        for key in ("role", "location", "ask_me_about", "start_date", "birth_month", "birth_day"):
+            value = out.get(key)
+            if isinstance(value, str):
+                out[key] = value.strip() or None
+        return out
+
+    @validates_schema
+    def _birthday_is_a_real_day(self, data, **kwargs):
+        # Written as a pair so a partial update can never leave half a birthday.
+        if ("birth_month" in data) != ("birth_day" in data):
+            raise ValidationError("Send the birthday month and day together.", "birth_day")
+        month, day = data.get("birth_month"), data.get("birth_day")
+        if (month is None) != (day is None):
+            raise ValidationError("Choose both a month and a day, or neither.", "birth_day")
+        if month is None:
+            return
+        try:
+            date(_LEAP_YEAR, month, day)
+        except ValueError:
+            raise ValidationError("That day does not exist in that month.", "birth_day") from None
+
+    @validates_schema
+    def _start_date_is_plausible(self, data, **kwargs):
+        start = data.get("start_date")
+        if start is None:
+            return
+        # A start date a few months ahead is normal for a new hire, so the
+        # future is allowed, up to a year.
+        if start.year < 1900 or start > date.today() + timedelta(days=366):
+            raise ValidationError("Enter a start date after 1900 and no more than a year ahead.", "start_date")
+
+
+MemberProfileRecord = model(
+    "MemberProfileRecord",
+    user_id=string(),
+    birth_month=integer(allow_none=True),
+    birth_day=integer(allow_none=True),
+    start_date=iso("date", allow_none=True),
+    role=string(allow_none=True),
+    location=string(allow_none=True),
+    ask_me_about=string(allow_none=True),
+    celebrate=boolean(),
+    updated_by=string(allow_none=True),
+    updated_at=iso(allow_none=True),
+    # True when someone other than the person wrote the row last, so the page
+    # can say "set by an admin" and the person knows to check it.
+    set_by_admin=boolean(),
+    left_at=iso(allow_none=True),
+)
+ProfileImportInput = model(
+    "ProfileImportInput",
+    csv=fields.String(required=True, validate=validate.Length(min=1, max=1_000_000)),
+    # Preview is the default so a request that forgets the flag writes nothing.
+    preview=fields.Boolean(load_default=True),
+    overwrite=fields.Boolean(load_default=False),
+)
+ProfileImportRow = model(
+    "ProfileImportRow",
+    line=integer(),
+    email=string(),
+    user_id=string(allow_none=True),
+    status=string(validate=validate.OneOf(["ready", "unchanged", "kept", "unmatched", "invalid"])),
+    birth_month=integer(allow_none=True),
+    birth_day=integer(allow_none=True),
+    start_date=iso("date", allow_none=True),
+    error=string(allow_none=True),
+)
+ProfileImportResult = model(
+    "ProfileImportResult",
+    preview=boolean(),
+    overwrite=boolean(),
+    **{key: integer() for key in ("rows_read", "ready", "written", "unchanged", "kept", "unmatched", "invalid")},
+    rows=nested(ProfileImportRow, many=True),
+)

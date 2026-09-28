@@ -1610,6 +1610,14 @@ def sync_members_from_slack() -> None:
             gone = db.set_members_active(team_id, to_deactivate, False)
             back = db.set_members_active(team_id, to_restore, True)
 
+            # Profiles of people with no members row (dates imported for the
+            # whole workspace) are stamped from the same directory. Only
+            # left_at changes; nothing a person entered is touched.
+            try:
+                db.sync_profile_departures(team_id, live)
+            except Exception as exc:
+                logger.warning("Member sync: could not update profile departures for %s: %s", team_id, exc)
+
             # Deactivating the member row is not enough. Anyone still named in a
             # schedule's participants is treated as expected by the
             # participation model, which invents a row for them when they are
@@ -1743,8 +1751,31 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # Profiles of people who left the workspace more than 30 days ago are
+    # deleted. Every pod schedules this; the advisory lock inside the purge
+    # lets exactly one of them do the work.
+    scheduler.add_job(
+        _purge_departed_profiles,
+        trigger=CronTrigger(hour=3, minute=17, timezone="UTC"),
+        id="profile_purge",
+        name="Remove profiles of people who left",
+        replace_existing=True,
+    )
+
     _scheduler = scheduler
     return scheduler
+
+
+def _purge_departed_profiles() -> None:
+    """Nightly: delete member profiles whose owner left over 30 days ago."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        removed = db.purge_departed_profiles()
+        if removed:
+            logger.info("Removed %d profiles of people who left", removed)
+    except Exception:
+        logger.exception("Profile purge failed")
 
 
 def _send_install_followups() -> None:
