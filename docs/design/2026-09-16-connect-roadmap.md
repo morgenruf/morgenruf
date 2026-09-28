@@ -14,17 +14,25 @@ product they have effectively vacated.
 
 ## Pillars
 
-Donut has five. One is already shipped.
+Donut has five. Two are already shipped.
 
 | # | Pillar | Morgenruf status | Sub-project |
 |---|---|---|---|
-| 1 | Introductions (pairing) | Not built | Connect, spec written |
+| 1 | Introductions (pairing) | **Shipped** as coffee chats (`connect` module, v1.7) | Connect, done |
 | 2 | Recognition (Shoutouts) | **Already shipped** as `kudos` (migration 010, `db.py:1560-1607`, DM and slash command) | Package as a module in Phase 0, then market it |
 | 3 | Engagement (watercooler prompts) | Not built | Sub-project 2 |
 | 4 | Onboarding (intros, buddies) | Not built | Sub-projects 3 and 4 |
 | 5 | Celebrations | Not built | Sub-project 5 |
 
 ## Build order and rationale
+
+**Update 2026-09-27.** Connect shipped as coffee chats in v1.7. The remaining
+order is now: Member profile (core), Intros, Celebrations, Onboarding buddies.
+Celebrations moved ahead of buddies because the member profile solves its data
+problem. Watercooler is not in the current order. Specs:
+`2026-09-27-profile-and-celebrations-design.md`, `2026-09-27-intros-design.md`,
+`2026-09-27-onboarding-buddies-design.md`. The original order below is kept
+for the rationale.
 
 **Phase 0: module contract.** Prerequisite for everything. See
 `2026-09-16-connect-pairing-design.md`.

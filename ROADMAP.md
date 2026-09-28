@@ -83,13 +83,18 @@ it will never fire. Release by release in [CHANGELOG.md](CHANGELOG.md).
 
 ### Next modules
 
+- [ ] **Member profile**: birthday, start date, role, location and "ask me
+      about", filled in by each member or imported by an admin
+- [ ] **Intros**: a welcome card in a channel when someone joins, built from
+      their profile
 - [ ] **Celebrations** — birthdays and work anniversaries announced in a
       channel on the day, with the roster held in Morgenruf
+- [ ] **Onboarding buddies**: each new hire paired with a volunteer buddy,
+      with a short checklist over the first month (replaces Onboarding journeys)
 - [ ] **Calendar** — hold the hour a coffee chat pair agreed on their
       calendars. Google Calendar first, which is a sensitive rather than a
       restricted scope, so it does not need a paid security assessment
 - [ ] **Meet and Teams rooms** created for a pairing the way Zoom already is
-- [ ] **Onboarding journeys** — a sequence over someone's first fortnight
 
 ### Integrations
 - [ ] PagerDuty / OpsGenie on-call awareness (skip standup when on-call)
