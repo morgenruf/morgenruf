@@ -1,6 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router';
 import {
   BarChart3,
+  Cake,
   CalendarCheck,
   Coffee,
   FileChartColumn,
@@ -44,6 +45,7 @@ type DashboardPath =
   | '/dashboard/standups'
   | '/dashboard/connect'
   | '/dashboard/kudos'
+  | '/dashboard/celebrations'
   | '/dashboard/members'
   | '/dashboard/insights'
   | '/dashboard/reports'
@@ -92,6 +94,12 @@ const groups: { label: string; items: NavItem[] }[] = [
         path: '/dashboard/kudos',
         icon: HeartHandshake,
         module: 'kudos',
+      },
+      {
+        label: 'Celebrations',
+        path: '/dashboard/celebrations',
+        icon: Cake,
+        module: 'celebrations',
       },
       { label: 'Members', path: '/dashboard/members', icon: Users },
     ],

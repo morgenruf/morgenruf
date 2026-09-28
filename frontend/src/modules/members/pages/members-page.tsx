@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { getRouteApi, useLocation } from '@tanstack/react-router';
-import { CalendarPlus, RefreshCw, UserPlus } from 'lucide-react';
+import { CalendarPlus, Mail, RefreshCw, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AskForDatesDialog } from '@/common/components/ask-for-dates-dialog';
 import {
   LoadingField,
   SkeletonPeople,
@@ -44,6 +45,7 @@ const moduleLabels: Record<string, string> = {
   standup: 'Standups',
   connect: 'Coffee chats',
   kudos: 'Kudos',
+  celebrations: 'Celebrations',
   insights: 'Insights',
 };
 
@@ -79,6 +81,7 @@ export default function MembersPage() {
   const [inviteSearch, setInviteSearch] = useState('');
   const [inviteId, setInviteId] = useState('');
   const [importing, setImporting] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(
     null,
   );
@@ -113,6 +116,10 @@ export default function MembersPage() {
   ];
 
   const isAdmin = session?.role === 'admin';
+  // Asking people for dates only makes sense once something celebrates them.
+  const celebrationsActive = !!modules.data?.find(
+    (module) => module.name === 'celebrations',
+  )?.active;
   const all = members.data ?? [];
   const q = search.trim().toLowerCase();
 
@@ -304,6 +311,15 @@ export default function MembersPage() {
                 >
                   <CalendarPlus /> Import dates
                 </Button>
+                {celebrationsActive && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAsking(true)}
+                  >
+                    <Mail /> Ask for dates
+                  </Button>
+                )}
               </div>
             )}
             {!filtered.length ? (
@@ -485,6 +501,8 @@ export default function MembersPage() {
         onSave={(id, data) => saveProfile.mutateAsync({ id, data })}
         onClose={() => setEditing(null)}
       />
+
+      <AskForDatesDialog open={asking} onOpenChange={setAsking} />
 
       <ImportDatesDialog
         open={importing}

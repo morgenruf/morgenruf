@@ -1,6 +1,7 @@
 import type { DashboardRouteMetadata } from '@/common/routing/metadata';
 import { AnalyticsPageSkeleton } from '@/modules/analytics/loading';
 import { AutomationPageSkeleton } from '@/modules/automation/loading';
+import { CelebrationsPageSkeleton } from '@/modules/celebrations/loading';
 import {
   ConnectAttendancePageSkeleton,
   ConnectDetailPageSkeleton,
@@ -78,6 +79,15 @@ export const dashboardViews = {
   profile: { title: 'My profile', Skeleton: ProfilePageSkeleton },
 
   kudos: { title: 'Kudos', Skeleton: KudosPageSkeleton, module: 'kudos' },
+
+  // Reachable while switched off, so HR can set it up before an admin turns
+  // it on. The page explains its own state.
+  celebrations: {
+    title: 'Celebrations',
+    Skeleton: CelebrationsPageSkeleton,
+    module: 'celebrations',
+    requireActive: false,
+  },
 
   automation: {
     title: 'Automation',

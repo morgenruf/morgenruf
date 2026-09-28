@@ -1,5 +1,6 @@
 import { Analytics } from './generated/Analytics';
 import { Automation } from './generated/Automation';
+import { Celebrations } from './generated/Celebrations';
 import { Connect } from './generated/Connect';
 import type { SessionInfo } from './generated/data-contracts';
 import { HttpClient, type FullRequestParams } from './generated/http-client';
@@ -117,6 +118,7 @@ export function createApi(options: TransportOptions) {
     mcp: new Mcp(httpClient),
     connect: new Connect(httpClient),
     kudos: new Kudos(httpClient),
+    celebrations: new Celebrations(httpClient),
     insights: new Insights(httpClient),
     public: new Public(httpClient),
   };

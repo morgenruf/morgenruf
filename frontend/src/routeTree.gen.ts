@@ -20,6 +20,7 @@ import { Route as ConnectZoomResultRouteImport } from './routes/connect.zoom.res
 import { Route as DashboardAuthenticatedIndexRouteImport } from './routes/dashboard/_authenticated/index'
 import { Route as DashboardAuthenticatedAnalyticsRouteImport } from './routes/dashboard/_authenticated/analytics'
 import { Route as DashboardAuthenticatedAutomationRouteImport } from './routes/dashboard/_authenticated/automation'
+import { Route as DashboardAuthenticatedCelebrationsRouteImport } from './routes/dashboard/_authenticated/celebrations'
 import { Route as DashboardAuthenticatedConnectRouteRouteImport } from './routes/dashboard/_authenticated/connect/route'
 import { Route as DashboardAuthenticatedInsightsRouteImport } from './routes/dashboard/_authenticated/insights'
 import { Route as DashboardAuthenticatedKudosRouteImport } from './routes/dashboard/_authenticated/kudos'
@@ -92,6 +93,12 @@ const DashboardAuthenticatedAutomationRoute =
   DashboardAuthenticatedAutomationRouteImport.update({
     id: '/automation',
     path: '/automation',
+    getParentRoute: () => DashboardAuthenticatedRouteRoute,
+  } as any)
+const DashboardAuthenticatedCelebrationsRoute =
+  DashboardAuthenticatedCelebrationsRouteImport.update({
+    id: '/celebrations',
+    path: '/celebrations',
     getParentRoute: () => DashboardAuthenticatedRouteRoute,
   } as any)
 const DashboardAuthenticatedConnectRouteRoute =
@@ -196,6 +203,7 @@ export interface FileRoutesByFullPath {
   '/connect/zoom/result': typeof ConnectZoomResultRoute
   '/dashboard/analytics': typeof DashboardAuthenticatedAnalyticsRoute
   '/dashboard/automation': typeof DashboardAuthenticatedAutomationRoute
+  '/dashboard/celebrations': typeof DashboardAuthenticatedCelebrationsRoute
   '/dashboard/insights': typeof DashboardAuthenticatedInsightsRoute
   '/dashboard/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/mcp': typeof DashboardAuthenticatedMcpRoute
@@ -222,6 +230,7 @@ export interface FileRoutesByTo {
   '/connect/zoom/result': typeof ConnectZoomResultRoute
   '/dashboard/analytics': typeof DashboardAuthenticatedAnalyticsRoute
   '/dashboard/automation': typeof DashboardAuthenticatedAutomationRoute
+  '/dashboard/celebrations': typeof DashboardAuthenticatedCelebrationsRoute
   '/dashboard/insights': typeof DashboardAuthenticatedInsightsRoute
   '/dashboard/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/mcp': typeof DashboardAuthenticatedMcpRoute
@@ -250,6 +259,7 @@ export interface FileRoutesById {
   '/connect/zoom/result': typeof ConnectZoomResultRoute
   '/dashboard/_authenticated/analytics': typeof DashboardAuthenticatedAnalyticsRoute
   '/dashboard/_authenticated/automation': typeof DashboardAuthenticatedAutomationRoute
+  '/dashboard/_authenticated/celebrations': typeof DashboardAuthenticatedCelebrationsRoute
   '/dashboard/_authenticated/insights': typeof DashboardAuthenticatedInsightsRoute
   '/dashboard/_authenticated/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/_authenticated/mcp': typeof DashboardAuthenticatedMcpRoute
@@ -279,6 +289,7 @@ export interface FileRouteTypes {
     | '/connect/zoom/result'
     | '/dashboard/analytics'
     | '/dashboard/automation'
+    | '/dashboard/celebrations'
     | '/dashboard/insights'
     | '/dashboard/kudos'
     | '/dashboard/mcp'
@@ -305,6 +316,7 @@ export interface FileRouteTypes {
     | '/connect/zoom/result'
     | '/dashboard/analytics'
     | '/dashboard/automation'
+    | '/dashboard/celebrations'
     | '/dashboard/insights'
     | '/dashboard/kudos'
     | '/dashboard/mcp'
@@ -332,6 +344,7 @@ export interface FileRouteTypes {
     | '/connect/zoom/result'
     | '/dashboard/_authenticated/analytics'
     | '/dashboard/_authenticated/automation'
+    | '/dashboard/_authenticated/celebrations'
     | '/dashboard/_authenticated/insights'
     | '/dashboard/_authenticated/kudos'
     | '/dashboard/_authenticated/mcp'
@@ -435,6 +448,13 @@ declare module '@tanstack/react-router' {
       path: '/automation'
       fullPath: '/dashboard/automation'
       preLoaderRoute: typeof DashboardAuthenticatedAutomationRouteImport
+      parentRoute: typeof DashboardAuthenticatedRouteRoute
+    }
+    '/dashboard/_authenticated/celebrations': {
+      id: '/dashboard/_authenticated/celebrations'
+      path: '/celebrations'
+      fullPath: '/dashboard/celebrations'
+      preLoaderRoute: typeof DashboardAuthenticatedCelebrationsRouteImport
       parentRoute: typeof DashboardAuthenticatedRouteRoute
     }
     '/dashboard/_authenticated/connect': {
@@ -573,6 +593,7 @@ interface DashboardAuthenticatedRouteRouteChildren {
   DashboardAuthenticatedConnectRouteRoute: typeof DashboardAuthenticatedConnectRouteRouteWithChildren
   DashboardAuthenticatedAnalyticsRoute: typeof DashboardAuthenticatedAnalyticsRoute
   DashboardAuthenticatedAutomationRoute: typeof DashboardAuthenticatedAutomationRoute
+  DashboardAuthenticatedCelebrationsRoute: typeof DashboardAuthenticatedCelebrationsRoute
   DashboardAuthenticatedInsightsRoute: typeof DashboardAuthenticatedInsightsRoute
   DashboardAuthenticatedKudosRoute: typeof DashboardAuthenticatedKudosRoute
   DashboardAuthenticatedMcpRoute: typeof DashboardAuthenticatedMcpRoute
@@ -593,6 +614,8 @@ const DashboardAuthenticatedRouteRouteChildren: DashboardAuthenticatedRouteRoute
     DashboardAuthenticatedAnalyticsRoute: DashboardAuthenticatedAnalyticsRoute,
     DashboardAuthenticatedAutomationRoute:
       DashboardAuthenticatedAutomationRoute,
+    DashboardAuthenticatedCelebrationsRoute:
+      DashboardAuthenticatedCelebrationsRoute,
     DashboardAuthenticatedInsightsRoute: DashboardAuthenticatedInsightsRoute,
     DashboardAuthenticatedKudosRoute: DashboardAuthenticatedKudosRoute,
     DashboardAuthenticatedMcpRoute: DashboardAuthenticatedMcpRoute,
