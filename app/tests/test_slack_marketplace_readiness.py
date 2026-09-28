@@ -132,6 +132,43 @@ class TestSlashCommands:
             assert legacy in commands
 
 
+class TestRequestUrls:
+    """The YAML and JSON manifests once sent interactivity to different paths.
+
+    The YAML said /slack/events and the JSON /slack/interactions. Both happen
+    to reach the same Bolt handler today, but a reviewer pasting either one
+    should get the same app, and each URL should be a route the app declares.
+    """
+
+    @staticmethod
+    def _settings(data):
+        settings = data["settings"]
+        return {
+            "events": settings["event_subscriptions"]["request_url"],
+            "interactivity": settings["interactivity"]["request_url"],
+        }
+
+    def test_yaml_and_json_agree(self):
+        as_json = json.loads(MANIFEST_JSON.read_text())
+        assert self._settings(manifest()) == self._settings(as_json)
+
+    def test_interactivity_uses_its_own_route(self):
+        assert self._settings(manifest())["interactivity"].endswith("/slack/interactions")
+
+    def test_every_request_url_is_a_route_the_app_serves(self):
+        from tests.support import RouteDeclarations
+
+        served = {path for path, *_ in RouteDeclarations().findall((APP / "src/main.py").read_text())}
+        for url in self._settings(manifest()).values():
+            path = "/" + url.split("://", 1)[1].split("/", 1)[1]
+            assert path in served, f"{url} points at a path main.py does not route"
+
+    def test_there_is_one_manifest_pair(self):
+        """app/ held a stale copy that nothing read and that had drifted."""
+        assert not (APP / "slack-manifest.yaml").exists()
+        assert not (APP / "slack-manifest.json").exists()
+
+
 class TestTheSecurityBasics:
     def test_requests_are_verified(self):
         assert "SLACK_SIGNING_SECRET" in (APP / "src/main.py").read_text()
