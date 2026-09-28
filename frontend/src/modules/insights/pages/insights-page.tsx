@@ -66,10 +66,15 @@ export default function InsightsPage() {
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  ) : query.data.contributors ? (
                     <EmptyState
                       title="Everyone has been recognised"
                       description="Everyone who showed up has been thanked by someone."
+                    />
+                  ) : (
+                    <EmptyState
+                      title="No standups yet"
+                      description="Nobody has filed a standup in the last 30 days. People who show up will appear here until someone thanks them."
                     />
                   )}
                 </CardContent>

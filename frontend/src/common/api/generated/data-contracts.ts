@@ -330,6 +330,7 @@ export interface GrantModuleAdminParams {
 }
 
 export interface InsightsData {
+  contributors: number;
   stuck: PersistentBlocker[];
   unrecognised: UnrecognisedContributor[];
   window_days: number;

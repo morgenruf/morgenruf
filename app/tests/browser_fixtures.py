@@ -472,14 +472,21 @@ def create_test_app(patcher=None):
     install(
         insights_db,
         {
-            "unrecognised_contributors": lambda team, **kwargs: [
+            "contributor_recognition": lambda team, **kwargs: [
                 {
                     "user_id": "U_LEAD",
                     "real_name": "Sam Rivera",
                     "standups": 12,
                     "last_standup": state.today,
                     "kudos": 0,
-                }
+                },
+                {
+                    "user_id": "U_ADMIN",
+                    "real_name": "Alex Morgan",
+                    "standups": 9,
+                    "last_standup": state.today,
+                    "kudos": 5,
+                },
             ],
             "blocker_rows": lambda team, **kwargs: {
                 "U_ADMIN": [
