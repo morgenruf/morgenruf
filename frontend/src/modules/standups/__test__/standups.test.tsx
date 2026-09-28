@@ -888,6 +888,9 @@ describe('standup overview', () => {
     [85, 20, 'Healthy', '85%'],
     [50, 20, 'Slipping', '50%'],
     [0, 20, 'Needs a look', '0%'],
+    [50, 2, 'Too early to judge', '50%'],
+    [0, 4, 'Too early to judge', '0%'],
+    [20, 5, 'Needs a look', '20%'],
     [0, 0, 'No participation data', null],
     [null, 20, 'No participation data', null],
   ])(
