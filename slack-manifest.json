@@ -35,7 +35,7 @@
         "command": "/morgenruf-kudos",
         "description": "Give a shoutout to a teammate",
         "usage_hint": "@teammate [message]",
-        "should_escape": false
+        "should_escape": true
       },
       {
         "command": "/standup",
@@ -51,7 +51,7 @@
         "command": "/kudos",
         "description": "Give a shoutout to a teammate (alias)",
         "usage_hint": "@teammate [message]",
-        "should_escape": false
+        "should_escape": true
       }
     ]
   },

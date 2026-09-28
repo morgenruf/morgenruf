@@ -31,6 +31,12 @@ class ModuleSpec:
     purge: Optional[Callable]
     nav: tuple[NavItem, ...]
     default_enabled: bool
+    # A DM that is an explicit command, such as `kudos @sam thanks`. Offered to
+    # every active module before any claim_dm, so the command still works while
+    # another module is mid-conversation with the person. Returns True when it
+    # handled the message. Defaulted so a module with no DM commands needs no
+    # change.
+    claim_dm_command: Optional[Callable] = None
     # Blocks this module contributes to the Slack App Home tab. Defaulted so
     # a module that has nothing to add needs no change.
     home_blocks: Optional[Callable] = None

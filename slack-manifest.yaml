@@ -22,6 +22,7 @@ features:
     - command: /morgenruf-kudos
       description: Give a shoutout to a teammate
       usage_hint: "@teammate [message]"
+      should_escape: true
     - command: /standup
       description: Start your daily standup now (alias)
     - command: /skip
@@ -29,6 +30,7 @@ features:
     - command: /kudos
       description: Give a shoutout to a teammate (alias)
       usage_hint: "@teammate [message]"
+      should_escape: true
 
 oauth_config:
   redirect_urls:
