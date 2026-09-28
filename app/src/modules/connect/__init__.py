@@ -13,7 +13,7 @@ from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.connect.dashboard import register_routes
-from src.modules.connect.handlers import register_handlers
+from src.modules.connect.handlers import on_channel_join, register_handlers
 from src.modules.connect.home import home_blocks
 from src.modules.connect.jobs import plan_jobs
 from src.modules.connect.mcp import tools as mcp_tools
@@ -42,6 +42,7 @@ MODULE = ModuleSpec(
     register_routes=register_routes,
     plan_jobs=plan_jobs,
     claim_dm=None,
+    on_channel_join=on_channel_join,
     purge=purge,
     nav=(NavItem(label="Coffee chats", path="#connect"),),
     default_enabled=False,

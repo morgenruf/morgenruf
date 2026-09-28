@@ -153,6 +153,44 @@ def register_dm_listener(bolt_app) -> None:
         route_dm(modules, ctx, fallback=None)
 
 
+def dispatch_channel_join(modules, event: dict, client) -> list[str]:
+    """Offer one member_joined_channel event to every module hook, in order.
+
+    One hook failing must not stop the next. Returns the names called, for
+    tests and logs.
+    """
+    called: list[str] = []
+    for spec in modules:
+        hook = getattr(spec, "on_channel_join", None)
+        if hook is None:
+            continue
+        try:
+            hook(event, client)
+            called.append(spec.name)
+        except Exception:
+            logger.exception("module %s failed to handle a channel join", spec.name)
+    return called
+
+
+def register_channel_join_listener(bolt_app) -> None:
+    """Own the single member_joined_channel listener for every module.
+
+    Bolt runs only the first listener that matches an event. Standup and
+    Connect each registered one, so Connect's welcome never ran; a third from
+    Celebrations would not have either. Modules expose on_channel_join and
+    this calls each of them.
+
+    Every module the deployment permits is offered the event, not only those
+    active for the workspace, because standup's welcome has always run
+    regardless of the workspace's module toggles and must keep doing so. Each
+    hook checks for itself whether the channel matters to it.
+    """
+
+    @bolt_app.event("member_joined_channel")
+    def handle_member_joined_channel(event, client):  # noqa: ANN001
+        dispatch_channel_join(_enabled_modules(), event, client)
+
+
 def create_app() -> tuple[App, Flask]:
     signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
     client_id = os.environ.get("SLACK_CLIENT_ID", "")
@@ -174,6 +212,7 @@ def create_app() -> tuple[App, Flask]:
     )
 
     register_dm_listener(slack_app)
+    register_channel_join_listener(slack_app)
 
     # Core's own Slack surface: /morgenruf and the member profile modal.
     from src.core.profile_slack import register_slack as register_profile_slack

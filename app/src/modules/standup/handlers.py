@@ -1346,41 +1346,6 @@ def register_handlers(app: App) -> None:
             "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
         )
 
-    @app.event("member_joined_channel")
-    def handle_member_joined(event, client):  # noqa: ANN001
-        """Welcome new members and register them for standups."""
-        user_id: str = event.get("user", "")
-        team_id: str = event.get("team", "")
-        if not user_id or not team_id:
-            return
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            user_info = client.users_info(user=user_id).get("user", {})
-            if not is_human(user_info):
-                # Another bot joined the channel. It can't do a standup and
-                # DMing it would fail on every run.
-                logger.debug("Ignoring non-human join by %s in %s", user_id, team_id)
-                return
-            profile = user_info.get("profile", {})
-            db.upsert_member(
-                team_id=team_id,
-                user_id=user_id,
-                real_name=profile.get("real_name", ""),
-                email=profile.get("email", ""),
-                tz=user_info.get("tz", "UTC"),
-            )
-            client.chat_postMessage(
-                channel=user_id,
-                text=(
-                    "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
-                    "I'll DM you each morning with a few quick questions to share with your team. "
-                    "Use `/standup` to try a standup now, or `/help` to learn more."
-                ),
-            )
-        except Exception as exc:
-            logger.warning("member_joined_channel error: %s", exc)
-
     @app.message("help")
     def handle_help(message, say):  # noqa: ANN001
         if message.get("channel_type") != "im":
@@ -1880,6 +1845,46 @@ def register_handlers(app: App) -> None:
             say(f"⚠️ Could not save timezone: {exc}")
             return
         say(f"✅ Your timezone has been updated to *{tz_str}*.")
+
+
+def on_channel_join(event, client):  # noqa: ANN001
+    """Welcome new members and register them for standups.
+
+    Called by core's single member_joined_channel listener (see
+    main.register_channel_join_listener) rather than registered here, because
+    Bolt runs only the first listener matching an event.
+    """
+    user_id: str = event.get("user", "")
+    team_id: str = event.get("team", "")
+    if not user_id or not team_id:
+        return
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        user_info = client.users_info(user=user_id).get("user", {})
+        if not is_human(user_info):
+            # Another bot joined the channel. It can't do a standup and
+            # DMing it would fail on every run.
+            logger.debug("Ignoring non-human join by %s in %s", user_id, team_id)
+            return
+        profile = user_info.get("profile", {})
+        db.upsert_member(
+            team_id=team_id,
+            user_id=user_id,
+            real_name=profile.get("real_name", ""),
+            email=profile.get("email", ""),
+            tz=user_info.get("tz", "UTC"),
+        )
+        client.chat_postMessage(
+            channel=user_id,
+            text=(
+                "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
+                "I'll DM you each morning with a few quick questions to share with your team. "
+                "Use `/standup` to try a standup now, or `/help` to learn more."
+            ),
+        )
+    except Exception as exc:
+        logger.warning("member_joined_channel error: %s", exc)
 
 
 def claim_dm(ctx) -> bool:

@@ -47,6 +47,13 @@ class ModuleSpec:
     # help lists what this workspace can actually do. Slack mrkdwn, one
     # command or tip per line.
     help_lines: tuple[str, ...] = ()
+    # Called with (event, client) when someone joins a channel the bot is in.
+    # Bolt runs only the first listener that matches an event, so a second
+    # module registering its own member_joined_channel listener would never
+    # be called. Core owns the one listener and offers the event to every
+    # module the deployment permits; each hook decides whether the channel is
+    # one it cares about.
+    on_channel_join: Optional[Callable] = None
 
 
 def deploy_allowlist() -> Optional[set[str]]:
@@ -74,6 +81,25 @@ def is_active(
     if workspace_setting is not None:
         return workspace_setting
     return spec.default_enabled
+
+
+def is_active_for(team_id: str, name: str) -> bool:
+    """Whether the module called `name` is active for one workspace.
+
+    For a module's own Slack hooks, which core calls for every module the
+    deployment permits and which must stay quiet where the module is off.
+    Fails closed: a lookup error means "not active".
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+        from src.modules import REGISTRY  # noqa: PLC0415
+
+        spec = next((s for s in REGISTRY if s.name == name), None)
+        if spec is None:
+            return False
+        return is_active(spec, db.granted_scopes(team_id), db.module_settings(team_id).get(name), deploy_allowlist())
+    except Exception:
+        return False
 
 
 def active_modules(
