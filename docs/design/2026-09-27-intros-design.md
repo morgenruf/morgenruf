@@ -523,50 +523,22 @@ deploy it. Roll out outside standup hours, since two schedulers overlap
 during a rolling update; the claim in section 7 is what makes that safe for
 Intros.
 
-## 13. Open questions
+## 13. Decisions (resolved 2026-09-27)
 
-Each has a recommendation; none blocks writing the implementation plan.
+The owner accepted every recommendation:
 
-1. **The stale `app/slack-manifest.yaml` and `app/slack-manifest.json`.**
-   They lack `/morgenruf`, the mpim scopes and `member_joined_channel`, and
-   no test reads them. Adding `team_join` to them alone would make them
-   look maintained when they are not.
-   *Recommendation:* delete both in this release and point anything that
-   referenced them at the root pair. If they must stay, regenerate them from
-   the root files and add them to the drift test.
-
-2. **Default delay.** 0 hours welcomes someone before they have a profile;
-   48 hours makes the welcome late.
-   *Recommendation:* 24 hours, posted early as soon as the person saves
-   their profile, and never outside posting hours.
-
-3. **Enterprise Grid moves.** A person added to one more workspace in the
-   org looks new unless HR set a start date.
-   *Recommendation:* welcome them anyway in v1. The DM's "Don't introduce
-   me" and the admin Skip cover it, and Grid customers are rare on a free
-   self-hosted bot. Revisit if anyone reports it.
-
-4. **A 👋 reaction on the card.** Nice for pile-on, but `reactions:write` is
-   a new scope and every workspace would have to reinstall.
-   *Recommendation:* no reaction in Intros. Decide once for both Intros and
-   Celebrations; if Celebrations keeps its 🎉 reaction, that release adds
-   the scope and Intros can start reacting in the same release at no extra
-   cost.
-
-5. **Location fallback from timezone.** `Europe/Berlin` gives "Berlin", but
-   plenty of people in that zone are not in Berlin.
-   *Recommendation:* no fallback. Show location only when the profile has
-   one. Role may fall back to Slack's `profile.title` because the person
-   wrote that themselves.
-
-6. **Guests turned into full members.** Slack sends that as `user_change`,
-   which Morgenruf does not subscribe to, so a contractor who is hired is
-   never welcomed automatically.
-   *Recommendation:* out of scope for v1. The pending list gets a "Welcome
-   someone" button that creates a row by hand; that also covers anyone who
-   joined before Intros was enabled.
-
-7. **Thread replies.** The card says "Say hi in the thread". Morgenruf could
-   DM the new person a digest of who said hi.
-   *Recommendation:* no, not in v1. The thread is one click away from the
-   mention, and a digest is one more DM on a busy first day.
+1. **Stale `app/slack-manifest.*`:** deleted in the Celebrations release;
+   the root pair is the only manifest.
+2. **Delay:** 24 hours, posted early once the person saves their profile,
+   never outside posting hours.
+3. **Enterprise Grid moves:** welcomed anyway in v1; "Don't introduce me"
+   and the admin Skip cover it.
+4. **👋 reaction:** Celebrations adds `reactions:write` to the manifest and
+   reacts only when the install has granted it; no workspace is forced to
+   reinstall. Intros uses the same rule, so the card gets a 👋 reaction
+   wherever the scope is present.
+5. **Location:** no fallback from timezone. Role may fall back to Slack's
+   `profile.title`.
+6. **Guests turned into full members:** out of scope; a "Welcome someone"
+   button on the pending list creates a row by hand.
+7. **Thread digest:** no.
