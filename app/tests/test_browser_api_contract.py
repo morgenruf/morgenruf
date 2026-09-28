@@ -62,6 +62,8 @@ GET_PATHS = [
     "/dashboard/api/connect/programs/1/participation",
     "/dashboard/api/insights",
     "/dashboard/api/today",
+    "/dashboard/api/profile",
+    "/dashboard/api/profiles",
     "/api/public/feed/public-browser-feed",
 ]
 
@@ -105,6 +107,17 @@ MUTATIONS = [
     ("DELETE", "/dashboard/api/connect/programs/1", None),
     ("POST", "/dashboard/api/connect/programs/1/run", None),
     ("POST", "/dashboard/api/connect/programs/1/members/U_MEMBER", {"state": "snoozed", "weeks": 2}),
+    (
+        "PUT",
+        "/dashboard/api/profile",
+        {"birth_month": 2, "birth_day": 29, "start_date": "2023-03-01", "role": "Designer", "celebrate": True},
+    ),
+    ("PUT", "/dashboard/api/profiles/U_MEMBER", {"location": "Berlin"}),
+    (
+        "POST",
+        "/dashboard/api/profiles/import",
+        {"csv": "email,birthday,start_date\nu_member@example.test,1990-07-04,2022-05-01\n", "preview": True},
+    ),
     ("POST", "/dashboard/api/logout", None),
 ]
 
@@ -286,7 +299,7 @@ print(json.dumps(spec, sort_keys=True))
         for method, operation in path.items()
         if method in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == 54
+    assert len(operations) == 59
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
 

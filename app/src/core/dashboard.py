@@ -855,6 +855,175 @@ def api_invite_admin(data):
 
 
 # ---------------------------------------------------------------------------
+# Member profile API
+#
+# Two halves. /profile is the signed-in person's own, and needs only a
+# session: the user id comes from the session, never from the request, so a
+# member can read and change their own profile and nobody else's. /profiles
+# is the admin side: every profile, any profile, and the CSV import.
+# ---------------------------------------------------------------------------
+
+
+def _profile_error(exc: Exception):
+    """A refused write, shaped like the schema errors the form already maps."""
+    messages = getattr(exc, "messages", None) or {"root.server": [str(exc)]}
+    return jsonify({"error": str(exc) or "Invalid profile", "details": messages}), 400
+
+
+@dashboard_bp.route("/dashboard/api/profile", methods=["GET"])
+@_login_required
+@dashboard_bp.doc(operationId="getMyProfile", tags=["Profile"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.MemberProfileRecord)
+def api_my_profile():
+    from src.core.profile import to_record  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    user_id = session.get("user_id") or ""
+    if not user_id:
+        return jsonify({"error": "Sign in again to see your profile"}), 401
+    try:
+        return to_record(user_id, db.get_member_profile(team_id, user_id))
+    except Exception as exc:
+        logger.error("api_my_profile: %s", exc)
+        return jsonify({"error": "Service unavailable"}), 503
+
+
+@dashboard_bp.route("/dashboard/api/profile", methods=["PUT"])
+@_login_required
+@dashboard_bp.doc(operationId="updateMyProfile", tags=["Profile"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.MemberProfile, error_status_code=400)
+@dashboard_bp.response(200, schemas.MemberProfileRecord)
+def api_update_my_profile(data):
+    from src.core.profile import to_record  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    user_id = session.get("user_id") or ""
+    if not user_id:
+        return jsonify({"error": "Sign in again to change your profile"}), 401
+    try:
+        row = db.upsert_member_profile(team_id, user_id, data, updated_by=user_id)
+    except ValueError as exc:
+        return _profile_error(exc)
+    except Exception as exc:
+        logger.error("api_update_my_profile: %s", exc)
+        return jsonify({"error": "Could not save your profile"}), 500
+    return to_record(user_id, row)
+
+
+@dashboard_bp.route("/dashboard/api/profiles", methods=["GET"])
+@_admin_required
+@dashboard_bp.doc(operationId="listProfiles", tags=["Profile"], security=[{"sessionCookie": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.response(200, schemas.MemberProfileRecord(many=True))
+def api_list_profiles():
+    from src.core.profile import to_record  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    try:
+        rows = db.list_member_profiles(team_id)
+    except Exception as exc:
+        logger.error("api_list_profiles: %s", exc)
+        return jsonify({"error": "Service unavailable"}), 503
+    return [to_record(r["user_id"], r) for r in rows]
+
+
+@dashboard_bp.route("/dashboard/api/profiles/<user_id>", methods=["PUT"])
+@_admin_required
+@dashboard_bp.doc(operationId="updateProfile", tags=["Profile"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.MemberProfile, error_status_code=400)
+@dashboard_bp.response(200, schemas.MemberProfileRecord)
+def api_update_profile(data, user_id: str):
+    from src.core.profile import is_user_id, to_record  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    if not is_user_id(user_id):
+        return jsonify({"error": "That is not a Slack member id"}), 404
+    try:
+        row = db.upsert_member_profile(team_id, user_id, data, updated_by=session.get("user_id") or "")
+    except ValueError as exc:
+        return _profile_error(exc)
+    except Exception as exc:
+        logger.error("api_update_profile: %s", exc)
+        return jsonify({"error": "Could not save the profile"}), 500
+    return to_record(user_id, row)
+
+
+def _import_candidates(team_id: str) -> list[dict]:
+    """Everyone an import row may match: `{user_id, email}` per person.
+
+    The Slack directory rather than the members table, because an HR export
+    covers the whole company and the members table only holds people the bot
+    has met. Falls back to the table when Slack cannot be reached.
+    """
+    token = _get_bot_token()
+    if token:
+        try:
+            from slack_sdk import WebClient  # noqa: PLC0415
+
+            from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
+
+            directory, _error = fetch_workspace_directory(WebClient(token=token))
+            if directory:
+                return [
+                    {"user_id": uid, "email": (user.get("profile") or {}).get("email", "")}
+                    for uid, user in directory.items()
+                ]
+        except Exception as exc:
+            logger.warning("profile import: Slack directory unavailable, using stored members: %s", exc)
+    return [{"user_id": r["user_id"], "email": r.get("email") or ""} for r in db.get_active_members(team_id)]
+
+
+@dashboard_bp.route("/dashboard/api/profiles/import", methods=["POST"])
+@_admin_required
+@dashboard_bp.doc(operationId="importProfiles", tags=["Profile"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.ProfileImportInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.ProfileImportResult)
+def api_import_profiles(data):
+    """Birthdays and start dates from `email,birthday,start_date`.
+
+    Preview (the default) reports what would happen and writes nothing. A
+    birthday given as a full date has its year dropped before anything else
+    sees it. A profile the person wrote themselves is kept unless `overwrite`.
+    """
+    from src.core import profile  # noqa: PLC0415
+
+    team_id = session["team_id"]
+    preview = bool(data.get("preview", True))
+    overwrite = bool(data.get("overwrite", False))
+    try:
+        rows = profile.read_import(data["csv"])
+    except profile.ImportFormatError as exc:
+        return jsonify({"error": str(exc), "details": {"csv": [str(exc)]}}), 400
+
+    try:
+        existing = {r["user_id"]: r for r in db.list_member_profiles(team_id, include_departed=True)}
+        planned = profile.plan_import(rows, _import_candidates(team_id), existing, overwrite)
+    except Exception as exc:
+        logger.error("api_import_profiles: %s", exc)
+        return jsonify({"error": "Service unavailable"}), 503
+
+    written = 0
+    if not preview:
+        admin_id = session.get("user_id") or ""
+        for row in planned:
+            if row["status"] != "ready":
+                continue
+            try:
+                db.upsert_member_profile(team_id, row["user_id"], profile.import_fields(row), updated_by=admin_id)
+                written += 1
+            except ValueError as exc:
+                row["status"], row["error"] = "invalid", str(exc)
+            except Exception as exc:
+                logger.error("api_import_profiles: line %s: %s", row["line"], exc)
+                row["status"], row["error"] = "invalid", "Could not be saved"
+    return profile.summarise_import(planned, preview, overwrite, written)
+
+
+# ---------------------------------------------------------------------------
 # Channels API (helper for dropdowns)
 # ---------------------------------------------------------------------------
 

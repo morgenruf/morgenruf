@@ -182,6 +182,23 @@ class BrowserData:
             }
         ]
         self.module_settings = {"standup": True, "connect": True, "kudos": True, "insights": True}
+        self.profiles = {
+            "U_LEAD": {
+                "team_id": self.team_id,
+                "user_id": "U_LEAD",
+                "birth_month": 3,
+                "birth_day": 14,
+                "start_date": self.today.replace(year=self.today.year - 3, month=1, day=9),
+                "role": "Engineering lead",
+                "location": "Toronto",
+                "ask_me_about": "Rust, bouldering",
+                "celebrate": True,
+                "nudged_at": None,
+                "left_at": None,
+                "updated_by": "U_ADMIN",
+                "updated_at": self.now,
+            }
+        }
 
     def overview(self, days=7):
         dates = [(self.today - timedelta(days=i)).isoformat() for i in reversed(range(days))]
@@ -292,6 +309,28 @@ class BrowserData:
         )
         return f"mrn_browser_secret_{key_id}"
 
+    def upsert_profile(self, validate, team_id, user_id, fields, updated_by):
+        """The real validation, stored in memory, like db.upsert_member_profile."""
+        clean = validate(fields)
+        row = self.profiles.setdefault(
+            user_id,
+            {
+                "team_id": team_id,
+                "user_id": user_id,
+                "birth_month": None,
+                "birth_day": None,
+                "start_date": None,
+                "role": None,
+                "location": None,
+                "ask_me_about": None,
+                "celebrate": True,
+                "nudged_at": None,
+                "left_at": None,
+            },
+        )
+        row.update(clean, updated_by=updated_by, updated_at=self.now)
+        return deepcopy(row)
+
     def delete(self, collection, row_id):
         old = len(collection)
         collection[:] = [r for r in collection if r["id"] != int(row_id)]
@@ -331,6 +370,7 @@ def create_test_app(patcher=None):
 
     patch(dashboard, "db", db)
     patch(oauth, "db", db)
+    validate_profile = db.validate_member_profile
     patch(dashboard, "verify_login_token", oauth.verify_login_token)
     install(
         db,
@@ -404,6 +444,13 @@ def create_test_app(patcher=None):
             "suppress_email": lambda email: None,
             "revoke_email_consent": lambda email: None,
             "grant_email_consent": lambda email, **kwargs: None,
+            "get_member_profile": lambda team, user: deepcopy(state.profiles.get(user)),
+            "list_member_profiles": lambda team, include_departed=False: [
+                deepcopy(p) for p in state.profiles.values() if include_departed or not p.get("left_at")
+            ],
+            "upsert_member_profile": lambda team, user, fields, updated_by: state.upsert_profile(
+                validate_profile, team, user, fields, updated_by
+            ),
         },
     )
     patch(roster, "db", db)

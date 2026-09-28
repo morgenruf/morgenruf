@@ -294,6 +294,8 @@ export interface GetLeaderboardParams {
   days?: number;
 }
 
+export type GetMyProfileError = ApiError;
+
 export type GetReportsError = ApiError;
 
 export interface GetReportsParams {
@@ -328,6 +330,8 @@ export interface GrantModuleAdminParams {
   /** @minLength 1 */
   userId: string;
 }
+
+export type ImportProfilesError = ApiError;
 
 export interface InsightsData {
   stuck: PersistentBlocker[];
@@ -432,6 +436,8 @@ export interface ListParticipationParams {
   rounds?: number;
 }
 
+export type ListProfilesError = ApiError;
+
 export type ListProgramMembersError = ApiError;
 
 export interface ListProgramMembersParams {
@@ -505,6 +511,46 @@ export interface Member {
   role: string;
   tracked: boolean;
   tz: string | null;
+}
+
+export interface MemberProfile {
+  /** @maxLength 200 */
+  ask_me_about?: string | null;
+  /**
+   * @min 1
+   * @max 31
+   */
+  birth_day?: number | null;
+  /**
+   * @min 1
+   * @max 12
+   */
+  birth_month?: number | null;
+  celebrate?: boolean;
+  /** @maxLength 80 */
+  location?: string | null;
+  /** @maxLength 80 */
+  role?: string | null;
+  /** @format date */
+  start_date?: string | null;
+}
+
+export interface MemberProfileRecord {
+  ask_me_about: string | null;
+  birth_day: number | null;
+  birth_month: number | null;
+  celebrate: boolean;
+  /** @format date-time */
+  left_at: string | null;
+  location: string | null;
+  role: string | null;
+  set_by_admin: boolean;
+  /** @format date */
+  start_date: string | null;
+  /** @format date-time */
+  updated_at: string | null;
+  updated_by: string | null;
+  user_id: string;
 }
 
 export interface MemberRole {
@@ -620,6 +666,43 @@ export interface PersistentBlocker {
   real_name: string | null;
   text: string;
   user_id: string;
+}
+
+export interface ProfileImportInput {
+  /**
+   * @minLength 1
+   * @maxLength 1000000
+   */
+  csv: string;
+  /** @default false */
+  overwrite?: boolean;
+  /** @default true */
+  preview?: boolean;
+}
+
+export interface ProfileImportResult {
+  invalid: number;
+  kept: number;
+  overwrite: boolean;
+  preview: boolean;
+  ready: number;
+  rows: ProfileImportRow[];
+  rows_read: number;
+  unchanged: number;
+  unmatched: number;
+  written: number;
+}
+
+export interface ProfileImportRow {
+  birth_day: number | null;
+  birth_month: number | null;
+  email: string;
+  error: string | null;
+  line: number;
+  /** @format date */
+  start_date: string | null;
+  status: "ready" | "unchanged" | "kept" | "unmatched" | "invalid";
+  user_id: string | null;
 }
 
 export interface ProgramInput {
@@ -930,6 +1013,15 @@ export type UpdateModuleError = ApiError | ModuleScopeError;
 export interface UpdateModuleParams {
   /** @minLength 1 */
   name: string;
+}
+
+export type UpdateMyProfileError = ApiError;
+
+export type UpdateProfileError = ApiError;
+
+export interface UpdateProfileParams {
+  /** @minLength 1 */
+  userId: string;
 }
 
 export type UpdateProgramError = ApiError;
