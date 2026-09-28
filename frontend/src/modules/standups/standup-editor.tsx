@@ -19,6 +19,7 @@ import {
 } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
 import {
   LoadingField,
   SkeletonPeople,
@@ -510,39 +511,42 @@ export function StandupEditor({
                     name="channel_id"
                     rules={{ required: 'Choose a channel.' }}
                     render={({ field, fieldState }) => (
-                      <LoadingField
-                        pending={resources.channels.isPending}
-                        label="Loading channels…"
-                        fieldLabel="Channel"
-                      >
-                        <Select
-                          name={field.name}
-                          value={field.value}
-                          items={channelOptions}
-                          disabled={save.isPending}
-                          onValueChange={(value) => {
-                            if (value !== null) field.onChange(value);
-                          }}
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <LoadingField
+                          pending={resources.channels.isPending}
+                          label="Loading channels…"
+                          fieldLabel="Channel"
                         >
-                          <Field label="Channel" name="channel_id">
-                            <SelectTrigger
-                              className="w-full"
-                              ref={field.ref}
-                              onBlur={field.onBlur}
-                              aria-invalid={fieldState.invalid}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                          </Field>
-                          <SelectContent>
-                            {channelOptions.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </LoadingField>
+                          <Select
+                            name={field.name}
+                            value={field.value}
+                            items={channelOptions}
+                            disabled={save.isPending}
+                            onValueChange={(value) => {
+                              if (value !== null) field.onChange(value);
+                            }}
+                          >
+                            <Field label="Channel" name="channel_id">
+                              <SelectTrigger
+                                className="w-full"
+                                ref={field.ref}
+                                onBlur={field.onBlur}
+                                aria-invalid={fieldState.invalid}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                            </Field>
+                            <SelectContent>
+                              {channelOptions.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </LoadingField>
+                        <ChannelInviteHint channels={resources.channels} />
+                      </div>
                     )}
                   />
                 </div>
@@ -977,32 +981,35 @@ export function StandupEditor({
                       control={form.control}
                       name="report_channel"
                       render={({ field }) => (
-                        <Select
-                          name={field.name}
-                          value={field.value}
-                          items={reportChannelOptions}
-                          disabled={save.isPending}
-                          onValueChange={(value) => {
-                            if (value !== null) field.onChange(value);
-                          }}
-                        >
-                          <Field label="Report channel" name="report_channel">
-                            <SelectTrigger
-                              className="w-full"
-                              ref={field.ref}
-                              onBlur={field.onBlur}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                          </Field>
-                          <SelectContent>
-                            {reportChannelOptions.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex min-w-0 flex-col gap-2">
+                          <Select
+                            name={field.name}
+                            value={field.value}
+                            items={reportChannelOptions}
+                            disabled={save.isPending}
+                            onValueChange={(value) => {
+                              if (value !== null) field.onChange(value);
+                            }}
+                          >
+                            <Field label="Report channel" name="report_channel">
+                              <SelectTrigger
+                                className="w-full"
+                                ref={field.ref}
+                                onBlur={field.onBlur}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                            </Field>
+                            <SelectContent>
+                              {reportChannelOptions.map((item) => (
+                                <SelectItem key={item.value} value={item.value}>
+                                  {item.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <ChannelInviteHint channels={resources.channels} />
+                        </div>
                       )}
                     />
                     <Field label="Report time">

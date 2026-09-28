@@ -3,6 +3,7 @@ import { Plus, Trash2, Zap } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
 import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
@@ -423,6 +424,9 @@ export default function AutomationPage() {
                     required
                     {...form.register('action_target', { required: true })}
                   />
+                )}
+                {values.action === 'post_to_channel' && (
+                  <ChannelInviteHint channels={channels} />
                 )}
               </div>
               <div className="space-y-2">

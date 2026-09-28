@@ -352,6 +352,65 @@ describe('standup management', () => {
     ).toBeInTheDocument();
   });
 
+  it('tells a new install how to fill an empty channel list and refetches it', async () => {
+    mock.channels.mockResolvedValue({ data: [] });
+    const user = userEvent.setup();
+
+    view('/dashboard/standups?edit=7');
+
+    await screen.findAllByText(/Invite @Morgenruf to a channel first/);
+    const basics = screen.getByRole('tabpanel', { name: 'Basics' });
+    expect(
+      within(basics).getByText(
+        'Invite @Morgenruf to a channel first: type /invite @Morgenruf in the channel, then refresh this list.',
+      ),
+    ).toBeInTheDocument();
+
+    // The admin runs /invite in Slack, then asks for the list again.
+    mock.channels.mockResolvedValue({ data: [{ id: 'C9', name: 'eng' }] });
+    const calls = mock.channels.mock.calls.length;
+    await user.click(
+      within(basics).getByRole('button', { name: 'Refresh channels' }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Invite @Morgenruf to a channel first/),
+      ).not.toBeInTheDocument(),
+    );
+    expect(mock.channels.mock.calls.length).toBeGreaterThan(calls);
+    await chooseOption(user, 'Channel', '#eng');
+  });
+
+  it('offers the same hint beside the report channel', async () => {
+    mock.channels.mockResolvedValue({ data: [] });
+    const user = userEvent.setup();
+
+    view('/dashboard/standups?edit=7');
+
+    await screen.findAllByText(/Invite @Morgenruf to a channel first/);
+    await user.click(screen.getByRole('tab', { name: 'Delivery' }));
+
+    const panel = screen.getByRole('tabpanel', { name: 'Delivery' });
+    expect(
+      within(panel).getByText(/Invite @Morgenruf to a channel first/),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole('button', { name: 'Refresh channels' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no hint when the bot is already in a channel', async () => {
+    view('/dashboard/standups?edit=7');
+
+    expect(
+      await screen.findByRole('combobox', { name: 'Channel' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Invite @Morgenruf to a channel first/),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows whole-channel enrollment and hides mutations for read-only members', async () => {
     mock.editable = false;
 

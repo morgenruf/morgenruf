@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
+import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
 import {
   LoadingField,
   SkeletonRegion,
@@ -550,6 +551,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                     </LoadingField>
                   )}
                 />
+                <ChannelInviteHint channels={resources.channels} />
                 {form.formState.errors.channel_id && (
                   <p role="alert" className="text-sm text-destructive">
                     {form.formState.errors.channel_id.message}
