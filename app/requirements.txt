@@ -1,4 +1,4 @@
-slack-bolt==1.28.0
+slack-bolt==1.30.0
 slack-sdk==3.44.1
 apscheduler==3.11.3
 pytz==2026.3.post1
