@@ -304,13 +304,20 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
     cdb.set_round_state(round_id, "delivered")
 
 
-def nudge_round(round_id: int, bot_token: str, team_id: str) -> None:
-    """One reminder to the pairs who have not spoken. Never more than one."""
+def nudge_round(round_id: int, bot_token: str, team_id: str) -> bool:
+    """One reminder to the pairs who have not spoken. Never more than one.
+
+    Returns False when some match was not handled (no usable token, or a
+    failed post), so the caller retries. A retry only reaches the matches
+    still without nudged_at, so nobody is nudged twice.
+    """
     import src.modules.connect.db as cdb  # noqa: PLC0415
 
     client = _client(bot_token, team_id)
     if client is None:
-        return
+        logger.warning("connect: no usable token to nudge round %s", round_id)
+        return False
+    done = True
     for m in cdb.matches_for_nudge(round_id):
         try:
             if api.has_replies(client, m["mpim_channel_id"]):
@@ -321,17 +328,25 @@ def nudge_round(round_id: int, bot_token: str, team_id: str) -> None:
             cdb.mark_nudged(m["id"])
         except Exception:
             logger.exception("connect: nudge failed for match %s", m["id"])
+            done = False
         finally:
             api.throttle()
+    return done
 
 
-def close_round(round_id: int, bot_token: str, team_id: str) -> None:
-    """Ask whether they met. That answer is the only metric worth having."""
+def close_round(round_id: int, bot_token: str, team_id: str) -> bool:
+    """Ask whether they met. That answer is the only metric worth having.
+
+    Returns False when the round was not closed (no usable token), so the
+    caller retries. A failed post for one match does not count: nothing
+    records which matches were asked, so a retry would ask the others twice.
+    """
     import src.modules.connect.db as cdb  # noqa: PLC0415
 
     client = _client(bot_token, team_id)
     if client is None:
-        return
+        logger.warning("connect: no usable token to close round %s", round_id)
+        return False
     for m in cdb.matches_for_close(round_id):
         try:
             text, blocks = cblocks.did_you_meet_message(m["id"])
@@ -342,6 +357,7 @@ def close_round(round_id: int, bot_token: str, team_id: str) -> None:
             api.throttle()
     cdb.set_round_state(round_id, "closed")
     _post_round_stats(client, round_id, team_id)
+    return True
 
 
 def _post_round_stats(client, round_id: int, team_id: str) -> None:
@@ -384,6 +400,10 @@ def _queue_followups(round_id: int, team_id: str) -> None:
         logger.exception("connect: could not queue follow-ups for round %s, the sweep will add them", round_id)
 
 
+class _FollowupNotDone(Exception):
+    """The sender ran but reported the follow-up was not done."""
+
+
 def send_due_followups(team_id: str) -> int:
     """Send this workspace's due nudges and closing questions.
 
@@ -416,12 +436,17 @@ def send_due_followups(team_id: str) -> int:
                     cdb.set_round_state(round_id, "closed")
                 cdb.finish_followup(round_id, kind, "skipped_stale")
             else:
-                (nudge_round if kind == "nudge" else close_round)(round_id, "", team_id)
+                send = nudge_round if kind == "nudge" else close_round
+                if not send(round_id, "", team_id):
+                    # Not an error to log with a traceback, but not done either:
+                    # recording it as sent would hide a round that never closed.
+                    raise _FollowupNotDone(f"{kind} for round {round_id} did not complete")
                 cdb.finish_followup(round_id, kind, "sent")
             finished += 1
         except Exception:
             logger.exception("connect: %s for round %s failed (attempt %s)", kind, round_id, f.get("attempts"))
-            # Left claimed, so it is retried once the lease runs out, up to a limit.
+            # Left claimed, so it is retried once the lease runs out, up to a
+            # limit, after which it is recorded as failed rather than sent.
             if int(f.get("attempts") or 0) >= FOLLOWUP_MAX_ATTEMPTS:
                 try:
                     cdb.finish_followup(round_id, kind, "failed")

@@ -163,8 +163,8 @@ def sweep(monkeypatch):
     from src.modules.connect import jobs
 
     sent = []
-    monkeypatch.setattr(jobs, "nudge_round", lambda r, tok, team: sent.append(("nudge", r, tok, team)))
-    monkeypatch.setattr(jobs, "close_round", lambda r, tok, team: sent.append(("close", r, tok, team)))
+    monkeypatch.setattr(jobs, "nudge_round", lambda r, tok, team: sent.append(("nudge", r, tok, team)) or True)
+    monkeypatch.setattr(jobs, "close_round", lambda r, tok, team: sent.append(("close", r, tok, team)) or True)
 
     def run(rows):
         store = FakeStore(rows)
@@ -241,11 +241,86 @@ def test_one_failure_does_not_stop_the_rest(sweep, monkeypatch):
         if r == 1:
             raise RuntimeError("slack down")
         sent.append(r)
+        return True
 
     monkeypatch.setattr(jobs, "nudge_round", nudge)
     store, _, _ = sweep([row(1, "nudge", timedelta(minutes=3)), row(2, "nudge", timedelta(minutes=3))])
     assert sent == [2]
     assert store.finished == {(2, "nudge"): "sent"}
+
+
+@pytest.fixture
+def no_token(monkeypatch):
+    """No usable Slack token, and a record of what the real senders touch."""
+    import src.modules.connect.db as cdb
+    from src.modules.connect import jobs
+
+    touched = []
+    monkeypatch.setattr(jobs, "_client", lambda *a: None)
+    monkeypatch.setattr(cdb, "matches_for_close", lambda r: touched.append(("close", r)) or [])
+    monkeypatch.setattr(cdb, "matches_for_nudge", lambda r: touched.append(("nudge", r)) or [])
+    return touched
+
+
+@pytest.mark.parametrize("kind", ["nudge", "close"])
+def test_without_a_token_the_follow_up_is_retried_not_marked_sent(no_token, monkeypatch, kind):
+    """close_round used to return early here and the row was recorded as sent,
+    leaving a round that never closed looking finished."""
+    from src.modules.connect import jobs
+
+    store = FakeStore([row(1, kind, timedelta(minutes=3), attempts=1)])
+    store.install(monkeypatch, jobs)
+    assert jobs.send_due_followups("T1") == 0
+    assert store.finished == {}  # still claimed; retried after the lease
+    assert store.states == {}  # and the round was not closed
+
+
+@pytest.mark.parametrize("kind", ["nudge", "close"])
+def test_without_a_token_it_ends_up_failed_not_sent(no_token, monkeypatch, kind):
+    from src.modules.connect import jobs
+
+    store = FakeStore([row(1, kind, timedelta(minutes=3), attempts=jobs.FOLLOWUP_MAX_ATTEMPTS)])
+    store.install(monkeypatch, jobs)
+    jobs.send_due_followups("T1")
+    assert store.finished == {(1, kind): "failed"}
+
+
+def test_close_round_reports_whether_it_closed(no_token, monkeypatch):
+    import src.modules.connect.db as cdb
+    from src.modules.connect import jobs
+
+    states = []
+    monkeypatch.setattr(cdb, "set_round_state", lambda r, s, *a: states.append((r, s)))
+    assert jobs.close_round(1, "", "T1") is False
+    assert states == []
+
+    monkeypatch.setattr(jobs, "_client", lambda *a: object())
+    monkeypatch.setattr(jobs, "_post_round_stats", lambda *a: None)
+    assert jobs.close_round(1, "", "T1") is True
+    assert states == [(1, "closed")]
+
+
+def test_nudge_round_reports_a_failed_post(monkeypatch):
+    """A retry is safe: only matches still without nudged_at are reached."""
+    import src.modules.connect.db as cdb
+    from src.modules.connect import jobs
+
+    monkeypatch.setattr(jobs, "_client", lambda *a: object())
+    monkeypatch.setattr(jobs.api, "throttle", lambda: None)
+    monkeypatch.setattr(jobs.api, "has_replies", lambda c, ch: False)
+    monkeypatch.setattr(cdb, "matches_for_nudge", lambda r: [{"id": 1, "mpim_channel_id": "G1"}])
+    nudged = []
+    monkeypatch.setattr(cdb, "mark_nudged", nudged.append)
+
+    monkeypatch.setattr(jobs.api, "post", lambda *a: None)
+    assert jobs.nudge_round(1, "", "T1") is True
+    assert nudged == [1]
+
+    def boom(*a):
+        raise RuntimeError("slack down")
+
+    monkeypatch.setattr(jobs.api, "post", boom)
+    assert jobs.nudge_round(1, "", "T1") is False
 
 
 def test_a_claim_failure_sends_nothing(monkeypatch):
