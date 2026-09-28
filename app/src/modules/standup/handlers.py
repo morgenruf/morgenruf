@@ -1381,31 +1381,6 @@ def register_handlers(app: App) -> None:
         except Exception as exc:
             logger.warning("member_joined_channel error: %s", exc)
 
-    @app.message("help")
-    def handle_help(message, say):  # noqa: ANN001
-        if message.get("channel_type") != "im":
-            return
-        say(
-            "🤖 *Standup Bot Help*\n\n"
-            "I'll ask you your team's standup questions at the scheduled time. "
-            "Type `standup` to start now. 🚀\n\n"
-            "*Commands:*\n"
-            "• `standup` — start a standup manually\n"
-            "• `skip` — skip today's standup\n"
-            "• `timezone <tz>` — set your timezone (e.g. `timezone America/New_York`)\n"
-            "• `kudos @teammate Great job!` — recognise a teammate 🏆\n"
-            "• `help` — show this message"
-        )
-
-    @app.message("standup")
-    def handle_manual_standup(message, say, client):  # noqa: ANN001
-        """Allow team members to trigger their own standup manually."""
-        if message.get("channel_type") != "im":
-            return
-        user_id: str = message["user"]
-        team_id: str = message.get("team", "")
-        _start_standup_session(user_id, team_id, client)
-
     @app.action(re.compile(r"submit_answer_\d+"))
     def handle_submit_answer(ack, body, client):  # noqa: ANN001
         """Handle Submit button click for each standup question.
@@ -1443,7 +1418,7 @@ def register_handlers(app: App) -> None:
             )
             return
 
-        session = state_store.record_answer(cache_key, answer)
+        session = state_store.record_answer(cache_key, answer_value(answer))
         n_questions = len(session.questions)
 
         if session.step < n_questions:
@@ -1529,7 +1504,7 @@ def register_handlers(app: App) -> None:
                             "• `/kudos @teammate message` — Give a shoutout\n"
                             "• `/help` — Show this message\n\n"
                             "*Other ways to interact:*\n"
-                            "• Reply to a standup DM at any time to start\n"
+                            "• Send me `standup` in a DM to start at any time, or `help` for the DM commands\n"
                             "• Use the *App Home* tab to see your history and settings\n"
                             "• Mention `@Morgenruf` in any channel for help\n\n"
                             "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>"
@@ -1805,81 +1780,6 @@ def register_handlers(app: App) -> None:
         )
         _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
 
-    @app.message("skip")
-    def handle_skip(message, say):  # noqa: ANN001
-        """Allow users to skip today's standup."""
-        if message.get("channel_type") != "im":
-            return
-        user_id = message["user"]
-        team_id = message.get("team", "")
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.skip_today(team_id, user_id)
-        except Exception as e:
-            logger.warning("Unexpected error in handle_skip recording skip: %s", e)
-        # Also clear any active session
-        cache_key = f"{team_id}:{user_id}"
-        state_store.clear(cache_key)
-        say("✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
-
-    @app.message(re.compile(r"i'?m back(?: from vacation)?|back from vacation|im back", re.IGNORECASE))
-    def handle_back_from_vacation(message, say):  # noqa: ANN001
-        """Handle messages indicating the user is back from vacation."""
-        if message.get("channel_type") != "im":
-            return
-        user_id = message["user"]
-        team_id = message.get("team", "")
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.set_vacation(team_id, user_id, False)
-        except Exception as e:
-            logger.warning("Unexpected error in handle_back_from_vacation clearing vacation: %s", e)
-        say("🎉 Welcome back! You're all set for standups again.")
-
-    @app.message(
-        re.compile(r"i'?m (?:going on vacation|away|on vacation)|going on vacation|on vacation", re.IGNORECASE)
-    )
-    def handle_going_on_vacation(message, say):  # noqa: ANN001
-        """Handle messages indicating the user is going on vacation."""
-        if message.get("channel_type") != "im":
-            return
-        user_id = message["user"]
-        team_id = message.get("team", "")
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.set_vacation(team_id, user_id, True)
-        except Exception as e:
-            logger.warning("Unexpected error in handle_going_on_vacation setting vacation: %s", e)
-        say("🌴 Enjoy your vacation! I won't bother you until you're back. Message me *I'm back* when you return.")
-
-    @app.message(re.compile(r"^timezone\s+(\S+)$", re.IGNORECASE))
-    def handle_set_timezone(message, say, context):  # noqa: ANN001
-        """Allow users to set their personal timezone."""
-        if message.get("channel_type") != "im":
-            return
-        user_id = message["user"]
-        team_id = message.get("team", "")
-        tz_str = context["matches"][0]
-        try:
-            pytz.timezone(tz_str)  # validate
-        except Exception:
-            say(
-                f"❌ Unknown timezone `{tz_str}`. Use a TZ name like `America/New_York` or `Europe/London`.\n"
-                "See: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones"
-            )
-            return
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.upsert_member(team_id, user_id, tz=tz_str)
-        except Exception as exc:
-            say(f"⚠️ Could not save timezone: {exc}")
-            return
-        say(f"✅ Your timezone has been updated to *{tz_str}*.")
-
 
 def claim_dm(ctx) -> bool:
     """Handle an in-progress standup answer sent by DM.
@@ -1890,6 +1790,8 @@ def claim_dm(ctx) -> bool:
     not, letting the next module see it.
 
     The three early returns below are the original listener's, unchanged.
+    Keywords reach claim_dm_command first; `skip` and `pass` come through here
+    as answers during a session, and a lone `pass` is stored blank.
     """
     event = ctx.event
     if event.get("channel_type") != "im":
@@ -1903,7 +1805,7 @@ def claim_dm(ctx) -> bool:
     if not session:
         return False
 
-    session = state_store.record_answer(cache_key, ctx.text)
+    session = state_store.record_answer(cache_key, answer_value(ctx.text))
     n_questions = len(session.questions)
 
     if session.step < n_questions:
@@ -1921,4 +1823,221 @@ def claim_dm(ctx) -> bool:
     else:
         # Mood answered — finalize
         _complete_standup(ctx.user_id, session, ctx.client)
+    return True
+
+
+# DM keywords.
+#
+# Core owns the only message listener Bolt runs (Bolt stops at the first
+# listener that matches, and core registers its catch-all first), so standup's
+# keywords reach it through the DM router as claim_dm_command, not through
+# @app.message listeners. Those listeners used to be substring matches that
+# never ran in production.
+#
+# A DM is a keyword only when the whole message is the keyword: case does not
+# matter, surrounding spaces and trailing punctuation are ignored ("Help!",
+# " skip. "). A message that merely contains the word ("I need help with the
+# deploy") is never a keyword.
+#
+# The rule while someone is answering a standup (a session is open):
+#
+# * `skip` and `pass` are answers, as they have always been in a session:
+#   `skip` is stored as the text "skip", and `pass` leaves the question blank,
+#   as the standup DM promises. Skipping the whole day mid-session is the
+#   "Skip today" button on that DM.
+# * `help` shows help and does not consume the answer; the question stays open.
+# * `standup` says a standup is already in progress instead of restarting it.
+#   `/standup` still starts over.
+# * `I'm back` and `timezone <tz>` do what they always do, and the question
+#   stays open.
+# * `I'm away` marks the person away and closes the open standup, the same as
+#   the "I'm away" button on the standup DM.
+#
+# Outside a session every keyword runs its command, and `pass` is not a
+# keyword.
+
+_KEYWORD_TRAILING_PUNCT = re.compile(r"[\s.!?,;:]+$")
+_KEYWORD_SPACES = re.compile(r"\s+")
+_TIMEZONE_COMMAND = re.compile(r"^timezone\s+(\S+)$", re.IGNORECASE)
+
+_AWAY_PHRASES = frozenset(
+    {
+        "i'm away",
+        "im away",
+        "i'm on vacation",
+        "im on vacation",
+        "on vacation",
+        "i'm going on vacation",
+        "im going on vacation",
+        "going on vacation",
+    }
+)
+_BACK_PHRASES = frozenset(
+    {
+        "i'm back",
+        "im back",
+        "i'm back from vacation",
+        "im back from vacation",
+        "back from vacation",
+    }
+)
+_KEYWORDS = {"help": "help", "standup": "standup", "skip": "skip"}
+_KEYWORDS.update(dict.fromkeys(_AWAY_PHRASES, "away"))
+_KEYWORDS.update(dict.fromkeys(_BACK_PHRASES, "back"))
+
+# Answers that the rule above keeps as answers during a session.
+_ANSWER_KEYWORDS = frozenset({"skip", "pass"})
+
+_STILL_OPEN = "Your standup is still open. Reply to the question above to carry on."
+
+HELP_TEXT = (
+    "🤖 *Morgenruf help*\n\n"
+    "I'll DM you your team's standup questions at the scheduled time.\n\n"
+    "*Send me one of these as a message on its own:*\n"
+    "• `standup`: start a standup now\n"
+    "• `skip`: skip today's standup\n"
+    "• `I'm away`: go on vacation, no standup DMs until you are back\n"
+    "• `I'm back`: return from vacation\n"
+    "• `timezone <tz>`: set your timezone (e.g. `timezone America/New_York`)\n"
+    "• `kudos @teammate Great job!`: recognise a teammate 🏆\n"
+    "• `help`: show this message\n\n"
+    "While you are answering a standup, send `pass` to leave a question blank."
+)
+
+
+def _keyword_text(text: str | None) -> str:
+    """Lowercased message with curly apostrophes, spacing and end punctuation evened out."""
+    t = (text or "").replace("’", "'").replace("‘", "'")
+    t = _KEYWORD_SPACES.sub(" ", t).strip()
+    return _KEYWORD_TRAILING_PUNCT.sub("", t).lower()
+
+
+def match_dm_command(text: str | None) -> tuple[str, str] | None:
+    """Return (command, argument) when the whole message is a standup keyword.
+
+    Commands: help, standup, skip, away, back, timezone. The argument is only
+    set for timezone. Returns None for anything else, including a message that
+    contains a keyword alongside other words.
+    """
+    normalised = _keyword_text(text)
+    if normalised in _KEYWORDS:
+        return _KEYWORDS[normalised], ""
+    raw = _KEYWORD_TRAILING_PUNCT.sub("", (text or "").strip())
+    tz = _TIMEZONE_COMMAND.match(raw)
+    if tz:
+        return "timezone", tz.group(1)
+    return None
+
+
+def answer_value(text: str | None) -> str:
+    """What gets stored for a typed answer. A lone `pass` leaves it blank."""
+    if _keyword_text(text) == "pass":
+        return ""
+    return text or ""
+
+
+def _reply(ctx, text: str) -> None:
+    ctx.client.chat_postMessage(channel=ctx.channel_id or ctx.user_id, text=text)
+
+
+def _dm_help(ctx, in_session: bool) -> None:
+    _reply(ctx, HELP_TEXT + (f"\n\n{_STILL_OPEN}" if in_session else ""))
+
+
+def _dm_standup(ctx, in_session: bool) -> None:
+    if in_session:
+        _reply(
+            ctx,
+            "You already have a standup in progress. Reply to the question above to carry on, "
+            "or use `/standup` to start over.",
+        )
+        return
+    _start_standup_session(ctx.user_id, ctx.team_id, ctx.client)
+
+
+def _dm_skip(ctx) -> None:
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        db.skip_today(ctx.team_id, ctx.user_id)
+    except Exception as e:
+        logger.warning("Unexpected error in DM skip recording skip: %s", e)
+    state_store.clear(f"{ctx.team_id}:{ctx.user_id}")
+    _reply(ctx, "✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
+
+
+def _dm_away(ctx, in_session: bool) -> None:
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        db.set_vacation(ctx.team_id, ctx.user_id, True)
+    except Exception as e:
+        logger.warning("Unexpected error in DM away setting vacation: %s", e)
+    if in_session:
+        # Same as the "I'm away" button on the standup DM.
+        state_store.clear(f"{ctx.team_id}:{ctx.user_id}")
+    _reply(ctx, "🌴 Enjoy your vacation! I won't bother you until you're back. Message me *I'm back* when you return.")
+
+
+def _dm_back(ctx, in_session: bool) -> None:
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        db.set_vacation(ctx.team_id, ctx.user_id, False)
+    except Exception as e:
+        logger.warning("Unexpected error in DM back clearing vacation: %s", e)
+    _reply(ctx, "🎉 Welcome back! You're all set for standups again." + (f"\n\n{_STILL_OPEN}" if in_session else ""))
+
+
+def _dm_timezone(ctx, tz_str: str, in_session: bool) -> None:
+    suffix = f"\n\n{_STILL_OPEN}" if in_session else ""
+    try:
+        tz_name = pytz.timezone(tz_str).zone
+    except Exception:
+        _reply(
+            ctx,
+            f"❌ Unknown timezone `{tz_str}`. Use a TZ name like `America/New_York` or `Europe/London`.\n"
+            "See: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones" + suffix,
+        )
+        return
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        db.upsert_member(ctx.team_id, ctx.user_id, tz=tz_name)
+    except Exception as exc:
+        logger.warning("Could not save timezone for %s/%s: %s", ctx.team_id, ctx.user_id, exc)
+        _reply(ctx, "⚠️ Could not save your timezone. Please try again in a moment." + suffix)
+        return
+    _reply(ctx, f"✅ Your timezone has been updated to *{tz_name}*." + suffix)
+
+
+def claim_dm_command(ctx) -> bool:
+    """Standup's DM keywords, offered by core's DM router before any claim_dm.
+
+    Returns True when the message was a keyword and was handled here, False to
+    let the router carry on (to kudos, then to claim_dm for answers). See the
+    comment above _KEYWORD_TRAILING_PUNCT for the rule during an open session.
+    """
+    event = ctx.event
+    if event.get("channel_type") != "im" or event.get("subtype") or event.get("bot_id"):
+        return False
+    command = match_dm_command(ctx.text)
+    if command is None:
+        return False
+    name, arg = command
+    in_session = state_store.get(f"{ctx.team_id}:{ctx.user_id}") is not None
+    if in_session and name in _ANSWER_KEYWORDS:
+        return False  # an answer; claim_dm records it
+    if name == "help":
+        _dm_help(ctx, in_session)
+    elif name == "standup":
+        _dm_standup(ctx, in_session)
+    elif name == "skip":
+        _dm_skip(ctx)
+    elif name == "away":
+        _dm_away(ctx, in_session)
+    elif name == "back":
+        _dm_back(ctx, in_session)
+    elif name == "timezone":
+        _dm_timezone(ctx, arg, in_session)
     return True

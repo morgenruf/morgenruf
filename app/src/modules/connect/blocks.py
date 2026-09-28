@@ -2,7 +2,7 @@
 
 Copy follows Donut's flow: say who you are talking to, give them something to
 open with, and make the next action one tap. Opt-out is a button, never a DM
-keyword, because standup already claims "skip" as a substring match.
+keyword, because standup already claims a DM that is exactly "skip".
 """
 
 from __future__ import annotations
