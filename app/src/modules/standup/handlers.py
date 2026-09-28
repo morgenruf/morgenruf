@@ -1361,7 +1361,6 @@ def register_handlers(app: App) -> None:
             "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
         )
 
-
     @app.action(re.compile(r"submit_answer_\d+"))
     def handle_submit_answer(ack, body, client):  # noqa: ANN001
         """Handle Submit button click for each standup question.
