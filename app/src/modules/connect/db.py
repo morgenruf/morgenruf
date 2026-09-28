@@ -409,6 +409,79 @@ def set_met(match_id: int, met: bool) -> None:
             cur.execute("UPDATE connect_matches SET met = %s WHERE id = %s", (met, match_id))
 
 
+# ── Follow-ups ──────────────────────────────────────────────────────────────
+#
+# The nudge and the closing question live here rather than on the in-memory
+# scheduler, which loses them on reconciliation and on every restart.
+
+
+def queue_followups(team_id: str, nudge_after_days: int, close_after_days: int, round_id: int | None = None) -> int:
+    """Create the nudge and close rows for open rounds that lack them.
+
+    Open means matched or delivered: a pending round never got matches and a
+    closed one is finished. With round_id, only that round. Without it, every
+    open round of the workspace, which is how rounds from before follow-ups
+    were stored, or whose insert failed, recover. Existing rows are left alone,
+    so calling this on every sweep is safe.
+    """
+    sql = """
+        INSERT INTO connect_followups (round_id, kind, team_id, due_at)
+        SELECT r.id, k.kind, r.team_id, r.scheduled_for + make_interval(days => k.days)
+        FROM connect_rounds r
+        CROSS JOIN (VALUES ('nudge', %(nudge)s::int), ('close', %(close)s::int)) AS k(kind, days)
+        WHERE r.team_id = %(team_id)s
+          AND r.state IN ('matched', 'delivered')
+          AND (%(round_id)s::int IS NULL OR r.id = %(round_id)s::int)
+        ON CONFLICT (round_id, kind) DO NOTHING
+    """
+    params = {"team_id": team_id, "nudge": nudge_after_days, "close": close_after_days, "round_id": round_id}
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.rowcount
+
+
+def claim_due_followups(team_id: str, lease_minutes: int, limit: int = 50) -> list[dict]:
+    """Take the due follow-ups for a workspace, so no other pod sends them.
+
+    SKIP LOCKED means two pods sweeping at the same moment split the rows
+    instead of both taking them, and the claimed_at lease keeps a claimed row
+    away from later sweeps until it either finishes or the lease runs out
+    (the pod that claimed it died mid-send). Oldest first, so a round's nudge
+    is handled before its closing question.
+    """
+    sql = """
+        UPDATE connect_followups f
+        SET claimed_at = NOW(), attempts = f.attempts + 1
+        WHERE (f.round_id, f.kind) IN (
+            SELECT round_id, kind FROM connect_followups
+            WHERE team_id = %(team_id)s
+              AND done_at IS NULL
+              AND due_at <= NOW()
+              AND (claimed_at IS NULL OR claimed_at < NOW() - make_interval(mins => %(lease)s))
+            ORDER BY due_at
+            LIMIT %(limit)s
+            FOR UPDATE SKIP LOCKED
+        )
+        RETURNING f.*
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, {"team_id": team_id, "lease": lease_minutes, "limit": limit})
+            rows = [dict(r) for r in cur.fetchall()]
+    return sorted(rows, key=lambda r: (r["due_at"], r["kind"] != "nudge"))
+
+
+def finish_followup(round_id: int, kind: str, outcome: str) -> None:
+    """Mark a follow-up finished so no sweep takes it again."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE connect_followups SET done_at = NOW(), outcome = %s WHERE round_id = %s AND kind = %s",
+                (outcome, round_id, kind),
+            )
+
+
 def opt_out(team_id: str, program_id: int, user_id: str, mode: str = "off", paused_until=None) -> None:
     sql = """
         INSERT INTO connect_optouts (team_id, program_id, user_id, mode, paused_until)
