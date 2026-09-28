@@ -1314,6 +1314,12 @@ def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
     return sorted(day for day in window if day.weekday() in weekdays and (created is None or day >= created))
 
 
+# Longest window any participation or report query covers. compute_participation
+# expands every schedule day by day, so an unbounded window (a date_from in year
+# 2 is about 740,000 days) runs the pod out of memory. Matches DaysQuery.
+MAX_WINDOW_DAYS = 365
+
+
 def compute_participation(
     schedules: list[dict] | None,
     members: list[dict] | None,
@@ -1349,7 +1355,7 @@ def compute_participation(
     are `members` rows and `submissions` are `standups` rows covering at least
     the window (a day of slack either side is fine, it is filtered here).
     """
-    days = max(1, int(days or 1))
+    days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
     now = now or _utc_now()
 
     known: dict[str, dict] = {}
@@ -1608,7 +1614,7 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
 
 def get_participation_overview(team_id: str, days: int = 7) -> dict:
     """Return workspace, per-schedule and per-member participation for the last N days."""
-    days = max(1, int(days or 1))
+    days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
     schedules, members, submissions = _fetch_participation_inputs(team_id, days)
     return compute_participation(schedules, members, submissions, days=days)
 

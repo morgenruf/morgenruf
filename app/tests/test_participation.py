@@ -826,3 +826,11 @@ class TestDaysBeforeTheScheduleExisted:
             db.get_participation_overview("T1", days=7)
         schedules_sql = cur.execute.call_args_list[0].args[0]
         assert "created_at" in schedules_sql
+
+
+def test_window_is_capped_at_a_year():
+    """A date_from in year 2 asked for about 740,000 days and ran the pod out of memory."""
+    schedules = [_schedule(1, "Daily", ["U1"])]
+    result = db.compute_participation(schedules, [_member("U1")], [], days=740_000, now=NOW)
+    assert result["days"] == db.MAX_WINDOW_DAYS
+    assert result["expected"] <= db.MAX_WINDOW_DAYS

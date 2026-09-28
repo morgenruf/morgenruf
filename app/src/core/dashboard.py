@@ -1211,6 +1211,28 @@ def _attach_questions(team_id: str, standups: list[dict]) -> None:
         row["questions"] = questions or unanimous(row.get("user_id", "")) or None
 
 
+# Same cap as db.MAX_WINDOW_DAYS and DaysQuery.
+_MAX_REPORT_DAYS = 365
+
+
+def _clamp_date_from(date_from: str | None) -> str | None:
+    """Move a date_from older than the longest report window up to its start.
+
+    Typing a year into the date picker sends 0002, 0020 and 0202 on the way to
+    2026, and a window that long used to run the pod out of memory.
+    """
+    if not date_from:
+        return date_from
+    from datetime import date, timedelta
+
+    try:
+        parsed = date.fromisoformat(date_from)
+    except ValueError:
+        return date_from
+    earliest = date.today() - timedelta(days=_MAX_REPORT_DAYS - 1)
+    return earliest.isoformat() if parsed < earliest else date_from
+
+
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="getReports", tags=["Reports"], security=[{"sessionCookie": []}])
@@ -1220,7 +1242,7 @@ def _attach_questions(team_id: str, standups: list[dict]) -> None:
 def api_reports(query):
     """Return standup history with participation stats, filterable by date/member."""
     team_id = session["team_id"]
-    date_from = query.get("date_from")
+    date_from = _clamp_date_from(query.get("date_from"))
     date_to = query.get("date_to")
     user_id_filter = query.get("user_id")
     try:
