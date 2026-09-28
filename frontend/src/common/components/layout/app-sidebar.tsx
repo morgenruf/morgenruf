@@ -59,6 +59,9 @@ type NavItem = {
   label: string;
   path: DashboardPath;
   icon: LucideIcon;
+  // Each feature keeps its own icon colour, Notion style: the label stays
+  // neutral and only the glyph is tinted.
+  color: string;
   module?: string;
 };
 
@@ -70,6 +73,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'Today',
         path: '/dashboard/today',
         icon: Sunrise,
+        color: 'text-orange-500 dark:text-orange-400',
         module: 'insights',
       },
     ],
@@ -81,27 +85,36 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'Standups',
         path: '/dashboard/standups',
         icon: CalendarCheck,
+        color: 'text-sky-600 dark:text-sky-400',
         module: 'standup',
       },
       {
         label: 'Coffee chats',
         path: '/dashboard/connect',
         icon: Coffee,
+        color: 'text-amber-600 dark:text-amber-400',
         module: 'connect',
       },
       {
         label: 'Kudos',
         path: '/dashboard/kudos',
         icon: HeartHandshake,
+        color: 'text-rose-500 dark:text-rose-400',
         module: 'kudos',
       },
       {
         label: 'Celebrations',
         path: '/dashboard/celebrations',
         icon: Cake,
+        color: 'text-violet-500 dark:text-violet-400',
         module: 'celebrations',
       },
-      { label: 'Members', path: '/dashboard/members', icon: Users },
+      {
+        label: 'Members',
+        path: '/dashboard/members',
+        icon: Users,
+        color: 'text-teal-600 dark:text-teal-400',
+      },
     ],
   },
   {
@@ -111,24 +124,52 @@ const groups: { label: string; items: NavItem[] }[] = [
         label: 'Insights',
         path: '/dashboard/insights',
         icon: Lightbulb,
+        color: 'text-yellow-600 dark:text-yellow-400',
         module: 'insights',
       },
-      { label: 'Reports', path: '/dashboard/reports', icon: FileChartColumn },
-      { label: 'Analytics', path: '/dashboard/analytics', icon: BarChart3 },
+      {
+        label: 'Reports',
+        path: '/dashboard/reports',
+        icon: FileChartColumn,
+        color: 'text-indigo-500 dark:text-indigo-400',
+      },
+      {
+        label: 'Analytics',
+        path: '/dashboard/analytics',
+        icon: BarChart3,
+        color: 'text-emerald-600 dark:text-emerald-400',
+      },
     ],
   },
   {
     label: 'Configure',
     items: [
-      { label: 'Settings', path: '/dashboard/settings', icon: Settings2 },
+      {
+        label: 'Settings',
+        path: '/dashboard/settings',
+        icon: Settings2,
+        color: 'text-slate-500 dark:text-slate-400',
+      },
       {
         label: 'Automation',
         path: '/dashboard/automation',
         icon: Workflow,
+        color: 'text-fuchsia-500 dark:text-fuchsia-400',
         module: 'standup',
       },
-      { label: 'Webhooks', path: '/dashboard/webhooks', icon: Webhook },
-      { label: 'MCP', path: '/dashboard/mcp', icon: Plug, module: 'mcp' },
+      {
+        label: 'Webhooks',
+        path: '/dashboard/webhooks',
+        icon: Webhook,
+        color: 'text-cyan-600 dark:text-cyan-400',
+      },
+      {
+        label: 'MCP',
+        path: '/dashboard/mcp',
+        icon: Plug,
+        color: 'text-lime-600 dark:text-lime-400',
+        module: 'mcp',
+      },
     ],
   },
 ];
@@ -215,7 +256,7 @@ export function AppSidebar({
                           tooltip={item.label}
                           onClick={closeMobile}
                         >
-                          <item.icon />
+                          <item.icon className={item.color} />
                           <span>{item.label}</span>
                         </SidebarMenuButton>
                         {item.path === '/dashboard/connect' &&
@@ -274,7 +315,7 @@ export function AppSidebar({
               tooltip="My profile"
               onClick={closeMobile}
             >
-              <UserRound />
+              <UserRound className="text-blue-500 dark:text-blue-400" />
               <span>My profile</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

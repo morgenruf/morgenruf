@@ -209,6 +209,27 @@ class TestApiReports:
         assert data["standups"]  # the real path ran, not the error fallback
         assert all(s["user_id"] == "U1" for s in data["standups"])
 
+    def test_far_past_date_from_is_clamped_to_a_year(self, authed_client):
+        """Typing a year sends 0002-09-01 first. That window used to OOM the pod."""
+        from datetime import date, timedelta
+
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
+        resp = authed_client.get("/dashboard/api/reports?date_from=0002-09-01")
+        assert resp.status_code == 200
+        earliest = (date.today() - timedelta(days=364)).isoformat()
+        assert _db_mock.get_standups.call_args.kwargs["from_date"] == earliest
+        assert _db_mock.get_participation_overview.call_args.kwargs["days"] <= 365
+
+    def test_recent_date_from_is_passed_through(self, authed_client):
+        from datetime import date, timedelta
+
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
+        recent = (date.today() - timedelta(days=10)).isoformat()
+        authed_client.get(f"/dashboard/api/reports?date_from={recent}")
+        assert _db_mock.get_standups.call_args.kwargs["from_date"] == recent
+
     def test_db_error_returns_empty_fallback(self, authed_client):
         _db_mock.get_standups.side_effect = Exception("DB error")
         resp = authed_client.get("/dashboard/api/reports")
