@@ -23,6 +23,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   to save says so instead of posting a card. Hosted installs need "Escape
   channels, users, and links" ticked for both commands in the Slack app
   config.
+- **Standup's DM keywords work.** `help`, `standup`, `skip`, `I'm away`,
+  `I'm back` and `timezone <tz>` never ran in production, even though the
+  welcome DM says "Type `help`" and App Home advertises `standup`, `skip` and
+  `I'm away`. Their listeners were registered after core's catch-all DM
+  listener, and Bolt runs only the first listener that matches. They now go
+  through the core DM router like kudos, and only a message that is the whole
+  keyword counts (any case, trailing punctuation ignored), so an answer such
+  as "need help with the deploy" is still an answer. While a standup is being
+  answered, `skip` stays an answer, `pass` leaves the question blank as the
+  standup DM always promised, `help` shows help without using up the answer,
+  `standup` says one is already in progress instead of restarting it, and
+  `I'm away` closes the open standup like the **I'm away** button. App Home's
+  help no longer lists an `edit` keyword that never existed, and the vacation
+  banner asks for `I'm back` rather than "just send me a message".
 - **The person you give kudos to is told.** The kudos card only went to
   the legacy workspace channel, which nothing in the dashboard or the API
   sets, so in current workspaces only the giver saw it. Every kudos that is

@@ -2,15 +2,14 @@
 
 Bolt runs only the first listener that matches an event, and core registers
 this one before any module. Every message event therefore ends here, and a
-module's own @app.message listener never sees a DM. (Standup's keyword
-listeners, `@app.message("standup")` and friends, are shadowed the same way;
-changing that would change how standup answers are collected, so it is left
-as it is.)
+module's own @app.message listener never sees a DM.
 
 So modules expose hooks instead of listeners, and core offers each DM to them
 in registry order. First claim wins. claim_dm_command is for explicit
-commands such as `kudos @sam thanks` and is offered to every module before any
-claim_dm, so a command still works while standup is waiting for an answer.
+commands such as `kudos @sam thanks` or standup's `help`, and is offered to
+every module before any claim_dm, so a command still works while standup is
+waiting for an answer. A module decides for itself which of its commands still
+count as answers mid-conversation (standup keeps `skip` and `pass` as answers).
 """
 
 from __future__ import annotations

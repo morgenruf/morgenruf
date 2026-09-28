@@ -1130,7 +1130,7 @@ def app_home_view(
                     "type": "mrkdwn",
                     "text": (
                         "I hope you'll be awesome when you get back. I won't bother you again until "
-                        "then. If you are already back, just send me a message or click *I'm back*. 🏖️"
+                        "then. If you are already back, send me `I'm back` or click *I'm back*. 🏖️"
                     ),
                 },
                 "accessory": {
@@ -1533,12 +1533,15 @@ def help_modal() -> dict:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        "• `standup` — Start a standup manually\n"
-                        "• `skip` — Skip today's standup\n"
-                        "• `I'm away` — Go on vacation (stops DMs)\n"
-                        "• `I'm back` — Return from vacation\n"
-                        "• `timezone America/New_York` — Set your personal timezone\n"
-                        "• `edit` — Edit your last standup (within 30 min)"
+                        "Send one of these as a message on its own:\n"
+                        "• `standup`: Start a standup manually\n"
+                        "• `skip`: Skip today's standup\n"
+                        "• `I'm away`: Go on vacation (stops DMs)\n"
+                        "• `I'm back`: Return from vacation\n"
+                        "• `timezone America/New_York`: Set your personal timezone\n"
+                        "• `help`: List these commands\n"
+                        "While answering a standup, send `pass` to leave a question blank. "
+                        "To edit a standup you sent, use *Edit responses* on its confirmation."
                     ),
                 },
             },

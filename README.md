@@ -255,9 +255,12 @@ Then posts a formatted summary to the configured channel:
 |---------|-------------|
 | `standup` | Start your standup now |
 | `skip` | Skip today's standup |
+| `I'm away` / `I'm back` | Go on vacation (no standup DMs) / return from it |
 | `timezone <tz>` | Set your personal timezone (e.g. `timezone Europe/London`) |
 | `kudos @teammate <reason>` | Give someone recognition (also `/kudos`) |
 | `help` | Show available commands |
+
+A keyword only counts when it is the whole message (any case, trailing punctuation ignored), so "I need help with the deploy" is an ordinary message. While you are answering a standup, `skip` and `pass` are answers (`pass` leaves the question blank), `help` shows help without using up the answer, and `standup` tells you one is already in progress. `I'm away` closes the open standup, like the **I'm away** button.
 
 Coffee chat replies are buttons rather than typed commands: **We met**, **Not this time**, **Skip this round** and **Pause** appear on the messages the bot sends, so nothing there can collide with `skip`.
 
