@@ -44,6 +44,11 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   sent for a kudos that was refused or failed to save. The giver's reply says
   where it went ("Sent to @x", or "Sent to @x and posted in #kudos"), and says
   so when a DM or the channel post could not be delivered.
+- **Empty channel pickers explain themselves.** When the bot is in no channel yet, every dashboard channel picker says to `/invite @Morgenruf` and offers a Refresh channels button.
+- **Participation only counts days a standup existed.** Days before a schedule was created are no longer expected, and a rate built on fewer than five expected answers reads "Too early to judge" instead of "Needs a look".
+- **Insights no longer says "Everyone has been recognised" with zero kudos.** Every contributor without kudos is listed, and a workspace with no standups gets a neutral "No standups yet" state.
+- **App Home shows the report time.** Cards said "Reports at" the standup time; they now show the report time (or the default an hour later), naming the standup's timezone when it differs from the reader's.
+- **The Slack manifests agree on the interactivity URL.** `slack-manifest.yaml` now uses `/slack/interactions` like the JSON, and the unused copies in `app/` are gone.
 
 ### Added
 - **A kudos channel.** Kudos has a channel setting of its own (migration

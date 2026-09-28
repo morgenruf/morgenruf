@@ -20,12 +20,17 @@ from src.core.db import db_conn
 logger = logging.getLogger(__name__)
 
 
-def unrecognised_contributors(team_id: str, days: int = 30, min_standups: int = 8) -> list[dict]:
-    """People who showed up consistently and were never thanked for it.
+def contributor_recognition(team_id: str, days: int = 30) -> list[dict]:
+    """Everyone who filed a standup in the window, with the kudos they received.
 
     The whole point is the pairing of the two numbers. A leaderboard shows who
     got kudos; it cannot show who earned them and got none, because a
     recognition tool does not know who did the work.
+
+    Returns every active contributor, thanked or not, most standups first, so
+    a caller can tell "nobody filed anything" apart from "everyone who filed
+    was thanked". The dashboard used to see an empty list in both cases and
+    told a workspace with no kudos at all that everyone had been recognised.
     """
     sql = """
         WITH participation AS (
@@ -50,19 +55,31 @@ def unrecognised_contributors(team_id: str, days: int = 30, min_standups: int = 
         FROM participation p
         LEFT JOIN received r ON r.user_id = p.user_id
         LEFT JOIN members m ON m.team_id = %(team)s AND m.user_id = p.user_id
-        WHERE COALESCE(r.kudos, 0) = 0
-          AND p.standups >= %(min_standups)s
-          AND COALESCE(m.active, TRUE) IS TRUE
+        WHERE COALESCE(m.active, TRUE) IS TRUE
         ORDER BY p.standups DESC, p.user_id
     """
     try:
         with db_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(sql, {"team": team_id, "days": days, "min_standups": min_standups})
+                cur.execute(sql, {"team": team_id, "days": days})
                 return [dict(r) for r in cur.fetchall()]
     except Exception as exc:
-        logger.warning("unrecognised_contributors failed for %s: %s", team_id, exc)
+        logger.warning("contributor_recognition failed for %s: %s", team_id, exc)
         return []
+
+
+def unrecognised_contributors(team_id: str, days: int = 30, min_standups: int = 8) -> list[dict]:
+    """People who showed up consistently and were never thanked for it.
+
+    `min_standups` is what "consistently" means. The MCP tool keeps its
+    default of 8; the dashboard asks for everyone (1) so its list is empty only
+    when every contributor has been thanked.
+    """
+    return [
+        row
+        for row in contributor_recognition(team_id, days=days)
+        if not int(row.get("kudos") or 0) and int(row.get("standups") or 0) >= min_standups
+    ]
 
 
 def blocker_rows(team_id: str, days: int = 21) -> dict[str, list[dict]]:

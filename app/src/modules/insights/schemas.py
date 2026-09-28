@@ -23,7 +23,13 @@ Stuck = model(
     text=string(),
 )
 Insights = model(
-    "InsightsData", window_days=integer(), unrecognised=nested(Unrecognised, many=True), stuck=nested(Stuck, many=True)
+    "InsightsData",
+    window_days=integer(),
+    # People who filed at least one standup in the window. Zero means there is
+    # nobody to recognise yet, which is not the same as everyone being thanked.
+    contributors=integer(),
+    unrecognised=nested(Unrecognised, many=True),
+    stuck=nested(Stuck, many=True),
 )
 Awaiting = model("AwaitingResponse", user_id=string(), real_name=string(allow_none=True))
 Blocked = model(

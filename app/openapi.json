@@ -629,6 +629,9 @@
       },
       "InsightsData": {
         "properties": {
+          "contributors": {
+            "type": "integer"
+          },
           "stuck": {
             "items": {
               "$ref": "#/components/schemas/PersistentBlocker"
@@ -646,6 +649,7 @@
           }
         },
         "required": [
+          "contributors",
           "stuck",
           "unrecognised",
           "window_days"

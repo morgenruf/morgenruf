@@ -63,7 +63,7 @@ settings:
       - member_joined_channel
   interactivity:
     is_enabled: true
-    request_url: "https://api.morgenruf.dev/slack/events"
+    request_url: "https://api.morgenruf.dev/slack/interactions"
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: true
