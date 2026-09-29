@@ -82,7 +82,12 @@ def save_installation(
     bot_token_expires_at: str | None = None,
     granted_scopes: list[str] | None = None,
 ) -> bool:
-    """Insert or update an OAuth installation record. Returns True if this is a new installation."""
+    """Insert or update an OAuth installation record. Returns True if this is a new installation.
+
+    The first installer keeps installed_by_user_id on a reinstall. A later
+    OAuth run is often a member signing in to the dashboard, and
+    get_member_role treats the installer as a permanent admin.
+    """
     sql = """
         INSERT INTO installations (team_id, team_name, bot_token, bot_user_id, app_id,
             installed_by_user_id, bot_refresh_token, bot_token_expires_at,
@@ -93,9 +98,6 @@ def save_installation(
             bot_token = EXCLUDED.bot_token,
             bot_user_id = EXCLUDED.bot_user_id,
             app_id = EXCLUDED.app_id,
-            -- The first installer keeps the seat. A later OAuth run is often a
-            -- member signing in to the dashboard, and get_member_role treats
-            -- installed_by_user_id as a permanent admin.
             installed_by_user_id = COALESCE(installations.installed_by_user_id, EXCLUDED.installed_by_user_id),
             bot_refresh_token = EXCLUDED.bot_refresh_token,
             bot_token_expires_at = EXCLUDED.bot_token_expires_at,
