@@ -95,3 +95,63 @@ def test_build_scheduler_uses_the_claiming_executor():
         scheduler = sched_mod.build_scheduler([])
     assert isinstance(scheduler._executors["default"], sched_mod.ClaimingExecutor)
     assert scheduler.get_job("scheduler_run_purge") is not None
+
+
+# ── Misfire grace ───────────────────────────────────────────────────────────
+#
+# APScheduler drops a firing that starts more than misfire_grace_time late, and
+# its default is one second. The claim above is a database round trip on the
+# scheduler thread, so the second of two jobs due at the same minute started
+# about 1.2 seconds late and was dropped ("Run time of job ... was missed by
+# 0:00:01.2"). A standup report was lost this way on 2026-09-29.
+
+
+def _started_scheduler():
+    db = MagicMock()
+    db.get_all_active_schedules.return_value = []
+    with patch.dict(sys.modules, {"src.core.db": db}), patch("src.core.db", db, create=True):
+        scheduler = sched_mod.build_scheduler([("T1", "xoxb-1", {"schedule_time": "09:00", "channel_id": "C1"})])
+    # Job defaults are applied when a pending job is really added, which is on start.
+    scheduler.start(paused=True)
+    return scheduler
+
+
+def test_every_job_gets_a_five_minute_grace_and_coalesces():
+    scheduler = _started_scheduler()
+    try:
+        jobs = scheduler.get_jobs()
+        assert any(j.id == "standup_T1" for j in jobs)
+        for job in jobs:
+            assert job.misfire_grace_time == sched_mod.MISFIRE_GRACE_SECS == 300, job.id
+            assert job.coalesce is True, job.id
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+def test_module_jobs_added_later_get_the_same_grace():
+    """reconcile_jobs passes no misfire settings, so it inherits the defaults."""
+    scheduler = _started_scheduler()
+    try:
+        spec = sched_mod.JobSpec(key="round:1", trigger=CronTrigger(hour=9, timezone="UTC"), func=print)
+        sched_mod.reconcile_jobs(scheduler, {"connect:T1:round:1": spec})
+        job = scheduler.get_job("connect:T1:round:1")
+        assert job.misfire_grace_time == 300
+        assert job.coalesce is True
+    finally:
+        scheduler.shutdown(wait=False)
+
+
+def test_a_firing_two_seconds_late_still_runs():
+    from datetime import timedelta
+
+    from apscheduler.executors.base import run_job
+
+    ran = []
+    scheduler = _started_scheduler()
+    try:
+        job = scheduler.add_job(ran.append, CronTrigger(hour=9, timezone="UTC"), args=("sent",), id="report_T9")
+        late = datetime.now(timezone.utc) - timedelta(seconds=2)
+        run_job(job, "default", [late], "test")
+    finally:
+        scheduler.shutdown(wait=False)
+    assert ran == ["sent"]

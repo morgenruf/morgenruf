@@ -20,7 +20,7 @@ from src.core.scheduler import JobSpec
 from src.modules.connect import blocks as cblocks
 from src.modules.connect import slack_api as api
 from src.modules.connect.matcher import match
-from src.modules.connect.rounds import is_round_due
+from src.modules.connect.rounds import _as_date, is_round_due
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,10 @@ FOLLOWUP_MAX_ATTEMPTS = 5
 # ones close quietly instead of messaging every old group DM at once. Skipping
 # a close still marks the round closed, without the stats post.
 FOLLOWUP_STALE_AFTER = {"nudge": timedelta(days=1), "close": timedelta(days=3)}
+# A missed round is started this long after its time at the earliest. Longer
+# than the scheduler's misfire grace, so the cron firing, which may start up
+# to five minutes late, is not raced by the catch-up.
+CATCHUP_AFTER_MINUTES = 10
 
 
 def plan_jobs(ctx: dict) -> list[JobSpec]:
@@ -82,26 +86,46 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
                     timezone=p["timezone"] or "UTC",
                 ),
                 func=run_round,
-                args=(p["id"], ctx.get("bot_token", "")),
+                # No token: bot tokens rotate every 12 hours and reconciliation
+                # used to keep a job's args for as long as the job lived, so a
+                # week later the round ran on an expired token and was skipped.
+                args=(p["id"],),
+            )
+        )
+    if programs:
+        jobs.append(
+            JobSpec(
+                key="catchup",
+                trigger=IntervalTrigger(minutes=FOLLOWUP_SWEEP_MINUTES, jitter=60),
+                func=start_missed_rounds,
+                args=(team_id,),
             )
         )
     return jobs
 
 
 def _client(bot_token: str, team_id: str) -> WebClient | None:
-    if bot_token:
-        return WebClient(token=bot_token)
-    try:
-        import src.core.db as db  # noqa: PLC0415
+    """A client on the installation's current token, refreshed if near expiry.
 
-        inst = db.get_installation(team_id)
-        return WebClient(token=inst["bot_token"]) if inst and inst.get("bot_token") else None
+    The token passed in is only a fallback for when the database cannot be
+    read. Preferring it would bring back the stale token bug for any caller
+    still holding an old one.
+    """
+    try:
+        from src.core.scheduler import _fresh_bot_token  # noqa: PLC0415
+
+        token = _fresh_bot_token(team_id, bot_token)
     except Exception:
-        return None
+        token = bot_token
+    return WebClient(token=token) if token else None
 
 
 def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None:
     """Start today's round: build the pool, match, then deliver.
+
+    `bot_token` is kept so jobs planned before tokens were dropped from the
+    args still run; the installation's current token is used whenever it can
+    be read.
 
     `force` runs a round that is not due, for the "run it now" button. Everything
     after the cadence check is unchanged, so a forced round is an ordinary round
@@ -453,6 +477,67 @@ def send_due_followups(team_id: str) -> int:
                 except Exception:
                     logger.exception("connect: could not give up on %s for round %s", kind, round_id)
     return finished
+
+
+def start_missed_rounds(team_id: str) -> int:
+    """Start any round whose weekly firing was missed earlier today.
+
+    The weekly cron firing is the only thing that starts a scheduled round, so
+    a pod that was down at that minute, a firing dropped as a misfire, or a
+    token error cost the whole week. This runs on the follow-up interval and
+    starts the round later the same day instead.
+
+    Only on the programme's weekday in its own timezone, and only once its
+    time (plus a margin for the cron firing itself) has passed, so a round is
+    never started on a day the programme does not run on. run_round checks the
+    cadence again, and create_round's same-day guard means a round that did
+    start is never started twice. Returns how many rounds it tried to start.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+
+    try:
+        programs = [p for p in cdb.get_programs(team_id) if p.get("enabled")]
+    except Exception:
+        logger.exception("connect: could not read programmes for %s to catch up", team_id)
+        return 0
+
+    now = datetime.now(timezone.utc)
+    tried = 0
+    for p in programs:
+        try:
+            if not _round_missed_today(p, now):
+                continue
+            logger.info("connect: programme %s missed its round today, starting it now", p["id"])
+            tried += 1
+            run_round(p["id"])
+        except Exception:
+            logger.exception("connect: catch-up round for programme %s failed", p.get("id"))
+    return tried
+
+
+def _round_missed_today(program: dict, now: datetime) -> bool:
+    """Whether today is this programme's round day, its time has passed, and no
+    scheduled round has run yet."""
+    try:
+        local = now.astimezone(ZoneInfo(program.get("timezone") or "UTC"))
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+    if local.weekday() != int(program["day_of_week"]):
+        return False
+    scheduled = local.replace(hour=int(program["hour"]), minute=int(program["minute"]), second=0, microsecond=0)
+    if local < scheduled + timedelta(minutes=CATCHUP_AFTER_MINUTES):
+        return False
+    # A programme set up after today's time gets its first round next week,
+    # which is what the dashboard told whoever created it.
+    created = program.get("created_at")
+    if getattr(created, "tzinfo", None) is not None and created > scheduled:
+        return False
+    return is_round_due(
+        program.get("interval_weeks") or 1,
+        _as_date(program.get("last_scheduled_round")),
+        local.date(),
+        _as_date(program.get("next_round_date")),
+    )
 
 
 def _offer_zoom(client, channel: str, team_id: str, members: list) -> None:
