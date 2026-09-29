@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
+from multiprocessing.sharedctypes import RawValue
 
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -258,6 +261,7 @@ def create_app() -> tuple[App, Flask]:
     workspace_jobs = _load_workspace_jobs()
     scheduler = build_scheduler(workspace_jobs)
     scheduler.start()
+    _start_scheduler_beat(scheduler)
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
     from src.http_app import create_http_app
@@ -303,12 +307,43 @@ def create_app() -> tuple[App, Flask]:
     return slack_app, flask_app
 
 
-def _scheduler_alive(scheduler) -> bool:  # noqa: ANN001
-    """True while the scheduler is running and its thread has not died."""
+# The scheduler starts in gunicorn's master process, before the worker is
+# forked, and its jobs run there. The worker that answers /livez holds only a
+# forked copy whose thread never existed in that process, so checking the
+# thread from the worker always reported it dead. The master instead writes a
+# timestamp into memory shared with the worker, and the worker checks its age.
+_SCHEDULER_BEAT = RawValue("d", 0.0)
+_BEAT_EVERY_SECONDS = 5
+_BEAT_STALE_AFTER_SECONDS = 60
+_scheduler_pid: int | None = None
+
+
+def _scheduler_thread_alive(scheduler) -> bool:  # noqa: ANN001
     if not scheduler.running:
         return False
     thread = getattr(scheduler, "_thread", None)
     return thread is None or thread.is_alive()
+
+
+def _start_scheduler_beat(scheduler) -> None:  # noqa: ANN001
+    global _scheduler_pid
+    _scheduler_pid = os.getpid()
+
+    def beat() -> None:
+        while _scheduler_thread_alive(scheduler):
+            _SCHEDULER_BEAT.value = time.time()
+            time.sleep(_BEAT_EVERY_SECONDS)
+
+    _SCHEDULER_BEAT.value = time.time()
+    threading.Thread(target=beat, name="scheduler-beat", daemon=True).start()
+
+
+def _scheduler_alive(scheduler) -> bool:  # noqa: ANN001
+    """True while the scheduler is running and its thread has not died."""
+    if _scheduler_pid is None or _scheduler_pid == os.getpid():
+        return _scheduler_thread_alive(scheduler)
+    # A forked worker: trust the master's beat instead of the local copy.
+    return time.time() - _SCHEDULER_BEAT.value < _BEAT_STALE_AFTER_SECONDS
 
 
 def _database_reachable() -> bool:

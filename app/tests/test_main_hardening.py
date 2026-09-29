@@ -8,7 +8,9 @@ database and scheduler were in, and the status page trusted it.
 
 from __future__ import annotations
 
+import os
 import sys
+import time
 from contextlib import contextmanager
 from unittest.mock import MagicMock
 
@@ -80,6 +82,32 @@ class TestSchedulerAlive:
 
     def test_dead_thread(self):
         assert main._scheduler_alive(_Scheduler(thread_alive=False)) is False
+
+
+class TestSchedulerAliveFromForkedWorker:
+    """Gunicorn forks the worker after the master started the scheduler."""
+
+    @pytest.fixture(autouse=True)
+    def forked(self, monkeypatch):
+        monkeypatch.setattr(main, "_scheduler_pid", os.getpid() + 1)
+
+    def test_fresh_beat_is_alive_though_local_thread_is_dead(self, monkeypatch):
+        monkeypatch.setattr(main._SCHEDULER_BEAT, "value", time.time())
+        assert main._scheduler_alive(_Scheduler(thread_alive=False)) is True
+
+    def test_stale_beat_is_dead(self, monkeypatch):
+        monkeypatch.setattr(main._SCHEDULER_BEAT, "value", time.time() - 3600)
+        assert main._scheduler_alive(_Scheduler()) is False
+
+
+def test_beat_is_shared_with_a_forked_child():
+    main._SCHEDULER_BEAT.value = 0.0
+    pid = os.fork()
+    if pid == 0:
+        main._SCHEDULER_BEAT.value = 123.0
+        os._exit(0)
+    os.waitpid(pid, 0)
+    assert main._SCHEDULER_BEAT.value == 123.0
 
 
 class TestDatabaseReachable:
