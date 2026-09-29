@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-09-29
+
+### Added
+- **Suggest another time for a coffee chat.** The introduction offers a few
+  times, and until now there was no way to propose a different one. A
+  "Suggest another time" button opens a date and time picker in your own
+  timezone; the suggestion is posted to the group DM in everyone's local time
+  with a "Works for me" button, and it settles the same way as the offered
+  times, with a calendar link and the meeting room.
+
 ## [1.9.3] - 2026-09-29
 
 ### Fixed
