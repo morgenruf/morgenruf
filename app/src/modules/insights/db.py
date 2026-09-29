@@ -12,10 +12,12 @@ module removed simply has no rows in that table.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 import psycopg2.extras
 
 from src.core.db import db_conn
+from src.core.timezones import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -112,9 +114,14 @@ def blocker_rows(team_id: str, days: int = 21) -> dict[str, list[dict]]:
 def todays_standups(team_id: str) -> list[dict]:
     """Every standup filed today, newest first, with the person's name.
 
-    CURRENT_DATE rather than a per-member local day, matching how the standup
-    rows were written: standup_date is set by the server that took the answer.
+    "Today" is each row's own schedule's local day, the same day the standup
+    was filed under (the workspace default for a row with no schedule). The
+    database's CURRENT_DATE is UTC and was a different day for a Sydney or a
+    late-reporting US team. Rows are fetched a day either side of UTC and
+    narrowed here, because a timezone name is checked more safely in Python
+    than in SQL, where one bad stored value would fail the whole query.
     """
+    utc_today = local_today("UTC")
     sql = """
         SELECT s.user_id,
                s.standup_date,
@@ -125,21 +132,33 @@ def todays_standups(team_id: str) -> list[dict]:
                s.mood,
                s.submitted_at,
                s.schedule_id,
-               m.real_name
+               m.real_name,
+               COALESCE(
+                   NULLIF(ss.schedule_tz, ''),
+                   (SELECT w.schedule_tz FROM workspace_config w WHERE w.team_id = s.team_id LIMIT 1)
+               ) AS local_tz
         FROM standups s
         LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
+        LEFT JOIN standup_schedules ss ON ss.team_id = s.team_id AND ss.id = s.schedule_id
         WHERE s.team_id = %s
-          AND s.standup_date = CURRENT_DATE
+          AND s.standup_date >= %s
+          AND s.standup_date <= %s
         ORDER BY s.submitted_at DESC NULLS LAST, s.id DESC
     """
     try:
         with db_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(sql, (team_id,))
-                return [dict(r) for r in cur.fetchall()]
+                cur.execute(sql, (team_id, utc_today - timedelta(days=1), utc_today + timedelta(days=1)))
+                rows = [dict(r) for r in cur.fetchall()]
     except Exception as exc:
         logger.warning("todays_standups failed for %s: %s", team_id, exc)
         return []
+    out = []
+    for row in rows:
+        tz_name = row.pop("local_tz", None)
+        if row.get("standup_date") == local_today(tz_name or "UTC"):
+            out.append(row)
+    return out
 
 
 def active_schedules(team_id: str) -> list[dict]:

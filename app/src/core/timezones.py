@@ -15,6 +15,9 @@ and must be kept in step with LEGACY_TZ_ALIASES (a test checks this).
 
 from __future__ import annotations
 
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
+
 # Legacy name to canonical name, taken from the tz database "backward" file.
 # Limited to the names a browser, Slack or an older dashboard can realistically
 # send; anything else is passed through unchanged.
@@ -130,3 +133,27 @@ def canonical_tz(name: object) -> object:
         return name
     stripped = name.strip()
     return LEGACY_TZ_ALIASES.get(stripped, stripped)
+
+
+def _utc_now() -> datetime:
+    """The current instant, in one place so tests can freeze it."""
+    return datetime.now(timezone.utc)
+
+
+def local_today(tz_name: object) -> date:
+    """Today's calendar date in `tz_name`, falling back to UTC.
+
+    Every "today" a standup cares about is the schedule's own day. The database
+    session runs in UTC, so CURRENT_DATE is already tomorrow for a Sydney team
+    at 09:00 and still yesterday for a US team reporting after 17:00 Pacific.
+    Legacy aliases are canonicalised first; an unknown or empty name means UTC
+    rather than an error, so a bad stored value never stops a job.
+    """
+    zone = timezone.utc
+    name = canonical_tz(tz_name)
+    if isinstance(name, str) and name:
+        try:
+            zone = ZoneInfo(name)
+        except Exception:  # noqa: BLE001 - unknown name or missing tz database
+            zone = timezone.utc
+    return _utc_now().astimezone(zone).date()

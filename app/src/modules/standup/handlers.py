@@ -25,9 +25,14 @@ _daily_thread_cache: dict[str, str] = {}
 
 
 def _clean_thread_cache() -> None:
-    """Remove stale entries from the thread cache (keep only today)."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    stale = [k for k in _daily_thread_cache if not k.endswith(today)]
+    """Remove stale entries from the thread cache (keep only today).
+
+    Keys are "team:channel:YYYY-MM-DD:schedule" and the date is the schedule's
+    local day, which can be a day either side of UTC, so all three are kept.
+    """
+    utc_today = datetime.now(timezone.utc).date()
+    keep = {f":{(utc_today + timedelta(days=d)).isoformat()}:" for d in (-1, 0, 1)}
+    stale = [k for k in _daily_thread_cache if not any(day in k for day in keep)]
     for k in stale:
         del _daily_thread_cache[k]
 
@@ -208,6 +213,24 @@ def _format_standup(
     return text
 
 
+def _record_skip(team_id: str, user_id: str) -> None:
+    """Record a skip under the local day the scheduler will check it on.
+
+    Called before the session is cleared: an open session names the schedule
+    that asked, and that schedule's timezone decides the day. Without one the
+    member's own schedule is looked up.
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+        from src.core.scheduler import standup_local_date  # noqa: PLC0415
+
+        session = state_store.get(f"{team_id}:{user_id}")
+        schedule_id = getattr(session, "schedule_id", None) if session else None
+        db.skip_today(team_id, user_id, for_date=standup_local_date(team_id, schedule_id, user_id))
+    except Exception as e:
+        logger.warning("Could not record skip for %s/%s: %s", team_id, user_id, e)
+
+
 def _persist_standup(
     team_id: str,
     user_id: str,
@@ -225,6 +248,7 @@ def _persist_standup(
     try:
         import src.core.db as db  # noqa: PLC0415
         from src.core.analytics import capture  # noqa: PLC0415
+        from src.core.scheduler import standup_local_date  # noqa: PLC0415
 
         standup_id = db.save_standup(
             team_id=team_id,
@@ -235,6 +259,9 @@ def _persist_standup(
             mood=mood,
             questions=questions,
             schedule_id=schedule_id,
+            # Filed under the schedule's local day, which is the day the
+            # report and the nudge look answers up by.
+            standup_date=standup_local_date(team_id, schedule_id, user_id),
         )
         capture("standup_posted", team_id, scheduled=schedule_id is not None, with_mood=mood is not None)
         return standup_id
@@ -480,9 +507,13 @@ def _complete_standup(user_id: str, session, client) -> None:
 
             # Always post individual standups in a daily thread, scoped by
             # schedule so Morning and Evening standups don't share a thread.
-            now_utc = datetime.now(timezone.utc)
-            today_str = now_utc.strftime("%Y-%m-%d")
+            # Keyed on the schedule's local day so the scheduled report, which
+            # uses the same day, finds this thread and replies under it.
+            from src.core.scheduler import standup_local_date  # noqa: PLC0415
+
             schedule_id = int(getattr(session, "schedule_id", 0) or sched_config.get("id") or 0)
+            local_day = standup_local_date(session.team_id, schedule_id or None, user_id)
+            today_str = local_day.isoformat()
             thread_key = f"{session.team_id}:{channel}:{today_str}:{schedule_id}"
             parent_ts = _daily_thread_cache.get(thread_key)
 
@@ -496,7 +527,7 @@ def _complete_standup(user_id: str, session, client) -> None:
             if not parent_ts:
                 # Create parent message for today's thread — polished like competitors
                 standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
-                display_date = now_utc.strftime("%a, %b %d.")
+                display_date = local_day.strftime("%a, %b %d.")
                 parent = client.chat_postMessage(
                     channel=channel,
                     text=f"✨ {standup_name} Completed - {display_date} ✨",
@@ -688,12 +719,22 @@ def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | N
     ok = False
     started = time.monotonic()
     try:
-        resp = requests.post(url, data=body, headers=headers, timeout=10)
-        status_code = getattr(resp, "status_code", None)
-        ok = isinstance(status_code, int) and 200 <= status_code < 300
-        if not ok:
-            error = f"HTTP {status_code}"
-        logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
+        from src.core.url_guard import is_safe_webhook_url, resolves_to_public  # noqa: PLC0415
+
+        if not (is_safe_webhook_url(url) and resolves_to_public(url)):
+            # Checked here, at send time, and not only when the URL was saved:
+            # a hostname can point at an internal address later.
+            error = "Refused: the URL does not resolve to a public address"
+            logger.warning("Webhook %s refused for %s: not a public address", hook.get("id"), event_type)
+        else:
+            # Redirects are refused so a public endpoint cannot bounce the
+            # request to an internal address or the cloud metadata service.
+            resp = requests.post(url, data=body, headers=headers, timeout=10, allow_redirects=False)
+            status_code = getattr(resp, "status_code", None)
+            ok = isinstance(status_code, int) and 200 <= status_code < 300
+            if not ok:
+                error = f"HTTP {status_code}"
+            logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"[:500]
         logger.warning("Webhook delivery failed for %s: %s", url, exc)
@@ -871,8 +912,11 @@ def register_handlers(app: App) -> None:
             on_vacation = db.is_on_vacation(team_id, user_id)
             streak = db.get_standup_streak(team_id, user_id)
 
-            # Get today's submissions for this user
-            today_standups = db.get_today_standups(team_id)
+            # Get today's submissions for this user, on the local day their
+            # standup files answers under.
+            from src.core.scheduler import standup_local_date  # noqa: PLC0415
+
+            today_standups = db.get_today_standups(team_id, for_date=standup_local_date(team_id, user_id=user_id))
             user_today = [s for s in today_standups if s.get("user_id") == user_id]
             user_responded_today = len(user_today) > 0
             user_last_response = user_today[-1] if user_today else None
@@ -1001,13 +1045,8 @@ def register_handlers(app: App) -> None:
         ack()
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.skip_today(team_id, user_id)
-        except Exception as e:
-            logger.warning("skip_standup button error: %s", e)
         cache_key = f"{team_id}:{user_id}"
+        _record_skip(team_id, user_id)
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
@@ -1055,6 +1094,11 @@ def register_handlers(app: App) -> None:
     def handle_open_create_standup(ack, body, client):  # noqa: ANN001
         """Handle 'Create a standup' button from App Home."""
         ack()
+        if not may_manage_standups(
+            body["user"].get("team_id") or body.get("team", {}).get("id", ""), body["user"]["id"]
+        ):
+            _refuse_standup_change(client, body["user"]["id"])
+            return
         import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         # Default new standup timezone to user's Slack timezone
@@ -1217,6 +1261,9 @@ def register_handlers(app: App) -> None:
         ack()
         standup_id = body["actions"][0].get("value", "")
         team_id = body["user"]["team_id"]
+        if not may_manage_standups(team_id, body["user"]["id"]):
+            _refuse_standup_change(client, body["user"]["id"])
+            return
         try:
             import src.core.db as db  # noqa: PLC0415
             import src.modules.standup.blocks as _blocks  # noqa: PLC0415
@@ -1264,6 +1311,9 @@ def register_handlers(app: App) -> None:
         standup_id = body["actions"][0].get("value", "")
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
+        if not may_manage_standups(team_id, user_id):
+            _refuse_standup_change(client, user_id)
+            return
         try:
             import src.core.db as db  # noqa: PLC0415
 
@@ -1295,6 +1345,10 @@ def register_handlers(app: App) -> None:
         action_value = action.get("value", "") or action.get("selected_option", {}).get("value", "")
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
+        # Every item in this menu changes a standup (delete, pause, enable, edit).
+        if not may_manage_standups(team_id, user_id):
+            _refuse_standup_change(client, user_id)
+            return
 
         if action_value.startswith("delete_"):
             standup_id = action_value.split("_", 1)[1]
@@ -1385,7 +1439,7 @@ def register_handlers(app: App) -> None:
 
             field = body.get("state", {}).get("values", {}).get(block_id, {}).get(input_action_id, {})
             rt = field.get("rich_text_value")
-            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else (field.get("value") or "")
+            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else _blocks.escape_mrkdwn(field.get("value") or "")
         except Exception as e:
             logger.warning("submit_answer: could not read input value: %s", e)
 
@@ -1452,12 +1506,7 @@ def register_handlers(app: App) -> None:
         ack()
         user_id: str = body["user_id"]
         team_id: str = body["team_id"]
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.skip_today(team_id, user_id)
-        except Exception as e:
-            logger.warning("Unexpected error in handle_skip_action recording skip: %s", e)
+        _record_skip(team_id, user_id)
         cache_key = f"{team_id}:{user_id}"
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
@@ -1498,9 +1547,14 @@ def register_handlers(app: App) -> None:
     @app.view("create_standup_modal")
     def handle_create_standup_modal(ack, body, client):  # noqa: ANN001
         """Handle submission of the create/edit standup modal from App Home."""
-        ack()
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
+        # Checked again here, not only when the modal opened: the submission is
+        # what writes, and roles can change while a modal is open.
+        if not may_manage_standups(team_id, user_id):
+            ack(response_action="errors", errors={"standup_channel": _NOT_A_STANDUP_ADMIN})
+            return
+        ack()
         values = body["view"]["state"]["values"]
         private_metadata = body["view"].get("private_metadata", "")
 
@@ -1671,7 +1725,7 @@ def register_handlers(app: App) -> None:
             field = values.get(block_id, {}).get(action_id, {})
             # rich_text_input → rich_text_value; fallback to plain value
             rt = field.get("rich_text_value")
-            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else field.get("value", "")
+            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else _blocks.escape_mrkdwn(field.get("value", ""))
             session = state_store.record_answer(cache_key, answer)
 
         # Ask mood after form submission
@@ -1958,11 +2012,42 @@ def match_dm_command(text: str | None) -> tuple[str, str] | None:
     return None
 
 
+_NOT_A_STANDUP_ADMIN = (
+    "Only workspace admins and standup admins can create or change standups. "
+    "Ask one of them, or ask an admin to make you a standup admin in the dashboard."
+)
+
+
+def may_manage_standups(team_id: str, user_id: str) -> bool:
+    """The dashboard's rule for standups, applied to App Home as well.
+
+    App Home created, edited, paused and deleted standups for any member,
+    while the dashboard asked for the standup admin grant, so a member could
+    set up daily DMs to anyone and posts to any channel the bot is in.
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return bool(db.can_administer(team_id, user_id, "standup"))
+    except Exception as exc:
+        logger.warning("Could not check standup admin for %s: %s", user_id, exc)
+        return False
+
+
+def _refuse_standup_change(client, user_id: str) -> None:  # noqa: ANN001
+    try:
+        client.chat_postMessage(channel=user_id, text=_NOT_A_STANDUP_ADMIN)
+    except Exception as exc:
+        logger.warning("Could not tell %s they cannot change standups: %s", user_id, exc)
+
+
 def answer_value(text: str | None) -> str:
     """What gets stored for a typed answer. A lone `pass` leaves it blank."""
     if _keyword_text(text) == "pass":
         return ""
-    return text or ""
+    from src.modules.standup.blocks import defuse_broadcasts  # noqa: PLC0415
+
+    return defuse_broadcasts(text or "")
 
 
 def _reply(ctx, text: str) -> None:
@@ -1985,12 +2070,7 @@ def _dm_standup(ctx, in_session: bool) -> None:
 
 
 def _dm_skip(ctx) -> None:
-    try:
-        import src.core.db as db  # noqa: PLC0415
-
-        db.skip_today(ctx.team_id, ctx.user_id)
-    except Exception as e:
-        logger.warning("Unexpected error in DM skip recording skip: %s", e)
+    _record_skip(ctx.team_id, ctx.user_id)
     state_store.clear(f"{ctx.team_id}:{ctx.user_id}")
     _reply(ctx, "✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 

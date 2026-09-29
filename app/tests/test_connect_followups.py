@@ -101,18 +101,25 @@ def test_nothing_is_left_on_the_in_memory_scheduler_per_round(connect_wiring, mo
     assert "DateTrigger" not in Path(jobs.__file__).read_text()
 
 
-def test_the_sweep_is_planned_even_when_programmes_cannot_be_read(monkeypatch):
+def test_unreadable_programmes_keep_the_live_sweep_and_rounds(monkeypatch, connect_wiring):
+    """A failed read used to plan the sweep alone, and sync deleted the rounds.
+
+    plan_jobs now raises, and module job sync keeps every live connect job of
+    that workspace until a pass can read the programmes again.
+    """
     import src.modules.connect.db as cdb
-    from src.modules.connect import jobs
+
+    sync_module_jobs(connect_wiring)
+    before = {j.id for j in connect_wiring.get_jobs()}
+    assert any(":round:" in jid for jid in before)
 
     def boom():
         raise RuntimeError("pool exhausted")
 
     monkeypatch.setattr(cdb, "active_programs", boom)
-    planned = jobs.plan_jobs({"team_id": "T1", "bot_token": "x"})
-    assert [j.key for j in planned] == ["followups"]
-    assert planned[0].func is jobs.send_due_followups
-    assert planned[0].args == ("T1",)
+    _, removed = sync_module_jobs(connect_wiring)
+    assert removed == []
+    assert {j.id for j in connect_wiring.get_jobs()} == before
 
 
 def test_a_failed_queue_is_logged_not_raised(monkeypatch):

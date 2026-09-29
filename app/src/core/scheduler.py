@@ -6,10 +6,11 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import pytz
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -25,7 +26,7 @@ from src.core.slack_users import (
     member_profile,
 )
 from src.core.state import state_store
-from src.core.timezones import canonical_tz
+from src.core.timezones import canonical_tz, local_today
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
@@ -325,6 +326,43 @@ def _notify_delivery_failure(client: WebClient, channel_id: str, failed_count: i
         logger.warning("Could not post delivery failure notice to %s: %s", channel_id, exc)
 
 
+def standup_local_date(team_id: str, schedule_id: int | None = None, user_id: str | None = None) -> date:
+    """Today's date in the timezone the relevant standup runs in.
+
+    Answers, skips and reports are all keyed on this date, so every path that
+    writes or reads them has to agree on it. The schedule's own timezone wins.
+    Without a schedule, the schedule `user_id` is most likely doing now is
+    used (the same pick an ad hoc standup session makes), then the workspace
+    default, then UTC.
+    """
+    import src.core.db as db  # noqa: PLC0415
+
+    tz_name = None
+    try:
+        if schedule_id:
+            tz_name = (db.get_standup_schedule(team_id, schedule_id) or {}).get("schedule_tz")
+        elif user_id:
+            tz_name = (db.get_schedule_for_user(team_id, user_id) or {}).get("schedule_tz")
+        if not tz_name:
+            tz_name = (db.get_workspace_config(team_id) or {}).get("schedule_tz")
+    except Exception as exc:
+        logger.warning("Could not resolve standup timezone for %s/%s: %s", team_id, schedule_id or user_id, exc)
+    return local_today(tz_name or "UTC")
+
+
+def _schedule_today(team_id: str, schedule: dict | None) -> date:
+    """Local today for a schedule row already in hand, else the workspace default."""
+    tz_name = (schedule or {}).get("schedule_tz")
+    if not tz_name:
+        try:
+            import src.core.db as db  # noqa: PLC0415
+
+            tz_name = (db.get_workspace_config(team_id) or {}).get("schedule_tz")
+        except Exception:
+            tz_name = None
+    return local_today(tz_name or "UTC")
+
+
 def _send_standup_to_workspace(
     team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None, retry_attempt: int = 0
 ) -> None:
@@ -350,6 +388,7 @@ def _send_standup_to_workspace(
             participants_filter = schedule.get("participants") or []
             channel_id = schedule.get("channel_id") or channel_id
             standup_name = schedule.get("name", "Team Standup")
+            local_day = local_today(schedule.get("schedule_tz") or "UTC")
         else:
             config = db.get_workspace_config(team_id) or {}
             qs = config.get("questions") or []
@@ -363,6 +402,7 @@ def _send_standup_to_workspace(
             questions = qs if qs else None
             participants_filter = []
             standup_name = config.get("standup_name", "Team Standup")
+            local_day = local_today(config.get("schedule_tz") or "UTC")
 
         members = db.get_active_members(team_id)
         if participants_filter:
@@ -457,7 +497,7 @@ def _send_standup_to_workspace(
             try:
                 import src.core.db as db  # noqa: PLC0415
 
-                if db.is_skipped_today(team_id, user_id):
+                if db.is_skipped_today(team_id, user_id, for_date=local_day):
                     logger.debug("Skipping %s — user opted out today", user_id)
                     continue
             except Exception as e:
@@ -624,6 +664,9 @@ def _send_reminder_to_workspace(
             participants = sched.get("participants") or []
             if participants:
                 members = resolve_participants(WebClient(token=bot_token), team_id, participants, members)
+        # The skip check has to use the standup's own day, the same one the
+        # skip was written under.
+        local_day = _schedule_today(team_id, sched if schedule_id is not None else None)
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
         return
@@ -633,7 +676,7 @@ def _send_reminder_to_workspace(
         try:
             import src.core.db as db  # noqa: PLC0415
 
-            if db.is_skipped_today(team_id, user_id):
+            if db.is_skipped_today(team_id, user_id, for_date=local_day):
                 continue
             label = f" for *{standup_label}*" if standup_label else ""
             _slack_dm_with_retry(
@@ -693,7 +736,6 @@ def _send_manager_digest(team_id: str, schedule_id: int | None = None) -> None:
 
         inst = db.get_installation(team_id)
         workspace_name = inst.get("team_name", team_id) if inst else team_id
-        date_str = datetime.now().strftime("%Y-%m-%d")
 
         if schedule_id:
             schedule = db.get_standup_schedule(team_id, schedule_id)
@@ -702,7 +744,9 @@ def _send_manager_digest(team_id: str, schedule_id: int | None = None) -> None:
             to = (schedule.get("digest_email") or "").strip()
             if not to:
                 return
-            standups = db.get_standups_for_schedule(team_id, schedule_id, days=1)
+            local_day = _schedule_today(team_id, schedule)
+            date_str = local_day.isoformat()
+            standups = db.get_standups_for_schedule(team_id, schedule_id, days=1, for_date=local_day)
             if not standups:
                 logger.info("schedule digest %s: nothing answered today", schedule_id)
                 return
@@ -714,7 +758,8 @@ def _send_manager_digest(team_id: str, schedule_id: int | None = None) -> None:
             to = (config.get("manager_email") or "").strip()
             if not to:
                 return
-            standups = db.get_standups(team_id, days=1)
+            date_str = local_today(config.get("schedule_tz") or "UTC").isoformat()
+            standups = db.get_standups(team_id, from_date=date_str, to_date=date_str)
             scope_label = ""
 
         send_manager_digest(
@@ -753,12 +798,18 @@ def _nudge_missing(team_id: str, bot_token: str, schedule_id: int) -> None:
 
         # Vacation and deactivation are handled here, by construction.
         eligible = {m.user_id for m in eligible_members(team_id)}
-        answered = {row["user_id"] for row in db.get_standups_for_schedule(team_id, schedule_id, days=1)}
+        # Answers and skips are filed under the schedule's local day, so that
+        # is the day to look them up by. The UTC date nagged a Sydney team
+        # every morning for answers they had already given.
+        local_day = _schedule_today(team_id, schedule)
+        answered = {
+            row["user_id"] for row in db.get_standups_for_schedule(team_id, schedule_id, days=1, for_date=local_day)
+        }
 
         outstanding = [
             uid
             for uid in participants
-            if uid in eligible and uid not in answered and not db.is_skipped_today(team_id, uid)
+            if uid in eligible and uid not in answered and not db.is_skipped_today(team_id, uid, for_date=local_day)
         ]
         if not outstanding:
             logger.info("nudge %s: everyone has filed", schedule_id)
@@ -796,7 +847,20 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
 
         import src.core.db as db  # noqa: PLC0415
 
-        today_standups = db.get_today_standups(team_id)
+        # The schedule is loaded first because its timezone decides which day
+        # "today" is. The UTC date skipped a Sydney 10:00 report every day,
+        # since its answers were filed under the local date.
+        sched_cfg = {}
+        if schedule_id:
+            sched_cfg = db.get_standup_schedule(team_id, schedule_id) or {}
+        if not sched_cfg:
+            try:
+                sched_cfg = db.get_standup_schedule_for_channel(team_id, channel_id) or {}
+            except Exception:
+                pass
+        local_day = _schedule_today(team_id, sched_cfg)
+
+        today_standups = db.get_today_standups(team_id, for_date=local_day)
         if not today_standups:
             logger.info("No submissions for team %s — skipping report", team_id)
             return
@@ -808,15 +872,6 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             logger.error("Bot token invalid for report %s: %s", team_id, exc)
             return
         bot_token = client.token
-
-        sched_cfg = {}
-        if schedule_id:
-            sched_cfg = db.get_standup_schedule(team_id, schedule_id) or {}
-        if not sched_cfg:
-            try:
-                sched_cfg = db.get_standup_schedule_for_channel(team_id, channel_id) or {}
-            except Exception:
-                pass
 
         # Filter standups to only include this schedule's participants
         participants = sched_cfg.get("participants") or []
@@ -885,7 +940,8 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         # Only when the summary lands in the standup channel: a thread_ts from
         # one channel is not a valid parent in another, and Slack rejects it.
         thread_ts = None
-        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        # Same local day the member path keys the thread on.
+        today_str = local_day.isoformat()
         sched_id_int = int(schedule_id or sched_cfg.get("id") or 0)
         if report_channel == channel_id:
             try:
@@ -1238,7 +1294,10 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
         scheduler.add_job(
             _send_reminder_to_workspace,
             trigger=CronTrigger(hour=int(hour), minute=int(minute), day_of_week="fri", timezone=tz),
-            args=[team_id, bot_token, reminder_minutes if reminder_minutes > 0 else 0],
+            # schedule_id limits the reminder to this schedule's participants.
+            # Without it the reminder went to every active member of the
+            # workspace, once per schedule with a weekend reminder.
+            args=[team_id, bot_token, reminder_minutes if reminder_minutes > 0 else 0, schedule_id],
             id=f"weekend_reminder_schedule_{team_id}_{schedule_id}",
             name=f"Weekend Reminder — {schedule.get('name', 'Standup')} — {team_id}",
             replace_existing=True,
@@ -1881,8 +1940,47 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    scheduler.add_listener(_alert_on_job_problem, EVENT_JOB_ERROR | EVENT_JOB_MISSED)
+
     _scheduler = scheduler
     return scheduler
+
+
+# A job that keeps failing alerts once per window, not on every firing.
+JOB_ALERT_WINDOW_SECS = 6 * 3600
+_job_alerted_at: dict[tuple[int, str], float] = {}
+
+
+def _alert_on_job_problem(event) -> None:  # noqa: ANN001
+    """Tell the operator when a scheduled job raised or missed its time.
+
+    A dropped coffee round on 2026-09-28 left nothing but one WARNING line on
+    stdout, gone with the pod. Missed interval jobs are skipped: they are the
+    per-pod sync loops, and their next run a minute later covers the gap.
+    """
+    try:
+        if event.code == EVENT_JOB_MISSED:
+            job = _scheduler.get_job(event.job_id) if _scheduler else None
+            if job is not None and not isinstance(job.trigger, CronTrigger):
+                return
+            text = f":warning: Scheduled job `{event.job_id}` missed its {event.scheduled_run_time} run."
+        else:
+            text = (
+                f":rotating_light: Scheduled job `{event.job_id}` failed at {event.scheduled_run_time}: "
+                f"{type(event.exception).__name__}: {event.exception}"[:500]
+            )
+        key = (event.code, event.job_id)
+        now = time.monotonic()
+        last = _job_alerted_at.get(key)
+        if last is not None and now - last < JOB_ALERT_WINDOW_SECS:
+            return
+        _job_alerted_at[key] = now
+
+        from src.core.alerts import notify  # noqa: PLC0415
+
+        notify(text)
+    except Exception:
+        logger.exception("Could not alert on scheduler event for %s", getattr(event, "job_id", "?"))
 
 
 def _purge_scheduler_runs() -> None:
@@ -1891,6 +1989,7 @@ def _purge_scheduler_runs() -> None:
         import src.core.db as db  # noqa: PLC0415
 
         db.purge_scheduler_runs(7)
+        db.purge_login_token_uses()
     except Exception:
         logger.exception("Scheduler claim purge failed")
 
@@ -1945,8 +2044,12 @@ def job_id(module: str, team_id: str, key: str) -> str:
     return f"{module}:{team_id}:{key}"
 
 
-def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
+def reconcile_jobs(scheduler, desired: dict, keep: tuple[str, ...] = ()) -> tuple[list[str], list[str]]:
     """Make the live job set match `desired`, for namespaced ids only.
+
+    Live jobs whose id starts with a prefix in `keep` are never removed. Those
+    are the workspaces or modules whose plan could not be read this pass: an
+    empty plan there means "unknown", not "none wanted".
 
     Ids without a colon are left alone. Every job id this scheduler creates
     today is of the form standup_T01ABC, report_schedule_T01ABC_7, member_sync
@@ -1961,7 +2064,7 @@ def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
     live = {j.id: j for j in scheduler.get_jobs() if ":" in j.id}
     wanted = set(desired)
     added = sorted(wanted - set(live))
-    removed = sorted(set(live) - wanted)
+    removed = sorted(jid for jid in set(live) - wanted if not jid.startswith(keep))
     changed = sorted(jid for jid in wanted & set(live) if _job_differs(live[jid], desired[jid]))
     for jid in removed:
         scheduler.remove_job(jid)
@@ -2011,6 +2114,11 @@ def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
     import src.core.db as db  # noqa: PLC0415
 
     desired: dict = {}
+    # Prefixes whose live jobs stay as they are because their plan failed. One
+    # transient database error used to leave a workspace out of `desired`, and
+    # reconciliation then deleted its live jobs: the same failure that pruned
+    # coffee chat follow-ups before 1.8.14.
+    keep: list[str] = []
     try:
         installations = db.get_all_installations()
     except Exception as exc:
@@ -2030,7 +2138,8 @@ def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
                 allowlist=allowlist,
             )
         except Exception as exc:
-            logger.warning("could not resolve modules for %s: %s", team_id, exc)
+            logger.warning("could not resolve modules for %s, keeping its jobs: %s", team_id, exc)
+            keep.extend(j.id for j in scheduler.get_jobs() if j.id.split(":")[1:2] == [team_id])
             continue
 
         ctx = _module_job_context(team_id, inst.get("bot_token", ""))
@@ -2041,9 +2150,10 @@ def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
                 for job in spec.plan_jobs(ctx) or []:
                     desired[job_id(spec.name, team_id, job.key)] = job
             except Exception:
-                logger.exception("module %s failed to plan jobs for %s", spec.name, team_id)
+                logger.exception("module %s failed to plan jobs for %s, keeping its jobs", spec.name, team_id)
+                keep.append(job_id(spec.name, team_id, ""))
 
-    added, removed = reconcile_jobs(scheduler, desired)
+    added, removed = reconcile_jobs(scheduler, desired, tuple(keep))
     if added or removed:
         logger.info("module jobs reconciled: +%d -%d", len(added), len(removed))
     return added, removed

@@ -284,7 +284,17 @@ test('backend routes stay proxied and login tokens never enter the shell', async
   expect(tokenResponse.headers().location).toBe('/dashboard/');
   expect(tokenResponse.headers()['cache-control']).toBe('no-store');
 
-  await page.goto(`${link.url}#reports`);
+  // A login link works once, so a copy read from an access log is useless.
+  const reused = await request.get(link.url, { maxRedirects: 0 });
+
+  expect(reused.status()).toBe(303);
+  expect(reused.headers().location).toBe('/dashboard/login?error=invalid-link');
+
+  const fresh = await (
+    await request.get(`${backend}/__test__/login-link`)
+  ).json();
+
+  await page.goto(`${fresh.url}#reports`);
 
   await expect(page).toHaveURL(/\/dashboard\/reports$/);
   await expect(

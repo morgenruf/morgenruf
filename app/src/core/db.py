@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Any, Generator
 from zoneinfo import ZoneInfo
 
-from src.core.timezones import canonical_tz
+from src.core.timezones import canonical_tz, local_today
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,12 @@ def save_installation(
     bot_token_expires_at: str | None = None,
     granted_scopes: list[str] | None = None,
 ) -> bool:
-    """Insert or update an OAuth installation record. Returns True if this is a new installation."""
+    """Insert or update an OAuth installation record. Returns True if this is a new installation.
+
+    The first installer keeps installed_by_user_id on a reinstall. A later
+    OAuth run is often a member signing in to the dashboard, and
+    get_member_role treats the installer as a permanent admin.
+    """
     sql = """
         INSERT INTO installations (team_id, team_name, bot_token, bot_user_id, app_id,
             installed_by_user_id, bot_refresh_token, bot_token_expires_at,
@@ -93,7 +98,7 @@ def save_installation(
             bot_token = EXCLUDED.bot_token,
             bot_user_id = EXCLUDED.bot_user_id,
             app_id = EXCLUDED.app_id,
-            installed_by_user_id = EXCLUDED.installed_by_user_id,
+            installed_by_user_id = COALESCE(installations.installed_by_user_id, EXCLUDED.installed_by_user_id),
             bot_refresh_token = EXCLUDED.bot_refresh_token,
             bot_token_expires_at = EXCLUDED.bot_token_expires_at,
             granted_scopes = COALESCE(EXCLUDED.granted_scopes, installations.granted_scopes),
@@ -269,23 +274,31 @@ def get_workspace_by_feed_token(token: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_standups_for_schedule(team_id: str, schedule_id: int, days: int = 1) -> list[dict]:
+def get_standups_for_schedule(
+    team_id: str, schedule_id: int, days: int = 1, for_date: date | None = None
+) -> list[dict]:
     """Today's answers for one standup only.
 
     The workspace-wide query is wrong for a per-team digest: a workspace with
     ten standups would mail every team's answers to every lead.
+
+    `for_date` is the schedule's local today (see timezones.local_today). The
+    database's CURRENT_DATE is UTC, which is a different day for most of the
+    world at report time. Without it the UTC date is used.
     """
+    day = for_date or local_today("UTC")
     sql = """
         SELECT s.*, m.real_name AS user_name
         FROM standups s
         LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
         WHERE s.team_id = %s AND s.schedule_id = %s
-          AND s.standup_date >= CURRENT_DATE - (%s - 1)
+          AND s.standup_date >= %s::date - (%s - 1)
+          AND s.standup_date <= %s::date
         ORDER BY s.submitted_at
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (team_id, schedule_id, days))
+            cur.execute(sql, (team_id, schedule_id, day, days, day))
             return [dict(r) for r in cur.fetchall()]
 
 
@@ -757,6 +770,28 @@ def purge_scheduler_runs(days: int = 7) -> int:
             return cur.rowcount or 0
 
 
+def claim_login_token(nonce: str) -> bool:
+    """Mark a dashboard login token as used. True only the first time."""
+    sql = """
+        INSERT INTO login_token_uses (nonce) VALUES (%s)
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (nonce,))
+            return cur.fetchone() is not None
+
+
+def purge_login_token_uses() -> int:
+    """Forget used login tokens once they are past their five minute life."""
+    sql = "DELETE FROM login_token_uses WHERE used_at < NOW() - INTERVAL '1 hour'"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            return cur.rowcount or 0
+
+
 # ---------------------------------------------------------------------------
 # Standups
 # ---------------------------------------------------------------------------
@@ -771,6 +806,7 @@ def save_standup(
     mood: str | None = None,
     questions: list[str] | None = None,
     schedule_id: int | None = None,
+    standup_date: date | None = None,
 ) -> int | None:
     """Persist a completed standup. Returns the new standup ID.
 
@@ -778,6 +814,10 @@ def save_standup(
     are named after the default questions, but a schedule can ask anything, so
     without the question list there is no way to tell whether the third answer
     is a blocker or an availability figure. See blockers.py.
+
+    Pass `standup_date` as the schedule's local today. The column defaults to
+    the database's CURRENT_DATE, which is UTC, so a Sydney team answering at
+    09:00 was filed under yesterday and its 10:00 report found nothing.
     """
     import src.modules.standup.blockers as _blockers  # noqa: PLC0415
 
@@ -786,29 +826,35 @@ def save_standup(
     else:
         has_blockers = _blockers.reports_a_blocker(blockers)
     sql = """
-        INSERT INTO standups (team_id, user_id, yesterday, today, blockers, has_blockers, mood, schedule_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO standups
+            (team_id, user_id, yesterday, today, blockers, has_blockers, mood, schedule_id, standup_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """
+    day = standup_date or local_today("UTC")
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers, mood, schedule_id))
+            cur.execute(sql, (team_id, user_id, yesterday, today, blockers, has_blockers, mood, schedule_id, day))
             row = cur.fetchone()
     standup_id = row[0] if row else None
     logger.info("Saved standup %s for %s / %s", standup_id, team_id, user_id)
     return standup_id
 
 
-def get_today_standups(team_id: str) -> list[dict]:
-    """Return all standup submissions for today."""
+def get_today_standups(team_id: str, for_date: date | None = None) -> list[dict]:
+    """Return all standup submissions for today.
+
+    `for_date` is the standup's local today; the UTC date is only a fallback
+    for a caller with no timezone to go on.
+    """
     sql = """
         SELECT * FROM standups
-        WHERE team_id = %s AND standup_date = CURRENT_DATE
+        WHERE team_id = %s AND standup_date = %s
         ORDER BY submitted_at
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (team_id,))
+            cur.execute(sql, (team_id, for_date or local_today("UTC")))
             rows = cur.fetchall()
     return [dict(r) for r in rows]
 
@@ -1094,24 +1140,28 @@ def get_standup_by_id(standup_id: int) -> dict | None:
 # ---------------------------------------------------------------------------
 
 
-def skip_today(team_id: str, user_id: str) -> None:
-    """Mark user as skipping today's standup."""
+def skip_today(team_id: str, user_id: str, for_date: date | None = None) -> None:
+    """Mark user as skipping today's standup.
+
+    `for_date` must be the same local day the scheduler checks with, or a skip
+    filed in the morning in Sydney lands on the previous UTC day and is ignored.
+    """
     sql = """
         INSERT INTO user_skip (team_id, user_id, skip_date)
-        VALUES (%s, %s, CURRENT_DATE)
+        VALUES (%s, %s, %s)
         ON CONFLICT DO NOTHING
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id))
+            cur.execute(sql, (team_id, user_id, for_date or local_today("UTC")))
 
 
-def is_skipped_today(team_id: str, user_id: str) -> bool:
-    """Return True if user has skipped today."""
-    sql = "SELECT 1 FROM user_skip WHERE team_id=%s AND user_id=%s AND skip_date=CURRENT_DATE"
+def is_skipped_today(team_id: str, user_id: str, for_date: date | None = None) -> bool:
+    """Return True if user has skipped `for_date` (the standup's local today)."""
+    sql = "SELECT 1 FROM user_skip WHERE team_id=%s AND user_id=%s AND skip_date=%s"
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id))
+            cur.execute(sql, (team_id, user_id, for_date or local_today("UTC")))
             return cur.fetchone() is not None
 
 

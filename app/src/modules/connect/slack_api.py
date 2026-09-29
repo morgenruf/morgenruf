@@ -46,28 +46,49 @@ class PermanentSlackError(Exception):
     """Raised when retrying cannot help, so the caller stops trying."""
 
 
+class RetryableSlackError(Exception):
+    """Raised when Slack stayed unavailable or rate limited for now; try later."""
+
+
+# Rate limit waits do not use up an attempt, but a call gives up after this
+# much total waiting so one match cannot hold a scheduler thread for long.
+_MAX_RATE_LIMIT_WAIT_SECONDS = 120
+
+
 def _call(fn, **kwargs):
     """One Slack call with backoff on rate limiting.
 
     Honours Retry-After rather than guessing, because guessing low gets the
-    app rate limited harder.
+    app rate limited harder. Running out of retries raises
+    RetryableSlackError, not PermanentSlackError: being rate limited three
+    times in a row used to mark the match delivered with no channel, and the
+    pair never heard from the bot.
     """
-    for attempt in range(_MAX_RETRIES):
+    attempt = 0
+    waited = 0
+    while True:
         try:
             return fn(**kwargs)
         except SlackApiError as exc:
             err = (exc.response or {}).get("error", "")
             if err == "ratelimited":
                 wait = int(exc.response.headers.get("Retry-After", 2))
+                if waited + wait > _MAX_RATE_LIMIT_WAIT_SECONDS:
+                    raise RetryableSlackError("still rate limited") from exc
                 logger.info("rate limited, waiting %ss", wait)
                 time.sleep(wait)
+                waited += wait
                 continue
             if err in _PERMANENT:
                 raise PermanentSlackError(err) from exc
-            if attempt == _MAX_RETRIES - 1:
-                raise
-            time.sleep(1.5 * (attempt + 1))
-    raise PermanentSlackError("retries exhausted")
+            cause: Exception = exc
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            # Network trouble is not a SlackApiError and was never retried.
+            cause = exc
+        attempt += 1
+        if attempt >= _MAX_RETRIES:
+            raise RetryableSlackError(f"gave up after {attempt} attempts: {cause}") from cause
+        time.sleep(1.5 * attempt)
 
 
 def open_group_dm(client: WebClient, user_ids: list[str]) -> str:
@@ -107,7 +128,7 @@ def has_replies(client: WebClient, channel_id: str, since_ts: float | None = Non
     """
     try:
         resp = _call(client.conversations_history, channel=channel_id, limit=20)
-    except (SlackApiError, PermanentSlackError):
+    except (SlackApiError, PermanentSlackError, RetryableSlackError):
         # Unreadable history means we cannot tell. Staying quiet is the safer
         # failure: a missed nudge costs less than nagging a conversation.
         return True

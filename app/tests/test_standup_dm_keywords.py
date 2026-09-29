@@ -64,7 +64,7 @@ def world(monkeypatch):
 
     monkeypatch.setattr(core_db, "granted_scopes", lambda team_id: set())
     monkeypatch.setattr(core_db, "module_settings", lambda team_id: dict(state.settings))
-    monkeypatch.setattr(core_db, "skip_today", lambda team_id, user_id: state.skips.append(user_id))
+    monkeypatch.setattr(core_db, "skip_today", lambda team_id, user_id, for_date=None: state.skips.append(user_id))
     monkeypatch.setattr(core_db, "set_vacation", lambda team_id, user_id, on: state.vacation.append(on))
     monkeypatch.setattr(core_db, "upsert_member", lambda team_id, user_id, **kw: state.tz.append(kw.get("tz")))
     monkeypatch.setattr(

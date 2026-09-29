@@ -50,27 +50,43 @@ def _state_secret() -> bytes:
     return key.encode() if isinstance(key, str) else key
 
 
-def _make_state() -> str:
-    """Generate a self-contained HMAC-signed state token (no session needed)."""
-    nonce = os.urandom(16).hex()
+# Every token this module signs carries its purpose inside the HMAC input, so
+# an OAuth state can never be replayed as a dashboard login token or the other
+# way round, even though both share one key.
+def _sign(purpose: str, payload: str) -> str:
+    return hmac.new(_state_secret(), f"{purpose}|{payload}".encode(), hashlib.sha256).hexdigest()
+
+
+def _make_state(nonce: str | None = None) -> str:
+    """Generate an HMAC-signed state token carrying `nonce`.
+
+    /install also stores the nonce in the browser's session, and the callback
+    only accepts a state whose nonce matches. That binds the flow to the
+    browser that started it, so an attacker cannot hand a victim a callback
+    link carrying the attacker's own code (login CSRF).
+    """
+    nonce = nonce or os.urandom(16).hex()
     ts = str(int(time.time()))
     payload = f"{ts}.{nonce}"
-    sig = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
-    return f"{payload}.{sig}"
+    return f"{payload}.{_sign('state', payload)}"
+
+
+def _state_nonce(state: str) -> str | None:
+    """Return the nonce of a valid state token (at most 10 minutes old), else None."""
+    try:
+        ts_str, nonce, sig = state.rsplit(".", 2)
+        payload = f"{ts_str}.{nonce}"
+        if not hmac.compare_digest(_sign("state", payload), sig):
+            return None
+        age = int(time.time()) - int(ts_str)
+        return nonce if 0 <= age <= 600 else None
+    except Exception:
+        return None
 
 
 def _verify_state(state: str) -> bool:
     """Verify HMAC-signed state token. Accepts tokens up to 10 minutes old."""
-    try:
-        ts_str, nonce, sig = state.rsplit(".", 2)
-        payload = f"{ts_str}.{nonce}"
-        expected = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, sig):
-            return False
-        age = int(time.time()) - int(ts_str)
-        return 0 <= age <= 600  # 10 minute window
-    except Exception:
-        return False
+    return _state_nonce(state) is not None
 
 
 @oauth_bp.route("/")
@@ -81,27 +97,34 @@ def index():
 @oauth_bp.route("/install")
 def install():
     """Redirect the browser to the Slack OAuth authorisation page."""
-    state = _make_state()
-    url = _url_generator.generate(state=state)
+    nonce = os.urandom(16).hex()
+    session["oauth_nonce"] = nonce
+    url = _url_generator.generate(state=_make_state(nonce))
     return redirect(url)
 
 
 @oauth_bp.route("/oauth/callback")
 def oauth_callback():
     """Exchange the OAuth code for a bot token and store the installation."""
-    incoming_state = request.args.get("state", "")
-    if incoming_state and not _verify_state(incoming_state):
-        logger.warning("OAuth state validation failed: %r", incoming_state)
-        return redirect("/auth/result?status=invalid", code=303)
-    if not incoming_state:
-        logger.warning("OAuth callback received without state — proceeding (direct install flow)")
-
     code = request.args.get("code")
     error = request.args.get("error")
 
     if error:
         logger.warning("OAuth flow returned error: %s", error)
         return redirect("/auth/result?status=denied", code=303)
+
+    incoming_state = request.args.get("state", "")
+    if not incoming_state:
+        # An install started on Slack's side arrives without our state. Send
+        # it through /install so it picks up a state bound to this browser;
+        # the code it carried is never exchanged.
+        logger.info("OAuth callback without state, restarting through /install")
+        return redirect("/install", code=303)
+    expected_nonce = session.pop("oauth_nonce", None)
+    nonce = _state_nonce(incoming_state)
+    if nonce is None or not expected_nonce or not hmac.compare_digest(nonce, expected_nonce):
+        logger.warning("OAuth state validation failed")
+        return redirect("/auth/result?status=invalid", code=303)
 
     if not code:
         logger.warning("OAuth callback received with no code")
@@ -153,8 +176,11 @@ def oauth_callback():
         logger.error("Failed to persist installation for %s: %s", team_id, exc)
         # Don't fail the flow — continue to send welcome messages
 
-    # Grant admin role to the installing user
-    if authed_user_id:
+    # Admin goes to whoever first installs the app, and to Slack's own admins
+    # and owners. Anyone else finishing OAuth is only signing in: dashboard
+    # sign-in runs through this same flow, so granting admin here to every
+    # caller made any member of a workspace an admin with one click.
+    if authed_user_id and (is_new_install or _is_slack_admin(bot_token, authed_user_id)):
         try:
             db.ensure_admin(team_id, authed_user_id)
         except Exception as exc:
@@ -249,40 +275,67 @@ def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str, team_i
         logger.warning("Could not retrieve user email for welcome message: %s", exc)
 
 
+def _is_slack_admin(bot_token: str, user_id: str) -> bool:
+    """True when Slack says the user is a workspace admin or owner."""
+    try:
+        user = WebClient(token=bot_token).users_info(user=user_id)["user"]
+    except Exception as exc:
+        logger.warning("Could not look up Slack role for %s: %s", user_id, exc)
+        return False
+    return bool(user.get("is_admin") or user.get("is_owner") or user.get("is_primary_owner"))
+
+
 def _make_login_token(team_id: str, user_id: str = "") -> str:
     """Short-lived HMAC token to bootstrap dashboard session via URL."""
-    ts = str(int(time.time()))
-    payload = f"{ts}.{team_id}|{user_id}"
-    sig = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
     import base64
 
-    return base64.urlsafe_b64encode(f"{payload}.{sig}".encode()).decode()
+    payload = f"{int(time.time())}.{os.urandom(12).hex()}.{team_id}|{user_id}"
+    return base64.urlsafe_b64encode(f"{payload}.{_sign('login', payload)}".encode()).decode()
 
 
-def verify_login_token(token: str) -> tuple[str, str] | None:
-    """Verify login token, return (team_id, user_id) if valid (5 min window).
-
-    Returns None if invalid. user_id may be empty for tokens issued before
-    this version.
-    """
+def _read_login_token(token: str) -> tuple[str, str, str] | None:
+    """Return (team_id, user_id, nonce) for a valid token at most 5 minutes old."""
     try:
         import base64
 
         decoded = base64.urlsafe_b64decode(token.encode()).decode()
-        ts_str, team_user, sig = decoded.split(".", 2)
-        payload = f"{ts_str}.{team_user}"
-        expected = hmac.new(_state_secret(), payload.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, sig):
+        payload, sig = decoded.rsplit(".", 1)
+        if not hmac.compare_digest(_sign("login", payload), sig):
             return None
-        if int(time.time()) - int(ts_str) > 300:
+        ts_str, nonce, team_user = payload.split(".", 2)
+        if not 0 <= int(time.time()) - int(ts_str) <= 300:
             return None
-        if "|" in team_user:
-            team_id, user_id = team_user.split("|", 1)
-        else:
-            team_id, user_id = team_user, ""
-        return team_id, user_id
+        team_id, user_id = team_user.split("|", 1)
+        return team_id, user_id, nonce
     except Exception:
         return None
+
+
+def verify_login_token(token: str) -> tuple[str, str] | None:
+    """Verify login token, return (team_id, user_id) if valid (5 min window)."""
+    parsed = _read_login_token(token)
+    return (parsed[0], parsed[1]) if parsed else None
+
+
+def consume_login_token(token: str) -> tuple[str, str] | None:
+    """Like verify_login_token, but each token opens a session only once.
+
+    The token rides in the dashboard URL, so access logs and proxies record
+    it. Claiming its nonce in the database means a copy read from a log
+    within the five minutes is worthless.
+    """
+    parsed = _read_login_token(token)
+    if not parsed:
+        return None
+    team_id, user_id, nonce = parsed
+    try:
+        if not db.claim_login_token(nonce):
+            logger.warning("Dashboard login token for %s was already used", team_id)
+            return None
+    except Exception as exc:
+        logger.error("Could not claim dashboard login token: %s", exc)
+        return None
+    return team_id, user_id
 
 
 def _schedule_workspace(team_id: str, bot_token: str) -> None:

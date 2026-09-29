@@ -65,11 +65,9 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
     import src.modules.celebrations.db as cdb  # noqa: PLC0415
 
     team_id = ctx["team_id"]
-    try:
-        settings = cdb.get_settings(team_id)
-    except Exception as exc:
-        logger.warning("celebrations could not plan jobs for %s: %s", team_id, exc)
-        return []
+    # Raises on a failed read: module job sync then keeps the live job, where
+    # an empty plan would delete it.
+    settings = cdb.get_settings(team_id)
     if not cdb.is_ready(settings):
         return []
     at = _parse_time(settings.get("post_time") or cdb.DEFAULT_POST_TIME)
