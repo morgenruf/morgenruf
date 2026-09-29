@@ -1,4 +1,7 @@
-FROM node:26-alpine AS build
+# The build output is static files, the same on every architecture, so build
+# once on the runner's own platform. Running vite under QEMU for arm64 died
+# with SIGILL (exit 132); only the nginx stage below needs to be per-arch.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 WORKDIR /workspace
 
 # Node 25 dropped the bundled corepack, so install it rather than relying on the
