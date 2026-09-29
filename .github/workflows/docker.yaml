@@ -90,12 +90,19 @@ jobs:
           sbom: true
       - name: Scan the staged digest
         if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.image }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-${{ matrix.cache }}.sarif
           severity: CRITICAL,HIGH
+          # Without this the SARIF carries every severity and the filter above
+          # only applies to the table output.
+          limit-severities-for-sarif: true
+          # A CVE with no fixed package yet cannot be acted on; it reappears
+          # once Debian ships a fix.
+          ignore-unfixed: true
+          version: v0.74.0
           exit-code: '0'
       - name: Upload scan results
         if: github.event_name != 'pull_request'
