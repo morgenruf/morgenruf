@@ -194,6 +194,8 @@ zoom:
 #
 # logLevel: set to DEBUG for verbose logs. It never turns on Flask's debug
 #   server, and Slack SDK request logs (which carry tokens) stay at INFO.
+# logFormat: "json" writes one JSON object per line (app and gunicorn logs),
+#   which a log shipper can parse. Set "text" for the plain format.
 # opsEmail: where the bot emails when a scheduled job fails. Blank disables it.
 # alertWebhook: a Slack incoming-webhook URL in the operator's own workspace.
 #   Posts a line when a workspace installs the app and when one removes it.
@@ -202,6 +204,7 @@ zoom:
 # ---------------------------------------------------------------------------
 ops:
   logLevel: ""
+  logFormat: "json"
   email: ""
   alertWebhook: ""
 
