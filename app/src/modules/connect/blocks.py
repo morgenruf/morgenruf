@@ -207,6 +207,25 @@ def intro_message(
                     "value": utc,
                 }
             blocks.append(block)
+        if match_id:
+            # The slots above are a guess from working hours, and a guess can
+            # miss. Without this, the only way to propose something else was
+            # typing it into the DM, where the bot cannot see it and so cannot
+            # settle it. Match id 0 is an introduction with no row behind it,
+            # which has nothing to record a suggestion against.
+            blocks.append(
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Suggest another time"},
+                            "action_id": f"connect:suggest_time:{match_id}",
+                            "value": str(match_id),
+                        }
+                    ],
+                }
+            )
         blocks.append(
             {
                 "type": "context",
@@ -346,6 +365,76 @@ def agreed_message(member_ids: list[str], label: str, add_url: str = "", meeting
             ],
         }
     )
+    return text, blocks
+
+
+SUGGEST_TIME_CALLBACK = "connect_suggest_time"
+SUGGEST_TIME_BLOCK = "suggest_when"
+SUGGEST_TIME_ACTION = "suggest_when_value"
+
+
+def suggest_time_modal(match_id: int, channel_id: str, initial_ts: int) -> dict:
+    """A single date and time picker for proposing a slot of your own.
+
+    Slack renders the picker in the viewer's own timezone and hands back a unix
+    timestamp, so nobody has to do timezone arithmetic in their head and the
+    bot never has to parse a typed time.
+    """
+    import json  # noqa: PLC0415
+
+    return {
+        "type": "modal",
+        "callback_id": SUGGEST_TIME_CALLBACK,
+        # The submission arrives without the message it came from, so the
+        # match and the group DM travel with the view.
+        "private_metadata": json.dumps({"match_id": match_id, "channel_id": channel_id}),
+        "title": {"type": "plain_text", "text": "Suggest a time"},
+        "submit": {"type": "plain_text", "text": "Suggest"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": SUGGEST_TIME_BLOCK,
+                "label": {"type": "plain_text", "text": "When"},
+                "hint": {
+                    "type": "plain_text",
+                    "text": "This is your own time. Everyone else sees it on their own clock.",
+                },
+                "element": {
+                    "type": "datetimepicker",
+                    "action_id": SUGGEST_TIME_ACTION,
+                    "initial_date_time": int(initial_ts),
+                },
+            }
+        ],
+    }
+
+
+def suggested_time_message(user_id: str, label: str, match_id: int, slot_iso: str, waiting: list[str]) -> tuple:
+    """Someone proposed a time of their own; put it in front of the others.
+
+    The button uses the same action id as the intro's slots, so accepting a
+    suggested time goes through exactly the same settle path, and the match
+    cannot end up agreed in two different ways.
+    """
+    text = f"<@{user_id}> suggested {label}."
+    ask = (
+        f"{_mentions(waiting)}, tap *Works for me* if it suits you and it is settled."
+        if len(waiting) == 1
+        else f"{_mentions(waiting)}, tap *Works for me* if it suits you. It is settled once you all have."
+    )
+    blocks = [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"<@{user_id}> suggested *{label}*\n{ask}"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Works for me"},
+                "action_id": f"connect:accept_slot:{match_id}:{slot_iso}",
+                "value": slot_iso,
+            },
+        }
+    ]
     return text, blocks
 
 

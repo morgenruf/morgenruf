@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,17 @@ def register_handlers(app) -> None:
         ack()
         _accept_slot(body, client)
 
+    @app.action(re.compile(r"^connect:suggest_time:"))
+    def handle_suggest_time(ack, body, client):  # noqa: ANN001
+        ack()
+        _open_suggest_time(body, client)
+
+    from src.modules.connect.blocks import SUGGEST_TIME_CALLBACK  # noqa: PLC0415
+
+    @app.view(SUGGEST_TIME_CALLBACK)
+    def handle_suggest_time_submit(ack, body, view, client):  # noqa: ANN001
+        _submit_suggest_time(ack, body, view, client)
+
     @app.action("connect:zoom_link")
     def handle_zoom_link(ack):  # noqa: ANN001
         """A url button; Slack still posts an interaction that has to be acked."""
@@ -199,7 +210,6 @@ def _accept_slot(body, client) -> None:
     taps it and the other person may have agreed something already.
     """
     import src.modules.connect.db as cdb  # noqa: PLC0415
-    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
 
     action = body["actions"][0]
     user_id = body["user"]["id"]
@@ -235,54 +245,184 @@ def _accept_slot(body, client) -> None:
             _quiet(client, channel_id, user_id, "You have already settled on a time for this one.")
             return
 
-        cdb.accept_slot(match_id, match["team_id"], user_id, slot)
-        votes = cdb.slot_votes(match_id)
-        accepted_by = {u for s, us in votes.items() if _same_slot(s, slot) for u in us}
-
-        if not accepted_by.issuperset(set(members)):
-            waiting = [m for m in members if m not in accepted_by]
-            # Posted to the DM, not ephemerally. An ephemeral reply would tell
-            # the person who tapped something they already know and leave the
-            # other one unaware that a time is now on the table, which is the
-            # only thing that makes them tap. The whole mechanism depends on
-            # this being visible to both.
-            label, _ = _slot_label_and_link(match, members, slot)
-            client.chat_postMessage(
-                channel=channel_id,
-                text=f"{label} works for <@{user_id}>.",
-                blocks=[
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"*{label}* works for <@{user_id}>.\n"
-                            + ", ".join(f"<@{m}>" for m in waiting)
-                            + (" — tap it too and it is settled." if len(waiting) == 1 else " — tap it to settle it."),
-                        },
-                    }
-                ],
-            )
-            return
-
-        # Everyone is in. The conditional update is what stops two simultaneous
-        # final taps producing two confirmations.
-        if not cdb.agree_slot(match_id, slot):
-            return
-
-        label, add_url = _slot_label_and_link(match, members, slot)
-        # A real meeting at the time they agreed, if anyone in the match has
-        # linked Zoom. Donut hands you a room to join now; this schedules it
-        # for the slot both people accepted, which is what they will actually
-        # turn up to.
-        # Honour what the programme chose rather than trying everything: a
-        # workspace that picked one shared room does not want a Zoom meeting
-        # made on somebody's account, and one that picked Zoom does not want
-        # a stale room link offered instead.
-        room = _room_for(match, members, slot)
-        text, blocks = cblocks.agreed_message(members, label, add_url, room)
-        client.chat_postMessage(channel=channel_id, text=text, blocks=blocks)
+        _record_acceptance(client, match_id, match, members, user_id, channel_id, slot)
     except Exception:
         logger.exception("connect: could not record slot acceptance on match %s", match_id)
+
+
+def _record_acceptance(
+    client, match_id: int, match: dict, members: list, user_id: str, channel_id: str, slot, suggested: bool = False
+) -> None:
+    """Record that this person can make this slot, then either say who is
+    still to tap or settle the match.
+
+    Shared by the "Works for me" button and by "Suggest another time", so a
+    suggested slot settles the same way an offered one does: the same
+    conditional agree_slot, the same confirmation, the same room. If the others
+    had already accepted this exact time, the suggestion settles it on the
+    spot rather than asking them to tap again.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+
+    cdb.accept_slot(match_id, match["team_id"], user_id, slot)
+    votes = cdb.slot_votes(match_id)
+    accepted_by = {u for s, us in votes.items() if _same_slot(s, slot) for u in us}
+
+    if not accepted_by.issuperset(set(members)):
+        waiting = [m for m in members if m not in accepted_by]
+        # Posted to the DM, not ephemerally. An ephemeral reply would tell
+        # the person who tapped something they already know and leave the
+        # other one unaware that a time is now on the table, which is the
+        # only thing that makes them tap. The whole mechanism depends on
+        # this being visible to both.
+        label, _ = _slot_label_and_link(match, members, slot)
+        if suggested:
+            # A new time needs its own button: it is not one of the intro's
+            # slots, so there is nothing else for the others to tap.
+            slot_iso = slot.astimezone(timezone.utc).isoformat()
+            text, blocks = cblocks.suggested_time_message(user_id, label, match_id, slot_iso, waiting)
+            client.chat_postMessage(channel=channel_id, text=text, blocks=blocks)
+            return
+        client.chat_postMessage(
+            channel=channel_id,
+            text=f"{label} works for <@{user_id}>.",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{label}* works for <@{user_id}>.\n"
+                        + ", ".join(f"<@{m}>" for m in waiting)
+                        + (" — tap it too and it is settled." if len(waiting) == 1 else " — tap it to settle it."),
+                    },
+                }
+            ],
+        )
+        return
+
+    # Everyone is in. The conditional update is what stops two simultaneous
+    # final taps producing two confirmations.
+    if not cdb.agree_slot(match_id, slot):
+        return
+
+    label, add_url = _slot_label_and_link(match, members, slot)
+    # A real meeting at the time they agreed, if anyone in the match has
+    # linked Zoom. Donut hands you a room to join now; this schedules it
+    # for the slot both people accepted, which is what they will actually
+    # turn up to.
+    # Honour what the programme chose rather than trying everything: a
+    # workspace that picked one shared room does not want a Zoom meeting
+    # made on somebody's account, and one that picked Zoom does not want
+    # a stale room link offered instead.
+    room = _room_for(match, members, slot)
+    text, blocks = cblocks.agreed_message(members, label, add_url, room)
+    client.chat_postMessage(channel=channel_id, text=text, blocks=blocks)
+
+
+# Far enough for "next Tuesday" across a fortnightly round, near enough that a
+# typo in the year cannot park a match on a date nobody will remember.
+SUGGEST_MAX_DAYS = 14
+
+
+def _open_suggest_time(body, client) -> None:
+    """Open the picker for proposing a time the intro did not offer.
+
+    The same checks as a "Works for me" tap, made before the modal opens so
+    nobody fills it in only to be told the match was settled yesterday.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+
+    action = body["actions"][0]
+    user_id = body["user"]["id"]
+    channel_id = body["channel"]["id"]
+    try:
+        match_id = int(action["action_id"].split(":", 2)[2])
+    except (KeyError, ValueError, IndexError):
+        logger.warning("connect: unparseable suggest_time action %s", action.get("action_id"))
+        return
+
+    try:
+        match = cdb.match_by_id(match_id)
+        if not match or user_id not in list(match.get("member_ids") or []):
+            return  # not their match to schedule
+        if match.get("agreed_slot_utc"):
+            _quiet(client, channel_id, user_id, "You have already settled on a time for this one.")
+            return
+        # Tomorrow at the top of the hour: a plausible starting point that is
+        # always valid, so submitting without touching it cannot fail.
+        start = (datetime.now(timezone.utc) + timedelta(days=1)).replace(minute=0, second=0, microsecond=0)
+        client.views_open(
+            trigger_id=body["trigger_id"],
+            view=cblocks.suggest_time_modal(match_id, channel_id, int(start.timestamp())),
+        )
+    except Exception:
+        logger.exception("connect: could not open the suggest time modal for match %s", match_id)
+
+
+def _submit_suggest_time(ack, body, view, client) -> None:
+    """Validate the suggested time, record it as the proposer's own acceptance,
+    and put it to the others.
+
+    Validation happens before ack because errors can only be shown on the
+    modal while it is still open. The proposer's vote is recorded for them:
+    suggesting a time and then having to tap "Works for me" on it would be
+    asking the same question twice.
+    """
+    import json  # noqa: PLC0415
+
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+    from src.modules.connect import blocks as cblocks  # noqa: PLC0415
+
+    user_id = body["user"]["id"]
+    block = cblocks.SUGGEST_TIME_BLOCK
+    try:
+        meta = json.loads((view or {}).get("private_metadata") or "{}")
+        match_id = int(meta["match_id"])
+        channel_id = str(meta["channel_id"])
+    except (KeyError, ValueError, TypeError):
+        logger.warning("connect: suggest time submission without usable metadata")
+        ack()
+        return
+
+    values = (view or {}).get("state", {}).get("values", {})
+    raw = ((values.get(block) or {}).get(cblocks.SUGGEST_TIME_ACTION) or {}).get("selected_date_time")
+    if not raw:
+        ack(response_action="errors", errors={block: "Pick a date and a time."})
+        return
+    # The picker works in minutes already; rounding guards against a client
+    # that sends seconds, so the same time suggested twice is the same slot.
+    slot = datetime.fromtimestamp(round(int(raw) / 60) * 60, tz=timezone.utc)
+    now = datetime.now(timezone.utc)
+    if slot <= now:
+        ack(response_action="errors", errors={block: "That time has already passed. Pick one in the future."})
+        return
+    if slot > now + timedelta(days=SUGGEST_MAX_DAYS):
+        ack(response_action="errors", errors={block: "Pick a time within the next two weeks."})
+        return
+
+    try:
+        match = cdb.match_by_id(match_id)
+    except Exception:
+        logger.exception("connect: could not read match %s for a suggested time", match_id)
+        ack(response_action="errors", errors={block: "That did not save. Please try again."})
+        return
+    if not match or user_id not in list(match.get("member_ids") or []):
+        ack()
+        return
+    if match.get("agreed_slot_utc"):
+        # Somebody settled it while the modal was open. Saying so on the modal
+        # beats posting a proposal for a match that no longer needs one.
+        ack(response_action="errors", errors={block: "A time has already been settled for this one."})
+        return
+
+    ack()
+    members = list(match.get("member_ids") or [])
+    try:
+        _record_acceptance(client, match_id, match, members, user_id, channel_id, slot, suggested=True)
+    except Exception:
+        logger.exception("connect: could not record a suggested time on match %s", match_id)
 
 
 def _same_slot(stored, slot) -> bool:
