@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-09-29
+
+### Fixed
+- **Standups with an old timezone name now run.** Chrome reports some zones by
+  their old names (Asia/Calcutta for India), and the server image could not
+  resolve them, so a schedule saved that way never fired. The server now ships
+  its own tz database, timezones are saved under their current names, and
+  migration 057 rewrites old names already stored.
+- **One broken schedule no longer blocks the others.** Startup and the two
+  minute schedule sync registered every schedule in one loop, so a row that
+  failed stopped every row after it. Each schedule and workspace now registers
+  on its own, and a failing one is logged and retried.
+
 ## [1.9.2] - 2026-09-29
 
 ### Fixed
