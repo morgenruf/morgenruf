@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from apscheduler.triggers.cron import CronTrigger
 
 from src.core.scheduler import JobSpec
+from src.core.timezones import canonical_tz
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ def _parse_time(value: str) -> tuple[int, int] | None:
 
 def _zone(name: str | None) -> ZoneInfo | None:
     try:
-        return ZoneInfo(name) if name else None
+        return ZoneInfo(canonical_tz(name)) if name else None
     except (ZoneInfoNotFoundError, ValueError):
         return None
 
@@ -72,7 +73,7 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
     if not cdb.is_ready(settings):
         return []
     at = _parse_time(settings.get("post_time") or cdb.DEFAULT_POST_TIME)
-    tz = settings.get("timezone")
+    tz = canonical_tz(settings.get("timezone"))
     if at is None or _zone(tz) is None:
         logger.warning("celebrations: unusable post time or timezone for %s", team_id)
         return []
