@@ -5,6 +5,24 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-09-29
+
+### Fixed
+- **Scheduled jobs are no longer dropped when two are due at once.** A job
+  that started more than a second late was skipped as missed, and claiming
+  each firing in the database made the second of two simultaneous jobs start
+  late. A standup report was lost this way. Jobs now run if they start within
+  five minutes.
+- **Coffee chat rounds use a current Slack token.** Round and Kudos jobs kept
+  the bot token from when the server started, and tokens rotate every 12
+  hours, so a round a week later failed on an expired token. The token is now
+  read when the job runs.
+- **Changing a coffee chat programme's day or time takes effect right away.**
+  The old schedule kept firing until the next restart.
+- **A missed coffee chat round starts later the same day.** If the weekly
+  firing is missed (server down, token error), a five minute check starts
+  the round once its time has passed, on the programme's own weekday only.
+
 ## [1.9.1] - 2026-09-28
 
 ### Changed
