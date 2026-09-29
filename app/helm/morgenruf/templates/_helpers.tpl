@@ -28,3 +28,17 @@ Selector labels
 app.kubernetes.io/name: {{ include "morgenruf.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Image reference. A digest, when set, wins over the tag so a release can be
+pinned to the exact scanned and signed image. Otherwise the tag is used, or
+the chart's appVersion when the tag is empty.
+Call with (dict "image" .Values.image "appVersion" .Chart.AppVersion).
+*/}}
+{{- define "morgenruf.image" -}}
+{{- if .image.digest -}}
+{{ .image.repository }}@{{ .image.digest }}
+{{- else -}}
+{{ .image.repository }}:{{ .image.tag | default .appVersion }}
+{{- end -}}
+{{- end }}

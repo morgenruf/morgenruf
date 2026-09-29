@@ -1,0 +1,17 @@
+{{- /*
+A PDB with minAvailable 1 over a single replica blocks every node drain, so
+it is only rendered when enabled and replicaCount is above 1.
+*/ -}}
+{{- if and .Values.pdb.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "morgenruf.fullname" . }}
+  labels:
+    {{- include "morgenruf.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "morgenruf.selectorLabels" . | nindent 6 }}
+{{- end }}
