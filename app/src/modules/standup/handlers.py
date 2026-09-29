@@ -25,9 +25,14 @@ _daily_thread_cache: dict[str, str] = {}
 
 
 def _clean_thread_cache() -> None:
-    """Remove stale entries from the thread cache (keep only today)."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    stale = [k for k in _daily_thread_cache if not k.endswith(today)]
+    """Remove stale entries from the thread cache (keep only today).
+
+    Keys are "team:channel:YYYY-MM-DD:schedule" and the date is the schedule's
+    local day, which can be a day either side of UTC, so all three are kept.
+    """
+    utc_today = datetime.now(timezone.utc).date()
+    keep = {f":{(utc_today + timedelta(days=d)).isoformat()}:" for d in (-1, 0, 1)}
+    stale = [k for k in _daily_thread_cache if not any(day in k for day in keep)]
     for k in stale:
         del _daily_thread_cache[k]
 
@@ -208,6 +213,24 @@ def _format_standup(
     return text
 
 
+def _record_skip(team_id: str, user_id: str) -> None:
+    """Record a skip under the local day the scheduler will check it on.
+
+    Called before the session is cleared: an open session names the schedule
+    that asked, and that schedule's timezone decides the day. Without one the
+    member's own schedule is looked up.
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+        from src.core.scheduler import standup_local_date  # noqa: PLC0415
+
+        session = state_store.get(f"{team_id}:{user_id}")
+        schedule_id = getattr(session, "schedule_id", None) if session else None
+        db.skip_today(team_id, user_id, for_date=standup_local_date(team_id, schedule_id, user_id))
+    except Exception as e:
+        logger.warning("Could not record skip for %s/%s: %s", team_id, user_id, e)
+
+
 def _persist_standup(
     team_id: str,
     user_id: str,
@@ -225,6 +248,7 @@ def _persist_standup(
     try:
         import src.core.db as db  # noqa: PLC0415
         from src.core.analytics import capture  # noqa: PLC0415
+        from src.core.scheduler import standup_local_date  # noqa: PLC0415
 
         standup_id = db.save_standup(
             team_id=team_id,
@@ -235,6 +259,9 @@ def _persist_standup(
             mood=mood,
             questions=questions,
             schedule_id=schedule_id,
+            # Filed under the schedule's local day, which is the day the
+            # report and the nudge look answers up by.
+            standup_date=standup_local_date(team_id, schedule_id, user_id),
         )
         capture("standup_posted", team_id, scheduled=schedule_id is not None, with_mood=mood is not None)
         return standup_id
@@ -480,9 +507,13 @@ def _complete_standup(user_id: str, session, client) -> None:
 
             # Always post individual standups in a daily thread, scoped by
             # schedule so Morning and Evening standups don't share a thread.
-            now_utc = datetime.now(timezone.utc)
-            today_str = now_utc.strftime("%Y-%m-%d")
+            # Keyed on the schedule's local day so the scheduled report, which
+            # uses the same day, finds this thread and replies under it.
+            from src.core.scheduler import standup_local_date  # noqa: PLC0415
+
             schedule_id = int(getattr(session, "schedule_id", 0) or sched_config.get("id") or 0)
+            local_day = standup_local_date(session.team_id, schedule_id or None, user_id)
+            today_str = local_day.isoformat()
             thread_key = f"{session.team_id}:{channel}:{today_str}:{schedule_id}"
             parent_ts = _daily_thread_cache.get(thread_key)
 
@@ -496,7 +527,7 @@ def _complete_standup(user_id: str, session, client) -> None:
             if not parent_ts:
                 # Create parent message for today's thread — polished like competitors
                 standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
-                display_date = now_utc.strftime("%a, %b %d.")
+                display_date = local_day.strftime("%a, %b %d.")
                 parent = client.chat_postMessage(
                     channel=channel,
                     text=f"✨ {standup_name} Completed - {display_date} ✨",
@@ -881,8 +912,11 @@ def register_handlers(app: App) -> None:
             on_vacation = db.is_on_vacation(team_id, user_id)
             streak = db.get_standup_streak(team_id, user_id)
 
-            # Get today's submissions for this user
-            today_standups = db.get_today_standups(team_id)
+            # Get today's submissions for this user, on the local day their
+            # standup files answers under.
+            from src.core.scheduler import standup_local_date  # noqa: PLC0415
+
+            today_standups = db.get_today_standups(team_id, for_date=standup_local_date(team_id, user_id=user_id))
             user_today = [s for s in today_standups if s.get("user_id") == user_id]
             user_responded_today = len(user_today) > 0
             user_last_response = user_today[-1] if user_today else None
@@ -1011,13 +1045,8 @@ def register_handlers(app: App) -> None:
         ack()
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.skip_today(team_id, user_id)
-        except Exception as e:
-            logger.warning("skip_standup button error: %s", e)
         cache_key = f"{team_id}:{user_id}"
+        _record_skip(team_id, user_id)
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 
@@ -1477,12 +1506,7 @@ def register_handlers(app: App) -> None:
         ack()
         user_id: str = body["user_id"]
         team_id: str = body["team_id"]
-        try:
-            import src.core.db as db  # noqa: PLC0415
-
-            db.skip_today(team_id, user_id)
-        except Exception as e:
-            logger.warning("Unexpected error in handle_skip_action recording skip: %s", e)
+        _record_skip(team_id, user_id)
         cache_key = f"{team_id}:{user_id}"
         state_store.clear(cache_key)
         client.chat_postMessage(channel=user_id, text="✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
@@ -2046,12 +2070,7 @@ def _dm_standup(ctx, in_session: bool) -> None:
 
 
 def _dm_skip(ctx) -> None:
-    try:
-        import src.core.db as db  # noqa: PLC0415
-
-        db.skip_today(ctx.team_id, ctx.user_id)
-    except Exception as e:
-        logger.warning("Unexpected error in DM skip recording skip: %s", e)
+    _record_skip(ctx.team_id, ctx.user_id)
     state_store.clear(f"{ctx.team_id}:{ctx.user_id}")
     _reply(ctx, "✅ Got it! You've skipped today's standup. See you tomorrow! 👋")
 

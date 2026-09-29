@@ -30,7 +30,7 @@ def test_people_on_leave_are_not_nudged():
 
 
 def test_someone_who_skipped_today_is_not_nudged():
-    assert "is_skipped_today(team_id, uid)" in _source()
+    assert "is_skipped_today(team_id, uid, for_date=local_day)" in _source()
 
 
 def test_someone_who_already_answered_is_not_nudged():
