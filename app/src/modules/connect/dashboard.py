@@ -21,6 +21,7 @@ def register_routes(flask_app) -> None:
     from src.core.api import api_errors, register_api_blueprint
     from src.core.dashboard import _admin_required, _login_required
     from src.core.roster import eligible_members
+    from src.core.timezones import canonical_tz
     from src.modules.connect import schemas
     from src.modules.connect.rounds import match_status
 
@@ -105,7 +106,7 @@ def register_routes(flask_app) -> None:
             day_of_week=int(data.get("day_of_week", 1)),
             hour=int(data.get("hour", 10)),
             minute=int(data.get("minute", 0)),
-            timezone=(data.get("timezone") or "UTC").strip(),
+            timezone=canonical_tz(data.get("timezone") or "UTC"),
         )
         extra = {
             key: data[key]
@@ -159,7 +160,7 @@ def register_routes(flask_app) -> None:
                     return jsonify({"error": f"{key} must be between {lo} and {hi}"}), 400
                 fields[key] = value
         if "timezone" in data:
-            fields["timezone"] = (data.get("timezone") or "UTC").strip()
+            fields["timezone"] = canonical_tz(data.get("timezone") or "UTC")
         if "match_working_hours" in data:
             fields["match_working_hours"] = bool(data["match_working_hours"])
         if "meeting_minutes" in data:

@@ -17,6 +17,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
 
 from src.core.scheduler import JobSpec
+from src.core.timezones import canonical_tz
 from src.modules.connect import blocks as cblocks
 from src.modules.connect import slack_api as api
 from src.modules.connect.matcher import match
@@ -76,15 +77,22 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
         return jobs
 
     for p in programs:
+        # One programme with an unusable timezone must not drop the other
+        # programmes' rounds or this workspace's follow-up sweep.
+        try:
+            trigger = CronTrigger(
+                day_of_week=int(p["day_of_week"]),
+                hour=int(p["hour"]),
+                minute=int(p["minute"]),
+                timezone=canonical_tz(p["timezone"] or "UTC"),
+            )
+        except Exception:
+            logger.exception("connect could not build a trigger for program %s (tz %r)", p["id"], p.get("timezone"))
+            continue
         jobs.append(
             JobSpec(
                 key=f"round:{p['id']}",
-                trigger=CronTrigger(
-                    day_of_week=int(p["day_of_week"]),
-                    hour=int(p["hour"]),
-                    minute=int(p["minute"]),
-                    timezone=p["timezone"] or "UTC",
-                ),
+                trigger=trigger,
                 func=run_round,
                 # No token: bot tokens rotate every 12 hours and reconciliation
                 # used to keep a job's args for as long as the job lived, so a

@@ -51,6 +51,7 @@ def register_routes(flask_app) -> None:
     from src.core.api import api_errors, register_api_blueprint
     from src.core.dashboard import _admin_required, _login_required
     from src.core.schedule_validation import schedule_time_error, schedule_timezone_error
+    from src.core.timezones import canonical_tz
     from src.core.workspace_calendar import (
         CalendarError,
         clean_holiday_name,
@@ -109,7 +110,7 @@ def register_routes(flask_app) -> None:
     @bp.response(200, schemas.Settings)
     def update_settings(data):
         team_id = session["team_id"]
-        timezone_name = (data.get("timezone") or "").strip()
+        timezone_name = canonical_tz(data.get("timezone") or "")
         problem = schedule_timezone_error(timezone_name)
         if problem:
             return _error("timezone", problem)

@@ -12,6 +12,8 @@ from threading import Lock
 from typing import Any, Generator
 from zoneinfo import ZoneInfo
 
+from src.core.timezones import canonical_tz
+
 logger = logging.getLogger(__name__)
 
 _pool = None
@@ -211,6 +213,8 @@ def upsert_workspace_config(team_id: str, **kwargs: Any) -> None:
         "manager_digest_enabled",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if "schedule_tz" in fields:
+        fields["schedule_tz"] = canonical_tz(fields["schedule_tz"])
     for col in fields:
         if not re.match(r"^[a-z_]+$", col):
             raise ValueError(f"Invalid column name: {col}")
@@ -438,7 +442,7 @@ def upsert_member(
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id, real_name, email, tz, avatar_url, display_name))
+            cur.execute(sql, (team_id, user_id, real_name, email, canonical_tz(tz), avatar_url, display_name))
 
 
 # ---------------------------------------------------------------------------
@@ -1227,7 +1231,7 @@ def _resolve_zone(name: object):
     """Return a tzinfo for an IANA timezone name, falling back to UTC."""
     if isinstance(name, str) and name.strip():
         try:
-            return ZoneInfo(name.strip())
+            return ZoneInfo(canonical_tz(name))
         except Exception:  # noqa: BLE001 - unknown name or missing tz database
             logger.debug("Unknown schedule timezone %r, treating it as UTC", name)
     return timezone.utc
@@ -1734,6 +1738,8 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
         fields["questions"] = json.dumps(fields["questions"])
+    if "schedule_tz" in fields:
+        fields["schedule_tz"] = canonical_tz(fields["schedule_tz"])
     cols = ", ".join(fields.keys())
     placeholders = ", ".join(["%s"] * len(fields))
     sql = f"""
@@ -1828,7 +1834,7 @@ def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
         tz_name = sched.get("schedule_tz") or "UTC"
         time_str = sched.get("schedule_time") or ""
         try:
-            tz = pytz.timezone(tz_name)
+            tz = pytz.timezone(canonical_tz(tz_name))
             now_local = datetime.now(tz)
             hh, mm = time_str.split(":")
             sched_today = now_local.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
@@ -1874,7 +1880,7 @@ def get_standup_schedule_for_channel(team_id: str, channel_id: str) -> dict | No
         tz_name = sched.get("schedule_tz") or "UTC"
         time_str = sched.get("schedule_time") or ""
         try:
-            tz = pytz.timezone(tz_name)
+            tz = pytz.timezone(canonical_tz(tz_name))
             now_local = datetime.now(tz)
             hh, mm = time_str.split(":")
             sched_today = now_local.replace(hour=int(hh), minute=int(mm), second=0, microsecond=0)
@@ -1919,6 +1925,8 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         return get_standup_schedule(team_id, schedule_id)
     if "questions" in fields and isinstance(fields["questions"], list):
         fields["questions"] = json.dumps(fields["questions"])
+    if "schedule_tz" in fields:
+        fields["schedule_tz"] = canonical_tz(fields["schedule_tz"])
     set_clause = ", ".join(f"{k} = %s" for k in fields) + ", updated_at = NOW()"
     sql = f"UPDATE standup_schedules SET {set_clause} WHERE id = %s AND team_id = %s RETURNING *"
     with db_conn() as conn:

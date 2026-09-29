@@ -25,6 +25,7 @@ from src.core.slack_users import (
     member_profile,
 )
 from src.core.state import state_store
+from src.core.timezones import canonical_tz
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
@@ -943,7 +944,7 @@ def register_workspace_job(
 
     try:
         hour, minute = schedule_time.split(":")
-        tz = pytz.timezone(schedule_tz)
+        tz = pytz.timezone(canonical_tz(schedule_tz))
     except Exception as exc:
         logger.error("Invalid schedule config for %s: %s", team_id, exc)
         return
@@ -1078,7 +1079,7 @@ def register_workspace_digests_only(
     schedule_days: str = config.get("schedule_days", "mon,tue,wed,thu,fri")
     try:
         hour, minute = schedule_time.split(":")
-        tz = pytz.timezone(schedule_tz)
+        tz = pytz.timezone(canonical_tz(schedule_tz))
     except Exception as exc:
         logger.error("Invalid schedule config for %s: %s", team_id, exc)
         return
@@ -1141,7 +1142,7 @@ def next_run_at(schedule: dict, now: Optional[datetime] = None) -> Optional[date
         return None
     try:
         hour, minute = (schedule.get("schedule_time") or "09:00").split(":")
-        tz = pytz.timezone(schedule.get("schedule_tz") or "UTC")
+        tz = pytz.timezone(canonical_tz(schedule.get("schedule_tz") or "UTC"))
         trigger = CronTrigger(
             hour=int(hour),
             minute=int(minute),
@@ -1199,7 +1200,7 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
         return
 
     hour, minute = schedule_time.split(":")
-    tz = pytz.timezone(schedule_tz)
+    tz = pytz.timezone(canonical_tz(schedule_tz))
 
     trigger = CronTrigger(hour=int(hour), minute=int(minute), day_of_week=schedule_days, timezone=tz)
     job_id = f"schedule_{team_id}_{schedule_id}"
@@ -1361,6 +1362,55 @@ def _workspace_job_ids(team_id: str, digests_too: bool = False) -> tuple[str, ..
     return ids
 
 
+# Recorded for a schedule or workspace whose registration raised, so the next
+# DB sync sees a changed fingerprint and tries it again.
+_UNREGISTERED_FP = ""
+
+
+def _register_schedule_safely(scheduler: BackgroundScheduler, sched: dict) -> bool:
+    """Register one schedule's jobs, logging and returning False if that raises.
+
+    Startup and the DB sync both walk every schedule in one loop, so a single
+    row that cannot be turned into a trigger (a timezone the tz database does
+    not know, for one) used to abort the loop and leave every later schedule
+    without jobs.
+    """
+    try:
+        register_schedule_job(scheduler, sched)
+    except Exception:
+        logger.exception(
+            "Could not register schedule %s for %s (tz %r); skipping it",
+            sched.get("id"),
+            sched.get("team_id"),
+            sched.get("schedule_tz"),
+        )
+        return False
+    return True
+
+
+def _register_workspace_safely(
+    scheduler: BackgroundScheduler,
+    team_id: str,
+    bot_token: str,
+    config: dict,
+    digests_only: bool,
+) -> bool:
+    """Register one workspace's jobs, logging and returning False if that raises."""
+    try:
+        if digests_only:
+            register_workspace_digests_only(scheduler, team_id, bot_token, config)
+        else:
+            register_workspace_job(scheduler, team_id, bot_token, config)
+    except Exception:
+        logger.exception(
+            "Could not register workspace jobs for %s (tz %r); skipping it",
+            team_id,
+            config.get("schedule_tz"),
+        )
+        return False
+    return True
+
+
 def _remove_jobs(scheduler: BackgroundScheduler, job_ids: tuple[str, ...]) -> None:
     for job_id in job_ids:
         try:
@@ -1446,7 +1496,9 @@ def _sync_jobs_from_db() -> None:
             # Drop the whole job group first so sub-jobs that are no longer
             # configured (e.g. a reminder switched off) don't linger.
             _remove_jobs(_scheduler, _schedule_job_ids(*key))
-            register_schedule_job(_scheduler, sched)
+            if not _register_schedule_safely(_scheduler, sched):
+                # Retried on the next pass instead of being recorded as done.
+                desired[key] = _UNREGISTERED_FP
     for key in set(_synced_schedule_fps) - set(desired):
         _remove_jobs(_scheduler, _schedule_job_ids(*key))
         logger.info("Schedule sync: removed jobs for deleted/inactive schedule %s/%s", key[0], key[1])
@@ -1473,10 +1525,8 @@ def _sync_jobs_from_db() -> None:
         if _synced_workspace_fps.get(team_id) != fp:
             bot_token = inst.get("bot_token") or ""
             _remove_jobs(_scheduler, _workspace_job_ids(team_id))
-            if digests_only:
-                register_workspace_digests_only(_scheduler, team_id, bot_token, config)
-            else:
-                register_workspace_job(_scheduler, team_id, bot_token, config)
+            if not _register_workspace_safely(_scheduler, team_id, bot_token, config, digests_only):
+                desired_ws[team_id] = _UNREGISTERED_FP
     for team_id in set(_synced_workspace_fps) - set(desired_ws):
         _remove_jobs(_scheduler, _workspace_job_ids(team_id, digests_too=True))
         logger.info("Schedule sync: removed jobs for uninstalled/inactive workspace %s", team_id)
@@ -1728,21 +1778,22 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         import src.core.db as db  # noqa: PLC0415
 
         all_schedules = db.get_all_active_schedules()
-        for sched in all_schedules:
-            teams_with_schedules.add(sched["team_id"])
-            register_schedule_job(scheduler, sched)
-            _synced_schedule_fps[(sched["team_id"], sched["id"])] = _schedule_fingerprint(sched)
     except Exception as exc:
         logger.warning("Could not load standup_schedules: %s", exc)
+        all_schedules = []
+
+    for sched in all_schedules:
+        teams_with_schedules.add(sched["team_id"])
+        # One unusable row must not stop the rows after it from registering.
+        # Its fingerprint is left out so the next DB sync tries it again.
+        if _register_schedule_safely(scheduler, sched):
+            _synced_schedule_fps[(sched["team_id"], sched["id"])] = _schedule_fingerprint(sched)
 
     for team_id, bot_token, config in installations:
-        if team_id in teams_with_schedules:
-            # Only register digest/manager jobs — standup + report handled by schedules
-            register_workspace_digests_only(scheduler, team_id, bot_token, config)
-            _synced_workspace_fps[team_id] = _workspace_fingerprint(config, True)
-        else:
-            register_workspace_job(scheduler, team_id, bot_token, config)
-            _synced_workspace_fps[team_id] = _workspace_fingerprint(config, False)
+        digests_only = team_id in teams_with_schedules
+        # Only digest/manager jobs when schedules own the standup and report.
+        if _register_workspace_safely(scheduler, team_id, bot_token, config, digests_only):
+            _synced_workspace_fps[team_id] = _workspace_fingerprint(config, digests_only)
 
     # Background bot-token maintenance: refresh any token nearing expiry every 30 minutes.
     # Runs once shortly after startup so freshly-booted pods don't wait half an hour.
