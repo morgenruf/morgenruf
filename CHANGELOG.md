@@ -5,6 +5,41 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-09-29
+
+### Security
+- **Signing in no longer makes a member an admin.** Dashboard sign-in runs
+  through the install flow, and finishing it granted admin to anyone. Admin
+  now goes only to the person who first installed the app and to Slack's own
+  workspace admins and owners.
+- **The sign-in link works once** and only in the browser that started it.
+- **Webhooks cannot reach internal addresses.** The target is resolved when
+  it is sent, private addresses are refused, and redirects are not followed.
+- **`LOG_LEVEL=DEBUG` is only a log level.** It no longer starts Flask's debug
+  server, and Slack tokens are never written to the logs.
+- **Standup answers stay text.** Typing `@channel` or a disguised link into an
+  answer no longer pings the channel or renders the link.
+- **Creating, editing, pausing and deleting standups from App Home** needs the
+  standup admin role, the same rule as the dashboard.
+
+### Fixed
+- **Reports and nudges use your team's own date.** They used the server's UTC
+  date, so teams far from UTC (Sydney, or US teams reporting late in the day)
+  got empty reports and nudges after they had already answered.
+- **The weekend reminder** went to every member of the workspace. It now goes
+  to the standup's participants.
+- **A coffee round interrupted partway through delivery now finishes** instead
+  of leaving the remaining pairs without an introduction, and a rate limited
+  Slack no longer drops a pair.
+- **A brief database error no longer removes a workspace's coffee chat and
+  celebration jobs.**
+- **Assistant (MCP) queries are limited to a year of history.**
+
+### Changed
+- `/healthz` checks the database and the scheduler and returns 503 when
+  either is down. `/livez` checks only the scheduler, for liveness probes.
+- The operator is alerted in Slack when a scheduled job fails or misses its time.
+
 ## [1.9.4] - 2026-09-29
 
 ### Added
