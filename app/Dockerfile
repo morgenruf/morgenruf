@@ -7,7 +7,12 @@ LABEL org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip is only needed to install. Its vendored msgpack and pkg_resources (from
+# setuptools) carry CVEs the scanner reports against the image, and nothing
+# runs pip at runtime, so remove it and the ensurepip wheel that bundles it.
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip uninstall -y pip \
+ && rm -f /usr/local/lib/python*/ensurepip/_bundled/*.whl
 
 COPY src/ ./src/
 COPY teams.yaml.example ./teams.yaml
