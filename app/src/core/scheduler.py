@@ -1701,10 +1701,23 @@ def _claim_run(job_id: str, run_at: datetime) -> bool:
     return claimed
 
 
+# How late a firing may start and still run. APScheduler's default is one
+# second, and ClaimingExecutor claims each cron firing in the database serially
+# on the scheduler thread, so the second of two jobs due at the same minute
+# started over a second late and was dropped as missed (a standup report was
+# lost this way on 2026-09-29). The claim in scheduler_runs already stops a
+# late firing from running twice across pods, so a longer grace is safe.
+# coalesce folds a backlog of missed firings into one run.
+MISFIRE_GRACE_SECS = 300
+
+
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:
     """Build scheduler from a list of (team_id, bot_token, config) tuples."""
     global _scheduler
-    scheduler = BackgroundScheduler(executors={"default": ClaimingExecutor()})
+    scheduler = BackgroundScheduler(
+        executors={"default": ClaimingExecutor()},
+        job_defaults={"misfire_grace_time": MISFIRE_GRACE_SECS, "coalesce": True},
+    )
     _synced_schedule_fps.clear()
     _synced_workspace_fps.clear()
 
@@ -1888,17 +1901,36 @@ def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
     today is of the form standup_T01ABC, report_schedule_T01ABC_7, member_sync
     and so on, none of which contain a colon, so reconciliation provably cannot
     remove a live standup job.
+
+    A live job whose trigger or args no longer match its spec is replaced, so
+    a programme moved to another day or hour stops firing at the old time.
+    Unchanged jobs are left alone: replacing them would reset next_run_time on
+    every pass.
     """
-    live = {j.id for j in scheduler.get_jobs() if ":" in j.id}
+    live = {j.id: j for j in scheduler.get_jobs() if ":" in j.id}
     wanted = set(desired)
-    added = sorted(wanted - live)
-    removed = sorted(live - wanted)
+    added = sorted(wanted - set(live))
+    removed = sorted(set(live) - wanted)
+    changed = sorted(jid for jid in wanted & set(live) if _job_differs(live[jid], desired[jid]))
     for jid in removed:
         scheduler.remove_job(jid)
-    for jid in added:
+    for jid in added + changed:
         spec = desired[jid]
         scheduler.add_job(spec.func, spec.trigger, args=spec.args, id=jid, replace_existing=True)
+    if changed:
+        logger.info("module jobs replaced after a trigger or args change: %d", len(changed))
     return added, removed
+
+
+def _trigger_signature(trigger) -> tuple[str, str]:
+    """What decides when a trigger fires. str() of a CronTrigger leaves the
+    timezone out, so it is compared on its own."""
+    return str(trigger), str(getattr(trigger, "timezone", ""))
+
+
+def _job_differs(job, spec: JobSpec) -> bool:
+    """True when a live job would fire at other times, or with other args, than its spec."""
+    return _trigger_signature(job.trigger) != _trigger_signature(spec.trigger) or tuple(job.args) != tuple(spec.args)
 
 
 def _module_job_context(team_id: str, bot_token: str):

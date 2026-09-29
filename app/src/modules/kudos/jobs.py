@@ -24,27 +24,32 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
             # Early morning UTC, away from the hours standups run in.
             trigger=CronTrigger(hour=4, minute=17),
             func=sync_token,
-            args=(team_id, ctx.get("bot_token", "")),
+            # The bot token is read when the job runs: tokens rotate every 12
+            # hours and a token stored in the args went stale within a day.
+            args=(team_id,),
         )
     ]
 
 
 def _client(bot_token: str, team_id: str):
+    """A client on the installation's current token; `bot_token` is only the fallback."""
     from slack_sdk import WebClient  # noqa: PLC0415
 
-    if bot_token:
-        return WebClient(token=bot_token)
     try:
-        import src.core.db as db  # noqa: PLC0415
+        from src.core.scheduler import _fresh_bot_token  # noqa: PLC0415
 
-        inst = db.get_installation(team_id)
-        return WebClient(token=inst["bot_token"]) if inst and inst.get("bot_token") else None
+        token = _fresh_bot_token(team_id, bot_token)
     except Exception:
-        return None
+        token = bot_token
+    return WebClient(token=token) if token else None
 
 
 def sync_token(team_id: str, bot_token: str = "") -> None:
-    """Upgrade to the branded token once the emoji exists, and back off if it goes."""
+    """Upgrade to the branded token once the emoji exists, and back off if it goes.
+
+    `bot_token` is kept for jobs planned with it in their args; the
+    installation's current token is preferred.
+    """
     import src.modules.kudos.db as kdb  # noqa: PLC0415
     from src.modules.kudos.token import resolve, workspace_has_brand_emoji  # noqa: PLC0415
 
