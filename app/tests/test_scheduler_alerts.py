@@ -120,3 +120,16 @@ class TestJobAlerts:
         cls.return_value.add_listener.assert_called_once_with(
             sched_mod._alert_on_job_problem, EVENT_JOB_ERROR | EVENT_JOB_MISSED
         )
+
+
+class TestExecutors:
+    def test_background_jobs_and_standups_use_separate_pools(self):
+        with patch.dict(sys.modules, {"src.core.db": MagicMock(get_all_active_schedules=lambda: [])}):
+            scheduler = sched_mod.build_scheduler([])
+        bulk = {j.id for j in scheduler.get_jobs() if j.executor == sched_mod.BULK_EXECUTOR}
+        assert {"member_sync", "schedule_sync", "module_job_sync", "token_maintenance"} <= bulk
+
+    def test_standup_jobs_stay_on_the_default_pool(self):
+        scheduler = BackgroundScheduler()
+        sched_mod.register_schedule_job(scheduler, _row())
+        assert {j.executor for j in scheduler.get_jobs()} == {"default"}
