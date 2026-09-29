@@ -375,6 +375,51 @@ def undelivered_matches(round_id: int) -> list[dict]:
             return [dict(r) for r in cur.fetchall()]
 
 
+def claim_round_delivery(round_id: int, lease_minutes: int) -> bool:
+    """Take the right to deliver a round. False while another pod holds it."""
+    sql = """
+        UPDATE connect_rounds SET delivery_claimed_at = NOW()
+        WHERE id = %s
+          AND (delivery_claimed_at IS NULL
+               OR delivery_claimed_at < NOW() - make_interval(mins => %s))
+        RETURNING id
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (round_id, lease_minutes))
+            return cur.fetchone() is not None
+
+
+def renew_round_delivery(round_id: int) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE connect_rounds SET delivery_claimed_at = NOW() WHERE id = %s", (round_id,))
+
+
+def release_round_delivery(round_id: int) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE connect_rounds SET delivery_claimed_at = NULL WHERE id = %s", (round_id,))
+
+
+def rounds_with_undelivered(team_id: str, max_age_hours: int) -> list[dict]:
+    """Recent rounds of a workspace that still have matches nobody was told about."""
+    sql = """
+        SELECT DISTINCT r.id, r.program_id
+        FROM connect_rounds r
+        JOIN connect_matches m ON m.round_id = r.id
+        WHERE r.team_id = %s
+          AND r.state IN ('matched', 'delivered')
+          AND m.delivered_at IS NULL
+          AND r.scheduled_for > NOW() - make_interval(hours => %s)
+        ORDER BY r.id
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, max_age_hours))
+            return [dict(r) for r in cur.fetchall()]
+
+
 def mark_delivered(match_id: int, mpim_channel_id: str) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:

@@ -1065,6 +1065,11 @@ def register_handlers(app: App) -> None:
     def handle_open_create_standup(ack, body, client):  # noqa: ANN001
         """Handle 'Create a standup' button from App Home."""
         ack()
+        if not may_manage_standups(
+            body["user"].get("team_id") or body.get("team", {}).get("id", ""), body["user"]["id"]
+        ):
+            _refuse_standup_change(client, body["user"]["id"])
+            return
         import src.modules.standup.blocks as _blocks  # noqa: PLC0415
 
         # Default new standup timezone to user's Slack timezone
@@ -1227,6 +1232,9 @@ def register_handlers(app: App) -> None:
         ack()
         standup_id = body["actions"][0].get("value", "")
         team_id = body["user"]["team_id"]
+        if not may_manage_standups(team_id, body["user"]["id"]):
+            _refuse_standup_change(client, body["user"]["id"])
+            return
         try:
             import src.core.db as db  # noqa: PLC0415
             import src.modules.standup.blocks as _blocks  # noqa: PLC0415
@@ -1274,6 +1282,9 @@ def register_handlers(app: App) -> None:
         standup_id = body["actions"][0].get("value", "")
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
+        if not may_manage_standups(team_id, user_id):
+            _refuse_standup_change(client, user_id)
+            return
         try:
             import src.core.db as db  # noqa: PLC0415
 
@@ -1305,6 +1316,10 @@ def register_handlers(app: App) -> None:
         action_value = action.get("value", "") or action.get("selected_option", {}).get("value", "")
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
+        # Every item in this menu changes a standup (delete, pause, enable, edit).
+        if not may_manage_standups(team_id, user_id):
+            _refuse_standup_change(client, user_id)
+            return
 
         if action_value.startswith("delete_"):
             standup_id = action_value.split("_", 1)[1]
@@ -1395,7 +1410,7 @@ def register_handlers(app: App) -> None:
 
             field = body.get("state", {}).get("values", {}).get(block_id, {}).get(input_action_id, {})
             rt = field.get("rich_text_value")
-            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else (field.get("value") or "")
+            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else _blocks.escape_mrkdwn(field.get("value") or "")
         except Exception as e:
             logger.warning("submit_answer: could not read input value: %s", e)
 
@@ -1508,9 +1523,14 @@ def register_handlers(app: App) -> None:
     @app.view("create_standup_modal")
     def handle_create_standup_modal(ack, body, client):  # noqa: ANN001
         """Handle submission of the create/edit standup modal from App Home."""
-        ack()
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
+        # Checked again here, not only when the modal opened: the submission is
+        # what writes, and roles can change while a modal is open.
+        if not may_manage_standups(team_id, user_id):
+            ack(response_action="errors", errors={"standup_channel": _NOT_A_STANDUP_ADMIN})
+            return
+        ack()
         values = body["view"]["state"]["values"]
         private_metadata = body["view"].get("private_metadata", "")
 
@@ -1681,7 +1701,7 @@ def register_handlers(app: App) -> None:
             field = values.get(block_id, {}).get(action_id, {})
             # rich_text_input → rich_text_value; fallback to plain value
             rt = field.get("rich_text_value")
-            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else field.get("value", "")
+            answer = _blocks.rich_text_to_mrkdwn(rt) if rt else _blocks.escape_mrkdwn(field.get("value", ""))
             session = state_store.record_answer(cache_key, answer)
 
         # Ask mood after form submission
@@ -1968,11 +1988,42 @@ def match_dm_command(text: str | None) -> tuple[str, str] | None:
     return None
 
 
+_NOT_A_STANDUP_ADMIN = (
+    "Only workspace admins and standup admins can create or change standups. "
+    "Ask one of them, or ask an admin to make you a standup admin in the dashboard."
+)
+
+
+def may_manage_standups(team_id: str, user_id: str) -> bool:
+    """The dashboard's rule for standups, applied to App Home as well.
+
+    App Home created, edited, paused and deleted standups for any member,
+    while the dashboard asked for the standup admin grant, so a member could
+    set up daily DMs to anyone and posts to any channel the bot is in.
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return bool(db.can_administer(team_id, user_id, "standup"))
+    except Exception as exc:
+        logger.warning("Could not check standup admin for %s: %s", user_id, exc)
+        return False
+
+
+def _refuse_standup_change(client, user_id: str) -> None:  # noqa: ANN001
+    try:
+        client.chat_postMessage(channel=user_id, text=_NOT_A_STANDUP_ADMIN)
+    except Exception as exc:
+        logger.warning("Could not tell %s they cannot change standups: %s", user_id, exc)
+
+
 def answer_value(text: str | None) -> str:
     """What gets stored for a typed answer. A lone `pass` leaves it blank."""
     if _keyword_text(text) == "pass":
         return ""
-    return text or ""
+    from src.modules.standup.blocks import defuse_broadcasts  # noqa: PLC0415
+
+    return defuse_broadcasts(text or "")
 
 
 def _reply(ctx, text: str) -> None:

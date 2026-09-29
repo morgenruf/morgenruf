@@ -1,8 +1,9 @@
 """The scheduled work: start a round, deliver it, nudge, then close it.
 
 Delivery is the part that has to be careful. A 200 person channel is 100 group
-DMs in a burst, so each match is marked delivered as it succeeds and a restart
-resumes from the undelivered ones rather than messaging everyone twice.
+DMs in a burst, so each match is marked delivered as it succeeds, and the
+follow-up sweep resumes a round left with undelivered matches (a pod killed
+mid-delivery, Slack unavailable) rather than messaging everyone twice.
 """
 
 from __future__ import annotations
@@ -47,6 +48,12 @@ FOLLOWUP_STALE_AFTER = {"nudge": timedelta(days=1), "close": timedelta(days=3)}
 # than the scheduler's misfire grace, so the cron firing, which may start up
 # to five minutes late, is not raced by the catch-up.
 CATCHUP_AFTER_MINUTES = 10
+# A pod delivering a round renews its lease after every match, so a lease this
+# old means the pod died. Long enough to cover one match's rate limit waits.
+DELIVERY_LEASE_MINUTES = 10
+# Matches still undelivered this long after the round's time are left alone:
+# an introduction a day late is still useful, one after the nudge is not.
+RESUME_DELIVERY_WITHIN_HOURS = 24
 
 
 def plan_jobs(ctx: dict) -> list[JobSpec]:
@@ -70,11 +77,10 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
             args=(team_id,),
         )
     ]
-    try:
-        programs = [p for p in cdb.active_programs() if p["team_id"] == team_id]
-    except Exception as exc:
-        logger.warning("connect could not plan jobs for %s: %s", team_id, exc)
-        return jobs
+    # A failed read raises rather than returning the sweep alone: module job
+    # sync keeps a workspace's live jobs when its plan raises, but would
+    # delete the round jobs missing from a partial plan.
+    programs = [p for p in cdb.active_programs() if p["team_id"] == team_id]
 
     for p in programs:
         # One programme with an unusable timezone must not drop the other
@@ -274,17 +280,34 @@ def _suggest_times(members: list[str], zones: dict[str, str], minutes: int, meet
         return []
 
 
-def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) -> None:
+def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) -> bool:
     """Open a group DM per match and introduce people.
 
     Each match is marked delivered as it succeeds, so an interruption resumes
-    instead of re-messaging anyone.
+    instead of re-messaging anyone. Only one pod delivers a round at a time
+    (the delivery lease), because the sweep that resumes an interrupted round
+    runs on every pod. Returns True when no match is left undelivered.
     """
     import src.modules.connect.db as cdb  # noqa: PLC0415
 
     client = _client(bot_token, team_id)
     if client is None:
-        return
+        return False
+    if not cdb.claim_round_delivery(round_id, DELIVERY_LEASE_MINUTES):
+        logger.info("connect: round %s is being delivered elsewhere", round_id)
+        return False
+    try:
+        return _deliver_matches(client, round_id, team_id, program_id)
+    finally:
+        try:
+            cdb.release_round_delivery(round_id)
+        except Exception:
+            # The lease runs out on its own; this only frees it sooner.
+            logger.warning("connect: could not release delivery of round %s", round_id)
+
+
+def _deliver_matches(client, round_id: int, team_id: str, program_id: int) -> bool:  # noqa: ANN001
+    import src.modules.connect.db as cdb  # noqa: PLC0415
 
     program = cdb.get_program(program_id) or {}
     # "How they meet" decides whether the shared room appears at all. It saved
@@ -329,11 +352,45 @@ def deliver_round(round_id: int, bot_token: str, team_id: str, program_id: int) 
             logger.warning("connect: match %s undeliverable (%s)", m["id"], exc)
             cdb.mark_delivered(m["id"], "")
         except Exception:
+            # Left undelivered; the follow-up sweep retries it.
             logger.exception("connect: delivery failed for match %s, will retry", m["id"])
         finally:
             api.throttle()
+            try:
+                cdb.renew_round_delivery(round_id)
+            except Exception:
+                logger.warning("connect: could not renew delivery lease for round %s", round_id)
 
+    if cdb.undelivered_matches(round_id):
+        # Not "delivered" yet: the round stays resumable.
+        return False
     cdb.set_round_state(round_id, "delivered")
+    return True
+
+
+def resume_undelivered_rounds(team_id: str) -> int:
+    """Finish delivering recent rounds that were interrupted. Returns how many finished.
+
+    deliver_round used to run only from run_round, and the same-day guard
+    stops the catch-up from starting that round again, so a pod killed
+    halfway through a delivery left the rest of the pairs unintroduced.
+    """
+    import src.modules.connect.db as cdb  # noqa: PLC0415
+
+    try:
+        rounds = cdb.rounds_with_undelivered(team_id, RESUME_DELIVERY_WITHIN_HOURS)
+    except Exception:
+        logger.exception("connect: could not look for undelivered rounds in %s", team_id)
+        return 0
+    finished = 0
+    for r in rounds:
+        try:
+            logger.info("connect: resuming delivery of round %s", r["id"])
+            if deliver_round(r["id"], "", team_id, r["program_id"]):
+                finished += 1
+        except Exception:
+            logger.exception("connect: resuming round %s failed", r["id"])
+    return finished
 
 
 def nudge_round(round_id: int, bot_token: str, team_id: str) -> bool:
@@ -447,6 +504,7 @@ def send_due_followups(team_id: str) -> int:
     """
     import src.modules.connect.db as cdb  # noqa: PLC0415
 
+    resume_undelivered_rounds(team_id)
     try:
         cdb.queue_followups(team_id, NUDGE_AFTER_DAYS, CLOSE_AFTER_DAYS)
     except Exception:

@@ -240,13 +240,38 @@ def timezone_search(query: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+def escape_mrkdwn(text: str) -> str:
+    """Keep what a person typed as text.
+
+    Answers are posted to the standup channel under the bot's name. Unescaped,
+    typing `<!channel>` pinged the whole channel, and `<https://evil|PROJ-12>`
+    showed a disguised link.
+    """
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+_BROADCAST = re.compile(r"<!(here|channel|everyone)(?:\|[^>]*)?>")
+_SUBTEAM = re.compile(r"<!subteam\^[A-Z0-9]+(?:\|@?([^>]*))?>")
+
+
+def defuse_broadcasts(text: str) -> str:
+    """Turn @here, @channel, @everyone and group mentions into plain text.
+
+    A DM answer arrives already encoded by Slack, so it is not escaped as a
+    whole (that would break the member's own links and mentions), but a
+    broadcast in it must not fire when the answer is reposted to a channel.
+    """
+    text = _BROADCAST.sub(lambda m: f"@{m.group(1)}", text or "")
+    return _SUBTEAM.sub(lambda m: f"@{m.group(1) or 'group'}", text)
+
+
 def _rt_elements_to_mrkdwn(elements: list[dict]) -> str:
     """Convert rich_text element list (text, link, user, etc.) to mrkdwn."""
     parts: list[str] = []
     for el in elements:
         el_type = el.get("type", "")
         if el_type == "text":
-            text = el.get("text", "")
+            text = escape_mrkdwn(el.get("text", ""))
             style = el.get("style", {})
             if style.get("code"):
                 text = f"`{text}`"
@@ -258,9 +283,9 @@ def _rt_elements_to_mrkdwn(elements: list[dict]) -> str:
                 text = f"~{text}~"
             parts.append(text)
         elif el_type == "link":
-            url = el.get("url", "")
+            url = el.get("url", "").replace("|", "%7C").replace(">", "%3E")
             text = el.get("text", url)
-            parts.append(f"<{url}|{text}>" if text != url else url)
+            parts.append(f"<{url}|{escape_mrkdwn(text)}>" if text != url else f"<{url}>")
         elif el_type == "user":
             parts.append(f"<@{el.get('user_id', '')}>")
         elif el_type == "channel":
@@ -296,12 +321,40 @@ def rich_text_to_mrkdwn(rich_text: dict) -> str:
     return "\n".join(parts)
 
 
+_MRKDWN_TOKEN = re.compile(r"<(@[UW][A-Z0-9]+|#C[A-Z0-9]+(?:\|[^>]*)?|https?://[^>|]+(?:\|[^>]*)?)>")
+
+
+def _unescape(text: str) -> str:
+    return text.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+
+
 def mrkdwn_to_rich_text(text: str) -> dict:
-    """Wrap a plain/mrkdwn string as a rich_text block for initial_value."""
-    return {
-        "type": "rich_text",
-        "elements": [{"type": "rich_text_section", "elements": [{"type": "text", "text": text}]}],
-    }
+    """A stored answer as a rich_text block, for editing it.
+
+    Mentions, channels and links go back to their own elements and escaped
+    characters to what the member typed, so saving an edit unchanged stores
+    the same text rather than escaping it a second time.
+    """
+    elements: list[dict] = []
+    pos = 0
+    for m in _MRKDWN_TOKEN.finditer(text or ""):
+        if m.start() > pos:
+            elements.append({"type": "text", "text": _unescape(text[pos : m.start()])})
+        token = m.group(1)
+        if token.startswith("@"):
+            elements.append({"type": "user", "user_id": token[1:]})
+        elif token.startswith("#"):
+            elements.append({"type": "channel", "channel_id": token[1:].split("|", 1)[0]})
+        else:
+            url, _, label = token.partition("|")
+            link = {"type": "link", "url": url}
+            if label:
+                link["text"] = _unescape(label)
+            elements.append(link)
+        pos = m.end()
+    if pos < len(text or "") or not elements:
+        elements.append({"type": "text", "text": _unescape((text or "")[pos:])})
+    return {"type": "rich_text", "elements": [{"type": "rich_text_section", "elements": elements}]}
 
 
 def _reminder_options() -> list[dict]:

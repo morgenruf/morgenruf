@@ -126,3 +126,35 @@ def test_a_row_without_a_team_id_is_ignored(wiring):
     wiring["installations"] = [{"bot_token": "x"}]
     s = FakeScheduler()
     assert sync_module_jobs(s) == ([], [])
+
+
+def test_a_failed_plan_keeps_that_modules_live_jobs(wiring):
+    """One transient error used to delete a workspace's jobs until the next pass."""
+    broken = module("connect", [])
+    broken.plan_jobs.side_effect = RuntimeError("pool exhausted")
+    wiring["active"] = [broken]
+    s = FakeScheduler(existing=["connect:T1:round:7", "connect:T1:followups"])
+    _, removed = sync_module_jobs(s)
+    assert removed == []
+    assert set(s.jobs) == {"connect:T1:round:7", "connect:T1:followups"}
+
+
+def test_a_failed_plan_still_prunes_other_workspaces(wiring):
+    broken = module("connect", [])
+    broken.plan_jobs.side_effect = lambda ctx: (
+        (_ for _ in ()).throw(RuntimeError("x")) if ctx["team_id"] == "T1" else []
+    )
+    wiring["active"] = [broken]
+    wiring["installations"] = [{"team_id": "T1", "bot_token": "x"}, {"team_id": "T2", "bot_token": "y"}]
+    s = FakeScheduler(existing=["connect:T1:round:7", "connect:T2:round:9"])
+    _, removed = sync_module_jobs(s)
+    assert removed == ["connect:T2:round:9"]
+
+
+def test_unresolvable_modules_keep_every_live_job_of_that_workspace(wiring, monkeypatch):
+    import src.core.db as db
+
+    monkeypatch.setattr(db, "granted_scopes", lambda t: (_ for _ in ()).throw(RuntimeError("pool")))
+    s = FakeScheduler(existing=["connect:T1:round:7", "celebrations:T1:daily:0900:UTC"])
+    _, removed = sync_module_jobs(s)
+    assert removed == []

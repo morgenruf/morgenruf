@@ -126,6 +126,32 @@ def _fmt(obj) -> str:
     return json.dumps(obj, indent=2, default=_default)
 
 
+# The longest window any tool reads, the same cap the dashboard reports use.
+# get_standups with from_date=2000-01-01, or search_standups with days=100000,
+# loaded a workspace's whole history into memory, the query that ran the pod
+# out of memory from the reports page before 1.9.1.
+MAX_DAYS = 365
+
+
+def _days(args: dict, default: int) -> int:
+    try:
+        days = int(args.get("days") or default)
+    except (TypeError, ValueError):
+        days = default
+    return max(1, min(days, MAX_DAYS))
+
+
+def _clamp_from_date(value: str, today) -> str:  # noqa: ANN001
+    from datetime import date, timedelta
+
+    earliest = today - timedelta(days=MAX_DAYS - 1)
+    try:
+        parsed = date.fromisoformat(str(value))
+    except ValueError:
+        return str(today - timedelta(days=7))
+    return earliest.isoformat() if parsed < earliest else parsed.isoformat()
+
+
 def _call_tool(name: str, args: dict, team_id: str) -> str:
     """Execute a named MCP tool and return a text result."""
     from collections import Counter
@@ -134,7 +160,7 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
     today = date.today()
 
     if name == "get_standups":
-        from_date = args.get("from_date", str(today - timedelta(days=7)))
+        from_date = _clamp_from_date(args.get("from_date") or str(today - timedelta(days=7)), today)
         to_date = args.get("to_date", str(today))
         user_id = args.get("user_id")
         rows = db.get_standups(team_id, from_date=from_date, to_date=to_date)
@@ -147,7 +173,7 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         return _fmt(rows) if rows else "No standups submitted today yet."
 
     if name == "get_blockers":
-        days = args.get("days", 7)
+        days = _days(args, 7)
         rows = db.get_standups(team_id, days=days)
         blockers = [
             {
@@ -161,7 +187,7 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         return _fmt(blockers) if blockers else f"No blockers reported in the last {days} days. 🎉"
 
     if name == "get_participation":
-        days = args.get("days", 30)
+        days = _days(args, 30)
         stats = db.get_participation_stats(team_id, days=days)
         return _fmt(stats)
 
@@ -174,7 +200,7 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
 
     if name == "search_standups":
         query = args.get("query", "")
-        days = args.get("days", 30)
+        days = _days(args, 30)
         rows = db.get_standups(team_id, days=days)
         q = query.lower()
         matches = [r for r in rows if q in json.dumps(r, default=str).lower()]
@@ -197,7 +223,7 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         return _fmt(summary)
 
     if name == "get_mood_summary":
-        days = args.get("days", 30)
+        days = _days(args, 30)
         rows = db.get_standups(team_id, days=days)
         moods = [r.get("mood") for r in rows if r.get("mood")]
         if not moods:

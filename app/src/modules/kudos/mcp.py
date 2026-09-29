@@ -13,7 +13,7 @@ from typing import Any
 def _leaderboard(args: dict, team_id: str) -> Any:
     import src.modules.kudos.db as kdb  # noqa: PLC0415
 
-    days = int(args.get("days") or 30)
+    days = max(1, min(int(args.get("days") or 30), 365))
     return {
         "days": days,
         "most_recognised": kdb.get_kudos_leaderboard(team_id, days),

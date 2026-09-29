@@ -1989,8 +1989,12 @@ def job_id(module: str, team_id: str, key: str) -> str:
     return f"{module}:{team_id}:{key}"
 
 
-def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
+def reconcile_jobs(scheduler, desired: dict, keep: tuple[str, ...] = ()) -> tuple[list[str], list[str]]:
     """Make the live job set match `desired`, for namespaced ids only.
+
+    Live jobs whose id starts with a prefix in `keep` are never removed. Those
+    are the workspaces or modules whose plan could not be read this pass: an
+    empty plan there means "unknown", not "none wanted".
 
     Ids without a colon are left alone. Every job id this scheduler creates
     today is of the form standup_T01ABC, report_schedule_T01ABC_7, member_sync
@@ -2005,7 +2009,7 @@ def reconcile_jobs(scheduler, desired: dict) -> tuple[list[str], list[str]]:
     live = {j.id: j for j in scheduler.get_jobs() if ":" in j.id}
     wanted = set(desired)
     added = sorted(wanted - set(live))
-    removed = sorted(set(live) - wanted)
+    removed = sorted(jid for jid in set(live) - wanted if not jid.startswith(keep))
     changed = sorted(jid for jid in wanted & set(live) if _job_differs(live[jid], desired[jid]))
     for jid in removed:
         scheduler.remove_job(jid)
@@ -2055,6 +2059,11 @@ def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
     import src.core.db as db  # noqa: PLC0415
 
     desired: dict = {}
+    # Prefixes whose live jobs stay as they are because their plan failed. One
+    # transient database error used to leave a workspace out of `desired`, and
+    # reconciliation then deleted its live jobs: the same failure that pruned
+    # coffee chat follow-ups before 1.8.14.
+    keep: list[str] = []
     try:
         installations = db.get_all_installations()
     except Exception as exc:
@@ -2074,7 +2083,8 @@ def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
                 allowlist=allowlist,
             )
         except Exception as exc:
-            logger.warning("could not resolve modules for %s: %s", team_id, exc)
+            logger.warning("could not resolve modules for %s, keeping its jobs: %s", team_id, exc)
+            keep.extend(j.id for j in scheduler.get_jobs() if j.id.split(":")[1:2] == [team_id])
             continue
 
         ctx = _module_job_context(team_id, inst.get("bot_token", ""))
@@ -2085,9 +2095,10 @@ def sync_module_jobs(scheduler=None) -> tuple[list[str], list[str]]:
                 for job in spec.plan_jobs(ctx) or []:
                     desired[job_id(spec.name, team_id, job.key)] = job
             except Exception:
-                logger.exception("module %s failed to plan jobs for %s", spec.name, team_id)
+                logger.exception("module %s failed to plan jobs for %s, keeping its jobs", spec.name, team_id)
+                keep.append(job_id(spec.name, team_id, ""))
 
-    added, removed = reconcile_jobs(scheduler, desired)
+    added, removed = reconcile_jobs(scheduler, desired, tuple(keep))
     if added or removed:
         logger.info("module jobs reconciled: +%d -%d", len(added), len(removed))
     return added, removed
