@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import pytz
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -1238,7 +1239,10 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
         scheduler.add_job(
             _send_reminder_to_workspace,
             trigger=CronTrigger(hour=int(hour), minute=int(minute), day_of_week="fri", timezone=tz),
-            args=[team_id, bot_token, reminder_minutes if reminder_minutes > 0 else 0],
+            # schedule_id limits the reminder to this schedule's participants.
+            # Without it the reminder went to every active member of the
+            # workspace, once per schedule with a weekend reminder.
+            args=[team_id, bot_token, reminder_minutes if reminder_minutes > 0 else 0, schedule_id],
             id=f"weekend_reminder_schedule_{team_id}_{schedule_id}",
             name=f"Weekend Reminder — {schedule.get('name', 'Standup')} — {team_id}",
             replace_existing=True,
@@ -1881,8 +1885,47 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    scheduler.add_listener(_alert_on_job_problem, EVENT_JOB_ERROR | EVENT_JOB_MISSED)
+
     _scheduler = scheduler
     return scheduler
+
+
+# A job that keeps failing alerts once per window, not on every firing.
+JOB_ALERT_WINDOW_SECS = 6 * 3600
+_job_alerted_at: dict[tuple[int, str], float] = {}
+
+
+def _alert_on_job_problem(event) -> None:  # noqa: ANN001
+    """Tell the operator when a scheduled job raised or missed its time.
+
+    A dropped coffee round on 2026-09-28 left nothing but one WARNING line on
+    stdout, gone with the pod. Missed interval jobs are skipped: they are the
+    per-pod sync loops, and their next run a minute later covers the gap.
+    """
+    try:
+        if event.code == EVENT_JOB_MISSED:
+            job = _scheduler.get_job(event.job_id) if _scheduler else None
+            if job is not None and not isinstance(job.trigger, CronTrigger):
+                return
+            text = f":warning: Scheduled job `{event.job_id}` missed its {event.scheduled_run_time} run."
+        else:
+            text = (
+                f":rotating_light: Scheduled job `{event.job_id}` failed at {event.scheduled_run_time}: "
+                f"{type(event.exception).__name__}: {event.exception}"[:500]
+            )
+        key = (event.code, event.job_id)
+        now = time.monotonic()
+        last = _job_alerted_at.get(key)
+        if last is not None and now - last < JOB_ALERT_WINDOW_SECS:
+            return
+        _job_alerted_at[key] = now
+
+        from src.core.alerts import notify  # noqa: PLC0415
+
+        notify(text)
+    except Exception:
+        logger.exception("Could not alert on scheduler event for %s", getattr(event, "job_id", "?"))
 
 
 def _purge_scheduler_runs() -> None:
@@ -1891,6 +1934,7 @@ def _purge_scheduler_runs() -> None:
         import src.core.db as db  # noqa: PLC0415
 
         db.purge_scheduler_runs(7)
+        db.purge_login_token_uses()
     except Exception:
         logger.exception("Scheduler claim purge failed")
 

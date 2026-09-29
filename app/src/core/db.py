@@ -93,7 +93,10 @@ def save_installation(
             bot_token = EXCLUDED.bot_token,
             bot_user_id = EXCLUDED.bot_user_id,
             app_id = EXCLUDED.app_id,
-            installed_by_user_id = EXCLUDED.installed_by_user_id,
+            -- The first installer keeps the seat. A later OAuth run is often a
+            -- member signing in to the dashboard, and get_member_role treats
+            -- installed_by_user_id as a permanent admin.
+            installed_by_user_id = COALESCE(installations.installed_by_user_id, EXCLUDED.installed_by_user_id),
             bot_refresh_token = EXCLUDED.bot_refresh_token,
             bot_token_expires_at = EXCLUDED.bot_token_expires_at,
             granted_scopes = COALESCE(EXCLUDED.granted_scopes, installations.granted_scopes),
@@ -754,6 +757,28 @@ def purge_scheduler_runs(days: int = 7) -> int:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (int(days),))
+            return cur.rowcount or 0
+
+
+def claim_login_token(nonce: str) -> bool:
+    """Mark a dashboard login token as used. True only the first time."""
+    sql = """
+        INSERT INTO login_token_uses (nonce) VALUES (%s)
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (nonce,))
+            return cur.fetchone() is not None
+
+
+def purge_login_token_uses() -> int:
+    """Forget used login tokens once they are past their five minute life."""
+    sql = "DELETE FROM login_token_uses WHERE used_at < NOW() - INTERVAL '1 hour'"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
             return cur.rowcount or 0
 
 

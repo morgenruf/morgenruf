@@ -192,7 +192,8 @@ zoom:
 # ---------------------------------------------------------------------------
 # Operations
 #
-# logLevel: set to DEBUG for verbose logs, including Flask debug output.
+# logLevel: set to DEBUG for verbose logs. It never turns on Flask's debug
+#   server, and Slack SDK request logs (which carry tokens) stay at INFO.
 # opsEmail: where the bot emails when a scheduled job fails. Blank disables it.
 # alertWebhook: a Slack incoming-webhook URL in the operator's own workspace.
 #   Posts a line when a workspace installs the app and when one removes it.
@@ -224,7 +225,7 @@ resources:
 
 livenessProbe:
   httpGet:
-    path: /healthz
+    path: /livez
     port: 3000
   initialDelaySeconds: 15
   periodSeconds: 30

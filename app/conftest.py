@@ -48,3 +48,21 @@ def _restore_stubbed_modules():
             sys.modules[name] = original
         elif name not in before:
             del sys.modules[name]
+
+
+@pytest.fixture(autouse=True)
+def _no_dns_in_tests(monkeypatch):
+    """Webhook delivery resolves the target host before sending. Tests use
+    example hostnames and must not depend on DNS, so every name resolves to a
+    public documentation address unless a test patches _resolve itself."""
+
+    def resolve(host):
+        try:
+            import ipaddress
+
+            ipaddress.ip_address(host)
+            return [host]
+        except ValueError:
+            return ["93.184.215.14"]
+
+    monkeypatch.setattr("src.core.url_guard._resolve", resolve)

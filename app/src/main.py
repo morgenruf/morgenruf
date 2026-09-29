@@ -39,6 +39,10 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+# slack_sdk logs every API request and response at DEBUG, including OAuth
+# token exchanges and refreshes, so LOG_LEVEL=DEBUG would write live bot and
+# refresh tokens into the logs.
+logging.getLogger("slack_sdk").setLevel(max(log_level, logging.INFO))
 
 
 def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
@@ -59,7 +63,29 @@ def _load_workspace_jobs() -> list[tuple[str, str, dict]]:
 
 
 def _is_dev_mode() -> bool:
-    return bool(os.environ.get("FLASK_DEBUG")) or os.environ.get("LOG_LEVEL", "").upper() == "DEBUG"
+    """Only FLASK_DEBUG means development.
+
+    LOG_LEVEL=DEBUG used to count too, and the chart suggests it for verbose
+    logs during an incident. That turned a production pod into Flask's debug
+    server and let it boot without FLASK_SECRET_KEY.
+    """
+    return bool(os.environ.get("FLASK_DEBUG"))
+
+
+def _resolve_signing_secret() -> str:
+    """Return SLACK_SIGNING_SECRET, or a random one when it is unset.
+
+    Bolt accepts an empty signing secret, and a signature computed with an
+    empty key is one anyone can compute, so every request to /slack/events
+    could be forged. A random secret makes every signature fail instead:
+    Slack features stay off until the variable is set, and nothing is
+    forgeable meanwhile.
+    """
+    secret = os.environ.get("SLACK_SIGNING_SECRET", "").strip()
+    if secret:
+        return secret
+    logger.error("SLACK_SIGNING_SECRET is not set. Slack requests will be rejected until it is.")
+    return os.urandom(32).hex()
 
 
 def _resolve_secret_key() -> bytes | str:
@@ -210,7 +236,7 @@ def register_channel_join_listener(bolt_app) -> None:
 
 
 def create_app() -> tuple[App, Flask]:
-    signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
+    signing_secret = _resolve_signing_secret()
     client_id = os.environ.get("SLACK_CLIENT_ID", "")
     client_secret = os.environ.get("SLACK_CLIENT_SECRET", "")
     installation_store = PostgresInstallationStore()
@@ -251,11 +277,52 @@ def create_app() -> tuple[App, Flask]:
     def slack_interactions():
         return handler.handle(request)
 
+    @flask_app.route("/livez", methods=["GET"])
+    def livez():
+        # Liveness restarts the pod, so it checks only what a restart fixes: a
+        # dead scheduler thread. A database outage must not crash-loop the pod.
+        ok = _scheduler_alive(scheduler)
+        return jsonify({"status": "ok" if ok else "error", "scheduler": ok}), 200 if ok else 503
+
     @flask_app.route("/healthz", methods=["GET"])
     def healthz():
-        return jsonify({"status": "ok", "jobs": len(scheduler.get_jobs())}), 200
+        # Readiness and the status page. It used to return 200 unconditionally,
+        # so the status page showed the database and scheduler green while
+        # either was down.
+        sched_ok = _scheduler_alive(scheduler)
+        db_ok = _database_reachable()
+        ok = sched_ok and db_ok
+        body = {
+            "status": "ok" if ok else "error",
+            "scheduler": sched_ok,
+            "db": db_ok,
+            "jobs": len(scheduler.get_jobs()) if sched_ok else 0,
+        }
+        return jsonify(body), 200 if ok else 503
 
     return slack_app, flask_app
+
+
+def _scheduler_alive(scheduler) -> bool:  # noqa: ANN001
+    """True while the scheduler is running and its thread has not died."""
+    if not scheduler.running:
+        return False
+    thread = getattr(scheduler, "_thread", None)
+    return thread is None or thread.is_alive()
+
+
+def _database_reachable() -> bool:
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        with db.db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return True
+    except Exception as exc:
+        logger.warning("Health check could not reach the database: %s", exc)
+        return False
 
 
 if __name__ == "__main__":
@@ -263,8 +330,8 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", "3000"))
     logger.info("Starting standup bot on port %d", port)
 
-    # Use gunicorn in production, Flask dev server only when DEBUG
-    if os.environ.get("FLASK_DEBUG") or os.environ.get("LOG_LEVEL", "").upper() == "DEBUG":
+    # Use gunicorn in production, Flask dev server only with FLASK_DEBUG
+    if _is_dev_mode():
         flask_app.run(host="0.0.0.0", port=port, debug=True)
     else:
         from gunicorn.app.base import BaseApplication

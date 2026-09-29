@@ -442,7 +442,16 @@ def create_test_app(patcher=None):
     patch(dashboard, "db", db)
     patch(oauth, "db", db)
     validate_profile = db.validate_member_profile
-    patch(dashboard, "verify_login_token", oauth.verify_login_token)
+    patch(dashboard, "consume_login_token", oauth.consume_login_token)
+    used_login_nonces: set[str] = set()
+
+    def claim_login_token(nonce):
+        if nonce in used_login_nonces:
+            return False
+        used_login_nonces.add(nonce)
+        return True
+
+    patch(db, "claim_login_token", claim_login_token)
     install(
         db,
         {

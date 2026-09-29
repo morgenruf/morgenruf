@@ -25,7 +25,7 @@ from flask_smorest import Blueprint
 import src.core.db as db
 from src.core import api_schemas as schemas
 from src.core.api import api_errors, csrf_token
-from src.core.oauth import verify_login_token
+from src.core.oauth import consume_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
 from src.core.scopes import SCOPE_STRING
 from src.core.slack_users import is_human
@@ -137,7 +137,7 @@ def dashboard():
     # Accept one-time login token from OAuth redirect to bootstrap session
     token = request.args.get("t")
     if token:
-        result = verify_login_token(token)
+        result = consume_login_token(token)
         if result:
             team_id, user_id = result
             session["team_id"] = team_id

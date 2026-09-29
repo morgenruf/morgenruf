@@ -688,12 +688,22 @@ def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | N
     ok = False
     started = time.monotonic()
     try:
-        resp = requests.post(url, data=body, headers=headers, timeout=10)
-        status_code = getattr(resp, "status_code", None)
-        ok = isinstance(status_code, int) and 200 <= status_code < 300
-        if not ok:
-            error = f"HTTP {status_code}"
-        logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
+        from src.core.url_guard import is_safe_webhook_url, resolves_to_public  # noqa: PLC0415
+
+        if not (is_safe_webhook_url(url) and resolves_to_public(url)):
+            # Checked here, at send time, and not only when the URL was saved:
+            # a hostname can point at an internal address later.
+            error = "Refused: the URL does not resolve to a public address"
+            logger.warning("Webhook %s refused for %s: not a public address", hook.get("id"), event_type)
+        else:
+            # Redirects are refused so a public endpoint cannot bounce the
+            # request to an internal address or the cloud metadata service.
+            resp = requests.post(url, data=body, headers=headers, timeout=10, allow_redirects=False)
+            status_code = getattr(resp, "status_code", None)
+            ok = isinstance(status_code, int) and 200 <= status_code < 300
+            if not ok:
+                error = f"HTTP {status_code}"
+            logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"[:500]
         logger.warning("Webhook delivery failed for %s: %s", url, exc)
