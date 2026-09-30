@@ -407,3 +407,26 @@ class TestSyncPicksUpNudgeToggle(_SyncTestBase):
 
         self.sync(_make_db(schedules=[], installations=[_installation_row()]))
         assert self.scheduler.get_job("nudge_missing_T1_1") is None
+
+
+class TestDeliveryFailureIsPrivate:
+    """Failed standup DMs are the installer's business, not the channel's."""
+
+    def test_the_installer_is_told_not_the_channel(self):
+        client = MagicMock()
+        db = MagicMock()
+        db.get_installation.return_value = {"installed_by_user_id": "UOWNER"}
+        with patch_modules({"src.core.db": db}):
+            sched_mod._notify_delivery_failure(client, "T1", "CSTANDUP", 2, 5, "Team Standup")
+        kwargs = client.chat_postMessage.call_args.kwargs
+        assert kwargs["channel"] == "UOWNER"
+        assert "2 of 5 people" in kwargs["text"]
+        assert "—" not in kwargs["text"]
+
+    def test_nothing_is_posted_without_an_installer(self):
+        client = MagicMock()
+        db = MagicMock()
+        db.get_installation.return_value = {}
+        with patch_modules({"src.core.db": db}):
+            sched_mod._notify_delivery_failure(client, "T1", "CSTANDUP", 1, 1)
+        client.chat_postMessage.assert_not_called()
