@@ -254,3 +254,26 @@ def test_nudge_honours_a_skip_under_the_local_date(frozen):
     )
 
     assert _run_nudge(db) == ["U1"]
+
+
+class TestWorkspaceLocalToday:
+    def test_first_active_schedule_wins(self, frozen):
+        frozen(SYDNEY_MORNING)
+        schedules = [
+            {"active": False, "schedule_tz": "America/Los_Angeles"},
+            {"active": True, "schedule_tz": "Australia/Sydney"},
+        ]
+        with patch.object(real_db, "get_standup_schedules", return_value=schedules):
+            assert real_db.workspace_local_today("T1") == date(2026, 9, 29)
+
+    def test_falls_back_to_the_workspace_default_then_utc(self, frozen):
+        frozen(LA_EVENING)
+        with (
+            patch.object(real_db, "get_standup_schedules", return_value=[]),
+            patch.object(real_db, "get_workspace_config", return_value={"schedule_tz": "America/Los_Angeles"}),
+        ):
+            assert real_db.workspace_local_today("T1") == date(2026, 9, 28)
+        with (
+            patch.object(real_db, "get_standup_schedules", side_effect=Exception("db down")),
+        ):
+            assert real_db.workspace_local_today("T1") == date(2026, 9, 29)

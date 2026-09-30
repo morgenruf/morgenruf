@@ -865,6 +865,25 @@ def save_standup(
     return standup_id
 
 
+def workspace_local_today(team_id: str) -> date:
+    """The day the workspace is on, for views with no single schedule to go by.
+
+    The first active standup's timezone, then the workspace default, then UTC:
+    the same order as insights.today.workspace_today. The database's
+    CURRENT_DATE is UTC, which is the wrong day for most teams for part of
+    every day.
+    """
+    tz_name = None
+    try:
+        schedules = [s for s in get_standup_schedules(team_id) if s.get("active", True)]
+        tz_name = next((s.get("schedule_tz") for s in schedules if s.get("schedule_tz")), None)
+        if not tz_name:
+            tz_name = (get_workspace_config(team_id) or {}).get("schedule_tz")
+    except Exception as exc:  # noqa: BLE001 - a lookup failure falls back to UTC
+        logger.debug("Could not resolve the workspace timezone for %s: %s", team_id, exc)
+    return local_today(tz_name or "UTC")
+
+
 def get_today_standups(team_id: str, for_date: date | None = None) -> list[dict]:
     """Return all standup submissions for today.
 

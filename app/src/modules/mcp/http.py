@@ -155,13 +155,14 @@ def _clamp_from_date(value: str, today) -> str:  # noqa: ANN001
 def _call_tool(name: str, args: dict, team_id: str) -> str:
     """Execute a named MCP tool and return a text result."""
     from collections import Counter
-    from datetime import date, timedelta
-
-    today = date.today()
+    from datetime import timedelta
 
     if name == "get_standups":
+        # Answers are filed under the team's local day, so "today" and the
+        # default end of the range are that day, not the server's UTC date.
+        today = db.workspace_local_today(team_id)
         from_date = _clamp_from_date(args.get("from_date") or str(today - timedelta(days=7)), today)
-        to_date = args.get("to_date", str(today))
+        to_date = args.get("to_date") or str(today)
         user_id = args.get("user_id")
         rows = db.get_standups(team_id, from_date=from_date, to_date=to_date)
         if user_id:
@@ -169,7 +170,8 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         return _fmt(rows) if rows else "No standups found for the given period."
 
     if name == "get_today_standups":
-        rows = db.get_standups(team_id, days=1)
+        today = db.workspace_local_today(team_id).isoformat()
+        rows = db.get_standups(team_id, from_date=today, to_date=today)
         return _fmt(rows) if rows else "No standups submitted today yet."
 
     if name == "get_blockers":
@@ -208,7 +210,8 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
 
     if name == "get_workspace_summary":
         members = db.get_active_members(team_id) or []
-        rows_today = db.get_standups(team_id, days=1) or []
+        today = db.workspace_local_today(team_id).isoformat()
+        rows_today = db.get_standups(team_id, from_date=today, to_date=today) or []
         all_recent = db.get_standups(team_id, days=7) or []
         blockers = [r for r in all_recent if r.get("blockers", "").strip().lower() not in _NO_BLOCKER]
         total = len(members)

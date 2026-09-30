@@ -1823,15 +1823,16 @@ def api_delete_rule(rule_id: int):
 @dashboard_bp.alt_response(404, schema=schemas.Error)
 @dashboard_bp.response(200, schemas.PublicFeed)
 def public_feed(token: str):
-    from datetime import date
-
     config = db.get_workspace_by_feed_token(token)
     if not config or not config.get("feed_public"):
         return jsonify(error="Feed not found or not public"), 404
+    # The team's own day, not the server's: the feed showed an empty "today"
+    # to a Sydney team every morning because answers are filed on local dates.
+    today = db.workspace_local_today(config["team_id"]).isoformat()
     return {
         "title": config.get("standup_name") or "Team Standup",
-        "date": date.today().isoformat(),
-        "standups": db.get_standups(config["team_id"], days=1),
+        "date": today,
+        "standups": db.get_standups(config["team_id"], from_date=today, to_date=today),
     }
 
 

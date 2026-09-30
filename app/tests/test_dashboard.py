@@ -944,3 +944,16 @@ class TestDigestScope:
         from src.modules.standup import mailer
 
         assert "scope_label or workspace_name" in inspect.getsource(mailer.send_manager_digest)
+
+
+class TestPublicFeedDay:
+    def test_feed_uses_the_workspaces_local_day(self, client):
+        from datetime import date
+
+        _db_mock.get_workspace_by_feed_token.return_value = {"team_id": "T123", "feed_public": True}
+        _db_mock.workspace_local_today.return_value = date(2026, 9, 30)
+        _db_mock.get_standups.return_value = []
+        data = client.get("/api/public/feed/tok").get_json()
+        assert data["date"] == "2026-09-30"
+        kwargs = _db_mock.get_standups.call_args.kwargs
+        assert kwargs["from_date"] == kwargs["to_date"] == "2026-09-30"
