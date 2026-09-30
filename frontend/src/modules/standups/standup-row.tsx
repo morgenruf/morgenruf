@@ -34,7 +34,12 @@ import {
   DropdownMenuTrigger,
 } from '@/common/components/ui/dropdown-menu';
 import { Skeleton } from '@/common/components/ui/skeleton';
-import { enoughToJudge } from '@/common/lib/participation';
+import { plural } from '@/common/lib/format';
+import {
+  enoughToJudge,
+  rateLevel,
+  rateTextClass,
+} from '@/common/lib/participation';
 import { cn } from '@/common/lib/utils';
 
 import { healthLabel } from './form-utils';
@@ -80,13 +85,8 @@ function Participation({
   // A standup with only a handful of expected answers gets no colour and no
   // trend line: one reply swings the rate too far for either to mean much.
   const judged = enoughToJudge(metrics.expected);
-  const tone = !judged
-    ? 'text-muted-foreground'
-    : rate >= 75
-      ? 'text-success'
-      : rate >= 40
-        ? 'text-warning'
-        : 'text-destructive';
+  const level = rateLevel(rate);
+  const tone = judged ? rateTextClass[level] : 'text-muted-foreground';
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -97,12 +97,7 @@ function Participation({
           {healthLabel(rate, metrics.expected)}
         </span>
         {judged && (
-          <ParticipationSparkline
-            series={metrics.series ?? []}
-            tone={
-              rate >= 75 ? 'success' : rate >= 40 ? 'warning' : 'destructive'
-            }
-          />
+          <ParticipationSparkline series={metrics.series ?? []} tone={level} />
         )}
       </div>
       <p className="text-xs text-muted-foreground">
@@ -129,10 +124,10 @@ export function StandupRow({
   editable: boolean;
   onEdit: () => void;
 }) {
-  const { save, remove } = useStandupMutations();
+  const { setActive, remove } = useStandupMutations();
   const [deleting, setDeleting] = useState(false);
   const menuTrigger = useRef<HTMLButtonElement>(null);
-  const busy = save.isPending || remove.isPending;
+  const busy = setActive.isPending || remove.isPending;
   const nextRun = standup.active
     ? nextRunLabel(standup.next_run, standup.schedule_tz)
     : null;
@@ -166,7 +161,7 @@ export function StandupRow({
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Users className="size-3.5 shrink-0" aria-hidden="true" />
             {standup.participants?.length
-              ? `${standup.participants.length} participant${standup.participants.length === 1 ? '' : 's'}`
+              ? plural(standup.participants.length, 'participant')
               : 'Everyone in the channel'}
           </p>
         </div>
@@ -222,12 +217,34 @@ export function StandupRow({
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem
                   disabled={busy}
-                  onClick={() =>
-                    save.mutate(
-                      { id: standup.id, body: { active: !standup.active } },
-                      { onError: (error) => toast.error(errorMessage(error)) },
-                    )
-                  }
+                  onClick={() => {
+                    // Pausing is one click to reverse, so it offers an undo
+                    // rather than asking first.
+                    const active = !standup.active;
+                    setActive.mutate(
+                      { id: standup.id, active },
+                      {
+                        onSuccess: () =>
+                          toast.success(
+                            active
+                              ? `${standup.name} resumed`
+                              : `${standup.name} paused. No reminders go out until you resume it.`,
+                            active
+                              ? undefined
+                              : {
+                                  action: {
+                                    label: 'Undo',
+                                    onClick: () =>
+                                      setActive.mutate({
+                                        id: standup.id,
+                                        active: true,
+                                      }),
+                                  },
+                                },
+                          ),
+                      },
+                    );
+                  }}
                 >
                   {standup.active ? <Pause /> : <Play />}
                   {standup.active ? 'Pause' : 'Resume'}

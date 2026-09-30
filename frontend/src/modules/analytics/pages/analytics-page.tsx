@@ -2,6 +2,7 @@ import { getRouteApi } from '@tanstack/react-router';
 import { CircleAlert, CircleCheck, UserMinus, Users } from 'lucide-react';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
+import { EmptyValue } from '@/common/components/empty-value';
 import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import {
@@ -38,7 +39,7 @@ import {
 } from '@/common/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/common/components/ui/tabs';
 import { formatDate, relativeTime } from '@/common/lib/format';
-import { enoughToJudge } from '@/common/lib/participation';
+import { enoughToJudge, rateLevel } from '@/common/lib/participation';
 
 import { analyticsView, rateTone } from '../analytics-utils';
 import { CompletionChart } from '../completion-chart';
@@ -186,13 +187,9 @@ export default function AnalyticsPage() {
                       label="Completion rate"
                       icon={CircleCheck}
                       tone={
-                        !enoughToJudge(view.expected)
-                          ? 'neutral'
-                          : view.rate >= 70
-                            ? 'success'
-                            : view.rate >= 40
-                              ? 'warning'
-                              : 'destructive'
+                        enoughToJudge(view.expected)
+                          ? rateLevel(view.rate)
+                          : 'neutral'
                       }
                       value={
                         <span
@@ -200,7 +197,11 @@ export default function AnalyticsPage() {
                             enoughToJudge(view.expected) ? view.rate : null,
                           )}
                         >
-                          {view.expected ? `${Math.round(view.rate)}%` : '—'}
+                          {view.expected ? (
+                            `${Math.round(view.rate)}%`
+                          ) : (
+                            <EmptyValue label="No rate yet" />
+                          )}
                         </span>
                       }
                       description={`${view.completed} of ${view.expected} expected responses`}
@@ -344,7 +345,9 @@ export default function AnalyticsPage() {
                                           {member.days_with_blockers}
                                         </Badge>
                                       ) : (
-                                        '—'
+                                        <span className="text-muted-foreground">
+                                          None
+                                        </span>
                                       )}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">
@@ -426,7 +429,9 @@ export default function AnalyticsPage() {
 
                   {!includeUnenrolled && view.unenrolled.length > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {view.unenrolled.length} members in no standup are hidden.
+                      {view.unenrolled.length === 1
+                        ? '1 member in no standup is hidden.'
+                        : `${view.unenrolled.length} members in no standup are hidden.`}
                       Turn on “Include unenrolled” to show them.
                     </p>
                   )}

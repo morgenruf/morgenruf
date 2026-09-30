@@ -16,7 +16,7 @@ import csv
 import io
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DEFAULT_WORKING_DAYS = "mon,tue,wed,thu,fri"
@@ -139,6 +139,24 @@ def load_calendar(team_id: str) -> Calendar:
     return from_rows(db.get_working_days(team_id), db.list_holidays(team_id))
 
 
+def is_company_holiday(team_id: str, day: date) -> bool:
+    """Whether `day` is on the workspace's holiday list. False if it cannot be read.
+
+    This is the check the standup and coffee chat jobs use to stay quiet on a
+    company holiday. It deliberately ignores the working week: that column
+    defaults to Monday to Friday for every workspace, configured or not, so it
+    cannot tell a deliberate Saturday standup from a mistake, and a schedule's
+    own days already say which weekdays it runs. A holiday is always explicit.
+    A failed lookup never stops a job, so it reads as an ordinary day.
+    """
+    import src.core.db as db  # noqa: PLC0415
+
+    try:
+        return any(h.get("date") == day for h in db.list_holidays(team_id))
+    except Exception:  # noqa: BLE001 - see docstring
+        return False
+
+
 def is_working_day(team_id: str, day: date) -> bool:
     return load_calendar(team_id).is_working_day(day)
 
@@ -181,7 +199,7 @@ def read_holiday_csv(text: str, today: date | None = None) -> list[dict]:
     invalid rather than silently replacing the first. A date more than a year
     back is refused, because the nightly purge would delete it anyway.
     """
-    today = today or date.today()
+    today = today or datetime.now(timezone.utc).date()
     oldest = today - timedelta(days=HOLIDAY_RETENTION_DAYS)
     reader = csv.reader(io.StringIO((text or "").lstrip("﻿")))
     rows: list[dict] = []

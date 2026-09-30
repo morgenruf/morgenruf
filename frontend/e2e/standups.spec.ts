@@ -101,6 +101,11 @@ for (const width of [390, 1440]) {
         'What did you finish?\nShare a little context for the team.',
       );
       await dialog.getByRole('button', { name: 'Cancel' }).click();
+      // The question was edited, so closing asks before discarding it.
+      await page
+        .getByRole('alertdialog', { name: 'Discard your changes?' })
+        .getByRole('button', { name: 'Discard changes' })
+        .click();
       await expect(page).toHaveURL(/q=engineering&status=active$/);
       expect(
         await page.evaluate(

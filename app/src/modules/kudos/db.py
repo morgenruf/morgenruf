@@ -7,6 +7,8 @@ alter behavior.
 
 from __future__ import annotations
 
+import re
+
 import psycopg2.extras
 
 from src.core.db import db_conn
@@ -68,6 +70,23 @@ def get_kudos_leaderboard(team_id: str, days: int = 30) -> list[dict]:
 DEFAULT_EMOJI = "\N{MAPLE LEAF}"  # upgraded to :morgenruf: once that emoji exists
 DEFAULT_ALLOWANCE = 5
 
+# A Slack shortcode (`:tada:`, `:wave::skin-tone-2:`) or unicode emoji. The
+# token is posted into channels, so anything that could carry markup (angle
+# brackets, formatting characters, plain words) is refused.
+_SHORTCODE = re.compile(r"^(?::[a-z0-9_+'-]{1,40}:)+$")
+_MARKUP = set("<>&*_~`|:")
+
+
+def valid_emoji(value: str) -> bool:
+    """True for a shortcode or a unicode emoji of at most 16 characters."""
+    if not value or len(value) > 16:
+        return False
+    if _SHORTCODE.match(value):
+        return True
+    if any(ch in _MARKUP or ch.isspace() or ch.isascii() and ch.isalpha() for ch in value):
+        return False
+    return any(not ch.isascii() for ch in value)
+
 
 def get_config(team_id: str) -> dict:
     """The workspace's token, daily allowance and channel, with defaults applied.
@@ -87,7 +106,9 @@ def get_config(team_id: str) -> dict:
     if not row:
         return defaults
     return {
-        "emoji": row[0] or DEFAULT_EMOJI,
+        # A token saved before it was validated falls back to the default
+        # rather than reaching Slack as markup.
+        "emoji": row[0] if valid_emoji(row[0] or "") else DEFAULT_EMOJI,
         "daily_allowance": row[1],
         "token_auto": bool(row[2]) if row[2] is not None else True,
         "channel_id": row[3] or "",

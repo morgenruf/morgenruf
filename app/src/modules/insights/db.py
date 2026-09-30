@@ -16,7 +16,7 @@ from datetime import timedelta
 
 import psycopg2.extras
 
-from src.core.db import db_conn
+from src.core.db import db_conn, workspace_local_today
 from src.core.timezones import local_today
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 def contributor_recognition(team_id: str, days: int = 30) -> list[dict]:
     """Everyone who filed a standup in the window, with the kudos they received.
+
+    The window ends on the workspace's local day, the day standups are filed
+    under, not the database's UTC CURRENT_DATE.
 
     The whole point is the pairing of the two numbers. A leaderboard shows who
     got kudos; it cannot show who earned them and got none, because a
@@ -39,7 +42,7 @@ def contributor_recognition(team_id: str, days: int = 30) -> list[dict]:
             SELECT s.user_id, COUNT(*) AS standups, MAX(s.standup_date) AS last_standup
             FROM standups s
             WHERE s.team_id = %(team)s
-              AND s.standup_date > CURRENT_DATE - %(days)s
+              AND s.standup_date > %(today)s::date - %(days)s
             GROUP BY s.user_id
         ),
         received AS (
@@ -63,7 +66,7 @@ def contributor_recognition(team_id: str, days: int = 30) -> list[dict]:
     try:
         with db_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(sql, {"team": team_id, "days": days})
+                cur.execute(sql, {"team": team_id, "days": days, "today": workspace_local_today(team_id)})
                 return [dict(r) for r in cur.fetchall()]
     except Exception as exc:
         logger.warning("contributor_recognition failed for %s: %s", team_id, exc)
@@ -94,7 +97,7 @@ def blocker_rows(team_id: str, days: int = 21) -> dict[str, list[dict]]:
         FROM standups s
         LEFT JOIN members m ON m.team_id = s.team_id AND m.user_id = s.user_id
         WHERE s.team_id = %s
-          AND s.standup_date > CURRENT_DATE - %s
+          AND s.standup_date > %s::date - %s
           AND s.blockers IS NOT NULL
           AND COALESCE(m.active, TRUE) IS TRUE
         ORDER BY s.user_id, s.standup_date
@@ -103,7 +106,7 @@ def blocker_rows(team_id: str, days: int = 21) -> dict[str, list[dict]]:
     try:
         with db_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(sql, (team_id, days))
+                cur.execute(sql, (team_id, workspace_local_today(team_id), days))
                 for row in cur.fetchall():
                     grouped.setdefault(row["user_id"], []).append(dict(row))
     except Exception as exc:

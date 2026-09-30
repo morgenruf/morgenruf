@@ -75,8 +75,8 @@ def _mentions(member_ids: list[str]) -> str:
 # one that has never met. One sentence differs; the mechanics do not.
 TONE_LINES = {
     "hybrid": (
-        "It is hard to meet people outside your own team when everyone is remote, "
-        "so this introduces a few of you every so often."
+        "It is hard to meet people outside your own team when you are not all in the same place "
+        "on the same days, so this introduces a few of you every so often."
     ),
     "remote": (
         "Nobody bumps into anyone in a distributed team, so this introduces a few of you "
@@ -108,6 +108,7 @@ def intro_message(
     match_id: int = 0,
     with_icebreaker: bool = True,
     tone: str = "hybrid",
+    channel_id: str = "",
 ) -> tuple[str, list]:
     """The group DM a match receives.
 
@@ -133,6 +134,7 @@ def intro_message(
                 "type": "mrkdwn",
                 "text": (
                     f"{mentions}, you have been matched. Say hello right here.\n"
+                    + (f"You were paired from <#{channel_id}>. " if channel_id else "")
                     + TONE_LINES.get(tone, TONE_LINES["hybrid"])
                 ),
             },
@@ -526,7 +528,7 @@ def round_stats_message(met: int, answered: int, pairings: int) -> tuple[str, li
     "20% met", and reporting it that way would make a quiet team look like a
     failing one.
     """
-    line = f"{pairings} pair" + ("" if pairings == 1 else "s") + " were introduced."
+    line = "1 pair was introduced." if pairings == 1 else f"{pairings} pairs were introduced."
     if answered:
         line += f" {met} of the {answered} who answered met up."
     else:

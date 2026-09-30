@@ -65,6 +65,8 @@ export function useStandupMutations() {
   };
 
   const save = useMutation({
+    // The editor shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: ({ id, body }: { id?: number; body: StandupInput }) =>
       id
         ? api.standups
@@ -74,10 +76,22 @@ export function useStandupMutations() {
     onSuccess: invalidate,
   });
 
+  // Pause and resume from the list. Unlike save, a failure here has no form
+  // to show it, so the global toast reports it.
+  const setActive = useMutation({
+    mutationFn: ({ id, active }: { id: number; active: boolean }) =>
+      api.standups
+        .updateStandup({ standupId: id }, { active })
+        .then((r) => r.data),
+    onSuccess: invalidate,
+  });
+
   const remove = useMutation({
+    // The delete dialog shows this error inline.
+    meta: { silent: true },
     mutationFn: (id: number) => api.standups.deleteStandup({ standupId: id }),
     onSuccess: invalidate,
   });
 
-  return { save, remove };
+  return { save, setActive, remove };
 }

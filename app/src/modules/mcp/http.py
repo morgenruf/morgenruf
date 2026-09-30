@@ -8,13 +8,14 @@ import logging
 from flask import Blueprint, jsonify, request
 
 import src.core.db as db
+from src.core.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 mcp_bp = Blueprint("mcp", __name__)
 
 MCP_SERVER_INFO = {
     "name": "morgenruf",
-    "version": "1.0.0",
+    "version": APP_VERSION,
 }
 
 TOOLS = [
@@ -47,7 +48,7 @@ TOOLS = [
     },
     {
         "name": "get_participation",
-        "description": "Get standup participation statistics — who submitted, who missed.",
+        "description": "Get standup participation statistics: who submitted and who missed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -107,12 +108,21 @@ _NO_BLOCKER = {"", "none", "n/a", "no", "-", "nothing"}
 
 
 def _auth() -> str | None:
-    """Extract and verify Bearer token, return team_id or None."""
+    """Extract and verify Bearer token, return team_id or None.
+
+    Failures are counted per address (mcp_endpoint refuses a caller over the
+    budget before the key is looked up), so guessing keys cannot also hammer
+    the database. A client using a good key never counts against it.
+    """
+    from src.core import rate_limit  # noqa: PLC0415
+
+    who = rate_limit.client_key()
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    key = auth[7:].strip()
-    return db.verify_mcp_key(key)
+    key = auth[7:].strip() if auth.startswith("Bearer ") else ""
+    team_id = db.verify_mcp_key(key) if key else None
+    if not team_id:
+        rate_limit.MCP_AUTH_FAILURES.hit(who)
+    return team_id
 
 
 def _fmt(obj) -> str:
@@ -155,13 +165,14 @@ def _clamp_from_date(value: str, today) -> str:  # noqa: ANN001
 def _call_tool(name: str, args: dict, team_id: str) -> str:
     """Execute a named MCP tool and return a text result."""
     from collections import Counter
-    from datetime import date, timedelta
-
-    today = date.today()
+    from datetime import timedelta
 
     if name == "get_standups":
+        # Answers are filed under the team's local day, so "today" and the
+        # default end of the range are that day, not the server's UTC date.
+        today = db.workspace_local_today(team_id)
         from_date = _clamp_from_date(args.get("from_date") or str(today - timedelta(days=7)), today)
-        to_date = args.get("to_date", str(today))
+        to_date = args.get("to_date") or str(today)
         user_id = args.get("user_id")
         rows = db.get_standups(team_id, from_date=from_date, to_date=to_date)
         if user_id:
@@ -169,7 +180,8 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
         return _fmt(rows) if rows else "No standups found for the given period."
 
     if name == "get_today_standups":
-        rows = db.get_standups(team_id, days=1)
+        today = db.workspace_local_today(team_id).isoformat()
+        rows = db.get_standups(team_id, from_date=today, to_date=today)
         return _fmt(rows) if rows else "No standups submitted today yet."
 
     if name == "get_blockers":
@@ -208,7 +220,8 @@ def _call_tool(name: str, args: dict, team_id: str) -> str:
 
     if name == "get_workspace_summary":
         members = db.get_active_members(team_id) or []
-        rows_today = db.get_standups(team_id, days=1) or []
+        today = db.workspace_local_today(team_id).isoformat()
+        rows_today = db.get_standups(team_id, from_date=today, to_date=today) or []
         all_recent = db.get_standups(team_id, days=7) or []
         blockers = [r for r in all_recent if r.get("blockers", "").strip().lower() not in _NO_BLOCKER]
         total = len(members)
@@ -301,10 +314,10 @@ def mcp_info():
     return jsonify(
         {
             "name": "Morgenruf MCP Server",
-            "version": "1.0.0",
+            "version": APP_VERSION,
             "transport": "http",
             "endpoint": request.host_url.rstrip("/") + "/mcp",
-            "auth": "Bearer token — generate from your Morgenruf dashboard",
+            "auth": "Bearer token. Create one in your Morgenruf dashboard.",
             "docs": "https://docs.morgenruf.dev/mcp.html",
             "tools": [t["name"] for t in TOOLS],
             "note": (
@@ -318,6 +331,10 @@ def mcp_info():
 @mcp_bp.route("/mcp", methods=["POST"])
 def mcp_endpoint():
     """MCP JSON-RPC 2.0 endpoint."""
+    from src.core import rate_limit  # noqa: PLC0415
+
+    if rate_limit.MCP_AUTH_FAILURES.limited(rate_limit.client_key()):
+        return rate_limit.too_many()
     team_id = _auth()
     if not team_id:
         return jsonify(
@@ -325,7 +342,7 @@ def mcp_endpoint():
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32001,
-                    "message": "Unauthorized — provide a valid Bearer API key from your Morgenruf dashboard",
+                    "message": "Unauthorized. Send a valid Bearer API key from your Morgenruf dashboard.",
                 },
                 "id": None,
             }

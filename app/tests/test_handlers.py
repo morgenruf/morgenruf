@@ -87,7 +87,7 @@ class TestFormatStandup:
 
         result = _format_standup("U1", ["only one answer"])
         assert "only one answer" in result
-        assert "—" in result  # missing answers show —
+        assert "n/a" in result  # missing answers show n/a
 
 
 # ---------------------------------------------------------------------------
@@ -365,7 +365,7 @@ class TestCanEditResponse:
 
             assert can_edit_response("T1", "U1", 1) is True
 
-    def test_zero_edit_window_returns_true(self):
+    def test_until_report_without_a_schedule_stays_open(self):
         db_mock = MagicMock()
         db_mock.get_standup_by_id.return_value = self._standup(hours_ago=100)
         db_mock.get_workspace_config.return_value = {"edit_window_hours": 0}
@@ -374,6 +374,41 @@ class TestCanEditResponse:
             from src.modules.standup.handlers import can_edit_response
 
             assert can_edit_response("T1", "U1", 1) is True
+
+    def _until_report(self, standup_date, report_time, allow_after=False):
+        db_mock = MagicMock()
+        standup = self._standup(hours_ago=1)
+        standup.update(schedule_id=7, standup_date=standup_date)
+        db_mock.get_standup_by_id.return_value = standup
+        db_mock.get_workspace_config.return_value = {"edit_window_hours": 0}
+        db_mock.get_standup_schedule.return_value = {
+            "schedule_tz": "UTC",
+            "schedule_time": "00:00",
+            "report_time": report_time,
+            "allow_edit_after_report": allow_after,
+        }
+        with patch_modules({"src.core.db": db_mock}):
+            from src.modules.standup.handlers import can_edit_response
+
+            return can_edit_response("T1", "U1", 1)
+
+    def test_until_report_closes_once_the_report_time_has_passed(self):
+        today = datetime.now(tz=timezone.utc).date()
+        assert self._until_report(today, "00:00") is False
+
+    def test_until_report_is_open_before_the_report(self):
+        today = datetime.now(tz=timezone.utc).date()
+        assert self._until_report(today, "23:59") is True
+
+    def test_yesterdays_answers_are_closed(self):
+        from datetime import timedelta
+
+        yesterday = datetime.now(tz=timezone.utc).date() - timedelta(days=1)
+        assert self._until_report(yesterday, "23:59") is False
+
+    def test_allowing_edits_after_the_report_keeps_the_day_open(self):
+        today = datetime.now(tz=timezone.utc).date()
+        assert self._until_report(today, "00:00", allow_after=True) is True
 
     def test_db_exception_returns_false(self):
         db_mock = MagicMock()

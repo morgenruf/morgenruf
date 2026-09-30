@@ -147,7 +147,23 @@ export default function McpPage() {
             ) : !keys.data?.keys.length ? (
               <EmptyState
                 title="No API keys yet"
-                description="Generate a key to connect an assistant."
+                description={
+                  canEdit
+                    ? 'Generate a key, then paste it into your assistant’s MCP settings.'
+                    : 'A workspace administrator can generate a key for your assistant.'
+                }
+                action={
+                  canEdit && (
+                    <Button
+                      onClick={() => {
+                        setName('');
+                        setNewKey(true);
+                      }}
+                    >
+                      <Plus /> Generate key
+                    </Button>
+                  )
+                }
               />
             ) : (
               <ScrollArea orientation="horizontal" className="min-w-0">

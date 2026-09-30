@@ -2,6 +2,7 @@ import type {
   AnalyticsData,
   ParticipationMember,
 } from '@/common/api/generated/data-contracts';
+import { rateLevel, rateTextClass } from '@/common/lib/participation';
 
 export function completionSeries(
   members: ParticipationMember[],
@@ -67,9 +68,5 @@ export function analyticsView(
 export function rateTone(rate: number | null) {
   return rate === null
     ? 'text-muted-foreground'
-    : rate >= 70
-      ? 'text-success'
-      : rate >= 40
-        ? 'text-warning'
-        : 'text-destructive';
+    : rateTextClass[rateLevel(rate)];
 }

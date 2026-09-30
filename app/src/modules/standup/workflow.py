@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime, timezone
 
 try:
     import requests as _requests
@@ -93,6 +94,11 @@ def _render_message(template: str | None, default: str, context: dict) -> str:
     return msg
 
 
+# Below this percentage a standup counts as low participation, unless a rule
+# sets its own figure. The participation.low webhook uses the same default.
+LOW_PARTICIPATION_THRESHOLD = 50
+
+
 def evaluate_rules(team_id: str, trigger: str, context: dict, client) -> None:
     """Load active rules matching trigger and fire their actions."""
     try:
@@ -114,7 +120,7 @@ def _fire_rule(team_id: str, rule: dict, trigger: str, context: dict, client) ->
         if not context.get("has_blockers", False):
             return
     elif trigger == "low_participation":
-        threshold = int(rule.get("condition_value") or 50)
+        threshold = int(rule.get("condition_value") or LOW_PARTICIPATION_THRESHOLD)
         if context.get("participation_pct", 100) >= threshold:
             return
     # standup_complete: always fires
@@ -187,3 +193,68 @@ def _fire_rule_webhook(team_id: str, rule: dict, trigger: str, context: dict) ->
         result.get("signed"),
         result.get("status_code"),
     )
+
+
+def schedule_participation_pct(
+    team_id: str, schedule: dict | None, local_day: date, answered: set[str], eligible: set[str]
+) -> int:
+    """Percentage of one standup's expected members who answered on `local_day`.
+
+    Expected means on this standup (everyone eligible when it names nobody),
+    eligible (active, not on leave) and not skipping today. Returns 100 when
+    nobody was expected, so an empty or fully skipped day never trips a rule.
+    """
+    import src.core.db as db  # noqa: PLC0415
+    from src.core.scheduler import participation_pct  # noqa: PLC0415
+
+    participants = [p for p in ((schedule or {}).get("participants") or []) if p]
+    pool = list(dict.fromkeys(participants)) if participants else sorted(eligible)
+    stats = []
+    for user_id in pool:
+        if user_id not in eligible:
+            continue
+        try:
+            if db.is_skipped_today(team_id, user_id, for_date=local_day):
+                continue
+        except Exception as exc:
+            logger.debug("Skip lookup failed for %s/%s: %s", team_id, user_id, exc)
+        stats.append({"user_id": user_id, "enrolled": True, "responses": 1 if user_id in answered else 0})
+    return participation_pct(stats)
+
+
+def evaluate_low_participation(
+    team_id: str, schedule: dict | None, local_day: date, today_standups: list[dict], client
+) -> None:
+    """Fire low_participation rules for one standup, once its window has closed."""
+    try:
+        from src.core.roster import eligible_members  # noqa: PLC0415
+
+        eligible = {m.user_id for m in eligible_members(team_id)}
+        answered = {s.get("user_id") for s in today_standups or [] if s.get("user_id")}
+        pct = schedule_participation_pct(team_id, schedule, local_day, answered, eligible)
+        context = {"participation_pct": pct, "team": team_id, "standup": (schedule or {}).get("name") or ""}
+        evaluate_rules(team_id, "low_participation", context, client)
+    except Exception as exc:
+        logger.warning("Participation workflow rules failed for %s: %s", team_id, exc)
+        return
+
+    # participation.low was offered as a webhook event but never sent.
+    try:
+        from src.modules.standup.handlers import fire_webhooks  # noqa: PLC0415
+
+        if pct < LOW_PARTICIPATION_THRESHOLD:
+            fire_webhooks(
+                team_id,
+                "participation.low",
+                {
+                    "team_id": team_id,
+                    "schedule_id": (schedule or {}).get("id"),
+                    "schedule": (schedule or {}).get("name") or "",
+                    "date": local_day.isoformat(),
+                    "participation_pct": pct,
+                    "threshold": LOW_PARTICIPATION_THRESHOLD,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+    except Exception as exc:
+        logger.warning("participation.low webhook failed for %s: %s", team_id, exc)

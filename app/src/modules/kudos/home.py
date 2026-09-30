@@ -64,9 +64,9 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
                 "text": {
                     "type": "mrkdwn",
                     "text": (
-                        f"*You have {left} {emoji} left to give today.*"
+                        f"*You have {left} kudos {emoji} left to give today.*"
                         if left
-                        else f"*You have given all {state['allowance']} of your {emoji} today.*"
+                        else f"*You have given all {state['allowance']} of your kudos {emoji} today.*"
                     ),
                 },
             }

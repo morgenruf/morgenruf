@@ -34,6 +34,8 @@ import {
   SelectValue,
 } from '@/common/components/ui/select';
 import { Skeleton } from '@/common/components/ui/skeleton';
+import { useConfirm } from '@/common/hooks/use-confirm';
+import { plural } from '@/common/lib/format';
 import { hasDates, profileFacts } from '@/common/lib/profile';
 
 import { useMembers } from '../hooks';
@@ -162,11 +164,74 @@ export default function MembersPage() {
     });
   }
 
+  const hasFilters = !!(
+    search ||
+    params.channel ||
+    params.role ||
+    params.tracking
+  );
+
+  function clearFilters() {
+    void navigate({
+      search: (previous) =>
+        validateSearch.parse({
+          ...previous,
+          q: '',
+          channel: '',
+          role: '',
+          tracking: '',
+        }),
+      replace: true,
+      resetScroll: false,
+    });
+  }
+
   const grantable = (modules.data ?? []).filter(
     (module) => module.available !== false && module.active && module.delegable,
   );
 
   const busy = role.isPending || grant.isPending;
+  const { confirm, dialog } = useConfirm();
+
+  async function changeRole(id: string, name: string, admin: boolean) {
+    const ok = await confirm(
+      admin
+        ? {
+            title: `Make ${name} an admin?`,
+            description:
+              'Admins can change every feature, workspace setting and role, including yours.',
+            confirmLabel: 'Make admin',
+          }
+        : {
+            title: `Make ${name} a member?`,
+            description:
+              'They lose access to workspace settings and to every feature they do not run.',
+            confirmLabel: 'Make member',
+            destructive: true,
+          },
+    );
+    if (ok) role.mutate({ id, role: admin ? 'admin' : 'member' });
+  }
+
+  async function changeGrant(
+    id: string,
+    name: string,
+    module: string,
+    enabled: boolean,
+  ) {
+    const label = moduleLabels[module] ?? module;
+    if (
+      !enabled &&
+      !(await confirm({
+        title: `Take ${label} away from ${name}?`,
+        description: `${name} will no longer be able to change ${label} settings.`,
+        confirmLabel: 'Remove access',
+        destructive: true,
+      }))
+    )
+      return;
+    grant.mutate({ id, module, enabled });
+  }
 
   return (
     <div className="page">
@@ -287,7 +352,7 @@ export default function MembersPage() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              {filtered.length} of {all.length} members ·{' '}
+              {filtered.length} of {plural(all.length, 'member')} ·{' '}
               {all.filter((member) => member.tracked !== false).length} in
               Morgenruf. People not tracked by Morgenruf do not appear in
               participation figures.
@@ -329,7 +394,19 @@ export default function MembersPage() {
                     ? 'No members match these filters'
                     : 'No members found'
                 }
-                description="Members are synchronized from your Slack workspace."
+                description={
+                  all.length
+                    ? 'Try a different search or filter.'
+                    : 'Members are synchronised from your Slack workspace. Try Refresh.'
+                }
+                action={
+                  all.length > 0 &&
+                  hasFilters && (
+                    <Button variant="outline" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  )
+                }
               />
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -371,13 +448,13 @@ export default function MembersPage() {
                           <p>{member.tz || 'UTC'}</p>
                           <LoadingTransition pending={standups.isPending}>
                             {standups.isPending ? (
-                              <SkeletonRegion label="Loading standup enrollment…">
+                              <SkeletonRegion label="Loading standup enrolment…">
                                 <Skeleton className="h-4 w-24" />
                               </SkeletonRegion>
                             ) : (
                               <p>
                                 {count
-                                  ? `${count} standup${count === 1 ? '' : 's'}`
+                                  ? plural(count, 'standup')
                                   : member.tracked === false
                                     ? 'Not in Morgenruf'
                                     : 'No standups'}
@@ -423,11 +500,12 @@ export default function MembersPage() {
                                         busy
                                       }
                                       onClick={() =>
-                                        grant.mutate({
-                                          id: member.id,
-                                          module: module.name,
-                                          enabled: !active,
-                                        })
+                                        void changeGrant(
+                                          member.id,
+                                          name,
+                                          module.name,
+                                          !active,
+                                        )
                                       }
                                     >
                                       {moduleLabels[module.name] ?? module.name}
@@ -472,11 +550,11 @@ export default function MembersPage() {
                             className="w-full"
                             disabled={busy}
                             onClick={() =>
-                              role.mutate({
-                                id: member.id,
-                                role:
-                                  member.role === 'admin' ? 'member' : 'admin',
-                              })
+                              void changeRole(
+                                member.id,
+                                name,
+                                member.role !== 'admin',
+                              )
                             }
                           >
                             {member.role === 'admin'
@@ -494,6 +572,7 @@ export default function MembersPage() {
         )}
       </LoadingTransition>
 
+      {dialog}
       <EditProfileDialog
         member={editing}
         profile={editing ? profileById.get(editing.id) : undefined}

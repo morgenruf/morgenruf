@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/common/components/ui/card';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, formatTime } from '@/common/lib/format';
 
 import { usePublicFeed } from '../hooks';
 import { FeedSkeleton } from '../loading';
@@ -59,11 +59,7 @@ export default function FeedPage() {
                       </CardTitle>
                       {row.submitted_at && (
                         <p className="text-xs text-muted-foreground">
-                          Submitted{' '}
-                          {formatDate(row.submitted_at, {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          Submitted {formatTime(row.submitted_at)}
                         </p>
                       )}
                     </CardHeader>

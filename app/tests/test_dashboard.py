@@ -158,6 +158,70 @@ class TestApiMembers:
         assert isinstance(data, list)
 
 
+class TestMembersDirectoryCache:
+    """users.list is Tier 2; the Members page must not page through it on every load."""
+
+    @staticmethod
+    def _slack(users_list):
+        client = MagicMock()
+        client.retry_handlers = []
+        client.users_list.side_effect = users_list
+        mod = MagicMock()
+        mod.WebClient.return_value = client
+        return mod, client
+
+    @staticmethod
+    def _page(uid="U1"):
+        return {
+            "members": [{"id": uid, "name": uid.lower(), "is_bot": False, "profile": {"real_name": uid}}],
+            "response_metadata": {},
+        }
+
+    def setup_method(self):
+        dashboard._directory_cache.clear()
+        _db_mock.get_installation.return_value = {"bot_token": "xoxb-test", "team_name": "Acme"}
+        _db_mock.get_active_members.return_value = []
+
+    def teardown_method(self):
+        dashboard._directory_cache.clear()
+
+    def test_second_load_is_served_from_the_cache(self, authed_client):
+        mod, client = self._slack(lambda **kw: self._page())
+        with patch_modules({"slack_sdk": mod}):
+            first = authed_client.get("/dashboard/api/members").get_json()
+            second = authed_client.get("/dashboard/api/members").get_json()
+        assert [m["id"] for m in first] == ["U1"] == [m["id"] for m in second]
+        assert client.users_list.call_count == 1
+
+    def test_the_cache_expires(self, authed_client):
+        mod, client = self._slack(lambda **kw: self._page())
+        with patch_modules({"slack_sdk": mod}):
+            authed_client.get("/dashboard/api/members")
+            stamp, directory = dashboard._directory_cache["T123"]
+            dashboard._directory_cache["T123"] = (stamp - dashboard._DIRECTORY_TTL_SECONDS - 1, directory)
+            authed_client.get("/dashboard/api/members")
+        assert client.users_list.call_count == 2
+
+    def test_a_failure_falls_back_to_the_table_and_is_not_cached(self, authed_client):
+        _db_mock.get_active_members.return_value = [{"user_id": "U9", "real_name": "Stored"}]
+        mod, client = self._slack(Exception("ratelimited"))
+        with patch_modules({"slack_sdk": mod}):
+            data = authed_client.get("/dashboard/api/members").get_json()
+        assert [m["id"] for m in data] == ["U9"]
+        assert "T123" not in dashboard._directory_cache
+
+    def test_client_retries_on_rate_limit(self):
+        import importlib
+
+        real_sdk = importlib.import_module("slack_sdk.web.client")
+        handlers_mod = importlib.import_module("slack_sdk.http_retry.builtin_handlers")
+        fake_sdk = MagicMock()
+        fake_sdk.WebClient = real_sdk.WebClient
+        with patch_modules({"slack_sdk": fake_sdk}):
+            client = dashboard._rate_limited_slack_client("xoxb-test")
+        assert any(isinstance(h, handlers_mod.RateLimitErrorRetryHandler) for h in client.retry_handlers)
+
+
 # ---------------------------------------------------------------------------
 # /dashboard/api/reports
 # ---------------------------------------------------------------------------
@@ -219,7 +283,26 @@ class TestApiReports:
         assert resp.status_code == 200
         earliest = (date.today() - timedelta(days=364)).isoformat()
         assert _db_mock.get_standups.call_args.kwargs["from_date"] == earliest
-        assert _db_mock.get_participation_overview.call_args.kwargs["days"] <= 365
+        assert _db_mock.get_participation_overview.call_args.kwargs["start"].isoformat() == earliest
+
+    def test_participation_uses_the_requested_from_and_to(self, authed_client):
+        """A report for a past range is scored on that range, not up to today."""
+        from datetime import date
+
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview(days=30)
+        resp = authed_client.get("/dashboard/api/reports?date_from=2026-08-01&date_to=2026-08-30")
+        kwargs = _db_mock.get_participation_overview.call_args.kwargs
+        assert kwargs["start"] == date(2026, 8, 1)
+        assert kwargs["end"] == date(2026, 8, 30)
+        assert resp.get_json()["total_days"] == 30
+
+    def test_no_range_means_the_last_week(self, authed_client):
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
+        authed_client.get("/dashboard/api/reports")
+        kwargs = _db_mock.get_participation_overview.call_args.kwargs
+        assert kwargs["start"] is None and kwargs["end"] is None and kwargs["days"] == 7
 
     def test_recent_date_from_is_passed_through(self, authed_client):
         from datetime import date, timedelta
@@ -861,3 +944,16 @@ class TestDigestScope:
         from src.modules.standup import mailer
 
         assert "scope_label or workspace_name" in inspect.getsource(mailer.send_manager_digest)
+
+
+class TestPublicFeedDay:
+    def test_feed_uses_the_workspaces_local_day(self, client):
+        from datetime import date
+
+        _db_mock.get_workspace_by_feed_token.return_value = {"team_id": "T123", "feed_public": True}
+        _db_mock.workspace_local_today.return_value = date(2026, 9, 30)
+        _db_mock.get_standups.return_value = []
+        data = client.get("/api/public/feed/tok").get_json()
+        assert data["date"] == "2026-09-30"
+        kwargs = _db_mock.get_standups.call_args.kwargs
+        assert kwargs["from_date"] == kwargs["to_date"] == "2026-09-30"

@@ -185,10 +185,18 @@ class TestTheModal:
 
 
 class TestTheAppHome:
-    def test_empty_profile_invites_you_to_fill_it_in(self, db):
+    def test_empty_profile_invites_you_to_fill_it_in(self, db, monkeypatch):
+        monkeypatch.setattr(profile_slack, "_celebrations_on", lambda team_id: True)
         blocks = profile_slack.home_blocks("T1", "U1")
         assert "Add your birthday and start date" in blocks[1]["text"]["text"]
         assert blocks[1]["accessory"]["action_id"] == "profile:edit"
+
+    def test_without_celebrations_nothing_mentions_celebrating(self, db, monkeypatch):
+        monkeypatch.setattr(profile_slack, "_celebrations_on", lambda team_id: False)
+        blocks = profile_slack.home_blocks("T1", "U1")
+        assert "celebrat" not in json.dumps(blocks).lower()
+        modal = profile_slack.profile_modal({"celebrate": False}, celebrations=False)
+        assert "celebrat" not in json.dumps(modal).lower()
 
     def test_a_filled_profile(self, db):
         db.get_member_profile.return_value = {
@@ -215,3 +223,15 @@ class TestTheAppHome:
 
         blocks = extra_home_blocks("T1", "U1", exclude="standup")
         assert blocks[1]["accessory"]["action_id"] == "profile:edit"
+
+
+class TestOneHelp:
+    """Every help surface renders the same text."""
+
+    def test_modal_and_dm_share_the_command_help(self, db):
+        text_out = profile_slack.help_text("T1")
+        modal = json.dumps(profile_slack.help_modal("T1"))
+        assert "/morgenruf help" in text_out
+        assert json.dumps(text_out)[1:-1] in modal
+        assert "—" not in text_out
+        assert "/help`" not in text_out.replace("/morgenruf help`", "")

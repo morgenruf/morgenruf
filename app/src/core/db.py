@@ -865,6 +865,25 @@ def save_standup(
     return standup_id
 
 
+def workspace_local_today(team_id: str) -> date:
+    """The day the workspace is on, for views with no single schedule to go by.
+
+    The first active standup's timezone, then the workspace default, then UTC:
+    the same order as insights.today.workspace_today. The database's
+    CURRENT_DATE is UTC, which is the wrong day for most teams for part of
+    every day.
+    """
+    tz_name = None
+    try:
+        schedules = [s for s in get_standup_schedules(team_id) if s.get("active", True)]
+        tz_name = next((s.get("schedule_tz") for s in schedules if s.get("schedule_tz")), None)
+        if not tz_name:
+            tz_name = (get_workspace_config(team_id) or {}).get("schedule_tz")
+    except Exception as exc:  # noqa: BLE001 - a lookup failure falls back to UTC
+        logger.debug("Could not resolve the workspace timezone for %s: %s", team_id, exc)
+    return local_today(tz_name or "UTC")
+
+
 def get_today_standups(team_id: str, for_date: date | None = None) -> list[dict]:
     """Return all standup submissions for today.
 
@@ -1216,33 +1235,82 @@ def is_on_vacation(team_id: str, user_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_standup_streak(team_id: str, user_id: str) -> int:
-    """Return the current consecutive standup streak (number of working days in a row).
+# How far back a streak is looked for. A year of unbroken standups is already
+# more than the App Home badge needs, and it keeps the query bounded.
+STREAK_LOOKBACK_DAYS = 400
 
-    Counts backwards from today (or the most recent standup date) through
-    consecutive weekdays where the user submitted a standup.
+
+def streak_from_dates(standup_dates, working_days, today: date, holidays=()) -> int:
+    """Count the member's consecutive scheduled days with a standup, newest first.
+
+    Only the days the member is actually asked count: their schedules' weekdays
+    minus company holidays. A weekend or a holiday between two answered days
+    neither breaks the streak nor adds to it. Today counts once answered, but
+    an unanswered today does not break anything yet, since the day is not over.
+    The streak is 0 once the member has missed the most recent scheduled day
+    before today.
+
+    Pure, so the counting can be tested with plain dates.
+    """
+    answered = {d for d in (_as_date(v) for v in standup_dates or ()) if d is not None}
+    if not answered:
+        return 0
+    weekdays = set(working_days or ()) or set(_WORKING_WEEK)
+    days_off = {d for d in (_as_date(v) for v in holidays or ()) if d is not None}
+    earliest = min(answered)
+    streak = 0
+    day = today
+    while day >= earliest:
+        scheduled = day.weekday() in weekdays and day not in days_off
+        if scheduled:
+            if day in answered:
+                streak += 1
+            elif day != today:
+                break
+        day -= timedelta(days=1)
+    return streak
+
+
+def get_standup_streak(team_id: str, user_id: str) -> int:
+    """Return the member's current streak of answered scheduled days.
+
+    The old SQL subtracted a descending ROW_NUMBER from each date, which puts
+    consecutive days into different groups, so every streak read 1. It also
+    counted calendar days, so a weekend would have broken it anyway. The
+    counting now happens in streak_from_dates against the member's own
+    schedule days and the workspace's holidays.
     """
     sql = """
-        WITH dates AS (
-            SELECT DISTINCT standup_date
-            FROM standups
-            WHERE team_id = %s AND user_id = %s
-            ORDER BY standup_date DESC
-        ),
-        numbered AS (
-            SELECT standup_date,
-                   standup_date - (ROW_NUMBER() OVER (ORDER BY standup_date DESC))::int AS grp
-            FROM dates
-        )
-        SELECT COUNT(*) AS streak
-        FROM numbered
-        WHERE grp = (SELECT grp FROM numbered LIMIT 1)
+        SELECT DISTINCT standup_date
+        FROM standups
+        WHERE team_id = %s AND user_id = %s AND standup_date >= CURRENT_DATE - %s * INTERVAL '1 day'
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id))
-            row = cur.fetchone()
-    return int(row[0]) if row and row[0] else 0
+            cur.execute(sql, (team_id, user_id, STREAK_LOOKBACK_DAYS))
+            dates = [row[0] for row in cur.fetchall()]
+    if not dates:
+        return 0
+
+    # The member's week is the union of the standups they are on. A schedule
+    # with no participant list asks everyone.
+    mine = [
+        s
+        for s in get_standup_schedules(team_id)
+        if s.get("active", True) and (not s.get("participants") or user_id in (s.get("participants") or []))
+    ]
+    weekdays: set[int] = set()
+    for schedule in mine:
+        weekdays |= parse_schedule_days(schedule.get("schedule_days"))
+    tz_name = next((s.get("schedule_tz") for s in mine if s.get("schedule_tz")), None)
+    if not tz_name:
+        tz_name = (get_workspace_config(team_id) or {}).get("schedule_tz")
+    try:
+        holidays = [h["date"] for h in list_holidays(team_id)]
+    except Exception as exc:  # noqa: BLE001 - a missing calendar must not hide the streak
+        logger.debug("No holiday list for %s: %s", team_id, exc)
+        holidays = []
+    return streak_from_dates(dates, weekdays, local_today(tz_name or "UTC"), holidays)
 
 
 def get_user_last_standup_answers(team_id: str, user_id: str) -> dict | None:
@@ -1395,8 +1463,16 @@ def _local_creation_date(schedule: dict, zone) -> date | None:
     return None
 
 
-def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
+def _occurrence_dates(
+    schedule: dict, days: int, now: datetime, end: date | None = None, holidays: frozenset[date] = frozenset()
+) -> list[date]:
     """Return the dates a schedule fired on in the last N days, in its own timezone.
+
+    With `end` the window is the N days ending on that date instead of today,
+    which is how a report for a past range is judged; a day after the
+    schedule's own today is never counted, because it has not happened yet.
+    Company holidays are dropped: the standup does not run on them, so they
+    are not a missed day.
 
     Days before the schedule existed are dropped. Counting them asked a
     standup created a few minutes ago for two weeks of answers nobody was ever
@@ -1408,10 +1484,27 @@ def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
     """
     zone = _resolve_zone(schedule.get("schedule_tz"))
     local_today = now.astimezone(zone).date()
+    first = (end or local_today) - timedelta(days=days - 1)
+    last = local_today if end is None else min(end, local_today)
     weekdays = parse_schedule_days(schedule.get("schedule_days"))
-    window = [local_today - timedelta(days=offset) for offset in range(days)]
+    window = [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
     created = _local_creation_date(schedule, zone)
-    return sorted(day for day in window if day.weekday() in weekdays and (created is None or day >= created))
+    return [
+        day
+        for day in window
+        if day.weekday() in weekdays and day not in holidays and (created is None or day >= created)
+    ]
+
+
+def _workspace_local_day(schedules: list[dict] | None, now: datetime) -> date:
+    """The day the workspace is on: the first standup's timezone, else UTC.
+
+    The same pick as insights.today.workspace_today, so the analytics grid and
+    the Today view end on the same date. Using the UTC date put a Sydney team's
+    whole morning in yesterday's column.
+    """
+    zone_name = next((s.get("schedule_tz") for s in schedules or [] if s.get("schedule_tz")), None)
+    return now.astimezone(_resolve_zone(zone_name)).date()
 
 
 # Longest window any participation or report query covers. compute_participation
@@ -1426,8 +1519,16 @@ def compute_participation(
     submissions: list[dict] | None,
     days: int = 7,
     now: datetime | None = None,
+    end: date | None = None,
+    start: date | None = None,
+    holidays=None,
 ) -> dict:
     """Compute workspace, per-schedule and per-member participation from raw rows.
+
+    The window is the `days` days ending on `end`, or on the workspace's local
+    today when no end is given. A `start` overrides `days`, so a report for
+    from..to covers exactly that range. `holidays` are company days off, which
+    are not counted as expected.
 
     The unit of "expected" is a (member, schedule, occurrence date) triple, not
     a member. Counting members was wrong in three independent ways on a
@@ -1455,8 +1556,16 @@ def compute_participation(
     are `members` rows and `submissions` are `standups` rows covering at least
     the window (a day of slack either side is fine, it is filtered here).
     """
-    days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
     now = now or _utc_now()
+    active_schedules = sorted(
+        (s for s in (schedules or []) if s.get("active", True)),
+        key=lambda s: (_schedule_minutes(s), int(s.get("id") or 0)),
+    )
+    window_end = end or _workspace_local_day([s for s in (schedules or []) if s.get("active", True)], now)
+    if start is not None:
+        days = (window_end - start).days + 1
+    days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
+    days_off = frozenset(d for d in (_as_date(h) for h in holidays or ()) if d is not None)
 
     known: dict[str, dict] = {}
     for row in members or []:
@@ -1482,7 +1591,7 @@ def compute_participation(
     # dashboard can mark the day rather than only the member.
     blocked_days: set[tuple[str, date]] = set()
     last_standup: dict[str, Any] = {}
-    window_start = now.astimezone(timezone.utc).date() - timedelta(days=days - 1)
+    window_start = window_end - timedelta(days=days - 1)
     for row in submissions or []:
         user_id = row.get("user_id")
         day = _as_date(row.get("standup_date"))
@@ -1492,7 +1601,7 @@ def compute_participation(
         named = row.get("schedule_id")
         if named:
             attributed.setdefault((user_id, day), set()).add(int(named))
-        if day >= window_start:
+        if window_start <= day <= window_end:
             responses[user_id] = responses.get(user_id, 0) + 1
             if row.get("has_blockers"):
                 blockers[user_id] = blockers.get(user_id, 0) + 1
@@ -1505,11 +1614,6 @@ def compute_participation(
                     last_standup[user_id] = submitted_at
             except TypeError:
                 last_standup.setdefault(user_id, submitted_at)
-
-    active_schedules = sorted(
-        (s for s in (schedules or []) if s.get("active", True)),
-        key=lambda s: (_schedule_minutes(s), int(s.get("id") or 0)),
-    )
 
     schedule_rows: dict[int, dict] = {}
     enrolled: set[str] = set()
@@ -1524,7 +1628,7 @@ def compute_participation(
     membership: dict[str, set[int]] = {}
     for schedule in active_schedules:
         schedule_id = int(schedule.get("id") or 0)
-        dates = _occurrence_dates(schedule, days, now)
+        dates = _occurrence_dates(schedule, days, now, end=end, holidays=days_off)
         counted: list[str] = []
         seen: set[str] = set()
         for user_id in schedule.get("participants") or []:
@@ -1672,7 +1776,7 @@ def compute_participation(
     }
 
 
-def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], list[dict], list[dict]]:
+def _fetch_participation_inputs(team_id: str, lower: date, upper: date) -> tuple[list[dict], list[dict], list[dict]]:
     """Load everything the participation model needs, in three fixed queries.
 
     Three round trips whatever the workspace looks like, rather than one query
@@ -1694,12 +1798,12 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
         FROM members
         WHERE team_id = %s AND active = TRUE
     """
-    # One extra day back absorbs the offset between the server's CURRENT_DATE
-    # and a schedule whose local date is behind it.
+    # The bounds carry a day of slack either side, for schedules whose local
+    # date differs from the one the window was computed in.
     sql_submissions = """
         SELECT user_id, standup_date, has_blockers, submitted_at, schedule_id
         FROM standups
-        WHERE team_id = %s AND standup_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+        WHERE team_id = %s AND standup_date >= %s AND standup_date <= %s
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1707,16 +1811,45 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
             schedules = [dict(r) for r in cur.fetchall()]
             cur.execute(sql_members, (team_id,))
             members = [dict(r) for r in cur.fetchall()]
-            cur.execute(sql_submissions, (team_id, int(days)))
+            cur.execute(sql_submissions, (team_id, lower, upper))
             submissions = [dict(r) for r in cur.fetchall()]
     return schedules, members, submissions
 
 
-def get_participation_overview(team_id: str, days: int = 7) -> dict:
-    """Return workspace, per-schedule and per-member participation for the last N days."""
+def get_participation_overview(team_id: str, days: int = 7, end: date | None = None, start: date | None = None) -> dict:
+    """Return workspace, per-schedule and per-member participation.
+
+    The last N days by default. With `start` and/or `end` the window is that
+    date range instead, which is what a report for a chosen period needs.
+    """
     days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
-    schedules, members, submissions = _fetch_participation_inputs(team_id, days)
-    return compute_participation(schedules, members, submissions, days=days)
+    anchor = end or _utc_now().date()
+    upper = anchor + timedelta(days=1)
+    lower = (start or anchor - timedelta(days=days)) - timedelta(days=1)
+    lower = max(lower, upper - timedelta(days=MAX_WINDOW_DAYS + 2))
+    schedules, members, submissions = _fetch_participation_inputs(team_id, lower, upper)
+    return compute_participation(
+        schedules,
+        members,
+        submissions,
+        days=days,
+        end=end,
+        start=start,
+        holidays=_holiday_dates(team_id),
+    )
+
+
+def _holiday_dates(team_id: str) -> list[date]:
+    """The workspace's company holidays, or none when they cannot be read.
+
+    A calendar that fails to load must not break the participation figures, it
+    only means holidays count as ordinary days, as they did before.
+    """
+    try:
+        return [h["date"] for h in list_holidays(team_id)]
+    except Exception as exc:  # noqa: BLE001 - see docstring
+        logger.debug("No holiday list for %s: %s", team_id, exc)
+        return []
 
 
 def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
@@ -1828,23 +1961,35 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
-def upsert_daily_thread(team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0) -> None:
-    """Persist the parent message ts for today's standup thread.
+def upsert_daily_thread(
+    team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0
+) -> str | None:
+    """Persist the parent message ts for today's standup thread; return the stored one.
 
     Scoped by schedule_id so workspaces running multiple standups on the same
     channel (morning + evening) get a distinct thread parent per schedule.
+
+    Two people finishing at the same moment both post a header. Only the first
+    insert wins, so this returns whichever ts is actually stored: the caller's
+    own when it won, the other one when it lost. The no-op DO UPDATE is there
+    because DO NOTHING returns no row on conflict. None means the write failed.
     """
     sql = """
         INSERT INTO daily_standup_threads (team_id, channel_id, thread_date, schedule_id, parent_ts)
         VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (team_id, channel_id, thread_date, schedule_id) DO NOTHING
+        ON CONFLICT (team_id, channel_id, thread_date, schedule_id)
+        DO UPDATE SET parent_ts = daily_standup_threads.parent_ts
+        RETURNING parent_ts
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             try:
                 cur.execute(sql, (team_id, channel_id, thread_date, int(schedule_id or 0), parent_ts))
-            except Exception:
-                pass
+                row = cur.fetchone()
+            except Exception as exc:
+                logger.warning("Could not store daily thread for %s/%s: %s", team_id, channel_id, exc)
+                return None
+    return row[0] if row else None
 
 
 def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str, schedule_id: int = 0) -> str | None:
@@ -1861,6 +2006,21 @@ def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str, schedul
                 return None
             row = cur.fetchone()
     return row[0] if row else None
+
+
+def schedules_change_marker() -> tuple:
+    """A cheap fingerprint of every standup schedule, for the change poll.
+
+    Creating, editing, pausing or enabling a schedule moves the latest
+    timestamp; deleting one changes the count. One indexed aggregate over a
+    small table, so the scheduler can afford to ask every few seconds.
+    """
+    sql = "SELECT COUNT(*), MAX(GREATEST(COALESCE(updated_at, created_at), created_at)) FROM standup_schedules"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            row = cur.fetchone()
+    return tuple(row) if row else ()
 
 
 def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
@@ -2065,12 +2225,18 @@ def get_member_role(team_id: str, user_id: str) -> str:
 
     The installer is the safe choice for this: they hold the Slack side of the
     relationship already, and it grants nothing to anyone else.
+
+    Only while they are still here, though. A person deactivated in Slack is
+    a member, whatever their row or the installation says, so leaving the
+    company ends their admin rights with everything else.
     """
-    sql = "SELECT role FROM members WHERE team_id = %s AND user_id = %s"
+    sql = "SELECT role, active FROM members WHERE team_id = %s AND user_id = %s"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id))
             row = cur.fetchone()
+            if row and row[1] is False:
+                return "member"
             role = (row[0] if row else None) or "member"
             if role == "admin":
                 return role
@@ -2079,6 +2245,27 @@ def get_member_role(team_id: str, user_id: str) -> str:
     if inst and inst[0] and user_id and inst[0] == user_id:
         return "admin"
     return role
+
+
+def session_member_active(team_id: str, user_id: str) -> bool:
+    """Whether a dashboard session for this person should still work.
+
+    The installation has to be active and the person must not have been
+    deactivated. A person with no members row yet (the roster sync has not
+    reached them) is let through: departures always leave a row behind,
+    because rows are never deleted, only flagged.
+    """
+    sql = """
+        SELECT COALESCE(i.active, TRUE), m.active
+        FROM installations i
+        LEFT JOIN members m ON m.team_id = i.team_id AND m.user_id = %s
+        WHERE i.team_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id, team_id))
+            row = cur.fetchone()
+    return bool(row and row[0] and row[1] is not False)
 
 
 def set_member_role(team_id: str, user_id: str, role: str) -> None:
@@ -2162,18 +2349,22 @@ import hashlib as _hashlib
 import secrets as _secrets
 
 
-def generate_mcp_key(team_id: str, name: str = "Default") -> str:
-    """Generate a new MCP API key, store its hash, return the full key."""
+def generate_mcp_key(team_id: str, name: str = "Default", created_by: str | None = None) -> str:
+    """Generate a new MCP API key, store its hash, return the full key.
+
+    created_by ties the key to the admin who made it, so it stops working
+    when they leave or stop being an admin (see verify_mcp_key).
+    """
     key = "mrn_" + _secrets.token_urlsafe(32)
     key_hash = _hashlib.sha256(key.encode()).hexdigest()
     key_prefix = key[:12]
     sql = """
-        INSERT INTO mcp_api_keys (team_id, key_hash, key_prefix, name)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO mcp_api_keys (team_id, key_hash, key_prefix, name, created_by)
+        VALUES (%s, %s, %s, %s, %s)
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, key_hash, key_prefix, name))
+            cur.execute(sql, (team_id, key_hash, key_prefix, name, created_by))
     logger.info("Generated MCP key %s... for team %s", key_prefix, team_id)
     return key
 
@@ -2201,18 +2392,36 @@ def revoke_mcp_key(key_id: int, team_id: str) -> None:
 
 
 def verify_mcp_key(key: str) -> str | None:
-    """Verify an API key, update last_used_at, return team_id or None."""
+    """Verify an API key, update last_used_at, return team_id or None.
+
+    A key is only as good as the admin who made it: once they are deactivated
+    or no longer a workspace admin, it is treated as revoked. Keys from before
+    the creator was recorded have none and keep working until revoked by hand.
+    Nothing is written for a key that fails, so guessing costs one read.
+    """
+    if not key:
+        return None
     key_hash = _hashlib.sha256(key.encode()).hexdigest()
     sql = """
-        UPDATE mcp_api_keys SET last_used_at = NOW()
-        WHERE key_hash = %s AND active = TRUE
-        RETURNING team_id
+        SELECT k.id, k.team_id, k.created_by
+        FROM mcp_api_keys k
+        JOIN installations i ON i.team_id = k.team_id
+        WHERE k.key_hash = %s AND k.active = TRUE AND COALESCE(i.active, TRUE)
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (key_hash,))
             row = cur.fetchone()
-    return row[0] if row else None
+    if not row:
+        return None
+    key_id, team_id, created_by = row
+    if created_by and get_member_role(team_id, created_by) != "admin":
+        logger.info("MCP key %s refused: its creator is no longer an active admin", key_id)
+        return None
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE mcp_api_keys SET last_used_at = NOW() WHERE id = %s", (key_id,))
+    return team_id
 
 
 def delete_installation(team_id: str) -> bool:

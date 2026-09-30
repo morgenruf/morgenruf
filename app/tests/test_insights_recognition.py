@@ -102,7 +102,10 @@ def test_the_query_no_longer_filters_by_kudos_or_standup_count():
     sql, params = cur.execute.call_args.args
     assert "min_standups" not in sql
     assert "= 0" not in sql
-    assert params == {"team": "T1", "days": 30}
+    assert params["team"] == "T1" and params["days"] == 30
+    # The window ends on the workspace's local day, not the database's UTC date.
+    assert "CURRENT_DATE" not in sql
+    assert "today" in params
 
 
 def test_the_mcp_helper_still_means_consistent_and_unthanked():
@@ -120,3 +123,19 @@ def test_a_failed_query_reads_as_no_contributors():
 
     with patch.object(idb, "db_conn", side_effect=RuntimeError("down")):
         assert idb.contributor_recognition("T1") == []
+
+
+def test_windows_end_on_the_workspaces_local_day():
+    from datetime import date
+
+    import src.modules.insights.db as idb
+
+    conn, cur = _cursor_returning([])
+    with (
+        patch.object(idb, "db_conn", return_value=conn),
+        patch.object(idb, "workspace_local_today", return_value=date(2026, 9, 30)),
+    ):
+        idb.contributor_recognition("T1", days=30)
+        assert cur.execute.call_args.args[1]["today"] == date(2026, 9, 30)
+        idb.blocker_rows("T1", days=21)
+        assert cur.execute.call_args.args[1] == ("T1", date(2026, 9, 30), 21)

@@ -12,3 +12,28 @@ export const MIN_EXPECTED_FOR_VERDICT = 5;
 export function enoughToJudge(expected: number | null | undefined) {
   return (expected ?? 0) >= MIN_EXPECTED_FOR_VERDICT;
 }
+
+/**
+ * Participation at or above this rate reads as healthy (green) everywhere:
+ * the standups list, analytics and the daily trend. Below SLIPPING_RATE it
+ * needs a look (red); in between it is slipping (amber).
+ */
+export const HEALTHY_RATE = 75;
+export const SLIPPING_RATE = 40;
+
+export type RateLevel = 'success' | 'warning' | 'destructive';
+
+export function rateLevel(rate: number): RateLevel {
+  return rate >= HEALTHY_RATE
+    ? 'success'
+    : rate >= SLIPPING_RATE
+      ? 'warning'
+      : 'destructive';
+}
+
+/** Written out in full so Tailwind finds the class names. */
+export const rateTextClass: Record<RateLevel, string> = {
+  success: 'text-success',
+  warning: 'text-warning',
+  destructive: 'text-destructive',
+};

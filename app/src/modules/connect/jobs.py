@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.triggers.cron import CronTrigger
@@ -19,10 +19,11 @@ from slack_sdk import WebClient
 
 from src.core.scheduler import JobSpec
 from src.core.timezones import canonical_tz
+from src.core.workspace_calendar import is_company_holiday
 from src.modules.connect import blocks as cblocks
 from src.modules.connect import slack_api as api
 from src.modules.connect.matcher import match
-from src.modules.connect.rounds import _as_date, is_round_due
+from src.modules.connect.rounds import _as_date, is_round_due, programme_today
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +157,12 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
 
     # The programme's calendar day, not the server's: the cron fires in the
     # programme's timezone and the same-day guard in create_round uses it too.
-    try:
-        today = datetime.now(ZoneInfo(program.get("timezone") or "UTC")).date()
-    except (ZoneInfoNotFoundError, ValueError):
-        today = date.today()
+    today = programme_today(program, datetime.now(timezone.utc))
+    # Nobody should be introduced on a company holiday. The round is not
+    # lost: the cadence check uses >=, so the next firing catches it up.
+    if not force and is_company_holiday(program["team_id"], today):
+        logger.info("connect: programme %s skipped, %s is a company holiday", program_id, today)
+        return
     # Manual rounds are extras, so the cadence counts scheduled rounds only.
     if not force and not is_round_due(
         program["interval_weeks"], program.get("last_scheduled_round"), today, program.get("next_round_date")
@@ -181,7 +184,7 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
         return
 
     eligible = {m.user_id for m in eligible_members(team_id)}
-    opted_out = cdb.optout_user_ids(team_id, program_id)
+    opted_out = cdb.optout_user_ids(team_id, program_id, today)
     pool = sorted(in_channel & eligible - opted_out)
 
     if len(pool) < MIN_POOL:
@@ -341,6 +344,7 @@ def _deliver_matches(client, round_id: int, team_id: str, program_id: int) -> bo
                 # The accept buttons carry the match, so the message needs it.
                 match_id=m["id"],
                 tone=str(program.get("intro_tone") or "hybrid"),
+                channel_id=str(program.get("channel_id") or ""),
             )
             api.post(client, channel, text, blocks)
             if video_mode == "zoom":

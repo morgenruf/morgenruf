@@ -228,17 +228,17 @@ test('nested participant, pairing, delivery, and invitation loads retain their s
 
   await expect(page.locator('[data-loading-skeleton]')).toHaveCount(0);
 
-  await page.getByRole('button', { name: /pairings/ }).click();
+  await page.getByRole('button', { name: /\bpairs?\b/ }).click();
 
   await expect(
-    page.getByRole('status', { name: 'Loading pairings…' }),
+    page.getByRole('status', { name: 'Loading pairs…' }),
   ).toBeVisible();
   await expect(page.getByText('By person', { exact: true })).toBeVisible();
 
   pairings();
 
   await expect(
-    page.getByRole('status', { name: 'Loading pairings…' }),
+    page.getByRole('status', { name: 'Loading pairs…' }),
   ).toHaveCount(0);
 
   const deliveries = await hold(

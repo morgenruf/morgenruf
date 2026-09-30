@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import hmac
 import io
 import json
 import logging
@@ -24,11 +23,11 @@ from flask_smorest import Blueprint
 
 import src.core.db as db
 from src.core import api_schemas as schemas
+from src.core import rate_limit
 from src.core.api import api_errors, csrf_token
 from src.core.oauth import consume_login_token
-from src.core.schedule_validation import schedule_config_error, schedule_payload_error
+from src.core.schedule_validation import DEFAULT_QUESTIONS, schedule_config_error, schedule_payload_error
 from src.core.scopes import SCOPE_STRING
-from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
 
 logger = logging.getLogger(__name__)
@@ -54,6 +53,40 @@ def _is_safe_webhook_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+# How often a session is checked against the roster. Each check also re-signs
+# the cookie, which is what makes PERMANENT_SESSION_LIFETIME a sliding window.
+_ACTIVE_CHECK_SECONDS = 60
+
+
+def _session_revoked():
+    """A response ending the session if its person or workspace is gone, else None.
+
+    A signed cookie outlives the job it was issued for: someone deactivated in
+    Slack, or a workspace that removed the app, kept dashboard access until
+    the cookie expired.
+    """
+    import time  # noqa: PLC0415
+
+    now = int(time.time())
+    try:
+        if now - int(session.get("active_checked_at") or 0) < _ACTIVE_CHECK_SECONDS:
+            return None
+    except (TypeError, ValueError):
+        pass
+    try:
+        active = db.session_member_active(session.get("team_id") or "", session.get("user_id") or "")
+    except Exception as exc:
+        logger.warning("session check DB error: %s", exc)
+        return jsonify({"error": "Service unavailable"}), 503
+    if not active:
+        session.clear()
+        if request.path.startswith("/dashboard/api/"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return redirect("/dashboard/login")
+    session["active_checked_at"] = now
+    return None
+
+
 def _login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -61,6 +94,9 @@ def _login_required(f):
             if request.path.startswith("/dashboard/api/"):
                 return jsonify({"error": "Unauthorized"}), 401
             return redirect("/dashboard/login")
+        revoked = _session_revoked()
+        if revoked is not None:
+            return revoked
         return f(*args, **kwargs)
 
     return wrapper
@@ -101,6 +137,9 @@ def _admin_required(arg=None):
             user_id = session.get("user_id")
             if not team_id:
                 return jsonify({"error": "Unauthorized"}), 401
+            revoked = _session_revoked()
+            if revoked is not None:
+                return revoked
             try:
                 if not db.can_administer(team_id, user_id or "", module):
                     return jsonify({"error": "Admin required" if module is None else _no_grant_message(module)}), 403
@@ -298,14 +337,23 @@ _WORKSPACE_SETTING_FIELDS = (
     "linear_team",
     "manager_email",
     "manager_digest_enabled",
-    "feed_token",
     "feed_public",
 )
 
 _BOOL_WORKSPACE_FIELDS = ("ai_summary_enabled", "manager_digest_enabled", "feed_public")
 
-# Publishing the workspace's standups is not part of running standups.
-_FEED_FIELDS = ("feed_token", "feed_public")
+# Settings that reach beyond one standup: publishing the feed, mailing every
+# standup to an outside address daily, sending answers to an AI provider, and
+# where issue keys link to. Running a standup does not need any of them.
+# feed_token is not among them at all: only the feed-token endpoint sets it.
+_WORKSPACE_ADMIN_FIELDS = (
+    "feed_public",
+    "manager_email",
+    "manager_digest_enabled",
+    "ai_summary_enabled",
+    "ai_provider",
+    "jira_base_url",
+)
 
 # "Until report time", "4 hours", "No limit" in the form, against the integer
 # hours that can_edit_response reads.
@@ -314,11 +362,18 @@ _HOURS_TO_EDIT_WINDOW = {0: "report", 4: "4h"}
 
 
 def _workspace_settings(team_id: str) -> dict:
-    """Workspace-level settings, for merging into a schedule response."""
+    """Workspace-level settings, for merging into a schedule response.
+
+    The feed token is the only secret guarding the public feed, so it goes
+    to workspace admins only.
+    """
     try:
-        return db.get_workspace_config(team_id) or {}
+        ws = dict(db.get_workspace_config(team_id) or {})
     except Exception:
         return {}
+    if not _is_workspace_admin():
+        ws.pop("feed_token", None)
+    return ws
 
 
 def _is_workspace_admin() -> bool:
@@ -332,17 +387,17 @@ def _is_workspace_admin() -> bool:
 def _split_workspace_fields(data: dict) -> dict:
     """Pull the workspace-level settings out of a schedule payload.
 
-    The standup form also carries the public feed switch, which publishes the
-    team's standups at an unauthenticated URL. Someone who administers
-    standups should not reach that through the form when they cannot reach
-    the feed endpoint directly, so those two fields need workspace admin.
+    The standup form also carries settings for the whole workspace, such as
+    the public feed switch and the manager digest. Someone who administers
+    standups should not reach those through the form when they cannot reach
+    them directly, so they need workspace admin.
     """
     workspace_admin = _is_workspace_admin()
     ws: dict = {}
     for field in _WORKSPACE_SETTING_FIELDS:
         if field not in data:
             continue
-        if field in _FEED_FIELDS and not workspace_admin:
+        if field in _WORKSPACE_ADMIN_FIELDS and not workspace_admin:
             continue
         ws[field] = bool(data[field]) if field in _BOOL_WORKSPACE_FIELDS else data[field]
     if "edit_window" in data:
@@ -363,7 +418,7 @@ def api_list_standups():
         # workspace settings always came back as their defaults, which is why
         # choosing Anthropic and reloading snapped the dropdown to OpenAI.
         ws = _workspace_settings(team_id)
-        return [_schedule_to_standup(r, ws) for r in rows]
+        return [_schedule_to_standup(r, ws) for r in _visible_schedules(rows)]
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
         return []
@@ -392,9 +447,7 @@ def api_create_standup(data):
             schedule_time=data.get("schedule_time", "09:00"),
             schedule_tz=data.get("schedule_tz", "UTC"),
             schedule_days=days,
-            questions=data.get(
-                "questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]
-            ),
+            questions=data.get("questions", list(DEFAULT_QUESTIONS)),
             participants=data.get("participants", []),
             active=data.get("active", True),
             reminder_minutes=int(data.get("reminder_minutes") or 0),
@@ -500,6 +553,7 @@ def api_delete_standup(standup_id: str):
 
 
 @browser_bp.route("/email/subscribe", methods=["GET", "POST"])
+@rate_limit.rate_limited(rate_limit.EMAIL_LINKS)
 def email_subscribe():
     """Record an express opt-in to product update emails.
 
@@ -511,7 +565,7 @@ def email_subscribe():
 
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
-    if not email or not hmac.compare_digest(token, mailer.unsubscribe_token(email)):
+    if not mailer.check_email_token(email, token, "subscribe"):
         return _email_result("invalid", 400)
     try:
         db.grant_email_consent(email, source="welcome-email", ip=request.headers.get("CF-Connecting-IP", ""))
@@ -523,17 +577,18 @@ def email_subscribe():
 
 
 @browser_bp.route("/email/unsubscribe", methods=["GET", "POST"])
+@rate_limit.rate_limited(rate_limit.EMAIL_LINKS)
 def email_unsubscribe():
     """Stop emailing this address. No login, one click, works from the header.
 
     Mail clients hit this with POST via List-Unsubscribe-Post, and people click
     it with GET from the footer. Both do the same thing.
     """
-    from src.core.mailer import unsubscribe_token  # noqa: PLC0415
+    from src.core.mailer import check_email_token  # noqa: PLC0415
 
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
-    if not email or not hmac.compare_digest(token, unsubscribe_token(email)):
+    if not check_email_token(email, token, "unsubscribe"):
         return _email_result("invalid", 400)
     try:
         db.suppress_email(email)
@@ -705,6 +760,51 @@ def _set_module_admin(user_id: str, module: str):
 # ---------------------------------------------------------------------------
 
 
+# The Slack directory, per workspace, for a few minutes. users.list is Tier 2
+# (about 20 calls a minute) and the Members page and every participant picker
+# used to page through it on each load, so a few admins clicking around could
+# rate limit the workspace for everyone, the standup jobs included. The members
+# table cannot stand in for it: it only holds people the bot has met, and the
+# pickers need everyone. Five minutes means someone who just joined Slack shows
+# up shortly, which is all the page needs.
+_DIRECTORY_TTL_SECONDS = 300
+_directory_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _rate_limited_slack_client(token: str):
+    """A WebClient that waits and retries when Slack answers 429."""
+    from slack_sdk import WebClient  # noqa: PLC0415
+
+    client = WebClient(token=token)
+    try:
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler  # noqa: PLC0415
+
+        client.retry_handlers.append(RateLimitErrorRetryHandler(max_retry_count=2))
+    except Exception as exc:  # pragma: no cover - depends on slack_sdk internals
+        logger.debug("Could not attach the rate limit retry handler: %s", exc)
+    return client
+
+
+def _slack_directory(team_id: str, client) -> dict:
+    """Every real person in the workspace as {id: user}, cached briefly.
+
+    Raises when Slack cannot be read, so callers keep their own fallback to
+    the members table. A failure is not cached.
+    """
+    import time  # noqa: PLC0415
+
+    from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
+
+    cached = _directory_cache.get(team_id)
+    if cached and time.monotonic() - cached[0] < _DIRECTORY_TTL_SECONDS:
+        return cached[1]
+    directory, error = fetch_workspace_directory(client)
+    if directory is None:
+        raise RuntimeError(f"users.list failed: {error or 'unknown'}")
+    _directory_cache[team_id] = (time.monotonic(), directory)
+    return directory
+
+
 @dashboard_bp.route("/dashboard/api/members", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="listMembers", tags=["Members"], security=[{"sessionCookie": []}])
@@ -738,11 +838,14 @@ def api_members(query):
         grants = {}
 
     channel_id = query.get("channel_id")
+    # Addresses are for the people who set standups up; membership of a
+    # channel only for someone who could see that channel in Slack.
+    privileged = _sees_every_standup()
 
     try:
-        from slack_sdk import WebClient  # noqa: PLC0415
-
-        client = WebClient(token=token)
+        client = _rate_limited_slack_client(token)
+        if channel_id and not privileged and not _can_see_channel(client, channel_id, session.get("user_id") or ""):
+            return []
 
         # If channel_id provided, fetch only that channel's members
         channel_member_ids = None
@@ -756,21 +859,8 @@ def api_members(query):
                 if not cursor:
                     break
 
-        # Paginate through all workspace users
-        all_users = []
-        cursor = None
-        while True:
-            result = client.users_list(limit=200, cursor=cursor or "")
-            all_users.extend(result.get("members", []))
-            cursor = result.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
-
         members = []
-        for u in all_users:
-            if not is_human(u):
-                continue
-            uid = u["id"]
+        for uid, u in _slack_directory(team_id, client).items():
             if channel_member_ids is not None and uid not in channel_member_ids:
                 continue
             profile = u.get("profile", {})
@@ -780,7 +870,7 @@ def api_members(query):
                     "name": profile.get("real_name") or u.get("name", ""),
                     "display_name": profile.get("display_name") or u.get("name", ""),
                     "avatar": profile.get("image_48", ""),
-                    "email": profile.get("email", ""),
+                    "email": profile.get("email", "") if privileged else "",
                     "tz": u.get("tz", "UTC"),
                     "role": role_map.get(uid, "member"),
                     "module_admin": sorted(grants.get(uid, ())),
@@ -803,7 +893,7 @@ def api_members(query):
                     # shows faces and handles when Slack is unreachable.
                     "display_name": r.get("display_name") or "",
                     "avatar": r.get("avatar_url") or "",
-                    "email": r.get("email", ""),
+                    "email": r.get("email", "") if privileged else "",
                     "tz": r.get("tz", "UTC"),
                     "role": r.get("role", "member"),
                     "module_admin": sorted(grants.get(r["user_id"], ())),
@@ -832,7 +922,9 @@ def api_invite_admin(data):
         return jsonify({"error": "user_id required"}), 400
     token = _get_bot_token()
     if not token:
-        return jsonify({"error": "No bot token"}), 500
+        return jsonify(
+            {"error": "Morgenruf is not connected to Slack for this workspace. Reinstall it, then try again."}
+        ), 500
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
 
@@ -961,11 +1053,7 @@ def _import_candidates(team_id: str) -> list[dict]:
     token = _get_bot_token()
     if token:
         try:
-            from slack_sdk import WebClient  # noqa: PLC0415
-
-            from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
-
-            directory, _error = fetch_workspace_directory(WebClient(token=token))
+            directory = _slack_directory(team_id, _rate_limited_slack_client(token))
             if directory:
                 return [
                     {"user_id": uid, "email": (user.get("profile") or {}).get("email", "")}
@@ -1223,14 +1311,130 @@ def _clamp_date_from(date_from: str | None) -> str | None:
     """
     if not date_from:
         return date_from
-    from datetime import date, timedelta
+    from datetime import date, datetime, timedelta, timezone
 
     try:
         parsed = date.fromisoformat(date_from)
     except ValueError:
         return date_from
-    earliest = date.today() - timedelta(days=_MAX_REPORT_DAYS - 1)
+    # A memory bound, not a calendar day, so the UTC date is precise enough.
+    earliest = datetime.now(timezone.utc).date() - timedelta(days=_MAX_REPORT_DAYS - 1)
     return earliest.isoformat() if parsed < earliest else date_from
+
+
+# Whether a channel is public, per process for a few minutes. Visibility checks
+# run on every report and feed load, and privacy changes rarely.
+_CHANNEL_PUBLIC_CACHE: dict[str, tuple[float, bool]] = {}
+_CHANNEL_PUBLIC_TTL = 600
+
+
+def _channel_is_public(client, channel_id: str) -> bool:
+    """True for a public channel. Anything that cannot be confirmed is not."""
+    import time  # noqa: PLC0415
+
+    cached = _CHANNEL_PUBLIC_CACHE.get(channel_id)
+    if cached and time.monotonic() - cached[0] < _CHANNEL_PUBLIC_TTL:
+        return cached[1]
+    try:
+        info = client.conversations_info(channel=channel_id).get("channel") or {}
+    except Exception as exc:
+        logger.info("Could not read channel %s: %s", channel_id, exc)
+        return False
+    public = not (info.get("is_private") or info.get("is_im") or info.get("is_mpim") or info.get("is_group"))
+    _CHANNEL_PUBLIC_CACHE[channel_id] = (time.monotonic(), public)
+    return public
+
+
+def _in_channel(client, channel_id: str, user_id: str) -> bool:
+    """Whether this person is a member of the channel, bounded to 20 pages."""
+    cursor = None
+    try:
+        for _ in range(20):
+            resp = client.conversations_members(channel=channel_id, limit=1000, cursor=cursor or "")
+            if user_id in (resp.get("members") or []):
+                return True
+            cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+            if not cursor:
+                break
+    except Exception as exc:
+        logger.info("Could not list members of %s: %s", channel_id, exc)
+    return False
+
+
+def _can_see_channel(client, channel_id: str, user_id: str) -> bool:
+    """What Slack would show them: any public channel, or a private one they are in."""
+    return _channel_is_public(client, channel_id) or _in_channel(client, channel_id, user_id)
+
+
+def _sees_every_standup() -> bool:
+    """Workspace and standup admins see every schedule, answer and email."""
+    try:
+        return db.can_administer(session.get("team_id") or "", session.get("user_id") or "", "standup")
+    except Exception as exc:
+        logger.warning("visibility check failed: %s", exc)
+        return False
+
+
+def _visible_schedules(schedules: list[dict]) -> list[dict]:
+    """The schedules this viewer may read.
+
+    A member sees a standup they are in, or one posting to a channel they
+    could read in Slack anyway. Without this anyone signed in could read the
+    answers from a private channel's standup.
+    """
+    if _sees_every_standup():
+        return schedules
+    user_id = session.get("user_id") or ""
+    client = None
+    token = _get_bot_token()
+    if token:
+        from slack_sdk import WebClient  # noqa: PLC0415
+
+        client = WebClient(token=token)
+    visible = []
+    for sched in schedules:
+        channel_id = sched.get("channel_id") or ""
+        if user_id in (sched.get("participants") or []) or (
+            client is not None and channel_id and _can_see_channel(client, channel_id, user_id)
+        ):
+            visible.append(sched)
+    return visible
+
+
+def _visible_schedule_ids(team_id: str) -> set[int] | None:
+    """Ids of the schedules this viewer may read, or None for all of them."""
+    if _sees_every_standup():
+        return None
+    try:
+        schedules = db.get_standup_schedules(team_id)
+    except Exception as exc:
+        logger.warning("Could not load schedules for visibility: %s", exc)
+        return set()
+    return {int(s["id"]) for s in _visible_schedules(schedules) if s.get("id") is not None}
+
+
+def _visible_rows(rows: list[dict], visible: set[int] | None) -> list[dict]:
+    """Answers from visible schedules. A row older than schedule ids is shown
+    only to the person who wrote it, since its standup cannot be told."""
+    if visible is None:
+        return rows
+    user_id = session.get("user_id") or ""
+    return [
+        r for r in rows if (int(r["schedule_id"]) in visible if r.get("schedule_id") else r.get("user_id") == user_id)
+    ]
+
+
+def _parse_report_date(value: str | None):
+    """A YYYY-MM-DD query value as a date, or None when absent or unreadable."""
+    if not value:
+        return None
+    from datetime import date
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        logger.info("Ignoring unreadable report date %r", value)
+        return None
 
 
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
@@ -1254,24 +1458,32 @@ def api_reports(query):
         )
         if user_id_filter:
             standups = [s for s in standups if s.get("user_id") == user_id_filter]
+        visible = _visible_schedule_ids(team_id)
+        standups = _visible_rows(standups, visible)
 
         _attach_questions(team_id, standups)
         channel_names = _resolve_channel_names(token, standups) if (token := _get_bot_token()) else {}
 
-        days = 7
-        if date_from:
-            try:
-                from datetime import datetime as _dt
+        # Participation covers the same from..to range as the standups list.
+        # It used to count from date_from to the server's UTC today and ignore
+        # date_to, so a report for last month was scored against this week.
+        overview = db.get_participation_overview(
+            team_id, days=7, start=_parse_report_date(date_from), end=_parse_report_date(date_to)
+        )
+        total_days = int(overview.get("days") or 7)
 
-                d = _dt.fromisoformat(date_from)
-                days = max(1, (_dt.utcnow() - d).days + 1)
-            except Exception as e:
-                logger.warning("Unexpected error in api_reports parsing date_from: %s", e)
-        overview = db.get_participation_overview(team_id, days=days)
-        total_days = days
+        overview_schedules = overview.get("schedules") or []
+        overview_members = overview.get("members") or []
+        if visible is not None:
+            overview_schedules = [r for r in overview_schedules if r.get("schedule_id") in visible]
+            overview_members = [
+                p
+                for p in overview_members
+                if p.get("user_id") == session.get("user_id") or set(p.get("schedule_ids") or []) & visible
+            ]
 
         member_summary = []
-        for p in overview.get("members") or []:
+        for p in overview_members:
             expected = int(p.get("expected") or 0)
             rate = int(p.get("completion_rate") or 0)
             member_summary.append(
@@ -1299,7 +1511,7 @@ def api_reports(query):
             "participation": member_summary,
             "total_days": total_days,
             "summary": _participation_summary(overview),
-            "schedules": overview.get("schedules") or [],
+            "schedules": overview_schedules,
         }
     except Exception as exc:
         logger.error("api_reports error: %s", exc)
@@ -1411,7 +1623,9 @@ def api_add_webhook(data):
     if not url_val:
         return jsonify({"error": "url is required"}), 400
     if not _is_safe_webhook_url(url_val):
-        return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+        return jsonify(
+            {"error": "Use a public https address. localhost and private network addresses are blocked."}
+        ), 400
     events, err = _clean_events(data.get("events"))
     if err:
         return jsonify({"error": err}), 400
@@ -1444,7 +1658,9 @@ def api_update_webhook(data, hook_id: str):
         if not url_val:
             return jsonify({"error": "url must not be empty"}), 400
         if not _is_safe_webhook_url(url_val):
-            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+            return jsonify(
+                {"error": "Use a public https address. localhost and private network addresses are blocked."}
+            ), 400
 
     events, err = _clean_events(data.get("events"))
     if err:
@@ -1509,7 +1725,9 @@ def api_test_webhook(hook_id: str):
         if not hook:
             return jsonify({"error": "Webhook not found"}), 404
         if not _is_safe_webhook_url(hook.get("webhook_url") or ""):
-            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+            return jsonify(
+                {"error": "Use a public https address. localhost and private network addresses are blocked."}
+            ), 400
 
         from datetime import datetime, timezone  # noqa: PLC0415
 
@@ -1667,6 +1885,7 @@ def api_export_csv(query):
         rows = db.export_standups(team_id, from_date, to_date)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+    rows = _visible_rows(rows, _visible_schedule_ids(team_id))
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
@@ -1788,17 +2007,44 @@ def api_delete_rule(rule_id: int):
 @dashboard_bp.doc(operationId="getFeed", tags=["Public"], security=[])
 @dashboard_bp.alt_response(404, schema=schemas.Error)
 @dashboard_bp.response(200, schemas.PublicFeed)
+@rate_limit.rate_limited(rate_limit.FEED)
 def public_feed(token: str):
-    from datetime import date
-
     config = db.get_workspace_by_feed_token(token)
     if not config or not config.get("feed_public"):
         return jsonify(error="Feed not found or not public"), 404
+    team_id = config["team_id"]
+    public = _public_schedule_ids(team_id)
+    # The team's own day, not the server's: the feed showed an empty "today"
+    # to a Sydney team every morning because answers are filed on local dates.
+    today = db.workspace_local_today(team_id).isoformat()
     return {
         "title": config.get("standup_name") or "Team Standup",
-        "date": date.today().isoformat(),
-        "standups": db.get_standups(config["team_id"], days=1),
+        "date": today,
+        "standups": [
+            r for r in db.get_standups(team_id, from_date=today, to_date=today) if r.get("schedule_id") in public
+        ],
     }
+
+
+def _public_schedule_ids(team_id: str) -> set:
+    """Schedules posting to a public channel, the only ones the feed shows.
+
+    Publishing the feed is meant to share what the team already shares in
+    Slack, not a private channel's standup. A channel that cannot be checked
+    counts as private, and so does an answer with no schedule.
+    """
+    try:
+        inst = db.get_installation(team_id) or {}
+        schedules = db.get_standup_schedules(team_id)
+    except Exception as exc:
+        logger.warning("feed: could not load schedules for %s: %s", team_id, exc)
+        return set()
+    if not inst.get("bot_token"):
+        return set()
+    from slack_sdk import WebClient  # noqa: PLC0415
+
+    client = WebClient(token=inst["bot_token"])
+    return {s["id"] for s in schedules if s.get("channel_id") and _channel_is_public(client, s["channel_id"])}
 
 
 @dashboard_bp.route("/dashboard/api/logout", methods=["POST"])
@@ -1859,8 +2105,8 @@ def api_get_mcp_keys():
 def api_create_mcp_key(data):
     team_id = session["team_id"]
     name = data.get("name", "Default")
-    key = db.generate_mcp_key(team_id, name)
-    return {"key": key, "message": "Save this key — it won't be shown again!"}
+    key = db.generate_mcp_key(team_id, name, created_by=session.get("user_id") or None)
+    return {"key": key, "message": "Save this key now. It won't be shown again."}
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys/<int:key_id>", methods=["DELETE"])
@@ -1932,12 +2178,12 @@ def api_set_module(data, name: str):
     team_id = session["team_id"]
     spec = next((s for s in REGISTRY if s.name == name), None)
     if spec is None:
-        return jsonify({"error": "unknown module"}), 404
+        return jsonify({"error": "There is no feature with that name."}), 404
     enabled = bool(data.get("enabled"))
     if enabled and not db.has_scopes(team_id, spec.required_scopes):
         return jsonify(
             {
-                "error": "missing_scopes",
+                "error": "Morgenruf needs more Slack permissions for this. Re-authorise the app, then try again.",
                 "required": list(spec.required_scopes),
                 "reauthorise_url": "/install",
             }

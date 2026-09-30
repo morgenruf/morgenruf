@@ -1,4 +1,5 @@
 import type { ConnectRound } from '@/common/api/generated/data-contracts';
+import { formatDate } from '@/common/lib/format';
 
 import { attendanceRate } from './form-utils';
 
@@ -18,7 +19,7 @@ export function attendanceTrend(rounds: readonly ConnectRound[]) {
 export function roundDate(value: string, compact = false) {
   if (!value) return 'Unscheduled';
 
-  return new Date(value).toLocaleDateString(undefined, {
+  return formatDate(value, {
     day: 'numeric',
     month: compact ? 'short' : 'long',
     ...(compact ? {} : { year: 'numeric' }),

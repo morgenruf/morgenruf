@@ -110,7 +110,7 @@ def register_routes(flask_app) -> None:
     def api_set_kudos_config(data):
 
         emoji = (data.get("emoji") or "").strip()
-        if not emoji or len(emoji) > 16:
+        if not kudos_db.valid_emoji(emoji):
             return jsonify({"error": "Pick a single emoji for your team to give"}), 400
         try:
             allowance = int(data.get("daily_allowance", 5))

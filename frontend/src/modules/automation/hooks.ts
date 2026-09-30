@@ -24,6 +24,8 @@ export function useAutomation() {
   const refresh = () => client.invalidateQueries({ queryKey: key });
 
   const create = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: (data: RuleInput) => api.automation.createRule(data),
     onSuccess: refresh,
   });

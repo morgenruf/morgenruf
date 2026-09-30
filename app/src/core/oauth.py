@@ -15,6 +15,7 @@ from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import src.core.db as db
+from src.core import rate_limit
 from src.core.scopes import BOT_SCOPES
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,9 @@ def _verify_state(state: str) -> bool:
 
 @oauth_bp.route("/")
 def index():
-    return jsonify({"name": "morgenruf", "version": "1.1.3", "status": "ok"})
+    from src.core.version import APP_VERSION  # noqa: PLC0415
+
+    return jsonify({"name": "morgenruf", "version": APP_VERSION, "status": "ok"})
 
 
 @oauth_bp.route("/install")
@@ -104,6 +107,7 @@ def install():
 
 
 @oauth_bp.route("/oauth/callback")
+@rate_limit.rate_limited(rate_limit.OAUTH_CALLBACK)
 def oauth_callback():
     """Exchange the OAuth code for a bot token and store the installation."""
     code = request.args.get("code")
@@ -195,8 +199,9 @@ def oauth_callback():
             bot_client.chat_postMessage(
                 channel=dm_channel,
                 text=(
-                    "👋 Welcome to Morgenruf! I'll ping you every morning for your standup. "
-                    "Type `help` to see what I can do."
+                    "👋 Morgenruf is installed. Nothing runs until you create a standup: "
+                    "open the Home tab and press *Create a standup*. It takes a minute. "
+                    "Type `/morgenruf help` to see everything else."
                 ),
             )
         except Exception as exc:

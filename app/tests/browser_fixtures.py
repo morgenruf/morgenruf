@@ -308,7 +308,7 @@ class BrowserData:
             fields["events"] = events
         return self.update(self.hooks, row_id, **fields)
 
-    def create_key(self, team_id, name):
+    def create_key(self, team_id, name, created_by=None):
         key_id = max((k["id"] for k in self.keys), default=0) + 1
         self.keys.append(
             {
@@ -463,6 +463,9 @@ def create_test_app(patcher=None):
             "get_workspace_config": lambda team: deepcopy(state.workspace),
             "upsert_workspace_config": lambda team, **fields: state.workspace.update(fields),
             "get_member_role": lambda team, user: state.roles.get(user, "member"),
+            "session_member_active": lambda team, user: any(
+                m["user_id"] == user and m.get("active", True) for m in state.members
+            ),
             "can_administer": lambda team, user, module=None: (
                 state.roles.get(user) == "admin" or (module is not None and module in state.grants.get(user, set()))
             ),
@@ -487,7 +490,7 @@ def create_test_app(patcher=None):
             "delete_standup_schedule": lambda team, schedule_id: state.delete(state.schedules, schedule_id),
             "get_standups": lambda team, **kwargs: deepcopy(state.responses),
             "export_standups": lambda *args: deepcopy(state.responses),
-            "get_participation_overview": lambda team, days=7: state.overview(days),
+            "get_participation_overview": lambda team, days=7, start=None, end=None: state.overview(days),
             "granted_scopes": lambda team: {
                 scope
                 for spec in __import__("src.modules", fromlist=["REGISTRY"]).REGISTRY
@@ -565,7 +568,7 @@ def create_test_app(patcher=None):
                 p["id"] == program_id and p["team_id"] == team for p in state.programs
             ),
             "delete_program": lambda team, program_id: state.delete(state.programs, program_id),
-            "optout_user_ids": lambda team, program_id: set(),
+            "optout_user_ids": lambda team, program_id, today=None: set(),
             "recent_rounds": lambda team, program_id, *args: deepcopy(state.rounds),
             "round_matches": lambda team, round_id: [
                 {

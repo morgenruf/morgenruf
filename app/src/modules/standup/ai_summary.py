@@ -22,6 +22,17 @@ _SYSTEM_PROMPT = """You are a team standup summariser. Given a list of standup u
 Be concise, professional, and use "the team" language. Do not list every person individually."""
 
 
+def safe_summary(text: str) -> str:
+    """The summary as it may be posted to a channel.
+
+    Model output is shaped by what people typed, so it must not be able to
+    ping the channel or show a link under a label that hides where it goes.
+    """
+    from src.modules.standup.blocks import defuse_broadcasts, neutralise_links  # noqa: PLC0415
+
+    return neutralise_links(defuse_broadcasts(text or ""))
+
+
 def generate_summary(standups: list[dict], team_name: str = "", provider: str = "") -> str:
     """Generate an AI summary paragraph from standup data.
 
@@ -125,9 +136,9 @@ def _plain_summary(standups: list[dict], team_name: str) -> str:
     total = len(standups)
     with_blockers = sum(1 for s in standups if s.get("has_blockers"))
 
-    summary = f"📊 *Team Summary* — {total} standup{'s' if total != 1 else ''} submitted"
+    summary = f"📊 *Team summary*: {total} standup{'s' if total != 1 else ''} submitted"
     if team_name:
-        summary = f"📊 *{team_name} Summary* — {total} standup{'s' if total != 1 else ''} submitted"
+        summary = f"📊 *{team_name} summary*: {total} standup{'s' if total != 1 else ''} submitted"
 
     if with_blockers:
         summary += f"\n⚠️ {with_blockers} team member{'s' if with_blockers != 1 else ''} reported blockers"

@@ -151,14 +151,51 @@ class TestAGrantIsNotAWayUp:
         )
         assert any("feed_public" in c.kwargs for c in db.upsert_workspace_config.call_args_list)
 
-    def test_the_other_workspace_settings_still_save(self, monkeypatch):
-        # Everything else on that form is part of running standups.
+    @pytest.mark.parametrize(
+        "field",
+        [
+            {"manager_email": "outside@example.com"},
+            {"manager_digest_enabled": True},
+            {"ai_summary_enabled": True},
+            {"ai_provider": "anthropic"},
+            {"jira_base_url": "https://evil.example.com/browse"},
+        ],
+    )
+    def test_workspace_wide_settings_need_a_workspace_admin(self, monkeypatch, field):
+        # A daily digest of every standup to any address, answers sent to an
+        # AI provider, where issue keys link: none of it is running a standup.
         client, db = _client(monkeypatch, grants={"standup"})
+        client.put("/dashboard/api/standups/1", json={"name": "Daily", "channel_id": "C1", "questions": ["a"], **field})
+        for call in db.upsert_workspace_config.call_args_list:
+            assert not set(field) & set(call.kwargs)
+
+    def test_the_other_workspace_settings_still_save(self, monkeypatch):
+        # Autolinking to the team's own repository is part of running standups.
+        client, db = _client(monkeypatch, grants={"standup"})
+        client.put(
+            "/dashboard/api/standups/1",
+            json={"name": "Daily", "channel_id": "C1", "questions": ["a"], "github_repo": "acme/app"},
+        )
+        assert any("github_repo" in c.kwargs for c in db.upsert_workspace_config.call_args_list)
+
+    def test_a_workspace_admin_saves_them(self, monkeypatch):
+        client, db = _client(monkeypatch, role="admin")
         client.put(
             "/dashboard/api/standups/1",
             json={"name": "Daily", "channel_id": "C1", "questions": ["a"], "manager_email": "lead@example.com"},
         )
         assert any("manager_email" in c.kwargs for c in db.upsert_workspace_config.call_args_list)
+
+    def test_nobody_sets_the_feed_token_through_the_form(self, monkeypatch):
+        # A chosen token could be short and guessable; only the feed-token
+        # endpoint mints one.
+        client, db = _client(monkeypatch, role="admin")
+        client.put(
+            "/dashboard/api/standups/1",
+            json={"name": "Daily", "channel_id": "C1", "questions": ["a"], "feed_token": "abc"},
+        )
+        for call in db.upsert_workspace_config.call_args_list:
+            assert "feed_token" not in call.kwargs
 
 
 class TestOnlyAWorkspaceAdminHandsOutGrants:

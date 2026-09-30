@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 
 import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
+import { ConfirmDialog } from '@/common/components/confirm-dialog';
 import {
   LoadingField,
   SkeletonPeople,
@@ -284,6 +285,7 @@ export function StandupEditor({
   const [memberSearch, setMemberSearch] = useState('');
   const memberSearchInput = useRef<HTMLInputElement>(null);
 
+  const { save } = useStandupMutations();
   const form = useForm<StandupInput>({
     defaultValues: standupDefaults(standup, workspace),
     shouldFocusError: false,
@@ -317,12 +319,19 @@ export function StandupEditor({
     register,
     setValue,
     handleSubmit,
-    formState: { errors, dirtyFields },
+    formState: { errors, dirtyFields, isDirty },
   } = form;
+  const [discarding, setDiscarding] = useState(false);
+  // Esc, the close button and Cancel all come through here, so unsaved edits
+  // are never thrown away without asking.
+  const requestClose = () => {
+    if (save.isPending) return;
+    if (isDirty) setDiscarding(true);
+    else close();
+  };
 
   const values = useWatch({ control: form.control });
   const resources = useStandupResources(values.channel_id);
-  const { save } = useStandupMutations();
 
   const participants = values.participants ?? [];
   const syncWithChannel = !!values.sync_with_channel;
@@ -421,7 +430,7 @@ export function StandupEditor({
       <Dialog
         open
         onOpenChange={(open) => {
-          if (!open && !save.isPending) close();
+          if (!open) requestClose();
         }}
       >
         <DialogContent
@@ -928,13 +937,29 @@ export function StandupEditor({
                         size="icon"
                         className="mt-6"
                         aria-label={`Remove question ${index + 1}`}
-                        onClick={() =>
+                        onClick={() => {
+                          const removed = questions[index] ?? '';
                           setQuestions(
                             questions.filter(
                               (_, position) => position !== index,
                             ),
-                          )
-                        }
+                          );
+                          // Nothing is saved until Save, and a removed
+                          // question can come back, so undo beats a dialog.
+                          if (removed.trim())
+                            toast(`Question ${index + 1} removed`, {
+                              action: {
+                                label: 'Undo',
+                                onClick: () => {
+                                  const current = [
+                                    ...(form.getValues('questions') ?? []),
+                                  ];
+                                  current.splice(index, 0, removed);
+                                  setQuestions(current);
+                                },
+                              },
+                            });
+                        }}
                       >
                         <X className="size-4" />
                       </Button>
@@ -1222,7 +1247,7 @@ export function StandupEditor({
               <Button
                 type="button"
                 variant="outline"
-                onClick={close}
+                onClick={requestClose}
                 disabled={save.isPending}
               >
                 Cancel
@@ -1234,6 +1259,23 @@ export function StandupEditor({
           </form>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={discarding}
+        onOpenChange={setDiscarding}
+        title="Discard your changes?"
+        description={
+          standup
+            ? `Your edits to ${standup.name} have not been saved.`
+            : 'This standup has not been created yet.'
+        }
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        destructive
+        onConfirm={() => {
+          setDiscarding(false);
+          close();
+        }}
+      />
     </FormProvider>
   );
 }

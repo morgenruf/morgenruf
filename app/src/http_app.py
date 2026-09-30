@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -19,6 +20,14 @@ def create_http_app(*, modules=None, schema_only=False):
         SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "true").lower() not in {"false", "0", "no"},
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        # Flask accepts a signed session cookie for this long, permanent or
+        # not. The dashboard re-signs it as it is used, so this is how long an
+        # idle session lasts, not a limit on an active one.
+        PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+        # The largest legitimate body is a profile CSV import, capped at a
+        # million characters by its schema: up to about 3 MB as UTF-8 JSON.
+        # Anything past this is refused before it is read into memory.
+        MAX_CONTENT_LENGTH=4 * 1024 * 1024,
     )
     init_api(app)
     install_browser_security(app)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import psycopg2.extras
 
 from src.core.db import db_conn
@@ -156,15 +158,21 @@ def program_for_channel(team_id: str, channel_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def optout_user_ids(team_id: str, program_id: int) -> set[str]:
+def optout_user_ids(team_id: str, program_id: int, today: date | None = None) -> set[str]:
+    """Who is out of this programme on `today`, the programme's own calendar day.
+
+    A snooze runs up to and including its date on the programme's calendar.
+    The database's CURRENT_DATE is UTC, which let a snooze end a day early or
+    late for a programme far from UTC. Callers pass rounds.programme_today.
+    """
     sql = """
         SELECT user_id FROM connect_optouts
         WHERE team_id = %s AND program_id = %s
-          AND (mode = 'off' OR (mode = 'paused' AND (paused_until IS NULL OR paused_until >= CURRENT_DATE)))
+          AND (mode = 'off' OR (mode = 'paused' AND (paused_until IS NULL OR paused_until >= COALESCE(%s, CURRENT_DATE))))
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, program_id))
+            cur.execute(sql, (team_id, program_id, today))
             return {r[0] for r in cur.fetchall()}
 
 
@@ -448,10 +456,11 @@ def mark_nudged(match_id: int) -> None:
             cur.execute("UPDATE connect_matches SET nudged_at = NOW() WHERE id = %s", (match_id,))
 
 
-def set_met(match_id: int, met: bool) -> None:
+def set_met(match_id: int, met: bool, team_id: str) -> None:
+    """Scoped by workspace, so a match id from another team changes nothing."""
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE connect_matches SET met = %s WHERE id = %s", (met, match_id))
+            cur.execute("UPDATE connect_matches SET met = %s WHERE id = %s AND team_id = %s", (met, match_id, team_id))
 
 
 # ── Follow-ups ──────────────────────────────────────────────────────────────

@@ -101,7 +101,8 @@ def test_a_permanent_opt_out_is_excluded():
 def test_a_snooze_is_excluded_only_until_its_date():
     sql = _eligibility_sql()
     assert "mode = 'paused'" in sql
-    assert "paused_until >= CURRENT_DATE" in sql
+    # Compared with the programme's own day when the caller passes it.
+    assert "paused_until >= COALESCE(%s, CURRENT_DATE)" in sql
 
 
 def test_snooze_writes_the_date_the_query_reads():

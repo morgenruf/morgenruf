@@ -191,7 +191,7 @@ class TestSkipHelpers:
 
 class TestGetMemberRole:
     def test_returns_admin_when_row_says_admin(self):
-        pool, conn, cur = _mock_pool(fetchone_result=("admin",))
+        pool, conn, cur = _mock_pool(fetchone_result=("admin", True))
         with patch.object(db, "_pool", pool):
             assert db.get_member_role("T1", "U1") == "admin"
 

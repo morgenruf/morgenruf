@@ -17,6 +17,15 @@ import pytz
 # 24-hour "HH:MM", the shape register_schedule_job splits on.
 _TIME_RE = re.compile(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$")
 
+# The questions a standup starts with when nobody has written their own. The
+# same three as the database column default, so the Slack modal, the
+# dashboard and the scheduler all agree.
+DEFAULT_QUESTIONS = (
+    "What did you complete yesterday?",
+    "What are you working on today?",
+    "Any blockers?",
+)
+
 _TZ_HINT = "Use an IANA timezone name such as Asia/Kolkata, Europe/London or America/New_York."
 _TIME_HINT = "Use a 24-hour HH:MM time such as 09:30."
 

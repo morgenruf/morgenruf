@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+from src.core.schedule_validation import DEFAULT_QUESTIONS
 from src.modules.standup.blockers import is_blocker_question, reports_a_blocker
 
 # ---------------------------------------------------------------------------
@@ -265,6 +266,16 @@ def defuse_broadcasts(text: str) -> str:
     return _SUBTEAM.sub(lambda m: f"@{m.group(1) or 'group'}", text)
 
 
+# `<https://evil|sso.acme.com>` shows only the label. Mentions (`<@`),
+# channels (`<#`) and specials (`<!`) are left alone.
+_LABELLED_LINK = re.compile(r"<([^@#!|<>][^|<>]*)\|[^<>]*>")
+
+
+def neutralise_links(text: str) -> str:
+    """Show a labelled link's real address instead of its label."""
+    return _LABELLED_LINK.sub(r"<\1>", text or "")
+
+
 def _rt_elements_to_mrkdwn(elements: list[dict]) -> str:
     """Convert rich_text element list (text, link, user, etc.) to mrkdwn."""
     parts: list[str] = []
@@ -400,7 +411,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
     cfg = existing_config or {}
     is_edit = bool(cfg.get("standup_id"))
 
-    default_questions = "What did you do yesterday?\nWhat will you do today?\nAny blockers?"
+    default_questions = "\n".join(DEFAULT_QUESTIONS)
     questions_text = "\n".join(cfg.get("questions", [])) if cfg.get("questions") else default_questions
 
     time_options = _time_options()
@@ -454,7 +465,12 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
         "action_id": "standup_channel",
         "placeholder": {"type": "plain_text", "text": "Select a channel"},
         "options": channel_opts
-        or [{"text": {"type": "plain_text", "text": "No channels — invite the bot first"}, "value": "_none"}],
+        or [
+            {
+                "text": {"type": "plain_text", "text": "No channels yet. Invite @Morgenruf to one first"},
+                "value": "_none",
+            }
+        ],
     }
     if cfg.get("channel_id") and channel_opts:
         initial = _find_option(channel_opts, cfg["channel_id"])
@@ -482,7 +498,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
                 "initial_value": questions_text,
                 "placeholder": {
                     "type": "plain_text",
-                    "text": "What did you do yesterday?\nWhat will you do today?\nAny blockers?",
+                    "text": "\n".join(DEFAULT_QUESTIONS),
                 },
             },
         },
@@ -733,7 +749,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
         "callback_id": "create_standup_modal",
         "title": {
             "type": "plain_text",
-            "text": "Edit standup" if is_edit else "Create a standup",
+            "text": "Standup settings" if is_edit else "Create a standup",
         },
         "submit": {"type": "plain_text", "text": "Save" if is_edit else "Create"},
         "close": {"type": "plain_text", "text": "Cancel"},
@@ -759,7 +775,7 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
     message styled as a question. Everything else is one tap.
     """
     questions = list(questions or [])
-    first_question = questions[0] if questions else "What did you do yesterday?"
+    first_question = questions[0] if questions else DEFAULT_QUESTIONS[0]
     count = len(questions) or 1
     return {
         "blocks": [
@@ -1073,11 +1089,19 @@ def app_home_view(
     user_tz: str = "",
     is_admin: bool = False,
     other_standups: list[dict] | None = None,
+    admin_contact: str = "",
 ) -> dict:
-    """App Home tab — rich standup cards matching Standup & Prosper quality."""
+    """App Home tab: rich standup cards.
+
+    ``is_admin`` means this person may manage standups (workspace admin or
+    standup admin). ``admin_contact`` is a user id to point everyone else at
+    when there is nothing for them yet.
+    """
     from datetime import datetime
 
     import pytz as _pytz
+
+    from src.core.links import dashboard_url, support_url
 
     # Compute local time string for the user
     local_time_str = ""
@@ -1106,7 +1130,7 @@ def app_home_view(
         },
     ]
 
-    # Top action bar — I'm away, Configure (admin only), Get support, Help
+    # Top action bar: I'm away, Configure (standup admins only), Get support, Help
     configure_btn = {
         "type": "button",
         "action_id": "open_configure_mode",
@@ -1125,8 +1149,14 @@ def app_home_view(
             {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
-                "url": "https://api.morgenruf.dev/dashboard",
+                "text": {"type": "plain_text", "text": "📊 Dashboard", "emoji": True},
+                "url": dashboard_url(),
+            },
+            {
+                "type": "button",
+                "action_id": "open_support",
+                "text": {"type": "plain_text", "text": "💬 Get support", "emoji": True},
+                "url": support_url(),
             },
             {
                 "type": "button",
@@ -1147,8 +1177,14 @@ def app_home_view(
             {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
-                "url": "https://api.morgenruf.dev/dashboard",
+                "text": {"type": "plain_text", "text": "📊 Dashboard", "emoji": True},
+                "url": dashboard_url(),
+            },
+            {
+                "type": "button",
+                "action_id": "open_support",
+                "text": {"type": "plain_text", "text": "💬 Get support", "emoji": True},
+                "url": support_url(),
             },
             {
                 "type": "button",
@@ -1198,7 +1234,7 @@ def app_home_view(
     blocks.append({"type": "divider"})
 
     # Standups section
-    if not standups:
+    if not standups and is_admin:
         blocks.append(
             {
                 "type": "section",
@@ -1206,9 +1242,8 @@ def app_home_view(
                     "type": "mrkdwn",
                     "text": (
                         "*You are not in a standup.*\nAdd yourself to one below, or create a new one."
-                        if (is_admin and other_standups)
-                        else "*No standups yet.*\n"
-                        "Create your first standup to get started, or ask your team admin to add you."
+                        if other_standups
+                        else "*No standups yet.*\nCreate your first standup to get started. It takes a minute."
                     ),
                 },
                 "accessory": {
@@ -1218,6 +1253,14 @@ def app_home_view(
                     "style": "primary",
                     "value": "create",
                 },
+            }
+        )
+    elif not standups:
+        who = f"<@{admin_contact}>" if admin_contact else "a workspace admin"
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*You are not in a standup yet.*\nAsk {who} to add you."},
             }
         )
     else:
@@ -1286,17 +1329,19 @@ def app_home_view(
                 }
             )
 
-            # Action buttons — context-aware
+            # Action buttons, depending on what the person has done today
             actions = []
+            last_id = standup.get("user_last_response_id")
             if active and responded_today:
-                actions.append(
-                    {
-                        "type": "button",
-                        "action_id": "start_standup_now",
-                        "text": {"type": "plain_text", "text": "🔄 Edit standup", "emoji": True},
-                        "value": str(standup_id),
-                    }
-                )
+                if last_id:
+                    actions.append(
+                        {
+                            "type": "button",
+                            "action_id": "standup_edit",
+                            "text": {"type": "plain_text", "text": "✏️ Edit my answers", "emoji": True},
+                            "value": str(last_id),
+                        }
+                    )
             elif active:
                 actions.append(
                     {
@@ -1403,11 +1448,13 @@ def app_home_configure_view(
     user_id: str,
     workspace_name: str = "",
 ) -> dict:
-    """App Home tab — Standup Configuration mode matching competitor."""
+    """App Home tab in settings mode, for people who may manage standups."""
+    from src.core.links import dashboard_url
+
     blocks: list[dict] = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "⚙️ Standup Configuration", "emoji": True},
+            "text": {"type": "plain_text", "text": "⚙️ Standup settings", "emoji": True},
         },
         {
             "type": "actions",
@@ -1415,7 +1462,7 @@ def app_home_configure_view(
                 {
                     "type": "button",
                     "action_id": "close_configure_mode",
-                    "text": {"type": "plain_text", "text": "x Close Configuration"},
+                    "text": {"type": "plain_text", "text": "Close settings"},
                     "value": "close",
                 },
             ],
@@ -1437,16 +1484,15 @@ def app_home_configure_view(
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    "Don't see the standup you are looking for? That means you "
-                    "probably are not a part of it. You can easily join an existing "
-                    "standup and edit it in the <https://api.morgenruf.dev/dashboard|Standup Portal>. 👉"
+                    "Don't see the standup you are looking for? You are probably not in it. "
+                    f"Join an existing standup and edit it in the <{dashboard_url()}|Dashboard>. 👉"
                 ),
             },
             "accessory": {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "Go to Standup Portal 🔗", "emoji": True},
-                "url": "https://api.morgenruf.dev/dashboard",
+                "text": {"type": "plain_text", "text": "Open the Dashboard 🔗", "emoji": True},
+                "url": dashboard_url(),
             },
         },
         {"type": "divider"},
@@ -1530,7 +1576,7 @@ def app_home_configure_view(
                     "type": "button",
                     "action_id": "open_dashboard",
                     "text": {"type": "plain_text", "text": "Details 🔗", "emoji": True},
-                    "url": "https://api.morgenruf.dev/dashboard",
+                    "url": dashboard_url(),
                 }
             )
             row.append(
@@ -1558,146 +1604,62 @@ def app_home_configure_view(
 
 
 # ---------------------------------------------------------------------------
-# Modal: Help
-# ---------------------------------------------------------------------------
-
-
-def help_modal() -> dict:
-    """Help modal shown from App Home."""
-    return {
-        "type": "modal",
-        "title": {"type": "plain_text", "text": "Morgenruf Help"},
-        "close": {"type": "plain_text", "text": "Close"},
-        "blocks": [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "🌅 Getting Started", "emoji": True},
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "*Morgenruf* runs async standups in Slack. "
-                        "At your scheduled time, each member gets a DM with your standup questions. "
-                        "Answers are collected and posted as a threaded summary in your standup channel."
-                    ),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "💬 DM Commands", "emoji": True},
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "Send one of these as a message on its own:\n"
-                        "• `standup`: Start a standup manually\n"
-                        "• `skip`: Skip today's standup\n"
-                        "• `I'm away`: Go on vacation (stops DMs)\n"
-                        "• `I'm back`: Return from vacation\n"
-                        "• `timezone America/New_York`: Set your personal timezone\n"
-                        "• `help`: List these commands\n"
-                        "While answering a standup, send `pass` to leave a question blank. "
-                        "To edit a standup you sent, use *Edit responses* on its confirmation."
-                    ),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "⚙️ Configuration", "emoji": True},
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "• Click *Configure standups* in App Home to manage standups\n"
-                        "• Use the *Configure* button on any standup card to edit settings\n"
-                        "• Visit the <https://api.morgenruf.dev/dashboard|Web Dashboard> for advanced analytics and management"
-                    ),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": "📊 Features", "emoji": True},
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        "• *Streaks* — Track consecutive standup days\n"
-                        "• *Mood tracking* — Team health check after each standup\n"
-                        "• *Answer prefill* — Yesterday's answers auto-fill today's form\n"
-                        "• *Channel sync* — Auto-add channel members to standups\n"
-                        "• *Webhooks* — Push standup data to external systems\n"
-                        "• *CSV export* — Download standup data from the dashboard"
-                    ),
-                },
-            },
-            {"type": "divider"},
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": "Need more help? Visit <https://docs.morgenruf.dev|docs.morgenruf.dev> or <https://api.morgenruf.dev/support|contact support>",
-                    }
-                ],
-            },
-        ],
-    }
-
-
-# ---------------------------------------------------------------------------
 # Modal: Previous standups history
 # ---------------------------------------------------------------------------
 
 
-def previous_standups_modal(standups: list[dict], standup_name: str = "Standup") -> dict:
-    """Modal showing recent standup history for the current user."""
+def _short_date(value: object) -> str:
+    """A stored date as "Tue 29 Sep", or the value as it came when it is not one."""
+    from datetime import date as _date  # noqa: PLC0415
+
+    if isinstance(value, str):
+        try:
+            value = _date.fromisoformat(value[:10])
+        except ValueError:
+            return value
+    if isinstance(value, _date):
+        return value.strftime("%a %-d %b")
+    return str(value or "")
+
+
+def previous_standups_modal(
+    standups: list[dict], standup_name: str = "Standup", questions: list[str] | None = None
+) -> dict:
+    """Modal showing one person's recent answers to one standup.
+
+    Answers are labelled with that standup's own questions. Its first three
+    answers are stored as yesterday, today and blockers whatever was asked.
+    """
     blocks: list[dict] = []
+    labels = list(questions or []) or ["Yesterday", "Today", "Blockers"]
 
     if not standups:
         blocks.append(
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": "_No previous standups found._"},
+                "text": {"type": "mrkdwn", "text": "_No answers in the last two weeks._"},
             }
         )
     else:
         for s in standups[:10]:  # Show last 10
-            date_str = str(s.get("standup_date", ""))
-            yesterday = s.get("yesterday", "") or "—"
-            today = s.get("today", "") or "—"
-            blockers = s.get("blockers", "") or "None"
             mood = s.get("mood", "")
             mood_str = f"  |  🎭 {mood}" if mood else ""
+            lines = [
+                f"*{labels[idx]}*\n{s.get(key) or 'n/a'}"
+                for idx, key in enumerate(("yesterday", "today", "blockers"))
+                if idx < len(labels)
+            ]
 
             blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*{date_str}*{mood_str}",
+                        "text": f"*{_short_date(s.get('standup_date'))}*{mood_str}",
                     },
                 }
             )
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (f"*Yesterday:* {yesterday}\n*Today:* {today}\n*Blockers:* {blockers}"),
-                    },
-                }
-            )
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)[:3000]}})
             blocks.append({"type": "divider"})
 
     return {
@@ -1797,15 +1759,7 @@ def build_summary_by_member(
     if not responses:
         return _nobody_answered()
 
-    q_labels = (
-        list(questions)
-        if questions
-        else [
-            "What did you complete yesterday?",
-            "What are you working on today?",
-            "Any blockers?",
-        ]
-    )
+    q_labels = list(questions) if questions else list(DEFAULT_QUESTIONS)
     answer_keys = ["yesterday", "today", "blockers"]
 
     chunks: list[list[dict]] = []
@@ -1893,15 +1847,7 @@ def build_summary_by_question(
     if not responses:
         return _nobody_answered()
 
-    q_labels = (
-        list(questions)
-        if questions
-        else [
-            "What did you complete yesterday?",
-            "What are you working on today?",
-            "Any blockers?",
-        ]
-    )
+    q_labels = list(questions) if questions else list(DEFAULT_QUESTIONS)
     answer_keys = ["yesterday", "today", "blockers"]
 
     count = len(responses)

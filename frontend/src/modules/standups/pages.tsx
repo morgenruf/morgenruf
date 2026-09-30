@@ -12,6 +12,7 @@ import {
   InputGroupInput,
 } from '@/common/components/ui/input-group';
 import { Tabs, TabsList, TabsTrigger } from '@/common/components/ui/tabs';
+import { plural } from '@/common/lib/format';
 
 import { sortedStandups } from './form-utils';
 import { useStandupHealth, useStandupResources, useStandups } from './hooks';
@@ -164,7 +165,7 @@ export function StandupsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <p role="status">
                 {filtered.length === all.length
-                  ? `${all.length} standup${all.length === 1 ? '' : 's'}`
+                  ? plural(all.length, 'standup')
                   : `${filtered.length} of ${all.length} standups`}{' '}
                 · earliest time first
               </p>

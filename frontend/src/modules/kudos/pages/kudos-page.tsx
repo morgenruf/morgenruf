@@ -59,7 +59,9 @@ export default function KudosPage() {
           daily_allowance: config.data.daily_allowance,
           channel_id: config.data.channel_id,
         }
-      : { emoji: '☕', daily_allowance: 5, channel_id: '' },
+      : // Matches the backend default (kudos DEFAULT_EMOJI), so the form
+        // never flashes a coffee cup that belongs to coffee chats.
+        { emoji: '🍁', daily_allowance: 5, channel_id: '' },
   });
 
   // Only channels the bot is in come back, which are the only ones it can
@@ -135,9 +137,13 @@ export default function KudosPage() {
               /kudos
             </code>
             . The person you thank gets a DM, and it is shared in your kudos
-            channel when one is set. Everyone has{' '}
-            {config.data?.daily_allowance ?? '…'} to give per day; unused kudos
-            reset at midnight in each person’s timezone.
+            channel when one is set.{' '}
+            {config.isPending
+              ? 'Everyone has a daily allowance to give'
+              : config.isError
+                ? 'Everyone has a daily allowance to give (the exact number could not be loaded)'
+                : `Everyone has ${config.data.daily_allowance} to give per day`}
+            ; unused kudos reset at midnight in each person’s timezone.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -145,7 +151,7 @@ export default function KudosPage() {
       <div className="grid gap-5 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Most recognized</CardTitle>
+            <CardTitle>Most recognised</CardTitle>
             <CardDescription>Teammates receiving appreciation.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -158,7 +164,10 @@ export default function KudosPage() {
                   retry={() => void receivers.refetch()}
                 />
               ) : !receivers.data?.length ? (
-                <EmptyState title="No kudos received yet" />
+                <EmptyState
+                  title="No kudos received yet"
+                  description="Thank a teammate with /kudos in Slack and they will show up here."
+                />
               ) : (
                 <ol className="divide-y">
                   {receivers.data.map((person, index) => (
@@ -201,7 +210,10 @@ export default function KudosPage() {
                   retry={() => void givers.refetch()}
                 />
               ) : !givers.data?.length ? (
-                <EmptyState title="Nobody has given kudos yet" />
+                <EmptyState
+                  title="Nobody has given kudos yet"
+                  description="Be the first: use /kudos in Slack to thank someone."
+                />
               ) : (
                 <ol className="divide-y">
                   {givers.data.map((person, index) => (

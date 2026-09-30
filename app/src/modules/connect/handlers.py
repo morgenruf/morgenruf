@@ -14,6 +14,9 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
+_PAUSED = "Coffee chats paused. Resume any time from the Home tab."
+_DID_NOT_SAVE = "That did not save. Please try again."
+
 
 def register_handlers(app) -> None:
     @app.action("connect:skip_round")
@@ -42,13 +45,11 @@ def register_handlers(app) -> None:
             import src.modules.connect.db as cdb  # noqa: PLC0415
 
             cdb.opt_out(team_id, program_id, user_id, mode="off")
-            client.chat_postEphemeral(
-                channel=body["channel"]["id"],
-                user=user_id,
-                text="You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
-            )
         except Exception:
             logger.exception("connect: could not pause %s", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, _PAUSED)
 
     def _confirm(client, body, text: str) -> None:
         """Say what happened, wherever the button was pressed.
@@ -71,19 +72,23 @@ def register_handlers(app) -> None:
     def handle_home_snooze(ack, body, client):  # noqa: ANN001
         """A fortnight off, which is what most people want rather than leaving."""
         ack()
-        from datetime import date, timedelta  # noqa: PLC0415
-
         user_id = body["user"]["id"]
         team_id = body.get("team", {}).get("id", "")
         program_id = int(body["actions"][0]["value"])
-        until = date.today() + timedelta(weeks=2)
         try:
             import src.modules.connect.db as cdb  # noqa: PLC0415
+            from src.modules.connect.rounds import programme_today  # noqa: PLC0415
+
+            # Counted from the programme's calendar day, the day the snooze
+            # check compares against.
+            until = programme_today(cdb.get_program(program_id) or {}) + timedelta(weeks=2)
 
             cdb.snooze(team_id, program_id, user_id, until)
-            _confirm(client, body, f"Snoozed until {until.strftime('%d %B')}. You will be matched again after that.")
         except Exception:
             logger.exception("connect: could not snooze %s", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, f"Snoozed until {until.strftime('%-d %B')}. You will be matched again after that.")
 
     @app.action("connect:home_pause")
     def handle_home_pause(ack, body, client):  # noqa: ANN001
@@ -96,13 +101,11 @@ def register_handlers(app) -> None:
             import src.modules.connect.db as cdb  # noqa: PLC0415
 
             cdb.opt_out(team_id, program_id, user_id, mode="off")
-            _confirm(
-                client,
-                body,
-                "Paused. You will not be matched until you resume, and the App Home will say so next time you open it.",
-            )
         except Exception:
             logger.exception("connect: could not pause %s from the App Home", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, _PAUSED)
 
     @app.action("connect:home_resume")
     def handle_home_resume(ack, body, client):  # noqa: ANN001
@@ -115,9 +118,11 @@ def register_handlers(app) -> None:
             import src.modules.connect.db as cdb  # noqa: PLC0415
 
             cdb.opt_in(team_id, program_id, user_id)
-            _confirm(client, body, "You are back in. You will be matched in the next round.")
         except Exception:
             logger.exception("connect: could not resume %s from the App Home", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, "Coffee chats resumed. You will be matched in the next round.")
 
     # The action id carries the match and the slot, so one regex handler serves
     # every proposed time without the message having to hold state.
@@ -192,10 +197,17 @@ def register_handlers(app) -> None:
 
 def _record_met(body, client, met: bool, reply: str) -> None:
     match_id = int(body["actions"][0]["value"])
+    user_id = (body.get("user") or {}).get("id", "")
+    team_id = (body.get("team") or {}).get("id") or (body.get("user") or {}).get("team_id", "")
     try:
         import src.modules.connect.db as cdb  # noqa: PLC0415
 
-        cdb.set_met(match_id, met)
+        # The match id is in the button, so only someone in that match, in
+        # that workspace, gets to say whether it happened.
+        match = cdb.match_by_id(match_id)
+        if not match or match.get("team_id") != team_id or user_id not in list(match.get("member_ids") or []):
+            return
+        cdb.set_met(match_id, met, team_id)
         client.chat_postMessage(channel=body["channel"]["id"], text=reply)
     except Exception:
         logger.exception("connect: could not record met=%s for match %s", met, match_id)
@@ -230,6 +242,16 @@ def _accept_slot(body, client) -> None:
         return
     if slot.tzinfo is None:
         slot = slot.replace(tzinfo=timezone.utc)
+    # An old intro still has live buttons. A time that has passed cannot be
+    # met, and settling on one would book a Zoom meeting in the past. The far
+    # bound is the one a suggested time has to meet.
+    now = datetime.now(timezone.utc)
+    if slot <= now:
+        _quiet(client, channel_id, user_id, "That time has already passed. Suggest a new one instead.")
+        return
+    if slot > now + timedelta(days=SUGGEST_MAX_DAYS):
+        logger.warning("connect: slot %s on match %s is too far ahead", slot_iso, match_id)
+        return
 
     try:
         match = cdb.match_by_id(match_id)
@@ -298,7 +320,7 @@ def _record_acceptance(
                         "type": "mrkdwn",
                         "text": f"*{label}* works for <@{user_id}>.\n"
                         + ", ".join(f"<@{m}>" for m in waiting)
-                        + (" — tap it too and it is settled." if len(waiting) == 1 else " — tap it to settle it."),
+                        + (": tap it too and it is settled." if len(waiting) == 1 else ": tap it to settle it."),
                     },
                 }
             ],
@@ -632,11 +654,16 @@ def _want_new_match(client, channel_id: str, user_id: str, match_id: int) -> Non
 
         members = sorted([user_id, partner])
         new_channel = api.open_group_dm(client, members)
+        try:
+            program = cdb.get_program(match.get("program_id") or 0) or {}
+        except Exception:
+            program = {}
         text, blocks = cblocks.intro_message(
             members,
             cblocks.random_seed_for(round_id, match_id + 1),
             match.get("program_id") or 0,
             match_id=0,
+            channel_id=str(program.get("channel_id") or ""),
         )
         api.post(client, new_channel, text, blocks)
         _quiet(client, channel_id, user_id, f"Introduced you to <@{partner}>, who also wanted a new match.")
@@ -652,14 +679,9 @@ def _pause_for(client, channel_id: str, user_id: str, team_id: str, program_id: 
         cdb.opt_out(team_id, program_id, user_id, mode="off")
     except Exception:
         logger.exception("connect: could not pause %s", user_id)
-        _quiet(client, channel_id, user_id, "That did not save. Please try again.")
+        _quiet(client, channel_id, user_id, _DID_NOT_SAVE)
         return
-    _quiet(
-        client,
-        channel_id,
-        user_id,
-        "You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
-    )
+    _quiet(client, channel_id, user_id, _PAUSED)
 
 
 def on_channel_join(event, client):  # noqa: ANN001
@@ -672,7 +694,6 @@ def on_channel_join(event, client):  # noqa: ANN001
     Slack shows nothing about a bot's schedule, so without this a person
     joins and waits, with no idea whether anything is coming or when.
     """
-    from datetime import date  # noqa: PLC0415
 
     user_id = event.get("user", "")
     channel_id = event.get("channel", "")
@@ -687,12 +708,12 @@ def on_channel_join(event, client):  # noqa: ANN001
         return
     try:
         import src.modules.connect.db as cdb  # noqa: PLC0415
-        from src.modules.connect.rounds import cadence_phrase, upcoming_round_date  # noqa: PLC0415
+        from src.modules.connect.rounds import cadence_phrase, programme_today, upcoming_round_date  # noqa: PLC0415
 
         program = cdb.program_for_channel(team_id, channel_id)
         if not program:
             return
-        nxt = upcoming_round_date(program, date.today())
+        nxt = upcoming_round_date(program, programme_today(program))
         message = (
             f"Thanks for joining <#{channel_id}>. "
             f"I introduce you to someone else from this channel {cadence_phrase(program.get('interval_weeks'))}.\n"

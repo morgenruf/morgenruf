@@ -101,3 +101,15 @@ def test_today_is_the_programme_day_not_the_server_day(run, jobs):
     created = run({"last_scheduled_round": date(2026, 9, 14)}, now=late_sunday)
     jobs.run_round(1)
     assert created == []
+
+
+def test_snoozes_are_checked_against_the_programme_day(run, jobs, monkeypatch):
+    """A snooze ending on Sunday in Toronto still holds at 23:30 Sunday there."""
+    import src.modules.connect.db as cdb
+
+    late_sunday = datetime(2026, 9, 21, 3, 30, tzinfo=timezone.utc)
+    run({"last_scheduled_round": date(2026, 9, 7)}, now=late_sunday)
+    seen = []
+    monkeypatch.setattr(cdb, "optout_user_ids", lambda team, program, today=None: seen.append(today) or set())
+    jobs.run_round(1)
+    assert seen == [date(2026, 9, 20)]

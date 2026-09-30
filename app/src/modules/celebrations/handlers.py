@@ -43,6 +43,10 @@ def register_handlers(app) -> None:
             skip_me(_team_id(body), user_id)
         except Exception:
             logger.exception("celebrations: could not record the opt-out for %s", user_id)
+            try:
+                client.chat_postMessage(channel=user_id, text="That did not save. Please try again.")
+            except Exception:
+                logger.info("celebrations: could not tell %s the opt-out failed", user_id)
             return
         channel = (body.get("channel") or {}).get("id")
         ts = (body.get("message") or {}).get("ts")

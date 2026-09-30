@@ -77,12 +77,16 @@ export function useMembers(channel?: string, loadInviteRoster = false) {
     client.invalidateQueries({ queryKey: ['workspace', team, 'profile'] });
 
   const saveProfile = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: ({ id, data }: { id: string; data: MemberProfile }) =>
       api.profile.updateProfile({ userId: id }, data),
     onSuccess: invalidateProfiles,
   });
 
   const importDates = useMutation({
+    // The import dialog shows this error inline.
+    meta: { silent: true },
     mutationFn: (data: ProfileImportInput) => api.profile.importProfiles(data),
     onSuccess: (response) => {
       if (!response.data.preview) void invalidateProfiles();

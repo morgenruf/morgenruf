@@ -37,10 +37,53 @@ def _clean_thread_cache() -> None:
         del _daily_thread_cache[k]
 
 
+def _daily_thread_parent(
+    client, db, team_id: str, channel: str, today_str: str, schedule_id: int, header_text: str
+) -> str:
+    """Return the ts of today's thread header, posting it when there is none.
+
+    The stored ts is the one everybody threads under, including the scheduled
+    report. When two people finish together both see no thread and both post
+    a header; the database keeps the first. The loser adopts the stored ts and
+    deletes its own header, so the channel does not show two, and only a ts
+    that is actually stored is cached.
+    """
+    thread_key = f"{team_id}:{channel}:{today_str}:{schedule_id}"
+    parent_ts = _daily_thread_cache.get(thread_key)
+    if parent_ts:
+        return parent_ts
+    try:
+        # The in-memory cache is lost on restart and not shared between workers.
+        parent_ts = db.get_daily_thread_ts(team_id, channel, today_str, schedule_id)
+    except Exception:
+        parent_ts = None
+    if parent_ts:
+        _daily_thread_cache[thread_key] = parent_ts
+        return parent_ts
+
+    ours = client.chat_postMessage(channel=channel, text=header_text)["ts"]
+    try:
+        stored = db.upsert_daily_thread(team_id, channel, today_str, ours, schedule_id)
+    except Exception as exc:
+        logger.warning("Could not persist daily thread ts: %s", exc)
+        stored = None
+    if not stored:
+        # Not stored, so another worker cannot find it: use it for this post
+        # but do not cache it, and the next answer checks the database again.
+        return ours
+    if stored != ours:
+        try:
+            client.chat_delete(channel=channel, ts=ours)
+        except Exception as exc:
+            logger.info("Could not delete duplicate thread header %s in %s: %s", ours, channel, exc)
+    _daily_thread_cache[thread_key] = stored
+    return stored
+
+
 # Track which users are in configure mode: "team_id:user_id"
 _configure_mode_users: set[str] = set()
 
-_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
+_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough, or type anything)_"
 
 
 def _send_mood_block(client, user_id: str) -> None:
@@ -197,14 +240,14 @@ def _format_standup(
     date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
     labels = questions or _DEFAULT_LABELS
-    parts = [f"📋 *Standup from <@{user_id}>* — {date_str}\n"]
+    parts = [f"📋 *Standup from <@{user_id}>* · {date_str}\n"]
     for i, label in enumerate(labels):
-        raw = answers[i] if i < len(answers) else "—"
+        raw = answers[i] if i < len(answers) else "n/a"
         # Detect "no blockers" only for the last default question
         if not questions and i == 2 and raw.strip().lower() in ("none", "no", "nope", "-", "n/a", ""):
             formatted_answer = "_None_ ✅"
         else:
-            formatted_answer = _blocks.linkify_issues(raw) if raw != "—" else raw
+            formatted_answer = _blocks.linkify_issues(raw) if raw != "n/a" else raw
         parts.append(f"*{label}:*\n{formatted_answer}")
 
     text = "\n\n".join(parts)
@@ -392,7 +435,7 @@ def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int 
     dm = _blocks.standup_dm_message(session.questions, session.standup_name or "Standup")
     client.chat_postMessage(
         channel=user_id,
-        text=f"Time for your standup, {session.standup_name or 'Standup'}",
+        text=f"🌅 Time for {session.standup_name or 'your standup'}",
         blocks=dm["blocks"],
     )
 
@@ -437,7 +480,7 @@ def _complete_standup(user_id: str, session, client) -> None:
     confirmation_text = (
         "✏️ *Standup updated!* Your edits have been saved."
         if is_edit
-        else "✅ *Standup submitted!* You can edit your responses within 30 minutes."
+        else f"✅ *Standup submitted!* {edit_rule_text(session.team_id, session.schedule_id)}"
     )
     # Block Kit confirmation with edit button
     client.chat_postMessage(
@@ -456,7 +499,7 @@ def _complete_standup(user_id: str, session, client) -> None:
                 "elements": [
                     {
                         "type": "button",
-                        "text": {"type": "plain_text", "text": "✏️ Edit responses"},
+                        "text": {"type": "plain_text", "text": "✏️ Edit my answers"},
                         "action_id": "standup_edit",
                         "value": str(standup_id) if standup_id else "0",
                         "style": "primary",
@@ -514,31 +557,16 @@ def _complete_standup(user_id: str, session, client) -> None:
             schedule_id = int(getattr(session, "schedule_id", 0) or sched_config.get("id") or 0)
             local_day = standup_local_date(session.team_id, schedule_id or None, user_id)
             today_str = local_day.isoformat()
-            thread_key = f"{session.team_id}:{channel}:{today_str}:{schedule_id}"
-            parent_ts = _daily_thread_cache.get(thread_key)
-
-            if not parent_ts:
-                # Check DB first — the in-memory cache is lost on pod restart.
-                try:
-                    parent_ts = _db.get_daily_thread_ts(session.team_id, channel, today_str, schedule_id)
-                except Exception:
-                    parent_ts = None
-
-            if not parent_ts:
-                # Create parent message for today's thread — polished like competitors
-                standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
-                display_date = local_day.strftime("%a, %b %d.")
-                parent = client.chat_postMessage(
-                    channel=channel,
-                    text=f"✨ {standup_name} Completed - {display_date} ✨",
-                )
-                parent_ts = parent["ts"]
-                try:
-                    _db.upsert_daily_thread(session.team_id, channel, today_str, parent_ts, schedule_id)
-                except Exception as e:
-                    logger.warning("Could not persist daily thread ts: %s", e)
-
-            _daily_thread_cache[thread_key] = parent_ts
+            standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
+            parent_ts = _daily_thread_parent(
+                client,
+                _db,
+                session.team_id,
+                channel,
+                today_str,
+                schedule_id,
+                header_text=f"{standup_name} · {local_day.strftime('%a %-d %b')}",
+            )
 
             # Mark edits so teammates can tell which message is the latest version;
             # we don't have the original reply's ts to update in place, so post
@@ -560,7 +588,7 @@ def _complete_standup(user_id: str, session, client) -> None:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
             client.chat_postMessage(
                 channel=user_id,
-                text=f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}",
+                text=f"⚠️ I couldn't post this to the channel. You can paste it there yourself:\n\n{formatted}",
             )
 
     # Ensure member exists in DB for reports/participation
@@ -593,17 +621,43 @@ def _complete_standup(user_id: str, session, client) -> None:
     if len(question_answers) > 2:
         answers_dict["blockers"] = question_answers[2]
 
+    schedule_id = getattr(session, "schedule_id", None)
+    timestamp = datetime.now(timezone.utc).isoformat()
     fire_webhooks(
         session.team_id,
         "standup.completed",
         {
             "team_id": session.team_id,
             "user_id": user_id,
+            "schedule_id": schedule_id,
             "answers": answers_dict,
             "mood": mood,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": timestamp,
         },
     )
+
+    # blocker.detected was offered as a webhook event but never sent. The
+    # check is the one save_standup stores as has_blockers, so a webhook and
+    # the dashboard agree on which standups reported a blocker.
+    try:
+        import src.modules.standup.blockers as _blockers  # noqa: PLC0415
+
+        blocker_answer = _blockers.find_blocker_answer(session.questions, question_answers)
+        if _blockers.has_blockers(session.questions, question_answers):
+            fire_webhooks(
+                session.team_id,
+                "blocker.detected",
+                {
+                    "team_id": session.team_id,
+                    "user_id": user_id,
+                    "schedule_id": schedule_id,
+                    "blockers": blocker_answer or "",
+                    "answers": answers_dict,
+                    "timestamp": timestamp,
+                },
+            )
+    except Exception as exc:
+        logger.warning("blocker.detected webhook failed for %s/%s: %s", session.team_id, user_id, exc)
 
     # Report posting is handled by the scheduled report job (_post_scheduled_report)
     # which fires at report_time regardless of whether all members submitted.
@@ -670,6 +724,25 @@ def _record_delivery(hook: dict, event_type: str, team_id: str | None, result: d
         logger.warning("Could not record delivery for webhook %s: %s", webhook_id, exc)
 
 
+def _delivery_error(exc: Exception) -> str:
+    """A short reason for the delivery log, which admins read in the dashboard.
+
+    It stored the Python exception ("ConnectTimeout: HTTPSConnectionPool(...)"),
+    which says nothing to someone who did not write this code. Matched on the
+    class name so it works whatever requests module is in use.
+    """
+    names = " ".join(cls.__name__ for cls in type(exc).__mro__)
+    if "Timeout" in names:
+        return "Timed out"
+    if "SSL" in names:
+        return "Secure connection failed"
+    if "TooManyRedirects" in names:
+        return "Too many redirects"
+    if "Connection" in names or isinstance(exc, OSError):
+        return "Could not connect"
+    return "Could not deliver"
+
+
 def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | None = None) -> dict:
     """Sign and POST one payload to one webhook, log the attempt, return the result.
 
@@ -724,7 +797,7 @@ def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | N
         if not (is_safe_webhook_url(url) and resolves_to_public(url)):
             # Checked here, at send time, and not only when the URL was saved:
             # a hostname can point at an internal address later.
-            error = "Refused: the URL does not resolve to a public address"
+            error = "Refused: not a public address"
             logger.warning("Webhook %s refused for %s: not a public address", hook.get("id"), event_type)
         else:
             # Redirects are refused so a public endpoint cannot bounce the
@@ -736,7 +809,7 @@ def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | N
                 error = f"HTTP {status_code}"
             logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
     except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"[:500]
+        error = _delivery_error(exc)
         logger.warning("Webhook delivery failed for %s: %s", url, exc)
     duration_ms = int((time.monotonic() - started) * 1000)
 
@@ -780,13 +853,92 @@ def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
         deliver_webhook(hook, wanted, payload, team_id=team_id)
 
 
+def _edit_window_hours(team_id: str) -> int | None:
+    """Hours after sending that answers stay editable. None or 0 means no limit."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return (db.get_workspace_config(team_id) or {}).get("edit_window_hours", 4)
+    except Exception:
+        return 4
+
+
+def _hours(n: int) -> str:
+    return f"{n} hour{'s' if n != 1 else ''}"
+
+
+def _schedule_for(team_id: str, schedule_id) -> dict:  # noqa: ANN001
+    if not schedule_id:
+        return {}
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return db.get_standup_schedule(team_id, int(schedule_id)) or {}
+    except Exception:
+        return {}
+
+
+def _report_passed(schedule: dict, standup_date, now: datetime) -> bool:  # noqa: ANN001
+    """Whether the report for the day these answers belong to has gone out.
+
+    Compared in the standup's own timezone: an answer is filed under its
+    local day, and the report fires at report_time on that day.
+    """
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+    from src.core.timezones import canonical_tz  # noqa: PLC0415
+
+    try:
+        zone = ZoneInfo(str(canonical_tz(schedule.get("schedule_tz") or "UTC")))
+    except Exception:
+        zone = timezone.utc
+    local_now = now.astimezone(zone)
+    if standup_date is None:
+        return False
+    if standup_date < local_now.date():
+        return True
+    if standup_date > local_now.date():
+        return False
+    hour, minute = (int(x) for x in _report_time(schedule).split(":"))
+    return (local_now.hour, local_now.minute) >= (hour, minute)
+
+
+def edit_rule_text(team_id: str, schedule_id=None) -> str:  # noqa: ANN001
+    """The edit rule can_edit_response applies, in words."""
+    hours = _edit_window_hours(team_id)
+    if hours is None:
+        return "You can change your answers any time."
+    if hours == 0:
+        schedule = _schedule_for(team_id, schedule_id)
+        if schedule.get("allow_edit_after_report"):
+            return "You can change your answers until the end of the day."
+        if schedule:
+            return f"You can change your answers until the report is posted at {_report_time(schedule)}."
+        return "You can change your answers until the report is posted."
+    return f"You can change your answers for {_hours(hours)} after you send them."
+
+
+def edit_closed_text(team_id: str) -> str:
+    hours = _edit_window_hours(team_id)
+    if hours == 0:
+        return "These answers can no longer be changed: the report has been posted."
+    if not hours:
+        return "These answers can no longer be changed."
+    return f"These answers can no longer be changed. Answers stay editable for {_hours(hours)} after you send them."
+
+
 def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
     """Return True if the user is still within their edit window.
 
-    The edit window is controlled by ``edit_window_hours`` in workspace_config:
-      * ``0``    — editable until the report time (treated as no time limit here)
-      * positive — that many hours after submission
-      * ``None`` — no limit
+    The edit window is ``edit_window_hours`` in workspace_config, set from the
+    dashboard's "Editing answers" setting:
+      * ``None`` : no limit
+      * ``0``    : until that standup's report is posted, or until the end of
+        its local day when the standup allows edits after the report
+      * positive : that many hours after submission
+
+    ``0`` used to mean "no limit" here, so the dashboard's "until the report"
+    option and the per-standup "allow edits after the report" box did nothing.
     """
     try:
         import src.core.db as db  # noqa: PLC0415
@@ -799,17 +951,27 @@ def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
 
         config = db.get_workspace_config(team_id) or {}
         edit_window_hours = config.get("edit_window_hours", 4)
+        now = datetime.now(tz=timezone.utc)
 
         if edit_window_hours is None:
             return True
         if edit_window_hours == 0:
-            return True
+            schedule = _schedule_for(team_id, standup.get("schedule_id"))
+            if not schedule:
+                # A standup with no schedule has no report to wait for.
+                return True
+            standup_date = standup.get("standup_date")
+            if schedule.get("allow_edit_after_report"):
+                from src.core.timezones import local_today  # noqa: PLC0415
+
+                return standup_date is None or standup_date >= local_today(schedule.get("schedule_tz"))
+            return not _report_passed(schedule, standup_date, now)
 
         submitted_at: datetime = standup["submitted_at"]
         if submitted_at.tzinfo is None:
             submitted_at = submitted_at.replace(tzinfo=timezone.utc)
         cutoff = submitted_at + timedelta(hours=edit_window_hours)
-        return datetime.now(tz=timezone.utc) <= cutoff
+        return now <= cutoff
 
     except Exception as exc:
         logger.warning("can_edit_response check failed for %s/%s: %s", team_id, user_id, exc)
@@ -896,15 +1058,16 @@ def register_handlers(app: App) -> None:
         all_other_standups: list[dict] = []
         standups: list[dict] = []
 
-        # Fetch user timezone and Slack admin status FIRST so is_admin is available below
+        # One rule for who manages standups, the same one the buttons check
+        # when pressed: a workspace admin or a standup admin.
         user_tz = ""
         try:
             user_info = client.users_info(user=user_id)
-            user_data = user_info.get("user", {})
-            user_tz = user_data.get("tz", "")
-            is_admin = user_data.get("is_admin", False) or user_data.get("is_owner", False)
+            user_tz = user_info.get("user", {}).get("tz", "")
         except Exception:
             pass
+        is_admin = may_manage_standups(team_id, user_id)
+        admin_contact = "" if is_admin else _admin_contact(team_id)
 
         try:
             import src.core.db as db  # noqa: PLC0415
@@ -953,6 +1116,9 @@ def register_handlers(app: App) -> None:
                     "next_run": _schedule_next_run(s),
                     "is_participant": is_participant,
                     "user_responded_today": user_responded_today if is_participant else False,
+                    "user_last_response_id": (_last_response_for(user_today, s.get("id")) or {}).get("id")
+                    if is_participant
+                    else None,
                     "user_last_response_time": (
                         _local_clock(user_last_response["submitted_at"], user_tz or s.get("schedule_tz"))
                         if user_last_response and user_last_response.get("submitted_at")
@@ -981,6 +1147,7 @@ def register_handlers(app: App) -> None:
             user_tz=user_tz,
             is_admin=is_admin,
             other_standups=all_other_standups if is_admin else [],
+            admin_contact=admin_contact,
         )
 
         # Other active modules add their own sections. Core reads the registry
@@ -1122,16 +1289,20 @@ def register_handlers(app: App) -> None:
         """Acknowledge dashboard link button (URL buttons still need ack)."""
         ack()
 
+    @app.action("open_support")
+    def handle_open_support(ack):  # noqa: ANN001
+        """Acknowledge the support link button (URL buttons still need ack)."""
+        ack()
+
     @app.action("open_configure_mode")
     def handle_open_configure_mode(ack, body, client):  # noqa: ANN001
-        """Switch App Home to configuration mode (admin only)."""
+        """Switch App Home to settings mode (standup admins only)."""
         ack()
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
 
-        import src.core.db as _db  # noqa: PLC0415
-
-        if _db.get_member_role(team_id, user_id) != "admin":
+        if not may_manage_standups(team_id, user_id):
+            _refuse_standup_change(client, user_id)
             return
         _configure_mode_users.add(f"{team_id}:{user_id}")
         _publish_configure_view(team_id, user_id, client)
@@ -1149,9 +1320,10 @@ def register_handlers(app: App) -> None:
     def handle_app_home_help(ack, body, client):  # noqa: ANN001
         """Open help modal from App Home."""
         ack()
-        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
+        from src.core.profile_slack import help_modal  # noqa: PLC0415
 
-        client.views_open(trigger_id=body["trigger_id"], view=_blocks.help_modal())
+        team_id = (body.get("team") or {}).get("id") or body["user"].get("team_id", "")
+        client.views_open(trigger_id=body["trigger_id"], view=help_modal(team_id))
 
     def _refresh_home(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Refresh App Home — respects configure mode."""
@@ -1242,18 +1414,27 @@ def register_handlers(app: App) -> None:
             standups = db.get_standups(team_id, days=14)
             user_standups = [s for s in standups if s["user_id"] == user_id]
             standup_name = "Standup"
-            schedule_id = body["actions"][0].get("value", "")
+            questions: list[str] = []
+            raw_id = body["actions"][0].get("value", "")
+            schedule_id = int(raw_id) if str(raw_id).isdigit() else None
             if schedule_id:
+                # Only this standup's answers. Rows from before answers carried
+                # a schedule have none, and stay in so history is not lost.
+                user_standups = [s for s in user_standups if s.get("schedule_id") in (schedule_id, None)]
                 try:
-                    sched = db.get_standup_schedule(team_id, int(schedule_id))
+                    sched = db.get_standup_schedule(team_id, schedule_id)
                     if sched:
                         standup_name = sched.get("name", "Standup")
+                        questions = sched.get("questions") or []
+                        if isinstance(questions, str):
+                            questions = json.loads(questions)
                 except Exception:
                     pass
-            modal = _blocks.previous_standups_modal(user_standups, standup_name)
+            modal = _blocks.previous_standups_modal(user_standups, standup_name, questions)
             client.views_open(trigger_id=body["trigger_id"], view=modal)
         except Exception as exc:
             logger.warning("view_previous_standups error: %s", exc)
+            _say_once(client, user_id, "⚠️ I couldn't load your previous standups just now. Please try again.")
 
     @app.action("edit_standup")
     def handle_edit_standup_button(ack, body, client):  # noqa: ANN001
@@ -1318,19 +1499,11 @@ def register_handlers(app: App) -> None:
             import src.core.db as db  # noqa: PLC0415
 
             db.delete_standup_schedule(team_id, int(standup_id))
-            # Remove from scheduler
-            try:
-                from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-                sched_obj = get_scheduler()
-                if sched_obj:
-                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                        try:
-                            sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            # No scheduler call here. The scheduler runs in the gunicorn
+            # master and this handler in a forked worker, whose copy of it is
+            # never started, so removing or adding jobs here changed nothing.
+            # The database is the source of truth: the scheduler's change poll
+            # (_poll_schedule_changes) applies this within about 15 seconds.
             # Refresh App Home (respects configure mode)
             _refresh_home(team_id, user_id, client)
         except Exception as exc:
@@ -1364,20 +1537,9 @@ def register_handlers(app: App) -> None:
             try:
                 import src.core.db as db  # noqa: PLC0415
 
+                # The scheduler's change poll removes the jobs; see the delete
+                # handler above for why nothing is done to the scheduler here.
                 db.update_standup_schedule(team_id, int(standup_id), active=False)
-                # Remove from scheduler
-                try:
-                    from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-                    sched_obj = get_scheduler()
-                    if sched_obj:
-                        for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                            try:
-                                sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
                 _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow pause error: %s", exc)
@@ -1386,20 +1548,9 @@ def register_handlers(app: App) -> None:
             try:
                 import src.core.db as db  # noqa: PLC0415
 
-                schedule = db.update_standup_schedule(team_id, int(standup_id), active=True)
-                # Re-register in scheduler
-                if schedule:
-                    try:
-                        from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-                        inst = db.get_installation(team_id)
-                        sched_obj = get_scheduler()
-                        if inst and sched_obj:
-                            sched_with_token = dict(schedule)
-                            sched_with_token["bot_token"] = inst["bot_token"]
-                            register_schedule_job(sched_obj, sched_with_token)
-                    except Exception:
-                        pass
+                # The scheduler's change poll registers the jobs; see the
+                # delete handler above for why nothing is done here.
+                db.update_standup_schedule(team_id, int(standup_id), active=True)
                 _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow enable error: %s", exc)
@@ -1412,7 +1563,8 @@ def register_handlers(app: App) -> None:
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
         say(
-            "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
+            "👋 I'm Morgenruf. Type `/morgenruf help` to see what I can do, "
+            "or open my *Home* tab for your standups and settings."
         )
 
     @app.action(re.compile(r"submit_answer_\d+"))
@@ -1499,6 +1651,11 @@ def register_handlers(app: App) -> None:
         cache_key = f"{team_id}:{user_id}"
         session = state_store.get(cache_key)
         if not session:
+            _say_once(
+                client,
+                user_id,
+                "⚠️ That standup is no longer open, so your mood was not saved. Run `/standup` to start a new one.",
+            )
             return
 
         session = state_store.record_answer(cache_key, mood)
@@ -1529,33 +1686,12 @@ def register_handlers(app: App) -> None:
     # command, with subcommands, and its help lists every active feature.
     @app.command("/help")
     def handle_help_command(ack, body, client):  # noqa: ANN001
-        """Slash command to show available commands and help."""
+        """The old /help. Not in the manifest any more, kept for installs that still have it."""
         ack()
-        user_id: str = body["user_id"]
+        from src.core.profile_slack import help_blocks  # noqa: PLC0415
+
         client.chat_postMessage(
-            channel=user_id,
-            text="Morgenruf Help",
-            blocks=[
-                {"type": "header", "text": {"type": "plain_text", "text": "🌅 Morgenruf — Commands"}},
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            "*Standup commands:*\n"
-                            "• `/standup` — Start your standup right now\n"
-                            "• `/skip` — Skip today's standup\n"
-                            "• `/kudos @teammate message` — Give a shoutout\n"
-                            "• `/help` — Show this message\n\n"
-                            "*Other ways to interact:*\n"
-                            "• Send me `standup` in a DM to start at any time, or `help` for the DM commands\n"
-                            "• Use the *App Home* tab to see your history and settings\n"
-                            "• Mention `@Morgenruf` in any channel for help\n\n"
-                            "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>"
-                        ),
-                    },
-                },
-            ],
+            channel=body["user_id"], text="Morgenruf help", blocks=help_blocks(body.get("team_id", ""))
         )
 
     @app.view("create_standup_modal")
@@ -1568,7 +1704,6 @@ def register_handlers(app: App) -> None:
         if not may_manage_standups(team_id, user_id):
             ack(response_action="errors", errors={"standup_channel": _NOT_A_STANDUP_ADMIN})
             return
-        ack()
         values = body["view"]["state"]["values"]
         private_metadata = body["view"].get("private_metadata", "")
 
@@ -1593,9 +1728,6 @@ def register_handlers(app: App) -> None:
         timezone = values.get("timezone", {}).get("timezone", {}).get("selected_option", {}).get("value", "UTC")
         reminder_val = values.get("reminder", {}).get("reminder", {}).get("selected_option", {}).get("value", "0")
         members = values.get("members", {}).get("members", {}).get("selected_users", [])
-        # The users picker lets you select apps; they can't answer a standup.
-        _human_members = filter_human_ids(client, members)
-        members = [uid for uid in members if uid in _human_members]
         days_opts = values.get("days", {}).get("days", {}).get("selected_options", [])
         days = [o["value"] for o in days_opts]
         report_dest = (
@@ -1630,12 +1762,26 @@ def register_handlers(app: App) -> None:
         # The timezone picker is an external_select over a curated list, but a
         # value the scheduler cannot resolve would save a standup that never
         # fires and never says why (#67), so check before writing the row.
-        invalid = schedule_timezone_error(timezone) or schedule_time_error(standup_time)
-        if not invalid and report_time:
-            invalid = schedule_time_error(report_time)
-        if invalid:
-            client.chat_postMessage(channel=user_id, text=f"❌ Couldn't save *{standup_name}*: {invalid}")
+        # Errors go back to the modal, next to the field, and keep it open.
+        errors: dict[str, str] = {}
+        if not channel_id or channel_id == "_none":
+            errors["standup_channel"] = "Pick a channel. If yours is not listed, invite @Morgenruf to it first."
+        tz_error = schedule_timezone_error(timezone)
+        if tz_error:
+            errors["timezone"] = tz_error
+        time_error = schedule_time_error(standup_time)
+        if time_error:
+            errors["standup_time" if "standup_time" in values else "report_time"] = time_error
+        if report_time and schedule_time_error(report_time):
+            errors["report_time"] = schedule_time_error(report_time)
+        if errors:
+            ack(response_action="errors", errors=errors)
             return
+        ack()
+
+        # The users picker lets you select apps; they can't answer a standup.
+        _human_members = filter_human_ids(client, members)
+        members = [uid for uid in members if uid in _human_members]
 
         try:
             import src.core.db as db  # noqa: PLC0415
@@ -1667,20 +1813,9 @@ def register_handlers(app: App) -> None:
                 # Creating new schedule
                 schedule = db.create_standup_schedule(team_id, **kwargs)
 
-            # Register/update in scheduler
+            # The scheduler picks the saved row up through its change poll
+            # (_poll_schedule_changes); it cannot be reached from this worker.
             if schedule:
-                try:
-                    from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-                    inst = db.get_installation(team_id)
-                    sched_obj = get_scheduler()
-                    if inst and sched_obj:
-                        sched_with_token = dict(schedule)
-                        sched_with_token["bot_token"] = inst["bot_token"]
-                        register_schedule_job(sched_obj, sched_with_token)
-                except Exception as exc2:
-                    logger.warning("Could not register schedule job from modal: %s", exc2)
-
                 # Tell the creator what was saved and when it will run (#119).
                 # Without this, a standup that fires perfectly is indistinguishable
                 # from one that never registered: the creator sees nothing at the
@@ -1712,6 +1847,12 @@ def register_handlers(app: App) -> None:
             _refresh_home(team_id, user_id, client)
         except Exception as exc:
             logger.error("create_standup_modal error: %s", exc)
+            _say_once(
+                client,
+                user_id,
+                f"⚠️ I couldn't save *{standup_name}* just now. Nothing was changed. "
+                "Please try again in a minute, or use the Dashboard.",
+            )
 
     @app.view("standup_form_modal")
     def handle_standup_form_submit(ack, body, client):  # noqa: ANN001
@@ -1747,20 +1888,24 @@ def register_handlers(app: App) -> None:
 
     @app.action("standup_edit")
     def handle_standup_edit(ack, body, say, client):  # noqa: ANN001
-        """Handle 'Edit my standup' button — re-open DM session for edits."""
+        """Handle 'Edit my answers': reopen the DM session for edits.
+
+        The button sits on the DM confirmation, the channel summary and App
+        Home. App Home has no channel for say(), so replies go to the DM.
+        """
         ack()
         user_id: str = body["user"]["id"]
-        team_id: str = body.get("team", {}).get("id", "")
+        team_id: str = body.get("team", {}).get("id", "") or body["user"].get("team_id", "")
         standup_id_str: str = body.get("actions", [{}])[0].get("value", "")
 
         try:
             standup_id = int(standup_id_str)
         except (ValueError, TypeError):
-            say("⚠️ Could not identify your standup. Please try again.")
+            _say_once(client, user_id, "⚠️ I couldn't find that standup. Please try again.")
             return
 
         if not can_edit_response(team_id, user_id, standup_id):
-            say("⏰ Sorry, the edit window for your standup has closed.")
+            _say_once(client, user_id, "⏰ " + edit_closed_text(team_id))
             return
 
         cache_key = f"{team_id}:{user_id}"
@@ -1825,7 +1970,7 @@ def register_handlers(app: App) -> None:
         )
         client.chat_postMessage(
             channel=user_id,
-            text="✏️ Let's update your standup — your previous answers are pre-filled, edit what you need.",
+            text="✏️ Let's update your standup. Your previous answers are filled in, so change only what you need.",
         )
         _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
 
@@ -1869,9 +2014,9 @@ def on_channel_join(event, client):  # noqa: ANN001
         client.chat_postMessage(
             channel=user_id,
             text=(
-                "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
-                "I'll DM you each morning with a few quick questions to share with your team. "
-                "Use `/standup` to try a standup now, or `/help` to learn more."
+                f"👋 Welcome! I'm Morgenruf. <#{channel_id}> has a standup: when it runs, "
+                "I'll DM you a few quick questions and share your answers with the team.\n\n"
+                "Use `/standup` to try one now, or `/morgenruf help` to see everything I do."
             ),
         )
     except Exception as exc:
@@ -1987,20 +2132,6 @@ _ANSWER_KEYWORDS = frozenset({"skip", "pass"})
 
 _STILL_OPEN = "Your standup is still open. Reply to the question above to carry on."
 
-HELP_TEXT = (
-    "🤖 *Morgenruf help*\n\n"
-    "I'll DM you your team's standup questions at the scheduled time.\n\n"
-    "*Send me one of these as a message on its own:*\n"
-    "• `standup`: start a standup now\n"
-    "• `skip`: skip today's standup\n"
-    "• `I'm away`: go on vacation, no standup DMs until you are back\n"
-    "• `I'm back`: return from vacation\n"
-    "• `timezone <tz>`: set your timezone (e.g. `timezone America/New_York`)\n"
-    "• `kudos @teammate Great job!`: recognise a teammate 🏆\n"
-    "• `help`: show this message\n\n"
-    "While you are answering a standup, send `pass` to leave a question blank."
-)
-
 
 def _keyword_text(text: str | None) -> str:
     """Lowercased message with curly apostrophes, spacing and end punctuation evened out."""
@@ -2062,6 +2193,24 @@ def may_manage_standups(team_id: str, user_id: str) -> bool:
         return False
 
 
+def _admin_contact(team_id: str) -> str:
+    """Someone to ask about standups: the installer, when we know who that is."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return (db.get_installation(team_id) or {}).get("installed_by_user_id") or ""
+    except Exception:
+        return ""
+
+
+def _last_response_for(rows: list[dict], schedule_id) -> dict | None:  # noqa: ANN001
+    """Today's latest answer for this schedule, or the latest one at all."""
+    if not rows:
+        return None
+    own = [r for r in rows if schedule_id and r.get("schedule_id") == schedule_id]
+    return (own or rows)[-1]
+
+
 def _refuse_standup_change(client, user_id: str) -> None:  # noqa: ANN001
     try:
         client.chat_postMessage(channel=user_id, text=_NOT_A_STANDUP_ADMIN)
@@ -2103,7 +2252,13 @@ def _reply(ctx, text: str) -> None:
 
 
 def _dm_help(ctx, in_session: bool) -> None:
-    _reply(ctx, HELP_TEXT + (f"\n\n{_STILL_OPEN}" if in_session else ""))
+    from src.core.profile_slack import help_blocks, help_text  # noqa: PLC0415
+
+    suffix = _STILL_OPEN if in_session else ""
+    text = help_text(ctx.team_id) + (f"\n\n{suffix}" if suffix else "")
+    ctx.client.chat_postMessage(
+        channel=ctx.channel_id or ctx.user_id, text=text, blocks=help_blocks(ctx.team_id, suffix=suffix)
+    )
 
 
 def _dm_standup(ctx, in_session: bool) -> None:

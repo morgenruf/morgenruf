@@ -123,10 +123,41 @@ describe('workspace settings permissions', () => {
         name: 'Public standup feed enabled',
       }),
     );
+    // Publishing asks first: nothing is sent until it is confirmed.
+    expect(mock.feed).not.toHaveBeenCalled();
+    await user.click(
+      await screen.findByRole('button', { name: 'Publish feed' }),
+    );
 
     await waitFor(() => expect(mock.feed).toHaveBeenCalledOnce());
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['workspace', 'T1', 'standups'],
     });
+  });
+
+  it('asks before turning a feature off and does nothing on cancel', async () => {
+    mock.isAdmin = true;
+    mock.toggleModule.mockResolvedValue({ data: {} });
+    const user = userEvent.setup({ delay: null });
+
+    view();
+
+    const toggle = await screen.findByRole('switch', {
+      name: 'Coffee chats enabled',
+    });
+    await user.click(toggle);
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(mock.toggleModule).not.toHaveBeenCalled();
+
+    await user.click(toggle);
+    await user.click(
+      await screen.findByRole('button', { name: 'Turn off Coffee chats' }),
+    );
+    await waitFor(() =>
+      expect(mock.toggleModule).toHaveBeenCalledWith(
+        { name: 'connect' },
+        { enabled: false },
+      ),
+    );
   });
 });

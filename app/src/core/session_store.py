@@ -31,7 +31,11 @@ def _get_redis():
     return _redis
 
 
-SESSION_TTL = 4 * 3600  # 4 hours
+# Long enough to cover a working day: someone who opens the standup at 09:00
+# and answers after lunch must not lose what they typed, which a 4 hour TTL
+# did. Kept under 24 hours so yesterday's abandoned session of a daily
+# standup has expired by the time the same standup fires again.
+SESSION_TTL = 20 * 3600
 
 
 def get_session(user_id: str) -> dict | None:
