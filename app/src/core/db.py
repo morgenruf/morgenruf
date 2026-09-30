@@ -27,6 +27,30 @@ except ImportError:
     ThreadedConnectionPool = None
 
 
+# Pools a forked child inherited from its parent. Kept referenced so they are
+# never garbage collected in the child: closing one would send Postgres a
+# terminate message on a socket the parent is still using.
+_inherited_pools: list = []
+
+
+def _forget_pool_after_fork() -> None:
+    """Give a forked process its own connections.
+
+    gunicorn forks its worker after create_app, which already opened this
+    pool to load installations, and the scheduler keeps using it in the
+    master. The worker inherited the same sockets, so a web request and a
+    scheduled job could interleave on one connection, which surfaces as
+    "no results to fetch" or "PGRES_TUPLES_OK and no message from the libpq".
+    """
+    global _pool
+    if _pool is not None:
+        _inherited_pools.append(_pool)
+        _pool = None
+
+
+os.register_at_fork(after_in_child=_forget_pool_after_fork)
+
+
 def initialize_pool():
     """Open PostgreSQL only on first use, never while importing HTTP routes."""
     global _pool
