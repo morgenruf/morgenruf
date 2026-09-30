@@ -184,12 +184,13 @@ def welcome_html(team_name: str, installed_by: str, email: str) -> str:
 {_button(f"{APP}/dashboard", "Create your first standup")}
 <p style="margin:18px 0 26px;font-size:13.5px;color:{MUTED};">Takes about a minute. You pick a channel, the
   questions and the hour.</p>
-<p style="margin:0 0 12px;font-size:13px;font-weight:700;color:{ROOSTER};">Then this happens every morning</p>
+<p style="margin:0 0 12px;font-size:13px;font-weight:700;color:{ROOSTER};">Then this happens on every standup day</p>
 {_step("1", "Everyone gets a direct message", "At the hour you choose, in their own timezone, so nobody is asked at midnight.")}
 {_step("2", "They answer whenever they get to it", "No meeting, no waiting for the slowest person on the call.")}
 {_step("3", "One summary posts to your channel", "Grouped by person or question, with blockers pulled out.")}
 <p style="margin:24px 0 0;font-size:14.5px;color:{MUTED};line-height:1.6;">
-  Coffee chats and kudos are in there too, switched off until you want them.
+  Kudos is on from the start: <code>/kudos @teammate</code> thanks someone. Coffee chats and
+  celebrations are there too, switched off until you want them.
   If anything is confusing, reply to this email: it reaches a person.</p>
 {optin_block(email)}"""
     return _shell(f"Morgenruf is installed in {team_name}. One step left.", body, email)
@@ -213,9 +214,9 @@ def followup_running_html(team_name: str, email: str, standups: int, people: int
       <strong>What is the most annoying thing about it?</strong><br/>
       Reply to this email and it reaches the person who wrote it. One sentence is plenty.</p>
   </td></tr></table>
-<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:{ROOSTER};">Two things teams usually turn on next</p>
+<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:{ROOSTER};">Two things teams usually try next</p>
 {_step("·", "Coffee chats", "Pairs people from a channel on a cadence and gets them to agree a time.")}
-{_step("·", "Kudos", "A handful of tokens a day each, gone at midnight if unspent.")}
+{_step("·", "Kudos", "Already on. Type /kudos @teammate to thank someone. A handful a day each, gone at midnight if unspent.")}
 {_button(f"{APP}/dashboard", "Open the dashboard")}"""
     return _shell(f"{standups} standups in your first week. One question.", body, email)
 
@@ -244,7 +245,7 @@ def followup_stalled_html(team_name: str, email: str) -> str:
 <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:{ROOSTER};">The usual sticking points</p>
 {_step("·", "The bot is not in the channel", "Invite it with /invite @Morgenruf, or it cannot post the summary.")}
 {_step("·", "Coffee chats look switched off", "They are, until you enable them. They also need three extra Slack scopes.")}
-{_step("·", "You wanted Microsoft Teams", "Not yet. Google Chat is in beta, Teams is being built.")}
+{_step("·", "You wanted Microsoft Teams", "Not yet. Morgenruf runs on Slack, Google Chat is in beta, and Teams is planned.")}
 <p style="margin:22px 0 0;font-size:14px;color:{MUTED};line-height:1.6;">
   If you are done with it, removing the app from Slack deletes the workspace's data.
   No hard feelings, and the reply above still helps.</p>"""
@@ -421,7 +422,7 @@ def uninstall_html(team_name: str, email: str, days_installed: int, standups: in
   </td></tr></table>
 <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:{ROOSTER};">If it helps, the usual answers</p>
 {_step("·", "It never got set up", "Installing does nothing on its own: somebody has to create a standup, and most people never get that far.")}
-{_step("·", "Wrong platform", "Teams is being built. Google Chat is in beta.")}
+{_step("·", "Wrong platform", "Morgenruf runs on Slack. Google Chat is in beta, and Microsoft Teams is planned.")}
 {_step("·", "It was annoying", "Too many messages, wrong hour, or nagging people. All three are settings, and all three default badly for some teams.")}
 <p style="margin:22px 0 0;font-size:14px;color:{MUTED};line-height:1.6;">
   No follow-up after this one. If you reinstall, everything starts fresh.</p>"""
