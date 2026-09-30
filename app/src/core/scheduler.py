@@ -519,17 +519,12 @@ def _send_standup_to_workspace(
             dm_count += 1
 
             # Send DM first — only start session if delivery succeeds
+            from src.core.schedule_validation import DEFAULT_QUESTIONS  # noqa: PLC0415
             from src.modules.standup.blocks import standup_dm_message  # noqa: PLC0415
 
-            default_questions = questions or [
-                "What did you complete yesterday?",
-                "What are you working on today?",
-                "Any blockers?",
-            ]
+            default_questions = questions or list(DEFAULT_QUESTIONS)
             dm_msg = standup_dm_message(default_questions, standup_name)
-            _slack_dm_with_retry(
-                client, user_id, team_id=team_id, text=f"🌅 Time for your standup, {standup_name}", **dm_msg
-            )
+            _slack_dm_with_retry(client, user_id, team_id=team_id, text=f"🌅 Time for {standup_name}", **dm_msg)
 
             state_store.start(
                 cache_key,

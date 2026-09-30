@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+from src.core.schedule_validation import DEFAULT_QUESTIONS
 from src.modules.standup.blockers import is_blocker_question, reports_a_blocker
 
 # ---------------------------------------------------------------------------
@@ -400,7 +401,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
     cfg = existing_config or {}
     is_edit = bool(cfg.get("standup_id"))
 
-    default_questions = "What did you do yesterday?\nWhat will you do today?\nAny blockers?"
+    default_questions = "\n".join(DEFAULT_QUESTIONS)
     questions_text = "\n".join(cfg.get("questions", [])) if cfg.get("questions") else default_questions
 
     time_options = _time_options()
@@ -487,7 +488,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
                 "initial_value": questions_text,
                 "placeholder": {
                     "type": "plain_text",
-                    "text": "What did you do yesterday?\nWhat will you do today?\nAny blockers?",
+                    "text": "\n".join(DEFAULT_QUESTIONS),
                 },
             },
         },
@@ -764,7 +765,7 @@ def standup_dm_message(questions: list[str], standup_name: str) -> dict:
     message styled as a question. Everything else is one tap.
     """
     questions = list(questions or [])
-    first_question = questions[0] if questions else "What did you do yesterday?"
+    first_question = questions[0] if questions else DEFAULT_QUESTIONS[0]
     count = len(questions) or 1
     return {
         "blocks": [
@@ -1734,15 +1735,7 @@ def build_summary_by_member(
     if not responses:
         return _nobody_answered()
 
-    q_labels = (
-        list(questions)
-        if questions
-        else [
-            "What did you complete yesterday?",
-            "What are you working on today?",
-            "Any blockers?",
-        ]
-    )
+    q_labels = list(questions) if questions else list(DEFAULT_QUESTIONS)
     answer_keys = ["yesterday", "today", "blockers"]
 
     chunks: list[list[dict]] = []
@@ -1830,15 +1823,7 @@ def build_summary_by_question(
     if not responses:
         return _nobody_answered()
 
-    q_labels = (
-        list(questions)
-        if questions
-        else [
-            "What did you complete yesterday?",
-            "What are you working on today?",
-            "Any blockers?",
-        ]
-    )
+    q_labels = list(questions) if questions else list(DEFAULT_QUESTIONS)
     answer_keys = ["yesterday", "today", "blockers"]
 
     count = len(responses)

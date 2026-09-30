@@ -26,7 +26,7 @@ import src.core.db as db
 from src.core import api_schemas as schemas
 from src.core.api import api_errors, csrf_token
 from src.core.oauth import consume_login_token
-from src.core.schedule_validation import schedule_config_error, schedule_payload_error
+from src.core.schedule_validation import DEFAULT_QUESTIONS, schedule_config_error, schedule_payload_error
 from src.core.scopes import SCOPE_STRING
 from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
@@ -392,9 +392,7 @@ def api_create_standup(data):
             schedule_time=data.get("schedule_time", "09:00"),
             schedule_tz=data.get("schedule_tz", "UTC"),
             schedule_days=days,
-            questions=data.get(
-                "questions", ["What did you do yesterday?", "What are you doing today?", "Any blockers?"]
-            ),
+            questions=data.get("questions", list(DEFAULT_QUESTIONS)),
             participants=data.get("participants", []),
             active=data.get("active", True),
             reminder_minutes=int(data.get("reminder_minutes") or 0),

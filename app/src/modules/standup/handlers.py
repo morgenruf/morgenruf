@@ -392,7 +392,7 @@ def _start_standup_session(user_id: str, team_id: str, client, schedule_id: int 
     dm = _blocks.standup_dm_message(session.questions, session.standup_name or "Standup")
     client.chat_postMessage(
         channel=user_id,
-        text=f"Time for your standup, {session.standup_name or 'Standup'}",
+        text=f"🌅 Time for {session.standup_name or 'your standup'}",
         blocks=dm["blocks"],
     )
 
@@ -527,10 +527,10 @@ def _complete_standup(user_id: str, session, client) -> None:
             if not parent_ts:
                 # Create parent message for today's thread — polished like competitors
                 standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
-                display_date = local_day.strftime("%a, %b %d.")
+                display_date = local_day.strftime("%a %-d %b")
                 parent = client.chat_postMessage(
                     channel=channel,
-                    text=f"✨ {standup_name} Completed - {display_date} ✨",
+                    text=f"{standup_name} · {display_date}",
                 )
                 parent_ts = parent["ts"]
                 try:

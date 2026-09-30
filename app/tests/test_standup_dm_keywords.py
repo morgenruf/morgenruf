@@ -163,7 +163,7 @@ def test_standup_starts_a_standup(world, text):
     _dm(world.app, text)
     session = _session()
     assert session is not None and session.questions == QUESTIONS and session.step == 0
-    assert any("Time for your standup" in t for t in _texts(world))
+    assert any("Time for " in t for t in _texts(world))
 
 
 @pytest.mark.parametrize("text", ["skip", "Skip.", "SKIP!"])
