@@ -1281,18 +1281,27 @@ def register_handlers(app: App) -> None:
             standups = db.get_standups(team_id, days=14)
             user_standups = [s for s in standups if s["user_id"] == user_id]
             standup_name = "Standup"
-            schedule_id = body["actions"][0].get("value", "")
+            questions: list[str] = []
+            raw_id = body["actions"][0].get("value", "")
+            schedule_id = int(raw_id) if str(raw_id).isdigit() else None
             if schedule_id:
+                # Only this standup's answers. Rows from before answers carried
+                # a schedule have none, and stay in so history is not lost.
+                user_standups = [s for s in user_standups if s.get("schedule_id") in (schedule_id, None)]
                 try:
-                    sched = db.get_standup_schedule(team_id, int(schedule_id))
+                    sched = db.get_standup_schedule(team_id, schedule_id)
                     if sched:
                         standup_name = sched.get("name", "Standup")
+                        questions = sched.get("questions") or []
+                        if isinstance(questions, str):
+                            questions = json.loads(questions)
                 except Exception:
                     pass
-            modal = _blocks.previous_standups_modal(user_standups, standup_name)
+            modal = _blocks.previous_standups_modal(user_standups, standup_name, questions)
             client.views_open(trigger_id=body["trigger_id"], view=modal)
         except Exception as exc:
             logger.warning("view_previous_standups error: %s", exc)
+            _say_once(client, user_id, "⚠️ I couldn't load your previous standups just now. Please try again.")
 
     @app.action("edit_standup")
     def handle_edit_standup_button(ack, body, client):  # noqa: ANN001
@@ -1539,6 +1548,11 @@ def register_handlers(app: App) -> None:
         cache_key = f"{team_id}:{user_id}"
         session = state_store.get(cache_key)
         if not session:
+            _say_once(
+                client,
+                user_id,
+                "⚠️ That standup is no longer open, so your mood was not saved. Run `/standup` to start a new one.",
+            )
             return
 
         session = state_store.record_answer(cache_key, mood)

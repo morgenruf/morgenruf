@@ -90,3 +90,15 @@ def test_support_and_dashboard_are_separate_links(monkeypatch):
         el["url"] for b in view["blocks"] for el in b.get("elements", []) or [] if el.get("action_id") == "open_support"
     ]
     assert support == ["https://morgenruf.dev/support/"]
+
+
+def test_previous_standups_use_the_standups_own_questions_and_short_dates():
+    from datetime import date
+
+    rows = [{"standup_date": date(2026, 9, 29), "yesterday": "Shipped", "today": "", "blockers": "None"}]
+    modal = blocks.previous_standups_modal(rows, "Daily", ["What shipped?", "What next?", "Stuck?"])
+    text = " ".join(str(b.get("text", "")) for b in modal["blocks"])
+    assert "Tue 29 Sep" in text
+    assert "What shipped?" in text and "Yesterday" not in text
+    assert "n/a" in text
+    assert "—" not in text

@@ -1598,44 +1598,58 @@ def app_home_configure_view(
 # ---------------------------------------------------------------------------
 
 
-def previous_standups_modal(standups: list[dict], standup_name: str = "Standup") -> dict:
-    """Modal showing recent standup history for the current user."""
+def _short_date(value: object) -> str:
+    """A stored date as "Tue 29 Sep", or the value as it came when it is not one."""
+    from datetime import date as _date  # noqa: PLC0415
+
+    if isinstance(value, str):
+        try:
+            value = _date.fromisoformat(value[:10])
+        except ValueError:
+            return value
+    if isinstance(value, _date):
+        return value.strftime("%a %-d %b")
+    return str(value or "")
+
+
+def previous_standups_modal(
+    standups: list[dict], standup_name: str = "Standup", questions: list[str] | None = None
+) -> dict:
+    """Modal showing one person's recent answers to one standup.
+
+    Answers are labelled with that standup's own questions. Its first three
+    answers are stored as yesterday, today and blockers whatever was asked.
+    """
     blocks: list[dict] = []
+    labels = list(questions or []) or ["Yesterday", "Today", "Blockers"]
 
     if not standups:
         blocks.append(
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": "_No previous standups found._"},
+                "text": {"type": "mrkdwn", "text": "_No answers in the last two weeks._"},
             }
         )
     else:
         for s in standups[:10]:  # Show last 10
-            date_str = str(s.get("standup_date", ""))
-            yesterday = s.get("yesterday", "") or "—"
-            today = s.get("today", "") or "—"
-            blockers = s.get("blockers", "") or "None"
             mood = s.get("mood", "")
             mood_str = f"  |  🎭 {mood}" if mood else ""
+            lines = [
+                f"*{labels[idx]}*\n{s.get(key) or 'n/a'}"
+                for idx, key in enumerate(("yesterday", "today", "blockers"))
+                if idx < len(labels)
+            ]
 
             blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*{date_str}*{mood_str}",
+                        "text": f"*{_short_date(s.get('standup_date'))}*{mood_str}",
                     },
                 }
             )
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (f"*Yesterday:* {yesterday}\n*Today:* {today}\n*Blockers:* {blockers}"),
-                    },
-                }
-            )
+            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(lines)[:3000]}})
             blocks.append({"type": "divider"})
 
     return {
