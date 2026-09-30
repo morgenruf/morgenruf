@@ -17,10 +17,18 @@ export function formatDate(
 export function relativeTime(value: string | null | undefined): string {
   if (!value) return 'Never';
 
-  const date = new Date(value);
+  // A bare date (2026-09-29) is a calendar day, not UTC midnight. Parsed as
+  // UTC it was "Yesterday" by evening in New York for a standup filed today.
+  const date = new Date(value.length === 10 ? `${value}T00:00:00` : value);
   if (Number.isNaN(date.getTime())) return value;
 
-  const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const days = Math.round(
+    (startOfToday.getTime() - startOfDay.getTime()) / 86_400_000,
+  );
 
   return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`;
 }

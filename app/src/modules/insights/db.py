@@ -227,13 +227,18 @@ def connect_program_timing(team_id: str) -> dict | None:
                -- The weekday the programme runs on. Without it a programme
                -- that has never run falls back to "today", whatever day it is.
                p.day_of_week,
+               p.next_round_date,
+               p.timezone,
                MIN(r.scheduled_for) FILTER (WHERE r.scheduled_for > NOW()) AS next_scheduled,
-               MAX(r.scheduled_for) AS last_round
+               MAX(r.scheduled_for) AS last_round,
+               -- A round run by hand does not move the cadence; connect's own
+               -- job counts from the last scheduled one.
+               MAX(r.scheduled_for) FILTER (WHERE NOT r.manual) AS last_scheduled_round
         FROM connect_programs p
         LEFT JOIN connect_rounds r ON r.program_id = p.id
         WHERE p.team_id = %s
           AND p.enabled IS TRUE
-        GROUP BY p.id, p.name, p.interval_weeks, p.day_of_week, p.created_at
+        GROUP BY p.id, p.name, p.interval_weeks, p.day_of_week, p.next_round_date, p.timezone, p.created_at
         ORDER BY p.created_at
         LIMIT 1
     """

@@ -954,7 +954,7 @@ def register_handlers(app: App) -> None:
                     "is_participant": is_participant,
                     "user_responded_today": user_responded_today if is_participant else False,
                     "user_last_response_time": (
-                        user_last_response["submitted_at"].strftime("%-I:%M %p")
+                        _local_clock(user_last_response["submitted_at"], user_tz or s.get("schedule_tz"))
                         if user_last_response and user_last_response.get("submitted_at")
                         else None
                     ),
@@ -1450,6 +1450,20 @@ def register_handlers(app: App) -> None:
                 channel=user_id,
                 text="⚠️ Your standup session expired. Run `/standup` to start a new one.",
             )
+            return
+
+        if step != session.step:
+            # A Submit on a question already answered. Recording it would file
+            # it as the answer to the current question and shift every answer
+            # after it by one.
+            _say_once(client, user_id, _ALREADY_ANSWERED)
+            return
+
+        if not answer.strip():
+            # Slack can deliver the click before it has captured what was
+            # typed, and a blank used to be saved as the answer without a word.
+            # Leaving a question blank on purpose is what `pass` is for.
+            _say_once(client, user_id, _NO_ANSWER_RECEIVED)
             return
 
         session = state_store.record_answer(cache_key, answer_value(answer))
@@ -2012,6 +2026,20 @@ def match_dm_command(text: str | None) -> tuple[str, str] | None:
     return None
 
 
+_NO_ANSWER_RECEIVED = (
+    "I didn't get an answer for that one. Type it in the box and press *Submit* again, "
+    "or send `pass` to leave it blank."
+)
+_ALREADY_ANSWERED = "That question is already answered. Carry on with the latest one below."
+
+
+def _say_once(client, user_id: str, text: str) -> None:  # noqa: ANN001
+    try:
+        client.chat_postMessage(channel=user_id, text=text)
+    except Exception as exc:
+        logger.warning("Could not tell %s about their answer: %s", user_id, exc)
+
+
 _NOT_A_STANDUP_ADMIN = (
     "Only workspace admins and standup admins can create or change standups. "
     "Ask one of them, or ask an admin to make you a standup admin in the dashboard."
@@ -2039,6 +2067,26 @@ def _refuse_standup_change(client, user_id: str) -> None:  # noqa: ANN001
         client.chat_postMessage(channel=user_id, text=_NOT_A_STANDUP_ADMIN)
     except Exception as exc:
         logger.warning("Could not tell %s they cannot change standups: %s", user_id, exc)
+
+
+def _local_clock(moment, tz_name: str | None) -> str:  # noqa: ANN001
+    """A stored timestamp as a clock time in the reader's timezone.
+
+    submitted_at comes back from Postgres in UTC, and formatting it as it was
+    told a New York member they reported at 12:25 AM for an 8:25 PM answer.
+    """
+    from datetime import timezone as _tz  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+    from src.core.timezones import canonical_tz  # noqa: PLC0415
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=_tz.utc)
+    try:
+        zone = ZoneInfo(canonical_tz(tz_name)) if tz_name else _tz.utc
+    except Exception:
+        zone = _tz.utc
+    return moment.astimezone(zone).strftime("%-I:%M %p")
 
 
 def answer_value(text: str | None) -> str:

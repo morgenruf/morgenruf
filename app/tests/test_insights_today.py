@@ -204,3 +204,38 @@ def test_a_programme_with_history_still_counts_from_the_last_round():
 def test_a_biweekly_programme_with_history_waits_two_weeks():
     prog = {"day_of_week": 0, "interval_weeks": 2, "last_round": dt.date(2026, 9, 14)}
     assert next_chat_date(prog, dt.date(2026, 9, 17)) == dt.date(2026, 9, 28)
+
+
+# ── A round run by hand does not move the cadence ───────────────────────────
+# The Today page said the next coffee chat was on Tuesday 6 October for a
+# Monday programme, because it counted a week from a round run by hand on a
+# Tuesday. The Coffee chats page, which ignores manual rounds, said Monday 5.
+
+
+def test_a_manual_round_does_not_move_the_next_date():
+    tuesday = dt.date(2026, 9, 29)
+    program = {
+        "day_of_week": 0,
+        "interval_weeks": 1,
+        "next_scheduled": None,
+        "last_round": dt.datetime(2026, 9, 29, 15, 56, tzinfo=dt.timezone.utc),
+        "last_scheduled_round": dt.datetime(2026, 9, 28, 14, 0, tzinfo=dt.timezone.utc),
+    }
+    assert next_chat_date(program, tuesday) == dt.date(2026, 10, 5)
+
+
+def test_the_team_day_follows_the_first_standup_timezone():
+    from src.modules.insights.today import workspace_today
+
+    late_evening_new_york = dt.datetime(2026, 9, 30, 0, 45, tzinfo=dt.timezone.utc)
+    schedules = [{"schedule_tz": "America/New_York"}]
+    assert workspace_today(schedules, None, late_evening_new_york) == dt.date(2026, 9, 29)
+
+
+def test_the_team_day_falls_back_to_the_programme_then_utc():
+    from src.modules.insights.today import workspace_today
+
+    now = dt.datetime(2026, 9, 30, 0, 45, tzinfo=dt.timezone.utc)
+    assert workspace_today([], {"timezone": "America/Toronto"}, now) == dt.date(2026, 9, 29)
+    assert workspace_today([], None, now) == dt.date(2026, 9, 30)
+    assert workspace_today([{"schedule_tz": "Not/AZone"}], None, now) == dt.date(2026, 9, 30)

@@ -23,7 +23,7 @@ def register_routes(flask_app) -> None:
     from src.core.roster import eligible_members
     from src.modules.insights import schemas
     from src.modules.insights.rules import find_blocker_runs
-    from src.modules.insights.today import awaiting, blocked_from, expected_today, next_chat_date
+    from src.modules.insights.today import awaiting, blocked_from, expected_today, next_chat_date, workspace_today
 
     bp = Blueprint("insights", __name__)
 
@@ -105,7 +105,8 @@ def register_routes(flask_app) -> None:
             pool = []
         names = {m.user_id: m.name for m in pool}
 
-        expected = expected_today(idb.active_schedules(team_id), names.keys(), now)
+        schedules = idb.active_schedules(team_id)
+        expected = expected_today(schedules, names.keys(), now)
         answered = {row.get("user_id") for row in responses}
         waiting = [
             {"user_id": user_id, "real_name": names.get(user_id) or None} for user_id in awaiting(expected, answered)
@@ -120,13 +121,16 @@ def register_routes(flask_app) -> None:
             row["created_at"] = _iso(row.get("created_at"))
 
         program = idb.connect_program_timing(team_id)
-        chat_date = next_chat_date(program, now.date())
+        # "Today" is the team's day, not the server's: a New York evening is
+        # already tomorrow in UTC, and the page said Wednesday on a Tuesday.
+        today = workspace_today(schedules, program, now)
+        chat_date = next_chat_date(program, today)
         next_chat = None
         if program and chat_date:
             # A due date in the past is not a forecast: the round was due and
             # has not run. Showing it as "next" told a Thursday its coffee
             # chat was on Wednesday.
-            days_away = (chat_date - now.date()).days
+            days_away = (chat_date - today).days
             next_chat = {
                 "program_id": program.get("program_id"),
                 "name": program.get("name"),
@@ -136,7 +140,7 @@ def register_routes(flask_app) -> None:
             }
 
         return {
-            "date": now.date().isoformat(),
+            "date": today.isoformat(),
             "counts": {
                 # Answered counts people, not rows, so it stays comparable with
                 # expected when someone files two standups in one day.
