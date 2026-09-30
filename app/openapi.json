@@ -13,6 +13,17 @@
       }
     },
     "schemas": {
+      "AiSummaryStatus": {
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configured"
+        ],
+        "type": "object"
+      },
       "AnalyticsData": {
         "properties": {
           "completed": {
@@ -3015,6 +3026,106 @@
           }
         }
       ]
+    },
+    "/dashboard/api/ai-summary": {
+      "get": {
+        "description": "Without one the standup form hides the AI summary switch, the same way\nthe Connect page says when Zoom is not set up here.",
+        "operationId": "getAiSummary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSummaryStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "default": {
+            "$ref": "#/components/responses/DEFAULT_ERROR"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Whether this deployment has an AI provider key.",
+        "tags": [
+          "Standups"
+        ]
+      }
     },
     "/dashboard/api/analytics": {
       "get": {
@@ -10216,6 +10327,10 @@
     {
       "description": "",
       "name": "dashboard"
+    },
+    {
+      "description": "",
+      "name": "standup"
     },
     {
       "description": "",

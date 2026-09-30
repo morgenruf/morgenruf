@@ -332,6 +332,7 @@ export function StandupEditor({
 
   const values = useWatch({ control: form.control });
   const resources = useStandupResources(values.channel_id);
+  const aiConfigured = resources.ai.data?.configured === true;
 
   const participants = values.participants ?? [];
   const syncWithChannel = !!values.sync_with_channel;
@@ -1190,48 +1191,57 @@ export function StandupEditor({
                     <Field label="Linear team prefix">
                       <Input placeholder="ENG" {...register('linear_team')} />
                     </Field>
-                    <Controller
-                      control={form.control}
-                      name="ai_provider"
-                      render={({ field, fieldState }) => (
-                        <Select
-                          name={field.name}
-                          value={field.value}
-                          items={aiProviderOptions}
-                          disabled={save.isPending}
-                          onValueChange={(value) => {
-                            if (value !== null) field.onChange(value);
-                          }}
-                        >
-                          <Field label="AI provider" name="ai_provider">
-                            <SelectTrigger
-                              className="w-full"
-                              ref={field.ref}
-                              onBlur={field.onBlur}
-                              aria-invalid={fieldState.invalid}
+                    {aiConfigured && (
+                      <>
+                        <Controller
+                          control={form.control}
+                          name="ai_provider"
+                          render={({ field, fieldState }) => (
+                            <Select
+                              name={field.name}
+                              value={field.value}
+                              items={aiProviderOptions}
+                              disabled={save.isPending}
+                              onValueChange={(value) => {
+                                if (value !== null) field.onChange(value);
+                              }}
                             >
-                              <SelectValue />
-                            </SelectTrigger>
-                          </Field>
-                          <SelectContent>
-                            {aiProviderOptions.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    <ToggleField
-                      name="ai_summary_enabled"
-                      label="Enable AI-generated daily summary"
-                    />
+                              <Field label="AI provider" name="ai_provider">
+                                <SelectTrigger
+                                  className="w-full"
+                                  ref={field.ref}
+                                  onBlur={field.onBlur}
+                                  aria-invalid={fieldState.invalid}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </Field>
+                              <SelectContent>
+                                {aiProviderOptions.map((item) => (
+                                  <SelectItem
+                                    key={item.value}
+                                    value={item.value}
+                                  >
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                        <ToggleField
+                          name="ai_summary_enabled"
+                          label="Enable AI-generated daily summary"
+                        />
+                      </>
+                    )}
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    An API key for the chosen AI provider must be configured on
-                    the server.
-                  </p>
+                  {aiConfigured && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Standup answers are sent to the chosen AI provider to
+                      write the summary.
+                    </p>
+                  )}
                 </div>
               </section>
               {errors.root && (

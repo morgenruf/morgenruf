@@ -10,7 +10,7 @@ import { useServices } from '@/common/api/services-context';
 import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { useSession } from '@/common/auth/use-session';
 
-import { standupTemplatesOptions } from './queries';
+import { aiSummaryOptions, standupTemplatesOptions } from './queries';
 
 export type Standup = Awaited<
   ReturnType<Api['standups']['listStandups']>
@@ -36,8 +36,9 @@ export function useStandupResources(channelId = '') {
   const channels = useQuery(channelsOptions(services, workspace));
   const members = useMemberDirectory({ channel: channelId });
   const templates = useQuery(standupTemplatesOptions(services, workspace));
+  const ai = useQuery(aiSummaryOptions(services, workspace));
 
-  return { channels, members, templates };
+  return { channels, members, templates, ai };
 }
 
 export function useStandupHealth() {

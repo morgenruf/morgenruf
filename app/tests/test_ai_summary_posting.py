@@ -41,6 +41,7 @@ def test_the_posted_summary_cannot_broadcast_or_disguise_a_link():
         patch.object(sched_mod, "_fresh_bot_token", return_value="xoxb-test"),
         patch.object(sched_mod, "_call_with_auth_retry", return_value=None),
         patch("src.modules.standup.ai_summary.generate_summary", return_value=evil),
+        patch("src.modules.standup.ai_summary.configured", return_value=True),
     ):
         sched_mod._post_scheduled_report("T1", "xoxb-test", "C_STANDUP", 1)
     posted = client.chat_postMessage.call_args.kwargs["text"]

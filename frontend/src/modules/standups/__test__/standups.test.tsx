@@ -20,6 +20,7 @@ const mock = vi.hoisted(() => ({
   channels: vi.fn(),
   members: vi.fn(),
   templates: vi.fn(),
+  ai: vi.fn(),
   analytics: vi.fn(),
 }));
 
@@ -40,6 +41,7 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
       updateStandup: mock.update,
       deleteStandup: mock.remove,
       listTemplates: mock.templates,
+      getAiSummary: mock.ai,
     },
     workspace: { listChannels: mock.channels },
     members: { listMembers: mock.members },
@@ -136,6 +138,7 @@ beforeEach(() => {
       },
     ],
   });
+  mock.ai.mockResolvedValue({ data: { configured: true } });
   mock.analytics.mockResolvedValue({ data: { schedules: [] } });
   mock.create.mockResolvedValue({ data: standup });
   mock.update.mockResolvedValue({ data: standup });
@@ -686,6 +689,44 @@ it('saves deliberate shared-setting changes while creating a standup, including 
   );
   expect(mock.create.mock.calls[0][0]).not.toHaveProperty('github_repo');
   expect(mock.create.mock.calls[0][0]).not.toHaveProperty('linear_team');
+});
+
+it('hides the AI summary settings when no AI provider key is configured', async () => {
+  mock.ai.mockResolvedValue({ data: { configured: false } });
+  const user = userEvent.setup({ delay: null });
+
+  view('/dashboard/standups?edit=7');
+  await screen.findByRole('dialog');
+  await user.click(screen.getByRole('tab', { name: 'Workspace' }));
+
+  await waitFor(() => expect(mock.ai).toHaveBeenCalled());
+  expect(screen.getByLabelText('Jira base URL')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('combobox', { name: 'AI provider' }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('checkbox', {
+      name: 'Enable AI-generated daily summary',
+    }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText(/sent to the chosen AI provider/)).toBeNull();
+});
+
+it('shows the AI summary settings when an AI provider key is configured', async () => {
+  const user = userEvent.setup({ delay: null });
+
+  view('/dashboard/standups?edit=7');
+  await screen.findByRole('dialog');
+  await user.click(screen.getByRole('tab', { name: 'Workspace' }));
+
+  expect(
+    await screen.findByRole('checkbox', {
+      name: 'Enable AI-generated daily summary',
+    }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole('combobox', { name: 'AI provider' }),
+  ).toBeInTheDocument();
 });
 
 it.each([

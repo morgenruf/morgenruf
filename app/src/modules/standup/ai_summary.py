@@ -33,6 +33,16 @@ def safe_summary(text: str) -> str:
     return neutralise_links(defuse_broadcasts(text or ""))
 
 
+def configured() -> bool:
+    """Whether this deployment has a key for either provider.
+
+    Without one there is no AI summary to offer: the dashboard hides the
+    switch and the scheduler ignores it, rather than posting the plain
+    fallback under an "AI Summary" heading.
+    """
+    return bool(os.environ.get("OPENAI_API_KEY", "").strip() or os.environ.get("ANTHROPIC_API_KEY", "").strip())
+
+
 def generate_summary(standups: list[dict], team_name: str = "", provider: str = "") -> str:
     """Generate an AI summary paragraph from standup data.
 

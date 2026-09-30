@@ -11,9 +11,11 @@
  */
 
 import type {
+  AiSummaryStatus,
   CreateStandupError,
   DeleteStandupError,
   DeleteStandupParams,
+  GetAiSummaryError,
   ListStandupsError,
   ListTemplatesError,
   Ok,
@@ -65,6 +67,23 @@ export class Standups<SecurityDataType = unknown> {
     this.http.request<Ok, DeleteStandupError>({
       path: `/dashboard/api/standups/${standupId}`,
       method: "DELETE",
+      secure: true,
+      format: "json",
+      ...params,
+    });
+  /**
+   * @description Without one the standup form hides the AI summary switch, the same way the Connect page says when Zoom is not set up here.
+   *
+   * @tags Standups
+   * @name GetAiSummary
+   * @summary Whether this deployment has an AI provider key.
+   * @request GET:/dashboard/api/ai-summary
+   * @secure
+   */
+  getAiSummary = (params: RequestParams = {}) =>
+    this.http.request<AiSummaryStatus, GetAiSummaryError>({
+      path: `/dashboard/api/ai-summary`,
+      method: "GET",
       secure: true,
       format: "json",
       ...params,

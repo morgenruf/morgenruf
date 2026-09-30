@@ -1010,10 +1010,12 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
 
         # AI summary
         try:
-            from src.modules.standup.ai_summary import generate_summary, safe_summary  # noqa: PLC0415
+            from src.modules.standup.ai_summary import configured, generate_summary, safe_summary  # noqa: PLC0415
 
             ws_config = db.get_workspace_config(team_id) or {}
-            if ws_config.get("ai_summary_enabled"):
+            # Without a key the switch means nothing: the dashboard hides it,
+            # and a value saved before that is ignored here.
+            if ws_config.get("ai_summary_enabled") and configured():
                 inst = db.get_installation(team_id)
                 team_name = (inst or {}).get("team_name", "")
                 summary_text = generate_summary(today_standups, team_name, ws_config.get("ai_provider") or "")

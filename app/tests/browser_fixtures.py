@@ -421,6 +421,7 @@ def create_test_app(patcher=None):
     import src.modules.connect.zoom as zoom
     import src.modules.insights.db as insights_db
     import src.modules.kudos.db as kudos_db
+    import src.modules.standup.ai_summary as ai_summary
     import src.modules.standup.handlers as handlers
     import src.modules.standup.workflow as workflow
     from flask import jsonify, request, session
@@ -677,6 +678,7 @@ def create_test_app(patcher=None):
         },
     )
     patch(zoom, "configured", lambda: True)
+    patch(ai_summary, "configured", lambda: True)
     patch(connect_jobs, "run_round", lambda *args, **kwargs: None)
     patch(connect_slack, "channel_member_ids", lambda *args: [m["user_id"] for m in state.members])
     patch(
