@@ -41,7 +41,7 @@ import { Input } from '@/common/components/ui/input';
 import { Label } from '@/common/components/ui/label';
 import { ScrollArea } from '@/common/components/ui/scroll-area';
 import { applyApiErrors } from '@/common/forms/api-errors';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, formatDateTime } from '@/common/lib/format';
 
 import {
   useWebhookDeliveries,
@@ -230,12 +230,7 @@ function WebhookCard({
                               delivery.event_type}
                           </td>
                           <td className="whitespace-nowrap p-2">
-                            {formatDate(delivery.created_at, {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatDateTime(delivery.created_at)}
                           </td>
                           <td className="whitespace-nowrap p-2">
                             {delivery.duration_ms} ms

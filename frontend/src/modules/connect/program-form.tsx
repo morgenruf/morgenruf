@@ -42,6 +42,7 @@ import {
 } from '@/common/components/ui/select';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { useTabbedFormValidation } from '@/common/forms/use-tabbed-form-validation';
+import { formatDate } from '@/common/lib/format';
 
 import { dayNames, programDefaults, programTime } from './form-utils';
 import {
@@ -269,7 +270,7 @@ function ProgramMembers({ programId }: { programId: number }) {
                       )}
                       {person.until && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Until {new Date(person.until).toLocaleDateString()}
+                          Until {formatDate(person.until)}
                         </p>
                       )}
                     </td>

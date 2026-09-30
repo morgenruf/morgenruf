@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/common/components/ui/table';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, formatTime } from '@/common/lib/format';
 
 import { exportReports, useReports } from '../hooks';
 import { ReportsSkeleton } from '../loading';
@@ -423,10 +423,7 @@ export default function ReportsPage() {
                                   )}
                                   detail={
                                     row.submitted_at
-                                      ? formatDate(row.submitted_at, {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                        })
+                                      ? formatTime(row.submitted_at)
                                       : undefined
                                   }
                                 />

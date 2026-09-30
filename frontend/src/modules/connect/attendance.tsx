@@ -27,6 +27,7 @@ import {
   CardTitle,
 } from '@/common/components/ui/card';
 import { ScrollArea } from '@/common/components/ui/scroll-area';
+import { formatDate, formatDateTime } from '@/common/lib/format';
 
 import { AttendanceChart } from './attendance-chart';
 import {
@@ -77,7 +78,7 @@ function RoundMatches({
               <span className="flex flex-wrap gap-2">
                 {match.agreed_at && (
                   <Badge variant="outline">
-                    Agreed {new Date(match.agreed_at).toLocaleString()}
+                    Agreed {formatDateTime(match.agreed_at)}
                   </Badge>
                 )}
                 {match.has_zoom && <Badge variant="outline">Zoom</Badge>}
@@ -218,7 +219,7 @@ export function Attendance({ programId }: { programId: number }) {
                       <span className="min-w-0 flex-1">
                         <span className="text-sm font-medium">
                           {round.scheduled_for
-                            ? new Date(round.scheduled_for).toLocaleString()
+                            ? formatDateTime(round.scheduled_for)
                             : 'Unscheduled'}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
@@ -312,7 +313,7 @@ export function Attendance({ programId }: { programId: number }) {
                                   {...members.person(person.user_id)}
                                   detail={
                                     person.last_met
-                                      ? `Last met ${new Date(person.last_met).toLocaleDateString()}`
+                                      ? `Last met ${formatDate(person.last_met)}`
                                       : undefined
                                   }
                                 />

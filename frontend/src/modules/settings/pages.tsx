@@ -27,6 +27,7 @@ import { Input } from '@/common/components/ui/input';
 import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { useConfirm } from '@/common/hooks/use-confirm';
+import { formatDateTime, formatWeekdays } from '@/common/lib/format';
 
 import { useSettings, useSettingsMutations } from './hooks';
 import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
@@ -297,7 +298,7 @@ export function SettingsPage() {
               <CardContent className="space-y-4">
                 <p className="text-sm">
                   {first.schedule_time} {first.schedule_tz} ·{' '}
-                  {first.schedule_days.join(', ')}
+                  {formatWeekdays(first.schedule_days)}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {first.participants.length
@@ -314,7 +315,11 @@ export function SettingsPage() {
                   </p>
                 ) : first.next_run ? (
                   <p className="text-sm text-muted-foreground">
-                    Next run: {new Date(first.next_run).toLocaleString()}
+                    Next run:{' '}
+                    {formatDateTime(first.next_run, {
+                      timeZone: first.schedule_tz,
+                      weekday: true,
+                    })}
                   </p>
                 ) : (
                   <Badge variant="secondary" className="me-2">
