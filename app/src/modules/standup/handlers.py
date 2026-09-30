@@ -480,7 +480,7 @@ def _complete_standup(user_id: str, session, client) -> None:
     confirmation_text = (
         "✏️ *Standup updated!* Your edits have been saved."
         if is_edit
-        else f"✅ *Standup submitted!* {edit_rule_text(session.team_id)}"
+        else f"✅ *Standup submitted!* {edit_rule_text(session.team_id, session.schedule_id)}"
     )
     # Block Kit confirmation with edit button
     client.chat_postMessage(
@@ -867,16 +867,61 @@ def _hours(n: int) -> str:
     return f"{n} hour{'s' if n != 1 else ''}"
 
 
-def edit_rule_text(team_id: str) -> str:
+def _schedule_for(team_id: str, schedule_id) -> dict:  # noqa: ANN001
+    if not schedule_id:
+        return {}
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return db.get_standup_schedule(team_id, int(schedule_id)) or {}
+    except Exception:
+        return {}
+
+
+def _report_passed(schedule: dict, standup_date, now: datetime) -> bool:  # noqa: ANN001
+    """Whether the report for the day these answers belong to has gone out.
+
+    Compared in the standup's own timezone: an answer is filed under its
+    local day, and the report fires at report_time on that day.
+    """
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+    from src.core.timezones import canonical_tz  # noqa: PLC0415
+
+    try:
+        zone = ZoneInfo(str(canonical_tz(schedule.get("schedule_tz") or "UTC")))
+    except Exception:
+        zone = timezone.utc
+    local_now = now.astimezone(zone)
+    if standup_date is None:
+        return False
+    if standup_date < local_now.date():
+        return True
+    if standup_date > local_now.date():
+        return False
+    hour, minute = (int(x) for x in _report_time(schedule).split(":"))
+    return (local_now.hour, local_now.minute) >= (hour, minute)
+
+
+def edit_rule_text(team_id: str, schedule_id=None) -> str:  # noqa: ANN001
     """The edit rule can_edit_response applies, in words."""
     hours = _edit_window_hours(team_id)
-    if not hours:
+    if hours is None:
         return "You can change your answers any time."
+    if hours == 0:
+        schedule = _schedule_for(team_id, schedule_id)
+        if schedule.get("allow_edit_after_report"):
+            return "You can change your answers until the end of the day."
+        if schedule:
+            return f"You can change your answers until the report is posted at {_report_time(schedule)}."
+        return "You can change your answers until the report is posted."
     return f"You can change your answers for {_hours(hours)} after you send them."
 
 
 def edit_closed_text(team_id: str) -> str:
     hours = _edit_window_hours(team_id)
+    if hours == 0:
+        return "These answers can no longer be changed: the report has been posted."
     if not hours:
         return "These answers can no longer be changed."
     return f"These answers can no longer be changed. Answers stay editable for {_hours(hours)} after you send them."
@@ -885,10 +930,15 @@ def edit_closed_text(team_id: str) -> str:
 def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
     """Return True if the user is still within their edit window.
 
-    The edit window is controlled by ``edit_window_hours`` in workspace_config:
-      * ``0``    — editable until the report time (treated as no time limit here)
-      * positive — that many hours after submission
-      * ``None`` — no limit
+    The edit window is ``edit_window_hours`` in workspace_config, set from the
+    dashboard's "Editing answers" setting:
+      * ``None`` : no limit
+      * ``0``    : until that standup's report is posted, or until the end of
+        its local day when the standup allows edits after the report
+      * positive : that many hours after submission
+
+    ``0`` used to mean "no limit" here, so the dashboard's "until the report"
+    option and the per-standup "allow edits after the report" box did nothing.
     """
     try:
         import src.core.db as db  # noqa: PLC0415
@@ -901,17 +951,27 @@ def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
 
         config = db.get_workspace_config(team_id) or {}
         edit_window_hours = config.get("edit_window_hours", 4)
+        now = datetime.now(tz=timezone.utc)
 
         if edit_window_hours is None:
             return True
         if edit_window_hours == 0:
-            return True
+            schedule = _schedule_for(team_id, standup.get("schedule_id"))
+            if not schedule:
+                # A standup with no schedule has no report to wait for.
+                return True
+            standup_date = standup.get("standup_date")
+            if schedule.get("allow_edit_after_report"):
+                from src.core.timezones import local_today  # noqa: PLC0415
+
+                return standup_date is None or standup_date >= local_today(schedule.get("schedule_tz"))
+            return not _report_passed(schedule, standup_date, now)
 
         submitted_at: datetime = standup["submitted_at"]
         if submitted_at.tzinfo is None:
             submitted_at = submitted_at.replace(tzinfo=timezone.utc)
         cutoff = submitted_at + timedelta(hours=edit_window_hours)
-        return datetime.now(tz=timezone.utc) <= cutoff
+        return now <= cutoff
 
     except Exception as exc:
         logger.warning("can_edit_response check failed for %s/%s: %s", team_id, user_id, exc)
