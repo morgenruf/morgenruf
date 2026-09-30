@@ -111,13 +111,22 @@ def save_installation(
     The first installer keeps installed_by_user_id on a reinstall. A later
     OAuth run is often a member signing in to the dashboard, and
     get_member_role treats the installer as a permanent admin.
+
+    A workspace whose data was purged keeps a bare row, so coming back
+    conflicts with it. That still counts as new: nothing of the old install
+    is left, so the installer gets the welcome and the clock starts again.
+    `prior` reads the row as it was before this statement.
     """
     sql = """
+        WITH prior AS (SELECT purged_at FROM installations WHERE team_id = %s)
         INSERT INTO installations (team_id, team_name, bot_token, bot_user_id, app_id,
             installed_by_user_id, bot_refresh_token, bot_token_expires_at,
             granted_scopes, updated_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
         ON CONFLICT (team_id) DO UPDATE SET
+            installed_at = CASE WHEN installations.purged_at IS NOT NULL THEN NOW()
+                                ELSE installations.installed_at END,
+            purged_at = NULL,
             team_name = EXCLUDED.team_name,
             bot_token = EXCLUDED.bot_token,
             bot_user_id = EXCLUDED.bot_user_id,
@@ -127,13 +136,14 @@ def save_installation(
             bot_token_expires_at = EXCLUDED.bot_token_expires_at,
             granted_scopes = COALESCE(EXCLUDED.granted_scopes, installations.granted_scopes),
             updated_at = NOW()
-        RETURNING (xmax = 0) AS is_new
+        RETURNING (xmax = 0) OR EXISTS (SELECT 1 FROM prior WHERE purged_at IS NOT NULL) AS is_new
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 sql,
                 (
+                    team_id,
                     team_id,
                     team_name,
                     bot_token,
@@ -2424,18 +2434,246 @@ def verify_mcp_key(key: str) -> str | None:
     return team_id
 
 
-def delete_installation(team_id: str) -> bool:
-    """Delete a workspace installation and all cascading data (members, standups, config, etc.).
+# ── Removing a workspace: history first, then the data ──────────────────────
 
-    All child tables reference installations(team_id) with ON DELETE CASCADE,
-    so a single DELETE removes all workspace data.
-    Returns True if a row was deleted, False if team_id was not found.
+# Every table that holds a person or something they wrote, for one workspace,
+# in the order the purge deletes them. Children come before parents where the
+# foreign key is not ON DELETE CASCADE (standups before standup_schedules,
+# rematch requests before matches). connect_pair_history has no team_id, only
+# pairs of user IDs keyed by programme, so it is reached through its programme.
+#
+# A test reads every migration and fails when a table with a team_id is on
+# neither this list nor KEPT_TABLES, so a new table has to be decided on.
+_PURGE_STEPS: tuple[tuple[str, str], ...] = (
+    ("webhook_deliveries", "team_id = %s"),
+    ("webhooks", "team_id = %s"),
+    ("workflow_rules", "team_id = %s"),
+    ("connect_slot_votes", "team_id = %s"),
+    ("connect_rematch_requests", "team_id = %s"),
+    ("connect_followups", "team_id = %s"),
+    ("connect_matches", "team_id = %s"),
+    ("connect_optouts", "team_id = %s"),
+    ("connect_pair_history", "program_id IN (SELECT id FROM connect_programs WHERE team_id = %s)"),
+    ("connect_rounds", "team_id = %s"),
+    ("connect_programs", "team_id = %s"),
+    ("connect_zoom_links", "team_id = %s"),
+    ("celebration_posts", "team_id = %s"),
+    ("celebration_settings", "team_id = %s"),
+    ("kudos", "team_id = %s"),
+    ("kudos_config", "team_id = %s"),
+    ("daily_standup_threads", "team_id = %s"),
+    ("user_away", "team_id = %s"),
+    ("user_skip", "team_id = %s"),
+    ("standups", "team_id = %s"),
+    ("standup_schedules", "team_id = %s"),
+    ("member_profiles", "team_id = %s"),
+    ("module_admins", "team_id = %s"),
+    ("mcp_api_keys", "team_id = %s"),
+    ("members", "team_id = %s"),
+    ("workspace_holidays", "team_id = %s"),
+    ("workspace_modules", "team_id = %s"),
+    ("workspace_config", "team_id = %s"),
+    ("setup_email_consents", "team_id = %s"),
+    ("install_emails", "team_id = %s"),
+)
+PURGED_TABLES: tuple[str, ...] = tuple(table for table, _ in _PURGE_STEPS)
+
+# Tables with a team_id that the purge keeps, and why:
+#   installations      stripped to team_id, team_name, dates and the reason,
+#                      with every token and the installer's user ID cleared
+#   workspace_history  counts and dates only, the point of keeping anything
+#   email_consents     a person's own opt-in to product email, keyed by their
+#                      address and kept as the proof the law asks for. Only
+#                      the link to the workspace is cleared.
+KEPT_TABLES: tuple[str, ...] = ("installations", "workspace_history", "email_consents")
+
+# Written with the same expressions whether it runs for one workspace or all
+# of them. Counts and dates only: no user IDs, names, addresses or text.
+# A purged workspace is skipped, because its counts would all read zero.
+_HISTORY_SQL = """
+    INSERT INTO workspace_history (
+        team_id, team_name, installed_at, removed_at, removal_reason,
+        members_count, standups_created, standup_answers, first_answer_at,
+        last_activity_at, kudos_count, coffee_rounds, modules_used,
+        days_installed, updated_at)
+    SELECT i.team_id, i.team_name, i.installed_at,
+           CASE WHEN i.active THEN NULL ELSE i.deactivated_at END,
+           CASE WHEN i.active THEN NULL ELSE i.deactivated_reason END,
+           (SELECT COUNT(*) FROM members m WHERE m.team_id = i.team_id AND m.active),
+           sc.n, st.n, st.first_at,
+           GREATEST(st.last_at, k.last_at, c.last_at),
+           k.n, c.n,
+           ARRAY_REMOVE(ARRAY[
+               CASE WHEN sc.n > 0 OR st.n > 0 THEN 'standup' END,
+               CASE WHEN k.n > 0 THEN 'kudos' END,
+               CASE WHEN c.n > 0 THEN 'connect' END,
+               CASE WHEN EXISTS (SELECT 1 FROM celebration_posts p WHERE p.team_id = i.team_id)
+                    THEN 'celebrations' END,
+               CASE WHEN EXISTS (SELECT 1 FROM mcp_api_keys a WHERE a.team_id = i.team_id) THEN 'mcp' END
+           ]::text[], NULL),
+           GREATEST(0, COALESCE(CASE WHEN i.active THEN NULL ELSE i.deactivated_at END, NOW())::date
+                       - COALESCE(i.installed_at, NOW())::date),
+           NOW()
+    FROM installations i
+    CROSS JOIN LATERAL (SELECT COUNT(*) AS n FROM standup_schedules WHERE team_id = i.team_id) sc
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MIN(submitted_at) AS first_at, MAX(submitted_at) AS last_at
+        FROM standups WHERE team_id = i.team_id) st
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM kudos WHERE team_id = i.team_id) k
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(delivered_at) AS last_at
+        FROM connect_matches WHERE team_id = i.team_id AND delivered_at IS NOT NULL) c
+    WHERE {where}
+    ON CONFLICT (team_id) DO UPDATE SET
+        team_name = EXCLUDED.team_name,
+        installed_at = EXCLUDED.installed_at,
+        removed_at = EXCLUDED.removed_at,
+        removal_reason = EXCLUDED.removal_reason,
+        members_count = EXCLUDED.members_count,
+        standups_created = EXCLUDED.standups_created,
+        standup_answers = EXCLUDED.standup_answers,
+        first_answer_at = EXCLUDED.first_answer_at,
+        last_activity_at = EXCLUDED.last_activity_at,
+        kudos_count = EXCLUDED.kudos_count,
+        coffee_rounds = EXCLUDED.coffee_rounds,
+        modules_used = EXCLUDED.modules_used,
+        days_installed = EXCLUDED.days_installed,
+        updated_at = NOW()
+"""
+
+
+def record_workspace_history(team_id: str) -> bool:
+    """Refresh one workspace's history row from the live tables.
+
+    Returns False when there is nothing to record: no such installation, or
+    one already purged, whose last counts must not be overwritten with zeros.
     """
-    sql = "DELETE FROM installations WHERE team_id = %s"
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id,))
-            return cur.rowcount > 0
+            cur.execute(_HISTORY_SQL.format(where="i.team_id = %s AND i.purged_at IS NULL"), (team_id,))
+            return (cur.rowcount or 0) > 0
+
+
+def record_all_workspace_history() -> int:
+    """Refresh history for every installation, live or retired. Returns how many.
+
+    Nightly, so the row is current whenever a workspace goes, and the first
+    run fills it in for every workspace installed before the table existed.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_HISTORY_SQL.format(where="i.purged_at IS NULL"))
+            return cur.rowcount or 0
+
+
+def _existing_tables(cur) -> set[str]:
+    """The purge tables this database has. A module's tables may be absent."""
+    cur.execute(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ANY(%s)",
+        (list(PURGED_TABLES),),
+    )
+    return {row[0] for row in cur.fetchall()}
+
+
+def workspace_data_counts(team_id: str) -> dict[str, int]:
+    """Rows the purge would delete, per table. Reads only; for the dry run."""
+    counts: dict[str, int] = {}
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            present = _existing_tables(cur)
+            for table, where in _PURGE_STEPS:
+                if table not in present:
+                    continue
+                cur.execute(f"SELECT COUNT(*) FROM {table} WHERE {where}", (team_id,))
+                row = cur.fetchone()
+                counts[table] = int(row[0]) if row else 0
+    return counts
+
+
+def purge_workspace(
+    team_id: str,
+    reason: str | None = None,
+    expect_deactivated_at: datetime | None = None,
+) -> dict[str, int] | None:
+    """Delete everything a workspace holds about people, keeping its history.
+
+    One transaction: record history, delete every table in PURGED_TABLES for
+    this team, detach product email consent, and strip the installation row
+    to team_id, team_name, dates and the reason. Returns rows deleted per
+    table, or None when nothing was done.
+
+    Idempotent: a workspace already purged is left alone. The sweep passes
+    expect_deactivated_at, the retirement time it judged the grace period by,
+    and the purge is refused if the row has since come back to life or been
+    retired again. The row is locked while that is checked, so a reinstall
+    cannot slip in between. Slack's own uninstall events pass neither and
+    purge an active row straight away, as the listing promises.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT active, purged_at, deactivated_at FROM installations WHERE team_id = %s FOR UPDATE",
+                (team_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            active, purged_at, deactivated_at = row
+            if purged_at is not None:
+                return None
+            if expect_deactivated_at is not None and (active or deactivated_at != expect_deactivated_at):
+                logger.info("Not purging %s: it came back or was retired again since the sweep looked", team_id)
+                return None
+
+            cur.execute(
+                """
+                UPDATE installations
+                SET active = FALSE,
+                    deactivated_at = COALESCE(deactivated_at, NOW()),
+                    deactivated_reason = COALESCE(%s, deactivated_reason)
+                WHERE team_id = %s
+                """,
+                (reason[:200] if reason else None, team_id),
+            )
+            cur.execute(_HISTORY_SQL.format(where="i.team_id = %s AND i.purged_at IS NULL"), (team_id,))
+
+            present = _existing_tables(cur)
+            deleted: dict[str, int] = {}
+            for table, where in _PURGE_STEPS:
+                if table not in present:
+                    continue
+                cur.execute(f"DELETE FROM {table} WHERE {where}", (team_id,))
+                deleted[table] = cur.rowcount or 0
+
+            cur.execute("UPDATE email_consents SET team_id = NULL WHERE team_id = %s", (team_id,))
+            cur.execute(
+                """
+                UPDATE installations
+                SET bot_token = '', bot_user_id = '', bot_refresh_token = NULL,
+                    bot_token_expires_at = NULL, installed_by_user_id = NULL,
+                    granted_scopes = NULL, purged_at = NOW(), updated_at = NOW()
+                WHERE team_id = %s
+                """,
+                (team_id,),
+            )
+            cur.execute("UPDATE workspace_history SET purged_at = NOW() WHERE team_id = %s", (team_id,))
+    logger.info("Purged workspace %s: %d rows deleted", team_id, sum(deleted.values()))
+    return deleted
+
+
+def purge_candidates() -> list[dict]:
+    """Retired installations whose data has not been purged yet."""
+    sql = """
+        SELECT team_id, team_name, deactivated_at, deactivated_reason
+        FROM installations
+        WHERE NOT active AND purged_at IS NULL AND deactivated_at IS NOT NULL
+        ORDER BY deactivated_at
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
 
 
 def parse_scope_field(scope: str | None) -> list[str]:

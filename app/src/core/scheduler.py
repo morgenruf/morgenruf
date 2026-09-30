@@ -2059,6 +2059,28 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # What each workspace did, in counts and dates, kept current for every
+    # installation so it is there when the workspace's data is purged.
+    scheduler.add_job(
+        _refresh_workspace_history,
+        trigger=CronTrigger(hour=3, minute=47, timezone="UTC"),
+        id="workspace_history_refresh",
+        executor=BULK_EXECUTOR,
+        name="Refresh workspace history",
+        replace_existing=True,
+    )
+
+    # Workspaces Slack reports as gone have their data deleted after a grace
+    # period. A dry run unless PURGE_INACTIVE_WORKSPACES=1.
+    scheduler.add_job(
+        _sweep_inactive_workspaces,
+        trigger=CronTrigger(hour=3, minute=57, timezone="UTC"),
+        id="inactive_workspace_sweep",
+        executor=BULK_EXECUTOR,
+        name="Delete data of removed workspaces",
+        replace_existing=True,
+    )
+
     scheduler.add_listener(_alert_on_job_problem, EVENT_JOB_ERROR | EVENT_JOB_MISSED)
 
     _scheduler = scheduler
@@ -2100,6 +2122,27 @@ def _alert_on_job_problem(event) -> None:  # noqa: ANN001
         notify(text)
     except Exception:
         logger.exception("Could not alert on scheduler event for %s", getattr(event, "job_id", "?"))
+
+
+def _refresh_workspace_history() -> None:
+    """Nightly: refresh workspace_history for every installation, live or retired."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        refreshed = db.record_all_workspace_history()
+        logger.info("Refreshed workspace history for %d workspaces", refreshed)
+    except Exception:
+        logger.exception("Workspace history refresh failed")
+
+
+def _sweep_inactive_workspaces() -> None:
+    """Nightly: purge, or list in a dry run, workspaces removed past their grace period."""
+    try:
+        from src.core.workspace_retention import sweep_inactive_workspaces  # noqa: PLC0415
+
+        sweep_inactive_workspaces()
+    except Exception:
+        logger.exception("Inactive workspace sweep failed")
 
 
 def _purge_scheduler_runs() -> None:

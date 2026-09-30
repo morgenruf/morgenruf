@@ -992,7 +992,7 @@ def register_handlers(app: App) -> None:
 
     @app.event("tokens_revoked")
     def handle_tokens_revoked(event, logger) -> None:  # noqa: ANN001
-        """Handle token revocation — remove workspace installation and all data."""
+        """Slack says the app is gone: record its history, then delete its data."""
         import src.core.db as db  # noqa: PLC0415
 
         team_id = event.get("team_id") or (event.get("authorizations") or [{}])[0].get("team_id", "")
@@ -1006,18 +1006,25 @@ def register_handlers(app: App) -> None:
         from src.core.analytics import capture  # noqa: PLC0415
         from src.core.mailer import farewell  # noqa: PLC0415
 
+        # Slack sends both events for one removal. The second finds the
+        # workspace already purged and must not alert or email about it.
+        install = db.get_installation(team_id)
+        if not install or install.get("purged_at"):
+            logger.info("tokens_revoked: team %s has no data left to delete", team_id)
+            return
+
         departed(team_id)
         farewell(team_id)
         capture("workspace_uninstalled", team_id)
-        deleted = db.delete_installation(team_id)
-        if deleted:
-            logger.info("tokens_revoked: deleted installation and all data for team %s", team_id)
+        purged = db.purge_workspace(team_id, reason="tokens_revoked")
+        if purged is not None:
+            logger.info("tokens_revoked: recorded history and deleted all data for team %s", team_id)
         else:
-            logger.warning("tokens_revoked: no installation found for team %s", team_id)
+            logger.warning("tokens_revoked: nothing to delete for team %s", team_id)
 
     @app.event("app_uninstalled")
     def handle_app_uninstalled(event, logger) -> None:  # noqa: ANN001
-        """Handle app uninstall — remove workspace installation and all data."""
+        """Slack says the app is gone: record its history, then delete its data."""
         import src.core.db as db  # noqa: PLC0415
 
         team_id = event.get("team_id", "")
@@ -1031,14 +1038,21 @@ def register_handlers(app: App) -> None:
         from src.core.analytics import capture  # noqa: PLC0415
         from src.core.mailer import farewell  # noqa: PLC0415
 
+        # Slack sends both events for one removal. The second finds the
+        # workspace already purged and must not alert or email about it.
+        install = db.get_installation(team_id)
+        if not install or install.get("purged_at"):
+            logger.info("app_uninstalled: team %s has no data left to delete", team_id)
+            return
+
         departed(team_id)
         farewell(team_id)
         capture("workspace_uninstalled", team_id)
-        deleted = db.delete_installation(team_id)
-        if deleted:
-            logger.info("app_uninstalled: deleted installation and all data for team %s", team_id)
+        purged = db.purge_workspace(team_id, reason="app_uninstalled")
+        if purged is not None:
+            logger.info("app_uninstalled: recorded history and deleted all data for team %s", team_id)
         else:
-            logger.warning("app_uninstalled: no installation found for team %s", team_id)
+            logger.warning("app_uninstalled: nothing to delete for team %s", team_id)
 
     @app.event("app_home_opened")
     def handle_app_home(event, client, body=None):  # noqa: ANN001

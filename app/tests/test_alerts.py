@@ -188,7 +188,7 @@ class TestDepartedReadsBeforeTheDelete:
 class TestTheAlertRunsBeforeDeletion:
     """Same constraint as the farewell email: the data is in the doomed rows."""
 
-    def test_departed_is_called_before_delete_installation(self):
+    def test_departed_is_called_before_purge_workspace(self):
         import inspect
 
         from src.modules.standup import handlers
@@ -196,5 +196,5 @@ class TestTheAlertRunsBeforeDeletion:
         source = inspect.getsource(handlers)
         for handler in ("handle_tokens_revoked", "handle_app_uninstalled"):
             start = source.index(f"def {handler}")
-            body = source[start : start + 1200]
-            assert body.index("departed(team_id)") < body.index("db.delete_installation")
+            body = source[start : source.index("@app.", start)]
+            assert body.index("departed(team_id)") < body.index("db.purge_workspace")

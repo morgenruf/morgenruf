@@ -294,7 +294,7 @@ class TestTheFarewell:
         src = (app_root / "src/modules/standup/handlers.py").read_text()
         for handler in ("tokens_revoked", "app_uninstalled"):
             block = src[src.index(f'@app.event("{handler}")') :]
-            block = block[: block.index("deleted = db.delete_installation")]
+            block = block[: block.index("db.purge_workspace")]
             assert "farewell(team_id)" in block, f"{handler} deletes before it asks"
 
 

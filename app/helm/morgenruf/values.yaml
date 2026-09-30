@@ -208,12 +208,16 @@ zoom:
 #   Posts a line when a workspace installs the app and when one removes it.
 #   Blank disables it. Treated as a secret because anyone holding the URL can
 #   post to that channel.
+# purgeInactiveWorkspaces: delete the data of workspaces Slack reports as gone
+#   (account_inactive or a revoked token after 24 hours, invalid_auth after 7
+#   days). false is a dry run: the nightly sweep logs what it would delete.
 # ---------------------------------------------------------------------------
 ops:
   logLevel: ""
   logFormat: "json"
   email: ""
   alertWebhook: ""
+  purgeInactiveWorkspaces: false
 
 # Product analytics. Empty apiKey means nothing is sent, which is the default
 # for a self-hosted install. host defaults to the US cloud when left blank.
