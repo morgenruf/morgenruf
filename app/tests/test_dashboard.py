@@ -158,6 +158,70 @@ class TestApiMembers:
         assert isinstance(data, list)
 
 
+class TestMembersDirectoryCache:
+    """users.list is Tier 2; the Members page must not page through it on every load."""
+
+    @staticmethod
+    def _slack(users_list):
+        client = MagicMock()
+        client.retry_handlers = []
+        client.users_list.side_effect = users_list
+        mod = MagicMock()
+        mod.WebClient.return_value = client
+        return mod, client
+
+    @staticmethod
+    def _page(uid="U1"):
+        return {
+            "members": [{"id": uid, "name": uid.lower(), "is_bot": False, "profile": {"real_name": uid}}],
+            "response_metadata": {},
+        }
+
+    def setup_method(self):
+        dashboard._directory_cache.clear()
+        _db_mock.get_installation.return_value = {"bot_token": "xoxb-test", "team_name": "Acme"}
+        _db_mock.get_active_members.return_value = []
+
+    def teardown_method(self):
+        dashboard._directory_cache.clear()
+
+    def test_second_load_is_served_from_the_cache(self, authed_client):
+        mod, client = self._slack(lambda **kw: self._page())
+        with patch_modules({"slack_sdk": mod}):
+            first = authed_client.get("/dashboard/api/members").get_json()
+            second = authed_client.get("/dashboard/api/members").get_json()
+        assert [m["id"] for m in first] == ["U1"] == [m["id"] for m in second]
+        assert client.users_list.call_count == 1
+
+    def test_the_cache_expires(self, authed_client):
+        mod, client = self._slack(lambda **kw: self._page())
+        with patch_modules({"slack_sdk": mod}):
+            authed_client.get("/dashboard/api/members")
+            stamp, directory = dashboard._directory_cache["T123"]
+            dashboard._directory_cache["T123"] = (stamp - dashboard._DIRECTORY_TTL_SECONDS - 1, directory)
+            authed_client.get("/dashboard/api/members")
+        assert client.users_list.call_count == 2
+
+    def test_a_failure_falls_back_to_the_table_and_is_not_cached(self, authed_client):
+        _db_mock.get_active_members.return_value = [{"user_id": "U9", "real_name": "Stored"}]
+        mod, client = self._slack(Exception("ratelimited"))
+        with patch_modules({"slack_sdk": mod}):
+            data = authed_client.get("/dashboard/api/members").get_json()
+        assert [m["id"] for m in data] == ["U9"]
+        assert "T123" not in dashboard._directory_cache
+
+    def test_client_retries_on_rate_limit(self):
+        import importlib
+
+        real_sdk = importlib.import_module("slack_sdk.web.client")
+        handlers_mod = importlib.import_module("slack_sdk.http_retry.builtin_handlers")
+        fake_sdk = MagicMock()
+        fake_sdk.WebClient = real_sdk.WebClient
+        with patch_modules({"slack_sdk": fake_sdk}):
+            client = dashboard._rate_limited_slack_client("xoxb-test")
+        assert any(isinstance(h, handlers_mod.RateLimitErrorRetryHandler) for h in client.retry_handlers)
+
+
 # ---------------------------------------------------------------------------
 # /dashboard/api/reports
 # ---------------------------------------------------------------------------

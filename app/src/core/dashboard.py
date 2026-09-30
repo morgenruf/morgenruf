@@ -28,7 +28,6 @@ from src.core.api import api_errors, csrf_token
 from src.core.oauth import consume_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
 from src.core.scopes import SCOPE_STRING
-from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
 
 logger = logging.getLogger(__name__)
@@ -705,6 +704,51 @@ def _set_module_admin(user_id: str, module: str):
 # ---------------------------------------------------------------------------
 
 
+# The Slack directory, per workspace, for a few minutes. users.list is Tier 2
+# (about 20 calls a minute) and the Members page and every participant picker
+# used to page through it on each load, so a few admins clicking around could
+# rate limit the workspace for everyone, the standup jobs included. The members
+# table cannot stand in for it: it only holds people the bot has met, and the
+# pickers need everyone. Five minutes means someone who just joined Slack shows
+# up shortly, which is all the page needs.
+_DIRECTORY_TTL_SECONDS = 300
+_directory_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _rate_limited_slack_client(token: str):
+    """A WebClient that waits and retries when Slack answers 429."""
+    from slack_sdk import WebClient  # noqa: PLC0415
+
+    client = WebClient(token=token)
+    try:
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler  # noqa: PLC0415
+
+        client.retry_handlers.append(RateLimitErrorRetryHandler(max_retry_count=2))
+    except Exception as exc:  # pragma: no cover - depends on slack_sdk internals
+        logger.debug("Could not attach the rate limit retry handler: %s", exc)
+    return client
+
+
+def _slack_directory(team_id: str, client) -> dict:
+    """Every real person in the workspace as {id: user}, cached briefly.
+
+    Raises when Slack cannot be read, so callers keep their own fallback to
+    the members table. A failure is not cached.
+    """
+    import time  # noqa: PLC0415
+
+    from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
+
+    cached = _directory_cache.get(team_id)
+    if cached and time.monotonic() - cached[0] < _DIRECTORY_TTL_SECONDS:
+        return cached[1]
+    directory, error = fetch_workspace_directory(client)
+    if directory is None:
+        raise RuntimeError(f"users.list failed: {error or 'unknown'}")
+    _directory_cache[team_id] = (time.monotonic(), directory)
+    return directory
+
+
 @dashboard_bp.route("/dashboard/api/members", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="listMembers", tags=["Members"], security=[{"sessionCookie": []}])
@@ -740,9 +784,7 @@ def api_members(query):
     channel_id = query.get("channel_id")
 
     try:
-        from slack_sdk import WebClient  # noqa: PLC0415
-
-        client = WebClient(token=token)
+        client = _rate_limited_slack_client(token)
 
         # If channel_id provided, fetch only that channel's members
         channel_member_ids = None
@@ -756,21 +798,8 @@ def api_members(query):
                 if not cursor:
                     break
 
-        # Paginate through all workspace users
-        all_users = []
-        cursor = None
-        while True:
-            result = client.users_list(limit=200, cursor=cursor or "")
-            all_users.extend(result.get("members", []))
-            cursor = result.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
-
         members = []
-        for u in all_users:
-            if not is_human(u):
-                continue
-            uid = u["id"]
+        for uid, u in _slack_directory(team_id, client).items():
             if channel_member_ids is not None and uid not in channel_member_ids:
                 continue
             profile = u.get("profile", {})
@@ -961,11 +990,7 @@ def _import_candidates(team_id: str) -> list[dict]:
     token = _get_bot_token()
     if token:
         try:
-            from slack_sdk import WebClient  # noqa: PLC0415
-
-            from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
-
-            directory, _error = fetch_workspace_directory(WebClient(token=token))
+            directory = _slack_directory(team_id, _rate_limited_slack_client(token))
             if directory:
                 return [
                     {"user_id": uid, "email": (user.get("profile") or {}).get("email", "")}
