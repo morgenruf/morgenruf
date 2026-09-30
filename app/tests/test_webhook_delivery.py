@@ -359,7 +359,7 @@ class TestDeliveryLog:
         kwargs = db_double.record_webhook_delivery.call_args.kwargs
         assert kwargs["status_code"] is None
         assert kwargs["ok"] is False
-        assert "Connection refused" in kwargs["error"]
+        assert kwargs["error"] == "Could not connect"
         assert result["status_code"] is None
 
     def test_a_broken_log_never_breaks_delivery(self):
@@ -536,7 +536,7 @@ class TestTestSend:
         body = resp.get_json()
         assert body["ok"] is False
         assert body["status_code"] is None
-        assert "nope" in body["error"]
+        assert body["error"] == "Could not connect"
 
     def test_test_send_unknown_webhook_is_404(self, authed_client, db_mock):
         db_mock.get_webhook.return_value = None

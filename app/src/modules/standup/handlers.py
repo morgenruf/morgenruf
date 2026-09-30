@@ -670,6 +670,25 @@ def _record_delivery(hook: dict, event_type: str, team_id: str | None, result: d
         logger.warning("Could not record delivery for webhook %s: %s", webhook_id, exc)
 
 
+def _delivery_error(exc: Exception) -> str:
+    """A short reason for the delivery log, which admins read in the dashboard.
+
+    It stored the Python exception ("ConnectTimeout: HTTPSConnectionPool(...)"),
+    which says nothing to someone who did not write this code. Matched on the
+    class name so it works whatever requests module is in use.
+    """
+    names = " ".join(cls.__name__ for cls in type(exc).__mro__)
+    if "Timeout" in names:
+        return "Timed out"
+    if "SSL" in names:
+        return "Secure connection failed"
+    if "TooManyRedirects" in names:
+        return "Too many redirects"
+    if "Connection" in names or isinstance(exc, OSError):
+        return "Could not connect"
+    return "Could not deliver"
+
+
 def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | None = None) -> dict:
     """Sign and POST one payload to one webhook, log the attempt, return the result.
 
@@ -724,7 +743,7 @@ def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | N
         if not (is_safe_webhook_url(url) and resolves_to_public(url)):
             # Checked here, at send time, and not only when the URL was saved:
             # a hostname can point at an internal address later.
-            error = "Refused: the URL does not resolve to a public address"
+            error = "Refused: not a public address"
             logger.warning("Webhook %s refused for %s: not a public address", hook.get("id"), event_type)
         else:
             # Redirects are refused so a public endpoint cannot bounce the
@@ -736,7 +755,7 @@ def deliver_webhook(hook: dict, event_type: str, payload: dict, team_id: str | N
                 error = f"HTTP {status_code}"
             logger.info("Webhook %s fired for %s → HTTP %s", url, event_type, status_code)
     except Exception as exc:
-        error = f"{type(exc).__name__}: {exc}"[:500]
+        error = _delivery_error(exc)
         logger.warning("Webhook delivery failed for %s: %s", url, exc)
     duration_ms = int((time.monotonic() - started) * 1000)
 

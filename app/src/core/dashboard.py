@@ -830,7 +830,9 @@ def api_invite_admin(data):
         return jsonify({"error": "user_id required"}), 400
     token = _get_bot_token()
     if not token:
-        return jsonify({"error": "No bot token"}), 500
+        return jsonify(
+            {"error": "Morgenruf is not connected to Slack for this workspace. Reinstall it, then try again."}
+        ), 500
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
 
@@ -1409,7 +1411,9 @@ def api_add_webhook(data):
     if not url_val:
         return jsonify({"error": "url is required"}), 400
     if not _is_safe_webhook_url(url_val):
-        return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+        return jsonify(
+            {"error": "Use a public https address. localhost and private network addresses are blocked."}
+        ), 400
     events, err = _clean_events(data.get("events"))
     if err:
         return jsonify({"error": err}), 400
@@ -1442,7 +1446,9 @@ def api_update_webhook(data, hook_id: str):
         if not url_val:
             return jsonify({"error": "url must not be empty"}), 400
         if not _is_safe_webhook_url(url_val):
-            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+            return jsonify(
+                {"error": "Use a public https address. localhost and private network addresses are blocked."}
+            ), 400
 
     events, err = _clean_events(data.get("events"))
     if err:
@@ -1507,7 +1513,9 @@ def api_test_webhook(hook_id: str):
         if not hook:
             return jsonify({"error": "Webhook not found"}), 404
         if not _is_safe_webhook_url(hook.get("webhook_url") or ""):
-            return jsonify({"error": "Invalid or unsafe webhook URL"}), 400
+            return jsonify(
+                {"error": "Use a public https address. localhost and private network addresses are blocked."}
+            ), 400
 
         from datetime import datetime, timezone  # noqa: PLC0415
 
@@ -1858,7 +1866,7 @@ def api_create_mcp_key(data):
     team_id = session["team_id"]
     name = data.get("name", "Default")
     key = db.generate_mcp_key(team_id, name)
-    return {"key": key, "message": "Save this key — it won't be shown again!"}
+    return {"key": key, "message": "Save this key now. It won't be shown again."}
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys/<int:key_id>", methods=["DELETE"])
@@ -1930,12 +1938,12 @@ def api_set_module(data, name: str):
     team_id = session["team_id"]
     spec = next((s for s in REGISTRY if s.name == name), None)
     if spec is None:
-        return jsonify({"error": "unknown module"}), 404
+        return jsonify({"error": "There is no feature with that name."}), 404
     enabled = bool(data.get("enabled"))
     if enabled and not db.has_scopes(team_id, spec.required_scopes):
         return jsonify(
             {
-                "error": "missing_scopes",
+                "error": "Morgenruf needs more Slack permissions for this. Re-authorise the app, then try again.",
                 "required": list(spec.required_scopes),
                 "reauthorise_url": "/install",
             }
