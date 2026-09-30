@@ -1178,3 +1178,34 @@ it('recovers from empty weekday and question selections without losing the form'
     ),
   );
 });
+
+it('asks before Escape throws away unsaved edits', async () => {
+  const user = userEvent.setup();
+
+  view('/dashboard/standups?edit=7');
+  await screen.findByRole('dialog');
+
+  await user.click(screen.getByRole('tab', { name: 'Schedule' }));
+  await user.click(screen.getByRole('button', { name: 'Sat' }));
+  await user.keyboard('{Escape}');
+
+  expect(
+    await screen.findByRole('alertdialog', { name: 'Discard your changes?' }),
+  ).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  await user.click(
+    await screen.findByRole('button', { name: 'Discard changes' }),
+  );
+
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+  );
+  expect(mock.update).not.toHaveBeenCalled();
+});

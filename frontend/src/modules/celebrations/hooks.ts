@@ -46,12 +46,16 @@ export function useCelebrations() {
   const channels = useQuery(channelsOptions(services, team));
 
   const save = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: (data: CelebrationSettingsInput) =>
       api.celebrations.updateCelebrationSettings(data),
     onSuccess: invalidate,
   });
 
   const addHoliday = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: (data: HolidayInput) => api.celebrations.addHoliday(data),
     onSuccess: invalidate,
   });
@@ -62,6 +66,8 @@ export function useCelebrations() {
   });
 
   const importHolidays = useMutation({
+    // The import dialog shows this error inline.
+    meta: { silent: true },
     mutationFn: (data: HolidayImportInput) =>
       api.celebrations.importHolidays(data),
     onSuccess: (_response, variables) => {

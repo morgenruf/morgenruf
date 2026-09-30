@@ -30,6 +30,8 @@ export function useWebhooks() {
   const refresh = () => client.invalidateQueries({ queryKey: key });
 
   const save = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     gcTime: 0,
     mutationFn: async ({
       id,

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import {
+  AlertTriangle,
   Copy,
   ExternalLink,
   Globe,
@@ -11,7 +12,6 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import type { Api } from '@/common/api/client';
-import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
@@ -27,6 +27,9 @@ import {
 import { Input } from '@/common/components/ui/input';
 import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
+import { useConfirm } from '@/common/hooks/use-confirm';
+import { formatDateTime, formatWeekdays, plural } from '@/common/lib/format';
+import { describeScopes } from '@/common/lib/slack-scopes';
 
 import { useSettings, useSettingsMutations } from './hooks';
 import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
@@ -51,7 +54,7 @@ const featureNames: Record<string, string> = {
 
 const featureDescriptions: Record<string, string> = {
   standup: 'Collect updates from your team and share the summary.',
-  connect: 'Introduce people from a channel on a regular cadence.',
+  connect: 'Pair people from a channel for a coffee chat on a regular cadence.',
   kudos: 'Peer recognition with a daily allowance.',
   celebrations: 'Post birthdays and work anniversaries to a channel.',
   insights: 'See who needs recognition and where blockers persist.',
@@ -148,6 +151,45 @@ export function SettingsPage() {
   const { standups, modules } = useSettings();
   const { module, feed } = useSettingsMutations();
   const { isAdmin, canAdminister } = usePermissions();
+  const { confirm, dialog } = useConfirm();
+
+  async function toggleModule(name: string, enabled: boolean) {
+    const label = featureNames[name] ?? name;
+    if (
+      !enabled &&
+      !(await confirm({
+        title: `Turn off ${label}?`,
+        description: `${label} stops running for the whole workspace and leaves the navigation. Nothing is deleted; turn it back on at any time.`,
+        confirmLabel: `Turn off ${label}`,
+        destructive: true,
+      }))
+    )
+      return;
+    module.mutate(
+      { name, enabled },
+      {
+        onSuccess: () =>
+          toast.success(`${label} ${enabled ? 'turned on' : 'turned off'}`),
+      },
+    );
+  }
+
+  async function toggleFeed(enabled: boolean) {
+    if (
+      enabled &&
+      !(await confirm({
+        title: 'Publish standups to a public link?',
+        description:
+          'Anyone who has the link can read today’s standup answers without signing in, including people outside your company. Turn it off at any time to break the link.',
+        confirmLabel: 'Publish feed',
+      }))
+    )
+      return;
+    feed.mutate(enabled, {
+      onSuccess: () =>
+        toast.success(enabled ? 'Public feed on' : 'Public feed off'),
+    });
+  }
 
   const first = standups.data?.[0];
   const feedUrl = first?.feed_token
@@ -199,12 +241,22 @@ export function SettingsPage() {
                             {featureDescriptions[item.name]}
                           </p>
                           {!!item.missing_scopes?.length && (
-                            <p className="text-xs text-amber-600">
-                              Needs Slack permissions:{' '}
-                              {item.missing_scopes.join(', ')}.{' '}
-                              <a href="/install" className="underline">
-                                Re-authorise Slack
-                              </a>
+                            <p className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-500">
+                              <AlertTriangle
+                                className="mt-0.5 size-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                Needs permission to{' '}
+                                {describeScopes(item.missing_scopes)}.{' '}
+                                {isAdmin ? (
+                                  <a href="/install" className="underline">
+                                    Re-authorise Slack to grant it
+                                  </a>
+                                ) : (
+                                  'Ask a workspace administrator to reconnect Slack.'
+                                )}
+                              </span>
                             </p>
                           )}
                         </div>
@@ -215,17 +267,7 @@ export function SettingsPage() {
                             className="mt-0.5"
                             disabled={module.isPending}
                             onCheckedChange={(enabled) =>
-                              module.mutate(
-                                { name: item.name, enabled },
-                                {
-                                  onSuccess: () =>
-                                    toast.success(
-                                      `${featureNames[item.name] ?? item.name} ${enabled ? 'enabled' : 'disabled'}`,
-                                    ),
-                                  onError: (error) =>
-                                    toast.error(errorMessage(error)),
-                                },
-                              )
+                              void toggleModule(item.name, enabled)
                             }
                           />
                         ) : (
@@ -268,11 +310,11 @@ export function SettingsPage() {
               <CardContent className="space-y-4">
                 <p className="text-sm">
                   {first.schedule_time} {first.schedule_tz} ·{' '}
-                  {first.schedule_days.join(', ')}
+                  {formatWeekdays(first.schedule_days)}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {first.participants.length
-                    ? `${first.participants.length} participants`
+                    ? plural(first.participants.length, 'participant')
                     : 'Everyone in the channel'}
                 </p>
                 {first.registration_error ? (
@@ -285,7 +327,11 @@ export function SettingsPage() {
                   </p>
                 ) : first.next_run ? (
                   <p className="text-sm text-muted-foreground">
-                    Next run: {new Date(first.next_run).toLocaleString()}
+                    Next run:{' '}
+                    {formatDateTime(first.next_run, {
+                      timeZone: first.schedule_tz,
+                      weekday: true,
+                    })}
                   </p>
                 ) : (
                   <Badge variant="secondary" className="me-2">
@@ -361,16 +407,7 @@ export function SettingsPage() {
                             aria-label="Public standup feed enabled"
                             disabled={feed.isPending}
                             onCheckedChange={(enabled) =>
-                              feed.mutate(enabled, {
-                                onSuccess: () =>
-                                  toast.success(
-                                    enabled
-                                      ? 'Public feed enabled'
-                                      : 'Public feed disabled',
-                                  ),
-                                onError: (error) =>
-                                  toast.error(errorMessage(error)),
-                              })
+                              void toggleFeed(enabled)
                             }
                           />
                         ) : (
@@ -417,12 +454,7 @@ export function SettingsPage() {
                       {first.feed_public && !feedUrl && isAdmin && (
                         <Button
                           disabled={feed.isPending}
-                          onClick={() =>
-                            feed.mutate(true, {
-                              onError: (error) =>
-                                toast.error(errorMessage(error)),
-                            })
-                          }
+                          onClick={() => feed.mutate(true)}
                         >
                           Generate feed URL
                         </Button>
@@ -456,6 +488,7 @@ export function SettingsPage() {
           </>
         )}
       </div>
+      {dialog}
     </div>
   );
 }

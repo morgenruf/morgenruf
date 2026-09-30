@@ -27,7 +27,7 @@ import {
   TableRow,
 } from '@/common/components/ui/table';
 import { Textarea } from '@/common/components/ui/textarea';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, plural } from '@/common/lib/format';
 
 const example = `date,name
 2026-12-25,Christmas Day
@@ -62,9 +62,7 @@ export function ImportHolidaysDialog({
       const { data } = await run({ csv, preview: !write });
 
       if (write) {
-        toast.success(
-          `Saved ${data.written} holiday${data.written === 1 ? '' : 's'}`,
-        );
+        toast.success(`Saved ${plural(data.written, 'holiday')}`);
         reset();
         onOpenChange(false);
       } else setPreview(data);
@@ -198,7 +196,7 @@ export function ImportHolidaysDialog({
           >
             {pending && preview
               ? 'Saving…'
-              : `Save ${preview?.ready ?? 0} holiday${preview?.ready === 1 ? '' : 's'}`}
+              : `Save ${plural(preview?.ready ?? 0, 'holiday')}`}
           </Button>
         </DialogFooter>
       </DialogContent>

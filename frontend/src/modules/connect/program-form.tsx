@@ -10,7 +10,6 @@ import { useNavigate } from '@tanstack/react-router';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
 import {
@@ -43,6 +42,7 @@ import {
 } from '@/common/components/ui/select';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { useTabbedFormValidation } from '@/common/forms/use-tabbed-form-validation';
+import { formatDate, plural } from '@/common/lib/format';
 
 import { dayNames, programDefaults, programTime } from './form-utils';
 import {
@@ -157,8 +157,9 @@ function ProgramMembers({ programId }: { programId: number }) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          {eligible} in the pool. Everyone in the channel is matched unless they
-          are excluded, snoozed, or not eligible.
+          {plural(eligible, 'person', 'people')} in the pool, the people who can
+          be paired. Everyone in the channel is in it unless they are excluded,
+          snoozed, or not eligible.
         </p>
         <Input
           aria-label="Search coffee chat members"
@@ -202,8 +203,21 @@ function ProgramMembers({ programId }: { programId: number }) {
                           items={memberStateOptions}
                           value={person.state}
                           disabled={member.isPending}
-                          onValueChange={(value) =>
-                            value !== null &&
+                          onValueChange={(value) => {
+                            if (value === null || value === person.state)
+                              return;
+                            // One change is one click to reverse, so it offers
+                            // an undo rather than asking first.
+                            const previous = person.state;
+                            const change = (state: string) =>
+                              member.mutate({
+                                id: programId,
+                                userId: person.user_id,
+                                body: {
+                                  state: state as ProgramMemberInput['state'],
+                                  weeks: 2,
+                                },
+                              });
                             member.mutate(
                               {
                                 id: programId,
@@ -215,12 +229,22 @@ function ProgramMembers({ programId }: { programId: number }) {
                               },
                               {
                                 onSuccess: () =>
-                                  toast.success('Participation updated'),
-                                onError: (error) =>
-                                  toast.error(errorMessage(error)),
+                                  toast.success(
+                                    `${person.name || person.user_id}: ${
+                                      memberStateOptions.find(
+                                        (item) => item.value === value,
+                                      )?.label ?? value
+                                    }`,
+                                    {
+                                      action: {
+                                        label: 'Undo',
+                                        onClick: () => change(previous),
+                                      },
+                                    },
+                                  ),
                               },
-                            )
-                          }
+                            );
+                          }}
                         >
                           <SelectTrigger
                             aria-label={`Status for ${person.name || person.user_id}`}
@@ -247,7 +271,7 @@ function ProgramMembers({ programId }: { programId: number }) {
                       )}
                       {person.until && (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Until {new Date(person.until).toLocaleDateString()}
+                          Until {formatDate(person.until)}
                         </p>
                       )}
                     </td>
@@ -337,8 +361,8 @@ function MessagePreview({ values }: { values: ProgramInput }) {
               </p>
             )}
             <p className="border-t pt-3 text-xs text-muted-foreground">
-              More options · Another starter · New match · Unavailable this
-              round · Pause
+              More options · Another conversation starter · I need a new match ·
+              I am unavailable this round · Pause coffee chats
             </p>
           </div>
         </CardContent>
@@ -367,8 +391,8 @@ export function ProgramForm({ program }: { program?: Program }) {
   const id = useId();
 
   const tabs = program
-    ? ['Basics', 'Matching', 'Message', 'Meeting', 'Members']
-    : ['Basics', 'Matching', 'Message', 'Meeting'];
+    ? ['Basics', 'Grouping', 'Message', 'Meeting', 'Members']
+    : ['Basics', 'Grouping', 'Message', 'Meeting'];
   const [tab, setTab] = useState('Basics');
 
   const form = useForm<ProgramInput>({
@@ -529,7 +553,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                       >
                         <Field
                           label="Draw people from"
-                          help="Everyone eligible in this channel can be paired. People can opt out from Slack."
+                          help="Everyone eligible in this channel can be paired. People can pause coffee chats from Slack."
                         >
                           <SelectTrigger
                             className="w-full"
@@ -680,10 +704,10 @@ export function ProgramForm({ program }: { program?: Program }) {
 
               <section
                 role="tabpanel"
-                aria-labelledby={`${id}-Matching`}
-                id={`${id}-panel-Matching`}
-                data-tab="Matching"
-                hidden={tab !== 'Matching'}
+                aria-labelledby={`${id}-Grouping`}
+                id={`${id}-panel-Grouping`}
+                data-tab="Grouping"
+                hidden={tab !== 'Grouping'}
                 className="space-y-5"
               >
                 <Controller
@@ -739,7 +763,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                     className="mt-1"
                     {...register('match_working_hours')}
                   />
-                  <span>Only match people whose working hours overlap</span>
+                  <span>Only pair people whose working hours overlap</span>
                 </label>
                 <p className="text-xs text-muted-foreground">
                   Working hours use the timezone in each person’s Slack profile.
@@ -797,7 +821,7 @@ export function ProgramForm({ program }: { program?: Program }) {
                 </label>
                 <p className="text-xs text-muted-foreground">
                   A short check-in asks whether each group met. The summary
-                  helps the team see how introductions are working.
+                  helps the team see how coffee chats are going.
                 </p>
               </section>
 
@@ -910,8 +934,9 @@ export function ProgramForm({ program }: { program?: Program }) {
                       ) : resources.zoom.data?.configured ? (
                         <>
                           <p>
-                            {resources.zoom.data.linked} people have linked
-                            Zoom.
+                            {resources.zoom.data.linked === 1
+                              ? '1 person has linked Zoom.'
+                              : `${resources.zoom.data.linked} people have linked Zoom.`}
                           </p>
                           {resources.zoom.data.needs_reconnect > 0 && (
                             <p className="mt-1 text-amber-600">

@@ -184,7 +184,10 @@ describe('coffee chats', () => {
 
     view();
 
-    expect(await screen.findByText(/Missing: mpim:write/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/needs permission to start group messages/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/mpim:write/)).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Re-authorise Slack' }),
     ).toHaveAttribute('href', '/install');
@@ -339,7 +342,7 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
     name: 'Draw people from',
   });
   expect(channel).toHaveAccessibleDescription(
-    'Everyone eligible in this channel can be paired. People can opt out from Slack.',
+    'Everyone eligible in this channel can be paired. People can pause coffee chats from Slack.',
   );
   await waitFor(() => expect(channel).toHaveFocus());
 
@@ -355,7 +358,7 @@ it('requires a coffee chat channel and submits numeric choices across tabs', asy
   await chooseOption(user, 'On', 'Friday');
   await chooseOption(user, 'On', 'Monday');
 
-  await user.click(screen.getByRole('tab', { name: 'Matching' }));
+  await user.click(screen.getByRole('tab', { name: 'Grouping' }));
   await chooseOption(user, 'People in each group', '4 people');
 
   await user.click(screen.getByRole('tab', { name: 'Message' }));

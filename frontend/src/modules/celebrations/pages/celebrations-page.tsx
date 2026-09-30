@@ -113,7 +113,16 @@ function StatusCard() {
   const { feature, modules } = useCelebrationsModule();
   const { settings, enable, isAdmin, canEdit } = useCelebrations();
 
-  if (modules.isPending || !feature) return null;
+  if (modules.isPending) return null;
+
+  // Without the module list the page cannot say whether Celebrations is on;
+  // say so rather than show nothing.
+  if (modules.isError)
+    return (
+      <ErrorState error={modules.error} retry={() => void modules.refetch()} />
+    );
+
+  if (!feature) return null;
 
   if (feature.active)
     return settings.data && !settings.data.can_react ? (
@@ -149,7 +158,6 @@ function StatusCard() {
             onClick={() =>
               enable.mutate(undefined, {
                 onSuccess: () => toast.success('Celebrations are on'),
-                onError: (error) => toast.error(errorMessage(error)),
               })
             }
           >
@@ -511,9 +519,23 @@ function HolidaysCard() {
                       aria-label={`Remove ${holiday.name}`}
                       disabled={removeHoliday.isPending}
                       onClick={() =>
+                        // Deleting one holiday is easy to reverse, so it
+                        // offers an undo rather than asking first.
                         removeHoliday.mutate(holiday.date, {
-                          onError: (failure) =>
-                            toast.error(errorMessage(failure)),
+                          onSuccess: () =>
+                            toast.success(`${holiday.name} removed`, {
+                              action: {
+                                label: 'Undo',
+                                onClick: () =>
+                                  addHoliday.mutate(
+                                    { date: holiday.date, name: holiday.name },
+                                    {
+                                      onError: (failure) =>
+                                        toast.error(errorMessage(failure)),
+                                    },
+                                  ),
+                              },
+                            }),
                         })
                       }
                     >

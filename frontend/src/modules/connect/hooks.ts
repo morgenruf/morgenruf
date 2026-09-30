@@ -90,6 +90,8 @@ export function useConnectMutations() {
   };
 
   const save = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: ({ id, body }: { id?: number; body: ProgramInput }) =>
       id
         ? api.connect.updateProgram({ programId: id }, body).then((r) => r.data)
@@ -97,7 +99,18 @@ export function useConnectMutations() {
     onSuccess: invalidate,
   });
 
+  // Pause and resume from the list, where the global toast reports failure.
+  const setEnabled = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      api.connect
+        .updateProgram({ programId: id }, { enabled })
+        .then((r) => r.data),
+    onSuccess: invalidate,
+  });
+
   const remove = useMutation({
+    // The delete dialog shows this error inline.
+    meta: { silent: true },
     mutationFn: (id: number) => api.connect.deleteProgram({ programId: id }),
     onSuccess: invalidate,
   });
@@ -135,5 +148,5 @@ export function useConnectMutations() {
     },
   });
 
-  return { save, remove, run, member, enable };
+  return { save, setEnabled, remove, run, member, enable };
 }

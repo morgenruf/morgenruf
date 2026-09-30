@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/common/components/ui/table';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, formatTime, plural } from '@/common/lib/format';
 
 import { exportReports, useReports } from '../hooks';
 import { ReportsSkeleton } from '../loading';
@@ -292,7 +292,7 @@ export default function ReportsPage() {
                   <CardHeader>
                     <CardTitle>Participation</CardTitle>
                     <CardDescription>
-                      {reports.data.total_days} days in this window
+                      {plural(reports.data.total_days, 'day')} in this window
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -366,7 +366,10 @@ export default function ReportsPage() {
                           )}
                       </>
                     ) : (
-                      <EmptyState title="No participation data" />
+                      <EmptyState
+                        title="No participation data"
+                        description="Nobody was due to answer a standup in this window. Try a wider date range."
+                      />
                     )}
                   </CardContent>
                 </Card>
@@ -375,6 +378,25 @@ export default function ReportsPage() {
                   <EmptyState
                     title="No responses in this window"
                     description="Try another date range or member."
+                    action={
+                      (dateFrom || dateTo || userId) && (
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            void navigate({
+                              search: {
+                                date_from: '',
+                                date_to: '',
+                                user_id: '',
+                              },
+                              resetScroll: false,
+                            })
+                          }
+                        >
+                          Clear filters
+                        </Button>
+                      )
+                    }
                   />
                 ) : (
                   grouped.slice(0, dayLimit).map(([date, rows]) => (
@@ -401,15 +423,17 @@ export default function ReportsPage() {
                                   )}
                                   detail={
                                     row.submitted_at
-                                      ? formatDate(row.submitted_at, {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                        })
+                                      ? formatTime(row.submitted_at)
                                       : undefined
                                   }
                                 />
                                 {row.mood && (
-                                  <Badge variant="secondary">{row.mood}</Badge>
+                                  <Badge variant="secondary">
+                                    <span className="text-muted-foreground">
+                                      Mood
+                                    </span>{' '}
+                                    {row.mood}
+                                  </Badge>
                                 )}
                                 {row.has_blockers && (
                                   <Badge variant="destructive">Blocked</Badge>

@@ -69,7 +69,7 @@ export function AttendanceChart({ rounds }: { rounds: ConnectRound[] }) {
       <CardHeader>
         <CardTitle>Meeting rate by round</CardTitle>
         <CardDescription>
-          Latest available rounds, up to 10. Met ÷ answered pairings; rounds
+          Latest available rounds, up to 10. Met ÷ answered pairs; rounds
           without answers remain gaps.
         </CardDescription>
       </CardHeader>
@@ -132,8 +132,8 @@ export function AttendanceChart({ rounds }: { rounds: ConnectRound[] }) {
           <div className="grid min-h-48 place-content-center rounded-lg bg-muted/30 px-5 text-center">
             <p className="text-sm font-medium">No answered outcomes yet</p>
             <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-              Meeting rates appear once a pairing says whether they met. You can
-              still explore every pairing below.
+              Meeting rates appear once a pair says whether they met. You can
+              still explore every pair below.
             </p>
           </div>
         )}

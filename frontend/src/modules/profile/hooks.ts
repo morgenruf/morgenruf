@@ -15,6 +15,8 @@ export function useMyProfile() {
   const profile = useQuery(myProfileOptions(services, team));
 
   const save = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: (data: MemberProfile) => api.profile.updateMyProfile(data),
     onSuccess: (response) => {
       client.setQueryData(

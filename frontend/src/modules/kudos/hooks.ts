@@ -30,6 +30,8 @@ export function useKudos(days: number) {
   const channels = useQuery(channelsOptions(services, team));
 
   const save = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: (data: KudosConfigInput) => api.kudos.updateConfig(data),
     onSuccess: () => client.invalidateQueries({ queryKey: key }),
   });

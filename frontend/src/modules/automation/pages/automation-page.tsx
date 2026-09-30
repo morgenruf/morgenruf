@@ -3,6 +3,7 @@ import { Plus, Trash2, Zap } from 'lucide-react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { useMemberDirectory } from '@/common/api/use-member-directory';
 import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
 import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
@@ -116,6 +117,13 @@ export default function AutomationPage() {
     },
   });
   const values = useWatch({ control: form.control });
+  // Names are only needed to pick a person or to show who a saved rule
+  // messages, so the directory is not fetched for every visit.
+  const directory = useMemberDirectory({
+    enabled:
+      (canEdit && open && values.action === 'send_dm') ||
+      !!rules.data?.some((rule) => rule.action === 'send_dm'),
+  });
 
   const channelOptions = [
     { value: '', label: 'Choose a channel' },
@@ -123,6 +131,16 @@ export default function AutomationPage() {
       value: channel.id,
       label: `#${channel.name}`,
     })),
+  ];
+
+  const memberOptions = [
+    { value: '', label: 'Choose a person' },
+    ...(directory.data ?? [])
+      .map((member) => ({
+        value: member.id,
+        label: member.name || member.display_name || member.id,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
   ];
 
   function start(data?: Partial<RuleInput>) {
@@ -161,7 +179,18 @@ export default function AutomationPage() {
         ) : !rules.data?.length ? (
           <EmptyState
             title="Nothing runs by itself yet"
-            description="Start from a template or build your own rule."
+            description={
+              canEdit
+                ? 'Start from a template below or build your own rule.'
+                : 'A standup administrator can add rules, for example to flag low participation.'
+            }
+            action={
+              canEdit && (
+                <Button onClick={() => start()}>
+                  <Plus /> New rule
+                </Button>
+              )
+            }
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
@@ -181,7 +210,9 @@ export default function AutomationPage() {
                     , {actions[rule.action] ?? rule.action}{' '}
                     {rule.action === 'post_to_channel'
                       ? `#${channels.data?.find((channel) => channel.id === rule.action_target)?.name ?? rule.action_target}`
-                      : rule.action_target}
+                      : rule.action === 'send_dm'
+                        ? directory.person(rule.action_target).name
+                        : rule.action_target}
                     .
                   </CardDescription>
                 </CardHeader>
@@ -372,7 +403,7 @@ export default function AutomationPage() {
                   {values.action === 'fire_webhook'
                     ? 'Webhook URL'
                     : values.action === 'send_dm'
-                      ? 'Slack user ID'
+                      ? 'Person to message'
                       : 'Slack channel'}
                 </Label>
                 {values.action === 'post_to_channel' ? (
@@ -408,6 +439,46 @@ export default function AutomationPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {channelOptions.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </LoadingField>
+                    )}
+                  />
+                ) : values.action === 'send_dm' ? (
+                  <Controller
+                    control={form.control}
+                    name="action_target"
+                    rules={{ required: 'Choose a person.' }}
+                    render={({ field, fieldState }) => (
+                      <LoadingField
+                        pending={directory.isPending}
+                        label="Loading members…"
+                      >
+                        <Select
+                          name={field.name}
+                          value={field.value}
+                          items={memberOptions}
+                          required
+                          disabled={!canEdit || create.isPending}
+                          onValueChange={(value) => {
+                            if (value !== null) field.onChange(value);
+                          }}
+                        >
+                          <SelectTrigger
+                            id="rule-target"
+                            className="w-full"
+                            ref={field.ref}
+                            onBlur={field.onBlur}
+                            aria-invalid={fieldState.invalid}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {memberOptions.map((item) => (
                               <SelectItem key={item.value} value={item.value}>
                                 {item.label}
                               </SelectItem>

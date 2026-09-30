@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/common/components/ui/card';
-import { formatDate, relativeTime } from '@/common/lib/format';
+import { formatDate, plural, relativeTime } from '@/common/lib/format';
 
 import { useInsights } from '../hooks';
 import { InsightsSkeleton } from '../loading';
@@ -54,7 +54,7 @@ export default function InsightsPage() {
                             />
                           </div>
                           <Badge variant="secondary">
-                            {row.standups} standups
+                            {plural(row.standups, 'standup')}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
                             Last filed{' '}
@@ -95,7 +95,9 @@ export default function InsightsPage() {
                             <Person
                               {...members.person(row.user_id, row.real_name)}
                             />
-                            <Badge variant="destructive">{row.days} days</Badge>
+                            <Badge variant="destructive">
+                              {plural(row.days, 'day')}
+                            </Badge>
                           </div>
                           <p className="mt-3 text-sm text-muted-foreground">
                             <SlackText text={row.text} />

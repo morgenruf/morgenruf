@@ -31,10 +31,10 @@ describe('analytics charts', () => {
     expect(await screen.findByText('Not scheduled')).toBeInTheDocument();
   });
 
-  it('renders semantic colors at the existing health boundaries and visible zero markers', async () => {
+  it('renders semantic colors at the shared health boundaries and visible zero markers', async () => {
     const { container } = render(
       <DailyTrendChart
-        series={[0, 39, 40, null, 69, 70, 100]}
+        series={[0, 39, 40, null, 74, 75, 100]}
         dates={dates}
         name="Daily"
       />,

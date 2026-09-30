@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  CircleCheck,
+  CircleX,
   History,
   Pencil,
   Plus,
@@ -11,6 +13,7 @@ import {
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { EmptyValue } from '@/common/components/empty-value';
 import {
   SkeletonRegion,
   SkeletonTable,
@@ -41,7 +44,7 @@ import { Input } from '@/common/components/ui/input';
 import { Label } from '@/common/components/ui/label';
 import { ScrollArea } from '@/common/components/ui/scroll-area';
 import { applyApiErrors } from '@/common/forms/api-errors';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, formatDateTime } from '@/common/lib/format';
 
 import {
   useWebhookDeliveries,
@@ -180,7 +183,27 @@ function WebhookCard({
                   retry={() => void deliveries.refetch()}
                 />
               ) : !deliveries.data?.length ? (
-                <EmptyState title="No deliveries recorded yet" />
+                <EmptyState
+                  title="No deliveries recorded yet"
+                  description={
+                    canEdit
+                      ? 'Events arrive here as they happen. Send a test event to check your endpoint now.'
+                      : 'Events arrive here as they happen.'
+                  }
+                  action={
+                    canEdit && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={test.isPending || busy}
+                        onClick={() => test.mutate()}
+                      >
+                        <Send />
+                        {test.isPending ? 'Sending…' : 'Send test event'}
+                      </Button>
+                    )
+                  }
+                />
               ) : (
                 <ScrollArea orientation="horizontal" className="min-w-0">
                   <table className="w-full text-left text-xs">
@@ -203,19 +226,30 @@ function WebhookCard({
                           <td
                             className={`p-2 ${delivery.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
                           >
-                            {delivery.status_code ?? 'No response'}
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                              {delivery.ok ? (
+                                <CircleCheck
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <CircleX
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              {delivery.ok ? 'Delivered' : 'Failed'}
+                              <span className="text-muted-foreground">
+                                {delivery.status_code ?? 'No response'}
+                              </span>
+                            </span>
                           </td>
                           <td className="p-2">
                             {eventLabels[delivery.event_type] ??
                               delivery.event_type}
                           </td>
                           <td className="whitespace-nowrap p-2">
-                            {formatDate(delivery.created_at, {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {formatDateTime(delivery.created_at)}
                           </td>
                           <td className="whitespace-nowrap p-2">
                             {delivery.duration_ms} ms
@@ -223,7 +257,9 @@ function WebhookCard({
                           <td className="p-2">
                             {delivery.signed ? 'Signed' : 'Unsigned'}
                           </td>
-                          <td className="p-2">{delivery.error ?? '—'}</td>
+                          <td className="p-2">
+                            {delivery.error ?? <EmptyValue label="No error" />}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -305,7 +341,15 @@ export default function WebhooksPage() {
                     .map((event) => eventLabels[event] ?? event)
                     .join(' · ')}
                 </p>
+                {!canEdit && <p>A workspace administrator can add one.</p>}
               </div>
+            }
+            action={
+              canEdit && (
+                <Button onClick={() => openEditor()} disabled={!catalog.data}>
+                  <Plus /> Add webhook
+                </Button>
+              )
             }
           />
         ) : (

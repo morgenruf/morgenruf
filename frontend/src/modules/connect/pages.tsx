@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
+import { ConfirmDialog } from '@/common/components/confirm-dialog';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
@@ -35,7 +35,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/common/components/ui/select';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, plural } from '@/common/lib/format';
+import { describeScopes } from '@/common/lib/slack-scopes';
 
 import { Attendance } from './attendance';
 import { cadenceLabel } from './form-utils';
@@ -76,7 +77,7 @@ function ConnectGate({
     return (
       <EmptyState
         title="Coffee chats are unavailable"
-        description="This deployment does not include the coffee chat module."
+        description="This deployment does not include coffee chats."
       />
     );
 
@@ -86,10 +87,12 @@ function ConnectGate({
         title="Coffee chats need more Slack access"
         description={
           <>
-            Morgenruf needs permission to open group messages and check for
-            replies.
+            Morgenruf needs permission to{' '}
+            {describeScopes(feature.missing_scopes)}.
             <br />
-            Missing: {feature.missing_scopes.join(', ')}
+            {isAdmin
+              ? 'Choose Re-authorise Slack and approve the request. Nothing else changes.'
+              : 'Ask a workspace administrator to reconnect Slack.'}
           </>
         }
         action={
@@ -111,7 +114,7 @@ function ConnectGate({
         title="Coffee chats are switched off"
         description={
           isAdmin
-            ? 'Turn on introductions for your workspace. Nothing is sent until you create a coffee chat.'
+            ? 'Turn on coffee chats for your workspace. No introductions are sent until you create a coffee chat.'
             : 'A workspace administrator can turn coffee chats on in Settings.'
         }
         action={
@@ -121,7 +124,6 @@ function ConnectGate({
               onClick={() =>
                 enable.mutate(undefined, {
                   onSuccess: () => toast.success('Coffee chats enabled'),
-                  onError: (error) => toast.error(errorMessage(error)),
                 })
               }
             >
@@ -137,10 +139,11 @@ function ConnectGate({
 
 function ProgramActions({ program }: { program: Program }) {
   const { canAdminister } = usePermissions();
-  const { save, remove, run } = useConnectMutations();
+  const { setEnabled, remove, run } = useConnectMutations();
   const navigate = useNavigate();
 
   const [runOpen, setRunOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!canAdminister('connect')) return null;
 
@@ -181,7 +184,6 @@ function ProgramActions({ program }: { program: Program }) {
                     setRunOpen(false);
                     toast.success('Introductions sent');
                   },
-                  onError: (error) => toast.error(errorMessage(error)),
                 })
               }
             >
@@ -194,18 +196,31 @@ function ProgramActions({ program }: { program: Program }) {
       <Button
         size="sm"
         variant="outline"
-        disabled={save.isPending}
+        disabled={setEnabled.isPending}
         onClick={() =>
-          save.mutate(
-            { id: program.id, body: { enabled: !program.enabled } },
+          // Pausing is one click to reverse, so it offers an undo rather
+          // than asking first.
+          setEnabled.mutate(
+            { id: program.id, enabled: !program.enabled },
             {
               onSuccess: () =>
                 toast.success(
                   program.enabled
-                    ? 'Introductions paused'
-                    : 'Introductions resumed',
+                    ? `${program.name} paused. No introductions go out until you resume it.`
+                    : `${program.name} resumed`,
+                  program.enabled
+                    ? {
+                        action: {
+                          label: 'Undo',
+                          onClick: () =>
+                            setEnabled.mutate({
+                              id: program.id,
+                              enabled: true,
+                            }),
+                        },
+                      }
+                    : undefined,
                 ),
-              onError: (error) => toast.error(errorMessage(error)),
             },
           )
         }
@@ -217,23 +232,33 @@ function ProgramActions({ program }: { program: Program }) {
         variant="destructiveGhost"
         disabled={remove.isPending}
         onClick={() => {
-          if (
-            window.confirm(
-              `Delete ${program.name}? Its past rounds will also be deleted.`,
-            )
-          )
-            remove.mutate(program.id, {
-              onSuccess: () => {
-                toast.success('Coffee chat deleted');
-                void navigate({ to: '/dashboard/connect' });
-              },
-              onError: (error) => toast.error(errorMessage(error)),
-            });
+          remove.reset();
+          setDeleting(true);
         }}
       >
         <Trash />
-        <span className="sr-only">Delete</span>
+        <span className="sr-only">Delete {program.name}</span>
       </Button>
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={`Delete ${program.name}?`}
+        description="Its past rounds and attendance are deleted too. This cannot be undone."
+        confirmLabel="Delete coffee chat"
+        pendingLabel="Deleting…"
+        destructive
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(program.id, {
+            onSuccess: () => {
+              setDeleting(false);
+              toast.success('Coffee chat deleted');
+              void navigate({ to: '/dashboard/connect' });
+            },
+          })
+        }
+      />
     </div>
   );
 }
@@ -304,7 +329,7 @@ function ProgramList() {
                       <Users className="size-3.5" />
                       {program.pool_size == null
                         ? 'Pool size unavailable'
-                        : `${program.pool_size} in the pool`}
+                        : `${plural(program.pool_size, 'person', 'people')} in the pool`}
                     </span>
                   </div>
                   {program.upcoming_round && (
@@ -345,7 +370,9 @@ function ProgramList() {
 
         {zoom.data?.configured && (
           <p className="text-xs text-muted-foreground">
-            {zoom.data.linked} people have linked Zoom
+            {zoom.data.linked === 1
+              ? '1 person has linked Zoom'
+              : `${zoom.data.linked} people have linked Zoom`}
             {zoom.data.needs_reconnect
               ? ` · ${zoom.data.needs_reconnect} need to reconnect`
               : ''}
@@ -424,7 +451,7 @@ export function ConnectNewPage() {
         ) : (
           <EmptyState
             title="Administrator access required"
-            description="A coffee chat administrator can create an introduction program."
+            description="A coffee chat administrator can set one up."
           />
         )}
       </ConnectGate>
