@@ -4,6 +4,13 @@ LABEL org.opencontainers.image.source="https://github.com/morgenruf/morgenruf"
 LABEL org.opencontainers.image.description="Slack standup bot — structured daily standups"
 LABEL org.opencontainers.image.licenses="MIT"
 
+# The base image lags Debian security updates by days. Pull them in at build
+# time so a fixed CVE in a system library (OpenSSL, for one) does not fail the
+# release scan or ship in the image.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY requirements.txt .
