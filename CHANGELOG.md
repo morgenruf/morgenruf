@@ -5,6 +5,54 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.9] - 2026-09-30
+
+### Security
+- **Kudos and AI summaries stay text.** A kudos reason, the kudos emoji or an
+  AI summary could carry `@channel` or a disguised link into Slack. Both are
+  now defused, and links show their real address.
+- **People who leave lose access.** Dashboard sessions check once a minute
+  that the member and the install are still active, and a deactivated
+  installer is no longer an admin. Assistant (MCP) keys record who created
+  them and stop working when that person is no longer an active admin. Keys
+  made before this release keep working until revoked.
+- **Members see only their own standups.** The standups list, reports and CSV
+  export show standups a member is in or whose channel they can see. Emails
+  and private channel membership are shown to admins only.
+- **Workspace settings need a workspace admin.** The manager digest, AI
+  settings and Jira URL can no longer be changed by a standup admin.
+- **The public feed** only shows standups from public channels, and its token
+  is created on the server and hidden from non-admins.
+- **Zoom sign-in and email links are single purpose.** Zoom state is tied to
+  the browser that started it, and each email link works only for what it was
+  sent for.
+- **Rate limits** on the public feed, email links, the sign-in callback and
+  failed assistant key checks.
+
+### Fixed
+- **Streaks count.** They always showed 1. They now count your scheduled
+  working days, skip holidays, and reset after a missed day.
+- **The low participation rule** fired before every standup. It now checks at
+  report time, and the `participation.low` and `blocker.detected` webhooks
+  are sent.
+- **Company holidays** skip the standup DM, reminder, nudge, report and coffee
+  round.
+- **"Until the report is posted"** now closes answers at report time. Before,
+  it meant no limit.
+- **Pausing, editing or deleting a standup from App Home** takes effect within
+  about 15 seconds.
+- **Reports use the dates you pick,** and analytics end on your team's local
+  day.
+- **A late answer is no longer lost.** A standup session lasts 20 hours.
+- **Two reports racing** no longer leave an empty thread header behind.
+
+### Changed
+- Delivery failures are sent to the installer by DM instead of the channel.
+- One help text everywhere, and `/morgenruf help` is the command to remember.
+- The dashboard asks before destructive actions, offers undo on quick ones,
+  and each empty page says what to do next.
+- The API and assistant report the real app version.
+
 ## [1.9.8] - 2026-09-30
 
 ### Fixed
