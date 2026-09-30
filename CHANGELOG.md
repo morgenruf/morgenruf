@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.12] - 2026-09-30
+
+### Fixed
+- **Removing the app deletes the workspace's data.** Workspaces whose Slack
+  token stopped working (`account_inactive`, revoked tokens) were marked
+  inactive but kept their members, answers and settings. A daily sweep now
+  deletes that data 24 hours after removal, or 7 days after for
+  `invalid_auth`, which can be a token problem on our side. It runs as a dry
+  run that only logs what it would delete until `PURGE_INACTIVE_WORKSPACES=1`
+  (Helm: `ops.purgeInactiveWorkspaces`).
+- **Uninstall now deletes every table.** Nine tables with a team ID had no
+  cascade and kept data after a normal uninstall, including Zoom tokens,
+  standup threads, away and skip records, workflow rules and assistant keys.
+
+### Added
+- **Workspace history.** One row per workspace with dates and counts only (no
+  names, emails, Slack IDs or message text), refreshed nightly and kept after
+  removal, so it stays possible to see where teams stop during setup.
+
 ### Added
 - **Workspace history.** A new `workspace_history` table keeps one row per
   workspace with counts and dates only: members, standups created, answers,
