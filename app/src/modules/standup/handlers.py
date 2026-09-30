@@ -1372,19 +1372,11 @@ def register_handlers(app: App) -> None:
             import src.core.db as db  # noqa: PLC0415
 
             db.delete_standup_schedule(team_id, int(standup_id))
-            # Remove from scheduler
-            try:
-                from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-                sched_obj = get_scheduler()
-                if sched_obj:
-                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                        try:
-                            sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            # No scheduler call here. The scheduler runs in the gunicorn
+            # master and this handler in a forked worker, whose copy of it is
+            # never started, so removing or adding jobs here changed nothing.
+            # The database is the source of truth: the scheduler's change poll
+            # (_poll_schedule_changes) applies this within about 15 seconds.
             # Refresh App Home (respects configure mode)
             _refresh_home(team_id, user_id, client)
         except Exception as exc:
@@ -1418,20 +1410,9 @@ def register_handlers(app: App) -> None:
             try:
                 import src.core.db as db  # noqa: PLC0415
 
+                # The scheduler's change poll removes the jobs; see the delete
+                # handler above for why nothing is done to the scheduler here.
                 db.update_standup_schedule(team_id, int(standup_id), active=False)
-                # Remove from scheduler
-                try:
-                    from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-                    sched_obj = get_scheduler()
-                    if sched_obj:
-                        for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                            try:
-                                sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
                 _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow pause error: %s", exc)
@@ -1440,20 +1421,9 @@ def register_handlers(app: App) -> None:
             try:
                 import src.core.db as db  # noqa: PLC0415
 
-                schedule = db.update_standup_schedule(team_id, int(standup_id), active=True)
-                # Re-register in scheduler
-                if schedule:
-                    try:
-                        from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-                        inst = db.get_installation(team_id)
-                        sched_obj = get_scheduler()
-                        if inst and sched_obj:
-                            sched_with_token = dict(schedule)
-                            sched_with_token["bot_token"] = inst["bot_token"]
-                            register_schedule_job(sched_obj, sched_with_token)
-                    except Exception:
-                        pass
+                # The scheduler's change poll registers the jobs; see the
+                # delete handler above for why nothing is done here.
+                db.update_standup_schedule(team_id, int(standup_id), active=True)
                 _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow enable error: %s", exc)
@@ -1721,20 +1691,9 @@ def register_handlers(app: App) -> None:
                 # Creating new schedule
                 schedule = db.create_standup_schedule(team_id, **kwargs)
 
-            # Register/update in scheduler
+            # The scheduler picks the saved row up through its change poll
+            # (_poll_schedule_changes); it cannot be reached from this worker.
             if schedule:
-                try:
-                    from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-                    inst = db.get_installation(team_id)
-                    sched_obj = get_scheduler()
-                    if inst and sched_obj:
-                        sched_with_token = dict(schedule)
-                        sched_with_token["bot_token"] = inst["bot_token"]
-                        register_schedule_job(sched_obj, sched_with_token)
-                except Exception as exc2:
-                    logger.warning("Could not register schedule job from modal: %s", exc2)
-
                 # Tell the creator what was saved and when it will run (#119).
                 # Without this, a standup that fires perfectly is indistinguishable
                 # from one that never registered: the creator sees nothing at the

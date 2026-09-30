@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -1547,6 +1548,35 @@ def get_unregistered_schedules(
     return problems
 
 
+# The last schedules_change_marker seen by this process's scheduler.
+_schedule_marker: tuple | None = None
+# The change poll and the interval sync can overlap on the bulk executor.
+_sync_lock = threading.Lock()
+
+# How often the scheduler asks whether any schedule changed. Schedules are
+# edited in the web workers, which cannot reach the scheduler: it runs in the
+# gunicorn master, and a forked worker only holds a dead copy of it. The
+# database is the source of truth, and this poll is what makes an App Home or
+# dashboard change apply within seconds instead of at the next full sync.
+_CHANGE_POLL_SECONDS = 15
+
+
+def _poll_schedule_changes() -> None:
+    """Run the schedule sync when any schedule row changed since the last look."""
+    global _schedule_marker
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        marker = db.schedules_change_marker()
+    except Exception as exc:
+        logger.debug("Schedule change poll failed: %s", exc)
+        return
+    if marker == _schedule_marker:
+        return
+    _sync_jobs_from_db()
+    _schedule_marker = marker
+
+
 def _sync_jobs_from_db() -> None:
     """Reconcile the running scheduler's jobs with the DB.
 
@@ -1555,6 +1585,11 @@ def _sync_jobs_from_db() -> None:
     """
     if _scheduler is None:
         return
+    with _sync_lock:
+        _sync_jobs_from_db_locked()
+
+
+def _sync_jobs_from_db_locked() -> None:
     try:
         import src.core.db as db  # noqa: PLC0415
 
@@ -1915,6 +1950,18 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         executor=BULK_EXECUTOR,
         name="DB → scheduler schedule sync",
         replace_existing=True,
+    )
+    # The quick path for schedule edits: a cheap poll that runs the same sync
+    # only when a schedule row changed. The full sync above still covers
+    # workspace settings and anything the marker cannot see.
+    scheduler.add_job(
+        _poll_schedule_changes,
+        trigger=IntervalTrigger(seconds=_CHANGE_POLL_SECONDS),
+        id="schedule_change_poll",
+        executor=BULK_EXECUTOR,
+        name="Schedule change poll",
+        replace_existing=True,
+        max_instances=1,
     )
 
     # Modules declare their own jobs. Reconciled on an interval as well as at

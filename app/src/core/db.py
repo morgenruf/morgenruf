@@ -2008,6 +2008,21 @@ def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str, schedul
     return row[0] if row else None
 
 
+def schedules_change_marker() -> tuple:
+    """A cheap fingerprint of every standup schedule, for the change poll.
+
+    Creating, editing, pausing or enabling a schedule moves the latest
+    timestamp; deleting one changes the count. One indexed aggregate over a
+    small table, so the scheduler can afford to ask every few seconds.
+    """
+    sql = "SELECT COUNT(*), MAX(GREATEST(COALESCE(updated_at, created_at), created_at)) FROM standup_schedules"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            row = cur.fetchone()
+    return tuple(row) if row else ()
+
+
 def get_schedule_for_user(team_id: str, user_id: str) -> dict | None:
     """Return the active schedule the user is most likely currently doing.
 
