@@ -565,7 +565,7 @@ def create_test_app(patcher=None):
                 p["id"] == program_id and p["team_id"] == team for p in state.programs
             ),
             "delete_program": lambda team, program_id: state.delete(state.programs, program_id),
-            "optout_user_ids": lambda team, program_id: set(),
+            "optout_user_ids": lambda team, program_id, today=None: set(),
             "recent_rounds": lambda team, program_id, *args: deepcopy(state.rounds),
             "round_matches": lambda team, round_id: [
                 {
