@@ -24,7 +24,7 @@ def _send(to_email: str, subject: str, html: str) -> None:
         resend.Emails.send(
             {
                 "from": "hello@morgenruf.dev",
-                "reply_to": "support@morgenruf.dev",
+                "reply_to": "hello@morgenruf.dev",
                 "to": to_email,
                 "subject": subject,
                 "html": html,
@@ -46,6 +46,7 @@ def send_weekly_digest(
         logger.warning("No email for weekly digest, skipping")
         return
     from src.core.links import dashboard_url  # noqa: PLC0415
+    from src.core.mailer import unsubscribe_url  # noqa: PLC0415
 
     total = stats.get("total_responses", 0)
     total_members = stats.get("total_members", 0)
@@ -109,6 +110,8 @@ def send_weekly_digest(
   </p>
 </td></tr>
 <tr><td style="background:#f9fafb;padding:20px 40px;text-align:center;font-size:12px;color:#9ca3af;">
+  You are getting this because you pressed &ldquo;Email me setup tips&rdquo; in Morgenruf's Home tab in Slack.
+  Turn it off there at any time, or <a href="{_html.escape(unsubscribe_url(to_email))}" style="color:#6366f1;">unsubscribe</a>.<br/>
   Morgenruf · Self-hosted standup bot · <a href="https://morgenruf.dev" style="color:#6366f1;text-decoration:none;">morgenruf.dev</a>
 </td></tr>
 </table>

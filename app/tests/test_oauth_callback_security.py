@@ -31,7 +31,6 @@ def oauth(monkeypatch):
     fake_db.claim_login_token.return_value = True
     monkeypatch.setattr(mod, "db", fake_db)
     monkeypatch.setattr(mod, "_schedule_workspace", lambda *a: None)
-    monkeypatch.setattr(mod, "_try_send_welcome_email", lambda *a: None)
     return mod
 
 

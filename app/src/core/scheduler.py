@@ -726,7 +726,11 @@ def _send_reminder_to_workspace(
 
 
 def _send_weekly_digest(team_id: str, bot_token: str) -> None:
-    """Send a weekly summary email to the workspace admin."""
+    """Send a weekly summary email to whoever opted in to setup emails.
+
+    The address is the installer's, from Slack, so it needs their explicit
+    opt-in (src/core/email_consent.py). Without one nothing is sent.
+    """
     try:
         import src.core.db as db  # noqa: PLC0415
         from src.modules.standup.mailer import send_weekly_digest  # noqa: PLC0415
@@ -734,9 +738,15 @@ def _send_weekly_digest(team_id: str, bot_token: str) -> None:
         inst = db.get_installation(team_id)
         if not inst:
             return
+        consent = db.setup_email_consent(team_id)
+        if not consent:
+            logger.info("Weekly digest for %s skipped: nobody opted in to email", team_id)
+            return
+        email = db.get_member_email(team_id, consent.get("user_id", "")) or ""
+        if not email or db.email_is_suppressed(email):
+            return
         stats = db.get_dashboard_stats(team_id)
         participation = db.get_participation_stats(team_id, days=7)
-        email = db.get_member_email(team_id, inst.get("installed_by_user_id", "")) or ""
         send_weekly_digest(
             to_email=email,
             team_name=inst.get("team_name", team_id),

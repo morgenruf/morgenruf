@@ -31,6 +31,15 @@ def extra_home_blocks(team_id: str, user_id: str, exclude: str = "") -> list[dic
     except Exception:
         logger.exception("the profile section failed to render on the App Home")
 
+    # The setup email switch, which only the installer (or whoever opted in)
+    # sees. Also core: consent to email is not any one feature's business.
+    try:
+        from src.core.email_consent import home_blocks as email_blocks  # noqa: PLC0415
+
+        blocks.extend(email_blocks(team_id, user_id) or [])
+    except Exception:
+        logger.exception("the setup email section failed to render on the App Home")
+
     try:
         from src.core import db  # noqa: PLC0415
         from src.core.modules import active_modules, deploy_allowlist  # noqa: PLC0415

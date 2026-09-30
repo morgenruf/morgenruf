@@ -1,12 +1,17 @@
 """Email the app sends about itself: the welcome, and one follow-up a week later.
 
+None of it goes anywhere until the installer presses "Email me setup tips" in
+Slack (src/core/email_consent.py). The address comes from Slack through
+users:read.email, and Slack's marketplace guidelines want explicit consent
+before it is used.
+
 Install-time email belongs in core. It lived in the standup module, which meant
 core's OAuth handler imported a feature module by name, the one thing the module
 contract forbids.
 
 Two messages, both tied to an action the recipient took:
 
-  Welcome, on install. Transactional: they installed it thirty seconds ago.
+  Welcome, when they opt in. Transactional: they asked for it seconds ago.
   Day seven, once. Asks a question, and the question depends on whether they
   ever got a standup running. Carries an unsubscribe link, because a message
   that asks for something is no longer purely transactional and Canadian
@@ -24,7 +29,7 @@ import os
 logger = logging.getLogger(__name__)
 
 FROM = "Morgenruf <hello@morgenruf.dev>"
-REPLY_TO = "support@morgenruf.dev"
+REPLY_TO = "hello@morgenruf.dev"
 SITE = "https://morgenruf.dev"
 APP = os.environ.get("APP_URL", "https://api.morgenruf.dev").rstrip("/")
 
@@ -164,8 +169,8 @@ def _shell(preheader: str, body: str, email: str) -> str:
     <tr><td style="padding:34px 32px 30px;">{body}</td></tr>
     <tr><td style="background:{PAPER};border-top:1px solid {LINE};padding:20px 32px;">
       <p style="margin:0 0 8px;font-size:12.5px;color:{MUTED};line-height:1.55;">
-        You are getting this because Morgenruf was installed in your Slack workspace.
-        {POSTAL}.
+        You are getting this because you pressed &ldquo;Email me setup tips&rdquo; in Morgenruf's
+        Home tab in Slack. Turn it off there at any time, or unsubscribe below. {POSTAL}.
       </p>
       <p style="margin:0;font-size:12.5px;color:{MUTED};">
         <a href="{SITE}" style="color:{MUTED};">morgenruf.dev</a> ·
@@ -315,7 +320,12 @@ def send_install_followups(days: int = 7) -> tuple[int, int]:
     for row in pending:
         team_id = row["team_id"]
         team_name = row.get("team_name") or "your workspace"
-        email = _installer_email(team_id, row.get("installed_by_user_id"))
+        consent = _consent(team_id)
+        if not consent:
+            # Not recorded: a workspace that opts in later still gets it.
+            skipped += 1
+            continue
+        email = _installer_email(team_id, consent.get("user_id"))
         if not email:
             # Recorded anyway: without an address there is nothing to retry,
             # and leaving it unrecorded means asking again every single day.
@@ -343,6 +353,64 @@ def send_install_followups(days: int = 7) -> tuple[int, int]:
     if sent or skipped:
         logger.info("Install follow-ups: %d sent, %d skipped", sent, skipped)
     return sent, skipped
+
+
+def _consent(team_id: str) -> dict | None:
+    """The workspace's live opt-in, or None. Unreadable counts as no."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return db.setup_email_consent(team_id)
+    except Exception as exc:
+        logger.warning("Could not read email consent: %s", exc)
+        return None
+
+
+def consented_address(team_id: str) -> str:
+    """The address of whoever opted in to email for this workspace, or "".
+
+    Every message to a Slack-sourced address goes through this, so nothing
+    reaches an address whose owner did not press the button.
+    """
+    consent = _consent(team_id)
+    if not consent:
+        return ""
+    return _installer_email(team_id, consent.get("user_id"))
+
+
+def send_welcome(client, team_id: str, team_name: str, user_id: str) -> bool:
+    """The welcome, sent when the installer opts in. Returns whether it went.
+
+    Seven of the first twenty workspaces had no address on file, and this
+    returned quietly, so nobody knew the welcome had not been sent. It says so.
+    """
+    try:
+        profile = client.users_info(user=user_id)["user"]["profile"]
+    except Exception as exc:
+        logger.warning("Could not look up the installer for the welcome email: %s", exc)
+        return False
+    email = (profile.get("email") or "").strip()
+    if not email:
+        logger.info(
+            "Slack returned no email for the installer of %s, so no welcome email. "
+            "This usually means users:read.email was not granted.",
+            team_name,
+        )
+        return False
+    sent = send(
+        email,
+        f"Morgenruf is installed in {team_name}",
+        welcome_html(team_name, profile.get("real_name") or user_id, email),
+        kind="welcome",
+    )
+    if sent:
+        try:
+            import src.core.db as db  # noqa: PLC0415
+
+            db.record_install_email(team_id, "welcome", email)
+        except Exception as exc:
+            logger.warning("Could not record the welcome email: %s", exc)
+    return sent
 
 
 def _installer_email(team_id: str, user_id) -> str:
@@ -471,8 +539,9 @@ def uninstall_html(team_name: str, email: str, days_installed: int, standups: in
 def farewell(team_id: str) -> None:
     """Confirm the deletion and ask what was wrong, before anything is deleted.
 
-    Order matters: the address, the install date and the standup count all live
-    in rows that the uninstall handler is about to remove. Called afterwards,
+    Order matters: the address, the consent, the install date and the standup
+    count all live in rows that the uninstall handler is about to remove.
+    Without consent there is no farewell at all. Called afterwards,
     this has nothing to write to and nothing to say.
     """
     try:
@@ -482,10 +551,9 @@ def farewell(team_id: str) -> None:
         if not inst:
             return
         team_name = inst.get("team_name") or "your workspace"
-        installer = inst.get("installed_by_user_id")
-        email = _installer_email(team_id, installer)
+        email = consented_address(team_id)
         if not email:
-            logger.info("No address for %s, so no farewell email", team_name)
+            logger.info("No opted-in address for %s, so no farewell email", team_name)
             return
 
         installed_at = inst.get("installed_at")
