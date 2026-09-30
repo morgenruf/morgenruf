@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.11] - 2026-09-30
+
+### Security
+- **OpenSSL is patched in the image.** The backend image now applies Debian
+  security updates at build time, which picks up the OpenSSL fix for
+  CVE-2026-75804 and CVE-2026-84782. The 1.9.10 tag failed its image scan on
+  these and was never published, so 1.9.11 is the first release with the
+  1.9.10 changes below.
+
 ## [1.9.10] - 2026-09-30
 
 ### Changed
