@@ -1216,33 +1216,82 @@ def is_on_vacation(team_id: str, user_id: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_standup_streak(team_id: str, user_id: str) -> int:
-    """Return the current consecutive standup streak (number of working days in a row).
+# How far back a streak is looked for. A year of unbroken standups is already
+# more than the App Home badge needs, and it keeps the query bounded.
+STREAK_LOOKBACK_DAYS = 400
 
-    Counts backwards from today (or the most recent standup date) through
-    consecutive weekdays where the user submitted a standup.
+
+def streak_from_dates(standup_dates, working_days, today: date, holidays=()) -> int:
+    """Count the member's consecutive scheduled days with a standup, newest first.
+
+    Only the days the member is actually asked count: their schedules' weekdays
+    minus company holidays. A weekend or a holiday between two answered days
+    neither breaks the streak nor adds to it. Today counts once answered, but
+    an unanswered today does not break anything yet, since the day is not over.
+    The streak is 0 once the member has missed the most recent scheduled day
+    before today.
+
+    Pure, so the counting can be tested with plain dates.
+    """
+    answered = {d for d in (_as_date(v) for v in standup_dates or ()) if d is not None}
+    if not answered:
+        return 0
+    weekdays = set(working_days or ()) or set(_WORKING_WEEK)
+    days_off = {d for d in (_as_date(v) for v in holidays or ()) if d is not None}
+    earliest = min(answered)
+    streak = 0
+    day = today
+    while day >= earliest:
+        scheduled = day.weekday() in weekdays and day not in days_off
+        if scheduled:
+            if day in answered:
+                streak += 1
+            elif day != today:
+                break
+        day -= timedelta(days=1)
+    return streak
+
+
+def get_standup_streak(team_id: str, user_id: str) -> int:
+    """Return the member's current streak of answered scheduled days.
+
+    The old SQL subtracted a descending ROW_NUMBER from each date, which puts
+    consecutive days into different groups, so every streak read 1. It also
+    counted calendar days, so a weekend would have broken it anyway. The
+    counting now happens in streak_from_dates against the member's own
+    schedule days and the workspace's holidays.
     """
     sql = """
-        WITH dates AS (
-            SELECT DISTINCT standup_date
-            FROM standups
-            WHERE team_id = %s AND user_id = %s
-            ORDER BY standup_date DESC
-        ),
-        numbered AS (
-            SELECT standup_date,
-                   standup_date - (ROW_NUMBER() OVER (ORDER BY standup_date DESC))::int AS grp
-            FROM dates
-        )
-        SELECT COUNT(*) AS streak
-        FROM numbered
-        WHERE grp = (SELECT grp FROM numbered LIMIT 1)
+        SELECT DISTINCT standup_date
+        FROM standups
+        WHERE team_id = %s AND user_id = %s AND standup_date >= CURRENT_DATE - %s * INTERVAL '1 day'
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, user_id))
-            row = cur.fetchone()
-    return int(row[0]) if row and row[0] else 0
+            cur.execute(sql, (team_id, user_id, STREAK_LOOKBACK_DAYS))
+            dates = [row[0] for row in cur.fetchall()]
+    if not dates:
+        return 0
+
+    # The member's week is the union of the standups they are on. A schedule
+    # with no participant list asks everyone.
+    mine = [
+        s
+        for s in get_standup_schedules(team_id)
+        if s.get("active", True) and (not s.get("participants") or user_id in (s.get("participants") or []))
+    ]
+    weekdays: set[int] = set()
+    for schedule in mine:
+        weekdays |= parse_schedule_days(schedule.get("schedule_days"))
+    tz_name = next((s.get("schedule_tz") for s in mine if s.get("schedule_tz")), None)
+    if not tz_name:
+        tz_name = (get_workspace_config(team_id) or {}).get("schedule_tz")
+    try:
+        holidays = [h["date"] for h in list_holidays(team_id)]
+    except Exception as exc:  # noqa: BLE001 - a missing calendar must not hide the streak
+        logger.debug("No holiday list for %s: %s", team_id, exc)
+        holidays = []
+    return streak_from_dates(dates, weekdays, local_today(tz_name or "UTC"), holidays)
 
 
 def get_user_last_standup_answers(team_id: str, user_id: str) -> dict | None:
