@@ -1,6 +1,7 @@
 import { EvilBarChart } from '@/common/components/evilcharts/charts/recharts-bar-chart';
 import { PercentageTooltip } from '@/common/components/evilcharts/percentage-tooltip';
 import { ChartTooltip } from '@/common/components/evilcharts/ui/recharts-tooltip';
+import { rateLevel } from '@/common/lib/participation';
 
 const config = {
   plottedRate: { label: 'Completion', colors: { light: ['var(--success)'] } },
@@ -21,13 +22,7 @@ export function DailyTrendChart({
     // Unscheduled days keep a neutral baseline marker, never a failure color.
     plottedRate: rate === null ? 0 : Math.min(100, Math.max(0, rate)),
     color:
-      rate === null
-        ? 'var(--muted-foreground)'
-        : rate >= 70
-          ? 'var(--success)'
-          : rate >= 40
-            ? 'var(--warning)'
-            : 'var(--destructive)',
+      rate === null ? 'var(--muted-foreground)' : `var(--${rateLevel(rate)})`,
   }));
 
   return (

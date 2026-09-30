@@ -1,4 +1,4 @@
-import { enoughToJudge } from '@/common/lib/participation';
+import { enoughToJudge, rateLevel } from '@/common/lib/participation';
 
 import type { Standup, StandupInput } from './hooks';
 
@@ -94,11 +94,11 @@ export function healthLabel(
     ? 'No data yet'
     : expected != null && !enoughToJudge(expected)
       ? 'Too early to judge'
-      : rate >= 75
-        ? 'Healthy'
-        : rate >= 40
-          ? 'Slipping'
-          : 'Needs a look';
+      : {
+          success: 'Healthy',
+          warning: 'Slipping',
+          destructive: 'Needs a look',
+        }[rateLevel(rate)];
 }
 
 export function validTimezone(value: string) {

@@ -38,7 +38,7 @@ import {
 } from '@/common/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/common/components/ui/tabs';
 import { formatDate, relativeTime } from '@/common/lib/format';
-import { enoughToJudge } from '@/common/lib/participation';
+import { enoughToJudge, rateLevel } from '@/common/lib/participation';
 
 import { analyticsView, rateTone } from '../analytics-utils';
 import { CompletionChart } from '../completion-chart';
@@ -186,13 +186,9 @@ export default function AnalyticsPage() {
                       label="Completion rate"
                       icon={CircleCheck}
                       tone={
-                        !enoughToJudge(view.expected)
-                          ? 'neutral'
-                          : view.rate >= 70
-                            ? 'success'
-                            : view.rate >= 40
-                              ? 'warning'
-                              : 'destructive'
+                        enoughToJudge(view.expected)
+                          ? rateLevel(view.rate)
+                          : 'neutral'
                       }
                       value={
                         <span
