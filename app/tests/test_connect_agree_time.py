@@ -16,7 +16,10 @@ from src.modules.connect.hours import local_label, zone_city
 
 from tests.support import patch_modules
 
-SLOT = datetime(2026, 9, 18, 7, 0, tzinfo=timezone.utc)
+# A Friday in the future: the labels name the day, and a tap on a time that
+# has passed is refused.
+_SOON = datetime.now(timezone.utc) + timedelta(days=2)
+SLOT = (_SOON + timedelta(days=(4 - _SOON.weekday()) % 7)).replace(hour=7, minute=0, second=0, microsecond=0)
 
 
 class TestLocalTimes:

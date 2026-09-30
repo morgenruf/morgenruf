@@ -448,10 +448,11 @@ def mark_nudged(match_id: int) -> None:
             cur.execute("UPDATE connect_matches SET nudged_at = NOW() WHERE id = %s", (match_id,))
 
 
-def set_met(match_id: int, met: bool) -> None:
+def set_met(match_id: int, met: bool, team_id: str) -> None:
+    """Scoped by workspace, so a match id from another team changes nothing."""
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE connect_matches SET met = %s WHERE id = %s", (met, match_id))
+            cur.execute("UPDATE connect_matches SET met = %s WHERE id = %s AND team_id = %s", (met, match_id, team_id))
 
 
 # ── Follow-ups ──────────────────────────────────────────────────────────────

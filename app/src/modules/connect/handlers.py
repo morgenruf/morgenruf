@@ -192,10 +192,17 @@ def register_handlers(app) -> None:
 
 def _record_met(body, client, met: bool, reply: str) -> None:
     match_id = int(body["actions"][0]["value"])
+    user_id = (body.get("user") or {}).get("id", "")
+    team_id = (body.get("team") or {}).get("id") or (body.get("user") or {}).get("team_id", "")
     try:
         import src.modules.connect.db as cdb  # noqa: PLC0415
 
-        cdb.set_met(match_id, met)
+        # The match id is in the button, so only someone in that match, in
+        # that workspace, gets to say whether it happened.
+        match = cdb.match_by_id(match_id)
+        if not match or match.get("team_id") != team_id or user_id not in list(match.get("member_ids") or []):
+            return
+        cdb.set_met(match_id, met, team_id)
         client.chat_postMessage(channel=body["channel"]["id"], text=reply)
     except Exception:
         logger.exception("connect: could not record met=%s for match %s", met, match_id)
@@ -230,6 +237,16 @@ def _accept_slot(body, client) -> None:
         return
     if slot.tzinfo is None:
         slot = slot.replace(tzinfo=timezone.utc)
+    # An old intro still has live buttons. A time that has passed cannot be
+    # met, and settling on one would book a Zoom meeting in the past. The far
+    # bound is the one a suggested time has to meet.
+    now = datetime.now(timezone.utc)
+    if slot <= now:
+        _quiet(client, channel_id, user_id, "That time has already passed. Suggest a new one instead.")
+        return
+    if slot > now + timedelta(days=SUGGEST_MAX_DAYS):
+        logger.warning("connect: slot %s on match %s is too far ahead", slot_iso, match_id)
+        return
 
     try:
         match = cdb.match_by_id(match_id)
