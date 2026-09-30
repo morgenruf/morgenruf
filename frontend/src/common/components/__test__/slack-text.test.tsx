@@ -75,4 +75,11 @@ describe('Slack text rendering', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(container.textContent).toContain('<img src=x onerror=alert(1)>');
   });
+
+  it('marks missing text as n/a with a spoken label', () => {
+    render(<SlackText text="" />);
+
+    expect(screen.getByText('n/a')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByText('No text')).toHaveClass('sr-only');
+  });
 });

@@ -2,6 +2,7 @@ import { getRouteApi } from '@tanstack/react-router';
 import { CircleAlert, CircleCheck, UserMinus, Users } from 'lucide-react';
 
 import { useMemberDirectory } from '@/common/api/use-member-directory';
+import { EmptyValue } from '@/common/components/empty-value';
 import { LoadingField } from '@/common/components/loading-skeleton';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import {
@@ -196,7 +197,11 @@ export default function AnalyticsPage() {
                             enoughToJudge(view.expected) ? view.rate : null,
                           )}
                         >
-                          {view.expected ? `${Math.round(view.rate)}%` : '—'}
+                          {view.expected ? (
+                            `${Math.round(view.rate)}%`
+                          ) : (
+                            <EmptyValue label="No rate yet" />
+                          )}
                         </span>
                       }
                       description={`${view.completed} of ${view.expected} expected responses`}
@@ -340,7 +345,9 @@ export default function AnalyticsPage() {
                                           {member.days_with_blockers}
                                         </Badge>
                                       ) : (
-                                        '—'
+                                        <span className="text-muted-foreground">
+                                          None
+                                        </span>
                                       )}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">
