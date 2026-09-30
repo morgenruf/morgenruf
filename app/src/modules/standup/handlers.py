@@ -1187,9 +1187,10 @@ def register_handlers(app: App) -> None:
     def handle_app_home_help(ack, body, client):  # noqa: ANN001
         """Open help modal from App Home."""
         ack()
-        import src.modules.standup.blocks as _blocks  # noqa: PLC0415
+        from src.core.profile_slack import help_modal  # noqa: PLC0415
 
-        client.views_open(trigger_id=body["trigger_id"], view=_blocks.help_modal())
+        team_id = (body.get("team") or {}).get("id") or body["user"].get("team_id", "")
+        client.views_open(trigger_id=body["trigger_id"], view=help_modal(team_id))
 
     def _refresh_home(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Refresh App Home — respects configure mode."""
@@ -1450,7 +1451,8 @@ def register_handlers(app: App) -> None:
     @app.event("app_mention")
     def handle_mention(event, say):  # noqa: ANN001
         say(
-            "👋 I'm Morgenruf, your standup bot! Use `/help` to see available commands or check your *App Home* tab for settings and history."
+            "👋 I'm Morgenruf. Type `/morgenruf help` to see what I can do, "
+            "or open my *Home* tab for your standups and settings."
         )
 
     @app.action(re.compile(r"submit_answer_\d+"))
@@ -1567,33 +1569,12 @@ def register_handlers(app: App) -> None:
     # command, with subcommands, and its help lists every active feature.
     @app.command("/help")
     def handle_help_command(ack, body, client):  # noqa: ANN001
-        """Slash command to show available commands and help."""
+        """The old /help. Not in the manifest any more, kept for installs that still have it."""
         ack()
-        user_id: str = body["user_id"]
+        from src.core.profile_slack import help_blocks  # noqa: PLC0415
+
         client.chat_postMessage(
-            channel=user_id,
-            text="Morgenruf Help",
-            blocks=[
-                {"type": "header", "text": {"type": "plain_text", "text": "🌅 Morgenruf — Commands"}},
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            "*Standup commands:*\n"
-                            "• `/standup` — Start your standup right now\n"
-                            "• `/skip` — Skip today's standup\n"
-                            "• `/kudos @teammate message` — Give a shoutout\n"
-                            "• `/help` — Show this message\n\n"
-                            "*Other ways to interact:*\n"
-                            "• Send me `standup` in a DM to start at any time, or `help` for the DM commands\n"
-                            "• Use the *App Home* tab to see your history and settings\n"
-                            "• Mention `@Morgenruf` in any channel for help\n\n"
-                            "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>"
-                        ),
-                    },
-                },
-            ],
+            channel=body["user_id"], text="Morgenruf help", blocks=help_blocks(body.get("team_id", ""))
         )
 
     @app.view("create_standup_modal")
@@ -1911,9 +1892,9 @@ def on_channel_join(event, client):  # noqa: ANN001
         client.chat_postMessage(
             channel=user_id,
             text=(
-                "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
-                "I'll DM you each morning with a few quick questions to share with your team. "
-                "Use `/standup` to try a standup now, or `/help` to learn more."
+                f"👋 Welcome! I'm Morgenruf. <#{channel_id}> has a standup: when it runs, "
+                "I'll DM you a few quick questions and share your answers with the team.\n\n"
+                "Use `/standup` to try one now, or `/morgenruf help` to see everything I do."
             ),
         )
     except Exception as exc:
@@ -2028,20 +2009,6 @@ _KEYWORDS.update(dict.fromkeys(_BACK_PHRASES, "back"))
 _ANSWER_KEYWORDS = frozenset({"skip", "pass"})
 
 _STILL_OPEN = "Your standup is still open. Reply to the question above to carry on."
-
-HELP_TEXT = (
-    "🤖 *Morgenruf help*\n\n"
-    "I'll DM you your team's standup questions at the scheduled time.\n\n"
-    "*Send me one of these as a message on its own:*\n"
-    "• `standup`: start a standup now\n"
-    "• `skip`: skip today's standup\n"
-    "• `I'm away`: go on vacation, no standup DMs until you are back\n"
-    "• `I'm back`: return from vacation\n"
-    "• `timezone <tz>`: set your timezone (e.g. `timezone America/New_York`)\n"
-    "• `kudos @teammate Great job!`: recognise a teammate 🏆\n"
-    "• `help`: show this message\n\n"
-    "While you are answering a standup, send `pass` to leave a question blank."
-)
 
 
 def _keyword_text(text: str | None) -> str:
@@ -2163,7 +2130,13 @@ def _reply(ctx, text: str) -> None:
 
 
 def _dm_help(ctx, in_session: bool) -> None:
-    _reply(ctx, HELP_TEXT + (f"\n\n{_STILL_OPEN}" if in_session else ""))
+    from src.core.profile_slack import help_blocks, help_text  # noqa: PLC0415
+
+    suffix = _STILL_OPEN if in_session else ""
+    text = help_text(ctx.team_id) + (f"\n\n{suffix}" if suffix else "")
+    ctx.client.chat_postMessage(
+        channel=ctx.channel_id or ctx.user_id, text=text, blocks=help_blocks(ctx.team_id, suffix=suffix)
+    )
 
 
 def _dm_standup(ctx, in_session: bool) -> None:

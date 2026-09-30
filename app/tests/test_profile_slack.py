@@ -215,3 +215,15 @@ class TestTheAppHome:
 
         blocks = extra_home_blocks("T1", "U1", exclude="standup")
         assert blocks[1]["accessory"]["action_id"] == "profile:edit"
+
+
+class TestOneHelp:
+    """Every help surface renders the same text."""
+
+    def test_modal_and_dm_share_the_command_help(self, db):
+        text_out = profile_slack.help_text("T1")
+        modal = json.dumps(profile_slack.help_modal("T1"))
+        assert "/morgenruf help" in text_out
+        assert json.dumps(text_out)[1:-1] in modal
+        assert "—" not in text_out
+        assert "/help`" not in text_out.replace("/morgenruf help`", "")

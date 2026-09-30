@@ -308,8 +308,14 @@ def save_submission(team_id: str, user_id: str, values: dict) -> tuple[dict | No
 # ── /morgenruf ──────────────────────────────────────────────────────────────
 
 
-def help_blocks(team_id: str, prefix: str = "") -> list[dict]:
-    """What Morgenruf can do in this workspace, from the modules it has on."""
+def help_text(team_id: str) -> str:
+    """What Morgenruf can do in this workspace, from the modules it has on.
+
+    Every help surface renders this one text: `/morgenruf help`, the old
+    `/help`, `help` in a DM and the Help button on the Home tab.
+    """
+    from src.core.links import dashboard_url, support_url  # noqa: PLC0415
+
     lines = [
         "*Your profile*",
         "• `/morgenruf profile`: your birthday, start date, role and location",
@@ -341,16 +347,47 @@ def help_blocks(team_id: str, prefix: str = "") -> list[dict]:
         "*Anywhere*",
         "• `/morgenruf help`: show this message",
         "• The *Home* tab shows your standups, your profile and more",
+        f"• The <{dashboard_url()}|Dashboard> has settings, history and reports",
         "",
-        "📖 Full docs: <https://docs.morgenruf.dev|docs.morgenruf.dev>",
+        f"📖 Docs: <https://docs.morgenruf.dev|docs.morgenruf.dev> · 💬 <{support_url()}|Get support>",
     ]
-    text = "\n".join(lines)
+    return "\n".join(lines)
+
+
+def help_blocks(team_id: str, prefix: str = "", suffix: str = "") -> list[dict]:
+    """help_text as a message: a header, then the text."""
+    text = help_text(team_id)
     if prefix:
         text = f"{prefix}\n\n{text}"
+    if suffix:
+        text = f"{text}\n\n{suffix}"
     return [
         {"type": "header", "text": {"type": "plain_text", "text": "🌅 Morgenruf commands", "emoji": True}},
         {"type": "section", "text": {"type": "mrkdwn", "text": text}},
     ]
+
+
+def help_modal(team_id: str) -> dict:
+    """help_text in a modal, for the Help button on the Home tab."""
+    return {
+        "type": "modal",
+        "title": {"type": "plain_text", "text": "Morgenruf help"},
+        "close": {"type": "plain_text", "text": "Close"},
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        "Morgenruf runs async standups in Slack. At the scheduled time each member gets a DM "
+                        "with the questions, and the answers are posted as a thread in the standup channel."
+                    ),
+                },
+            },
+            {"type": "divider"},
+            *help_blocks(team_id)[1:],
+        ],
+    }
 
 
 def open_profile_modal(client, trigger_id: str, team_id: str, user_id: str, source: str) -> None:

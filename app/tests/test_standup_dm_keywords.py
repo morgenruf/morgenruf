@@ -146,13 +146,14 @@ def test_help_is_answered(world, text):
 
 
 def test_help_lists_every_keyword_it_advertises_and_each_one_works(world):
-    """Each backticked command in the help text is a working keyword."""
+    """Each backticked DM command in standup's help is a working keyword."""
     import re
 
-    from src.modules.standup.handlers import HELP_TEXT, match_dm_command
+    from src.modules.standup import MODULE
+    from src.modules.standup.handlers import match_dm_command
 
-    words = set(re.findall(r"`([^`]+)`", HELP_TEXT))
-    for word in words - {"pass", "kudos @teammate Great job!", "timezone <tz>", "timezone America/New_York"}:
+    words = set(re.findall(r"`([^`]+)`", " ".join(MODULE.help_lines)))
+    for word in words - {"pass", "/standup", "/skip", "timezone America/New_York"}:
         assert match_dm_command(word) is not None, word
     assert match_dm_command("timezone America/New_York") == ("timezone", "America/New_York")
 
