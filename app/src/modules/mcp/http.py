@@ -8,13 +8,14 @@ import logging
 from flask import Blueprint, jsonify, request
 
 import src.core.db as db
+from src.core.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 mcp_bp = Blueprint("mcp", __name__)
 
 MCP_SERVER_INFO = {
     "name": "morgenruf",
-    "version": "1.0.0",
+    "version": APP_VERSION,
 }
 
 TOOLS = [
@@ -301,7 +302,7 @@ def mcp_info():
     return jsonify(
         {
             "name": "Morgenruf MCP Server",
-            "version": "1.0.0",
+            "version": APP_VERSION,
             "transport": "http",
             "endpoint": request.host_url.rstrip("/") + "/mcp",
             "auth": "Bearer token — generate from your Morgenruf dashboard",

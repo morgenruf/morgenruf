@@ -91,7 +91,9 @@ def _verify_state(state: str) -> bool:
 
 @oauth_bp.route("/")
 def index():
-    return jsonify({"name": "morgenruf", "version": "1.1.3", "status": "ok"})
+    from src.core.version import APP_VERSION  # noqa: PLC0415
+
+    return jsonify({"name": "morgenruf", "version": APP_VERSION, "status": "ok"})
 
 
 @oauth_bp.route("/install")
