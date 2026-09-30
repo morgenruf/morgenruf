@@ -1587,7 +1587,6 @@ def register_handlers(app: App) -> None:
         if not may_manage_standups(team_id, user_id):
             ack(response_action="errors", errors={"standup_channel": _NOT_A_STANDUP_ADMIN})
             return
-        ack()
         values = body["view"]["state"]["values"]
         private_metadata = body["view"].get("private_metadata", "")
 
@@ -1612,9 +1611,6 @@ def register_handlers(app: App) -> None:
         timezone = values.get("timezone", {}).get("timezone", {}).get("selected_option", {}).get("value", "UTC")
         reminder_val = values.get("reminder", {}).get("reminder", {}).get("selected_option", {}).get("value", "0")
         members = values.get("members", {}).get("members", {}).get("selected_users", [])
-        # The users picker lets you select apps; they can't answer a standup.
-        _human_members = filter_human_ids(client, members)
-        members = [uid for uid in members if uid in _human_members]
         days_opts = values.get("days", {}).get("days", {}).get("selected_options", [])
         days = [o["value"] for o in days_opts]
         report_dest = (
@@ -1649,12 +1645,26 @@ def register_handlers(app: App) -> None:
         # The timezone picker is an external_select over a curated list, but a
         # value the scheduler cannot resolve would save a standup that never
         # fires and never says why (#67), so check before writing the row.
-        invalid = schedule_timezone_error(timezone) or schedule_time_error(standup_time)
-        if not invalid and report_time:
-            invalid = schedule_time_error(report_time)
-        if invalid:
-            client.chat_postMessage(channel=user_id, text=f"❌ Couldn't save *{standup_name}*: {invalid}")
+        # Errors go back to the modal, next to the field, and keep it open.
+        errors: dict[str, str] = {}
+        if not channel_id or channel_id == "_none":
+            errors["standup_channel"] = "Pick a channel. If yours is not listed, invite @Morgenruf to it first."
+        tz_error = schedule_timezone_error(timezone)
+        if tz_error:
+            errors["timezone"] = tz_error
+        time_error = schedule_time_error(standup_time)
+        if time_error:
+            errors["standup_time" if "standup_time" in values else "report_time"] = time_error
+        if report_time and schedule_time_error(report_time):
+            errors["report_time"] = schedule_time_error(report_time)
+        if errors:
+            ack(response_action="errors", errors=errors)
             return
+        ack()
+
+        # The users picker lets you select apps; they can't answer a standup.
+        _human_members = filter_human_ids(client, members)
+        members = [uid for uid in members if uid in _human_members]
 
         try:
             import src.core.db as db  # noqa: PLC0415
@@ -1731,6 +1741,12 @@ def register_handlers(app: App) -> None:
             _refresh_home(team_id, user_id, client)
         except Exception as exc:
             logger.error("create_standup_modal error: %s", exc)
+            _say_once(
+                client,
+                user_id,
+                f"⚠️ I couldn't save *{standup_name}* just now. Nothing was changed. "
+                "Please try again in a minute, or use the Dashboard.",
+            )
 
     @app.view("standup_form_modal")
     def handle_standup_form_submit(ack, body, client):  # noqa: ANN001

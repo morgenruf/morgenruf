@@ -87,14 +87,18 @@ class TestCreateStandupModalTimingGuard:
         }
 
     def _submit(self, **body_kwargs):
+        self.ack = MagicMock()
         with (
             patch_modules({"src.core.db": self.db}),
             patch.object(schedule_validation, "pytz", _real_pytz),
         ):
-            self.handler(MagicMock(), _modal_body(**body_kwargs), self.client)
+            self.handler(self.ack, _modal_body(**body_kwargs), self.client)
 
-    def _messages(self):
-        return [kwargs.get("text", "") for _, kwargs in self.client.chat_postMessage.call_args_list]
+    def _errors(self) -> dict:
+        """Validation errors are shown in the modal, not sent as a DM."""
+        kwargs = self.ack.call_args.kwargs
+        assert kwargs.get("response_action") == "errors"
+        return kwargs["errors"]
 
     def test_valid_timezone_is_saved(self):
         self._submit(timezone="Asia/Kolkata")
@@ -106,12 +110,31 @@ class TestCreateStandupModalTimingGuard:
 
     def test_invalid_timezone_tells_the_user_why(self):
         self._submit(timezone="Asia/Kolkatta")
-        assert any("Asia/Kolkatta" in text for text in self._messages())
+        assert "Asia/Kolkatta" in self._errors()["timezone"]
+        self.client.chat_postMessage.assert_not_called()
 
     def test_invalid_time_is_not_saved(self):
         self._submit(report_time="9am")
         self.db.create_standup_schedule.assert_not_called()
-        assert any("9am" in text for text in self._messages())
+        assert "9am" in self._errors()["report_time"]
+
+    def test_a_missing_channel_keeps_the_modal_open(self):
+        body = _modal_body()
+        body["view"]["state"]["values"]["standup_channel"] = {
+            "standup_channel": {"selected_option": {"value": "_none"}}
+        }
+        ack = MagicMock()
+        with patch_modules({"src.core.db": self.db}), patch.object(schedule_validation, "pytz", _real_pytz):
+            self.handler(ack, body, self.client)
+        assert "standup_channel" in ack.call_args.kwargs["errors"]
+        self.db.create_standup_schedule.assert_not_called()
+
+    def test_a_failed_save_is_reported(self):
+        self.db.create_standup_schedule.side_effect = RuntimeError("db down")
+        self._submit()
+        self.ack.assert_called_once_with()
+        texts = [kwargs.get("text", "") for _, kwargs in self.client.chat_postMessage.call_args_list]
+        assert any("couldn't save" in t for t in texts)
 
 
 def _find_block(blocks, block_id):

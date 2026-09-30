@@ -454,7 +454,12 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
         "action_id": "standup_channel",
         "placeholder": {"type": "plain_text", "text": "Select a channel"},
         "options": channel_opts
-        or [{"text": {"type": "plain_text", "text": "No channels — invite the bot first"}, "value": "_none"}],
+        or [
+            {
+                "text": {"type": "plain_text", "text": "No channels yet. Invite @Morgenruf to one first"},
+                "value": "_none",
+            }
+        ],
     }
     if cfg.get("channel_id") and channel_opts:
         initial = _find_option(channel_opts, cfg["channel_id"])
