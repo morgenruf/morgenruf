@@ -75,7 +75,7 @@ class TestRoundStatsMessage:
     def test_one_pairing_reads_as_singular(self):
         _, blocks = cb.round_stats_message(met=1, answered=1, pairings=1)
         body = " ".join(b.get("text", {}).get("text", "") for b in blocks if b.get("text"))
-        assert "1 pair were introduced" in body or "1 pair " in body
+        assert "1 pair was introduced" in body
 
 
 class TestGatingInTheJob:
@@ -99,3 +99,13 @@ class TestGatingInTheJob:
         src = (CONNECT / "jobs.py").read_text()
         fn = src[src.index("def _post_round_stats") :][:1400]
         assert "except Exception" in fn
+
+
+class TestIntroSaysWhereItCameFrom:
+    def test_the_programme_channel_is_named(self):
+        _, blocks = cb.intro_message(["U1", "U2"], 1, 3, channel_id="CCOFFEE")
+        body = " ".join(b.get("text", {}).get("text", "") for b in blocks if b.get("text"))
+        assert "You were paired from <#CCOFFEE>." in body
+
+    def test_hybrid_tone_does_not_claim_everyone_is_remote(self):
+        assert "everyone is remote" not in cb.TONE_LINES["hybrid"]
