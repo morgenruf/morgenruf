@@ -265,6 +265,16 @@ def defuse_broadcasts(text: str) -> str:
     return _SUBTEAM.sub(lambda m: f"@{m.group(1) or 'group'}", text)
 
 
+# `<https://evil|sso.acme.com>` shows only the label. Mentions (`<@`),
+# channels (`<#`) and specials (`<!`) are left alone.
+_LABELLED_LINK = re.compile(r"<([^@#!|<>][^|<>]*)\|[^<>]*>")
+
+
+def neutralise_links(text: str) -> str:
+    """Show a labelled link's real address instead of its label."""
+    return _LABELLED_LINK.sub(r"<\1>", text or "")
+
+
 def _rt_elements_to_mrkdwn(elements: list[dict]) -> str:
     """Convert rich_text element list (text, link, user, etc.) to mrkdwn."""
     parts: list[str] = []

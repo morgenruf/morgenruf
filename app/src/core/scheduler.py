@@ -967,7 +967,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
 
         # AI summary
         try:
-            from src.modules.standup.ai_summary import generate_summary  # noqa: PLC0415
+            from src.modules.standup.ai_summary import generate_summary, safe_summary  # noqa: PLC0415
 
             ws_config = db.get_workspace_config(team_id) or {}
             if ws_config.get("ai_summary_enabled"):
@@ -975,6 +975,7 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
                 team_name = (inst or {}).get("team_name", "")
                 summary_text = generate_summary(today_standups, team_name, ws_config.get("ai_provider") or "")
                 if summary_text:
+                    summary_text = safe_summary(summary_text)
                     ai_kwargs = {"channel": report_channel, "text": f"✨ *AI Summary*\n\n{summary_text}"}
                     if summary_thread_ts:
                         ai_kwargs["thread_ts"] = summary_thread_ts

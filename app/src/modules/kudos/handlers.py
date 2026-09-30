@@ -69,11 +69,6 @@ def _context(*lines: str) -> list[dict]:
     return [{"type": "context", "elements": [{"type": "mrkdwn", "text": line}]} for line in lines if line]
 
 
-# `<https://evil|sso.acme.com>` shows only the label. Mentions (`<@`),
-# channels (`<#`) and specials (`<!`) are left to defuse_broadcasts.
-_LABELLED_LINK = re.compile(r"<([^@#!|<>][^|<>]*)\|[^<>]*>")
-
-
 def safe_reason(message: str) -> str:
     """The reason as the giver wrote it, minus what could abuse the repost.
 
@@ -81,9 +76,9 @@ def safe_reason(message: str) -> str:
     escaped as a whole: that would break the mentions people type. Broadcasts
     are defused and a labelled link shows its real address instead.
     """
-    from src.modules.standup.blocks import defuse_broadcasts  # noqa: PLC0415
+    from src.modules.standup.blocks import defuse_broadcasts, neutralise_links  # noqa: PLC0415
 
-    return _LABELLED_LINK.sub(r"<\1>", defuse_broadcasts(message or ""))
+    return neutralise_links(defuse_broadcasts(message or ""))
 
 
 def _quote(message: str) -> str:
