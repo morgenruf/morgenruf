@@ -489,7 +489,7 @@ def _send_standup_to_workspace(
         user_id = member["user_id"]
         cache_key = f"{team_id}:{user_id}"
         try:
-            if state_store.is_active(cache_key):
+            if state_store.blocks_scheduled_dm(cache_key, schedule_id):
                 logger.debug("Skipping %s — already has active session", user_id)
                 continue
 

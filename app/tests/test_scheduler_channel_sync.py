@@ -80,7 +80,7 @@ class TestChannelSyncFiltersBots:
         with (
             patch_modules({"src.core.db": self.db}),
             patch.object(sched_mod, "WebClient", return_value=self.client),
-            patch.object(sched_mod.state_store, "is_active", return_value=False),
+            patch.object(sched_mod.state_store, "blocks_scheduled_dm", return_value=False),
         ):
             sched_mod._send_standup_to_workspace("T1", "xoxb-test", "C1", 1)
 
@@ -129,7 +129,7 @@ class TestChannelSyncStoresProfiles:
         with (
             patch_modules({"src.core.db": self.db}),
             patch.object(sched_mod, "WebClient", return_value=self.client),
-            patch.object(sched_mod.state_store, "is_active", return_value=False),
+            patch.object(sched_mod.state_store, "blocks_scheduled_dm", return_value=False),
         ):
             sched_mod._send_standup_to_workspace("T1", "xoxb-test", "C1", 1)
 
