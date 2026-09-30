@@ -163,6 +163,28 @@ export default function MembersPage() {
     });
   }
 
+  const hasFilters = !!(
+    search ||
+    params.channel ||
+    params.role ||
+    params.tracking
+  );
+
+  function clearFilters() {
+    void navigate({
+      search: (previous) =>
+        validateSearch.parse({
+          ...previous,
+          q: '',
+          channel: '',
+          role: '',
+          tracking: '',
+        }),
+      replace: true,
+      resetScroll: false,
+    });
+  }
+
   const grantable = (modules.data ?? []).filter(
     (module) => module.available !== false && module.active && module.delegable,
   );
@@ -371,7 +393,19 @@ export default function MembersPage() {
                     ? 'No members match these filters'
                     : 'No members found'
                 }
-                description="Members are synchronized from your Slack workspace."
+                description={
+                  all.length
+                    ? 'Try a different search or filter.'
+                    : 'Members are synchronised from your Slack workspace. Try Refresh.'
+                }
+                action={
+                  all.length > 0 &&
+                  hasFilters && (
+                    <Button variant="outline" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  )
+                }
               />
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

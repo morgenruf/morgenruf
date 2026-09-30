@@ -279,7 +279,10 @@ export function Attendance({ programId }: { programId: number }) {
                     retry={() => participation.refetch()}
                   />
                 ) : !participation.data?.length ? (
-                  <EmptyState title="Nobody has been paired yet" />
+                  <EmptyState
+                    title="Nobody has been paired yet"
+                    description="People appear here after their first coffee chat. Run a round from the coffee chat’s page to start one now."
+                  />
                 ) : (
                   <>
                     <ScrollArea orientation="horizontal" className="min-w-0">

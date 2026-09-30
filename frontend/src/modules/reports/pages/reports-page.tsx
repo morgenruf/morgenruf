@@ -366,7 +366,10 @@ export default function ReportsPage() {
                           )}
                       </>
                     ) : (
-                      <EmptyState title="No participation data" />
+                      <EmptyState
+                        title="No participation data"
+                        description="Nobody was due to answer a standup in this window. Try a wider date range."
+                      />
                     )}
                   </CardContent>
                 </Card>
@@ -375,6 +378,25 @@ export default function ReportsPage() {
                   <EmptyState
                     title="No responses in this window"
                     description="Try another date range or member."
+                    action={
+                      (dateFrom || dateTo || userId) && (
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            void navigate({
+                              search: {
+                                date_from: '',
+                                date_to: '',
+                                user_id: '',
+                              },
+                              resetScroll: false,
+                            })
+                          }
+                        >
+                          Clear filters
+                        </Button>
+                      )
+                    }
                   />
                 ) : (
                   grouped.slice(0, dayLimit).map(([date, rows]) => (

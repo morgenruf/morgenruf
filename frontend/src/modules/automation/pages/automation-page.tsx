@@ -161,7 +161,18 @@ export default function AutomationPage() {
         ) : !rules.data?.length ? (
           <EmptyState
             title="Nothing runs by itself yet"
-            description="Start from a template or build your own rule."
+            description={
+              canEdit
+                ? 'Start from a template below or build your own rule.'
+                : 'A standup administrator can add rules, for example to flag low participation.'
+            }
+            action={
+              canEdit && (
+                <Button onClick={() => start()}>
+                  <Plus /> New rule
+                </Button>
+              )
+            }
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2">

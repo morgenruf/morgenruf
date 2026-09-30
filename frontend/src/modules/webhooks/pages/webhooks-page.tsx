@@ -180,7 +180,27 @@ function WebhookCard({
                   retry={() => void deliveries.refetch()}
                 />
               ) : !deliveries.data?.length ? (
-                <EmptyState title="No deliveries recorded yet" />
+                <EmptyState
+                  title="No deliveries recorded yet"
+                  description={
+                    canEdit
+                      ? 'Events arrive here as they happen. Send a test event to check your endpoint now.'
+                      : 'Events arrive here as they happen.'
+                  }
+                  action={
+                    canEdit && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={test.isPending || busy}
+                        onClick={() => test.mutate()}
+                      >
+                        <Send />
+                        {test.isPending ? 'Sending…' : 'Send test event'}
+                      </Button>
+                    )
+                  }
+                />
               ) : (
                 <ScrollArea orientation="horizontal" className="min-w-0">
                   <table className="w-full text-left text-xs">
@@ -305,7 +325,15 @@ export default function WebhooksPage() {
                     .map((event) => eventLabels[event] ?? event)
                     .join(' · ')}
                 </p>
+                {!canEdit && <p>A workspace administrator can add one.</p>}
               </div>
+            }
+            action={
+              canEdit && (
+                <Button onClick={() => openEditor()} disabled={!catalog.data}>
+                  <Plus /> Add webhook
+                </Button>
+              )
             }
           />
         ) : (

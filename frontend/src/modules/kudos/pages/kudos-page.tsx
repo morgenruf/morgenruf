@@ -162,7 +162,10 @@ export default function KudosPage() {
                   retry={() => void receivers.refetch()}
                 />
               ) : !receivers.data?.length ? (
-                <EmptyState title="No kudos received yet" />
+                <EmptyState
+                  title="No kudos received yet"
+                  description="Thank a teammate with /kudos in Slack and they will show up here."
+                />
               ) : (
                 <ol className="divide-y">
                   {receivers.data.map((person, index) => (
@@ -205,7 +208,10 @@ export default function KudosPage() {
                   retry={() => void givers.refetch()}
                 />
               ) : !givers.data?.length ? (
-                <EmptyState title="Nobody has given kudos yet" />
+                <EmptyState
+                  title="Nobody has given kudos yet"
+                  description="Be the first: use /kudos in Slack to thank someone."
+                />
               ) : (
                 <ol className="divide-y">
                   {givers.data.map((person, index) => (

@@ -369,3 +369,17 @@ it('loads selected channel labels and clears filters without losing other choice
     screen.getByRole('combobox', { name: 'Sort members' }),
   ).toHaveTextContent('Sort by role');
 });
+
+it('offers to clear filters when nobody matches', async () => {
+  const user = userEvent.setup({ delay: null });
+
+  view('/dashboard/members?q=nobody-by-this-name');
+
+  expect(
+    await screen.findByText('No members match these filters'),
+  ).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+  expect(await screen.findByText('Mina')).toBeInTheDocument();
+  expect(screen.getByText('Sam')).toBeInTheDocument();
+});
