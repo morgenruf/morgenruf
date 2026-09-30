@@ -35,9 +35,40 @@ APP = os.environ.get("APP_URL", "https://api.morgenruf.dev").rstrip("/")
 POSTAL = "CloudDrove &middot; 18 King Street East, Suite 1400, Toronto, Ontario M5C 1C4, Canada \U0001f1e8\U0001f1e6"
 
 
-def unsubscribe_token(email: str) -> str:
+def _email_mac(message: str) -> str:
     secret = (os.environ.get("FLASK_SECRET_KEY") or "morgenruf-dev").encode()
-    return hmac.new(secret, email.lower().encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def email_token(email: str, purpose: str) -> str:
+    """A link token bound to one address and one action.
+
+    The purpose is part of the MAC so an unsubscribe link (in every footer,
+    and so in every forwarded email) cannot be replayed as a subscribe.
+    """
+    return _email_mac(f"{purpose}:{email.lower()}")
+
+
+def unsubscribe_token(email: str) -> str:
+    return email_token(email, "unsubscribe")
+
+
+def subscribe_token(email: str) -> str:
+    return email_token(email, "subscribe")
+
+
+def check_email_token(email: str, token: str, purpose: str) -> bool:
+    """True when token is this address's token for purpose.
+
+    Links sent before the purpose was added carry the bare address MAC. They
+    are still honoured for unsubscribing, which only ever stops mail, and
+    never for subscribing.
+    """
+    if not email or not token:
+        return False
+    if hmac.compare_digest(token, email_token(email, purpose)):
+        return True
+    return purpose == "unsubscribe" and hmac.compare_digest(token, _email_mac(email.lower()))
 
 
 def unsubscribe_url(email: str) -> str:
@@ -334,7 +365,7 @@ def _installer_email(team_id: str, user_id) -> str:
 def subscribe_url(email: str) -> str:
     from urllib.parse import quote
 
-    return f"{APP}/email/subscribe?e={quote(email)}&t={unsubscribe_token(email)}"
+    return f"{APP}/email/subscribe?e={quote(email)}&t={subscribe_token(email)}"
 
 
 def optin_block(email: str) -> str:

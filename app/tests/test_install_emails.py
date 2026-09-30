@@ -219,6 +219,43 @@ class TestTheUnsubscribeEndpoint:
         assert r.status_code == 200
         db.suppress_email.assert_called_once()
 
+    def test_an_unsubscribe_token_cannot_subscribe(self, client):
+        """The unsubscribe link is in every footer; replaying it as a
+        subscribe must not record consent the person never gave."""
+        c, db = client
+        email = "someone@example.com"
+        r = c.get(f"/email/subscribe?e={email}&t={mailer.unsubscribe_token(email)}")
+        assert r.location.endswith("status=invalid")
+        db.grant_email_consent.assert_not_called()
+
+    def test_a_subscribe_token_cannot_unsubscribe(self, client):
+        c, db = client
+        email = "someone@example.com"
+        r = c.get(f"/email/unsubscribe?e={email}&t={mailer.subscribe_token(email)}")
+        assert r.location.endswith("status=invalid")
+        db.suppress_email.assert_not_called()
+
+    def test_the_subscribe_link_still_subscribes(self, client):
+        c, db = client
+        email = "someone@example.com"
+        r = c.get(f"/email/subscribe?e={email}&t={mailer.subscribe_token(email)}")
+        assert r.location.endswith("status=subscribed")
+        db.grant_email_consent.assert_called_once()
+
+    def test_links_sent_before_the_purpose_was_added(self, client):
+        """Old footers carry the bare address MAC: good for leaving, not joining."""
+        import hashlib
+        import hmac as _hmac
+        import os
+
+        email = "someone@example.com"
+        legacy = _hmac.new(os.environ["FLASK_SECRET_KEY"].encode(), email.encode(), hashlib.sha256).hexdigest()[:32]
+        c, db = client
+        assert c.get(f"/email/subscribe?e={email}&t={legacy}").location.endswith("status=invalid")
+        db.grant_email_consent.assert_not_called()
+        assert c.get(f"/email/unsubscribe?e={email}&t={legacy}").location.endswith("status=unsubscribed")
+        db.suppress_email.assert_called_once_with(email)
+
 
 class TestTheFarewell:
     """The message that catches the thing nobody has been learning.
@@ -268,7 +305,7 @@ class TestConsentIsAskedForNotAssumed:
 
     def test_the_link_is_tied_to_the_address(self):
         a = mailer.subscribe_url("one@example.com")
-        assert "one%40example.com" in a and mailer.unsubscribe_token("one@example.com") in a
+        assert "one%40example.com" in a and mailer.subscribe_token("one@example.com") in a
 
     def test_nothing_is_synced_without_an_audience(self, monkeypatch):
         """A self-hosted install must never post its users to our contact list."""

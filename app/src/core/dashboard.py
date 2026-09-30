@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import hmac
 import io
 import json
 import logging
@@ -511,7 +510,7 @@ def email_subscribe():
 
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
-    if not email or not hmac.compare_digest(token, mailer.unsubscribe_token(email)):
+    if not mailer.check_email_token(email, token, "subscribe"):
         return _email_result("invalid", 400)
     try:
         db.grant_email_consent(email, source="welcome-email", ip=request.headers.get("CF-Connecting-IP", ""))
@@ -529,11 +528,11 @@ def email_unsubscribe():
     Mail clients hit this with POST via List-Unsubscribe-Post, and people click
     it with GET from the footer. Both do the same thing.
     """
-    from src.core.mailer import unsubscribe_token  # noqa: PLC0415
+    from src.core.mailer import check_email_token  # noqa: PLC0415
 
     email = (request.args.get("e") or "").strip()
     token = (request.args.get("t") or "").strip()
-    if not email or not hmac.compare_digest(token, unsubscribe_token(email)):
+    if not check_email_token(email, token, "unsubscribe"):
         return _email_result("invalid", 400)
     try:
         db.suppress_email(email)
