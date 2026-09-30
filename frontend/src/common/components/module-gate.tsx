@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 
 import { useWorkspaceModules } from '@/common/api/use-workspace-modules';
 import { usePermissions } from '@/common/auth/use-session';
+import { describeScopes } from '@/common/lib/slack-scopes';
 
 import { EmptyState, ErrorState } from './page';
 import { Button } from './ui/button';
@@ -52,17 +53,15 @@ export function ModuleGate({
           description={
             <>
               <span className="block">
-                Your workspace has not granted all the Slack permissions this
-                feature requires.
+                Morgenruf needs permission to{' '}
+                {describeScopes(feature.missing_scopes)}. Slack asks for it when
+                the app is authorised again.
               </span>
-              <span className="mt-2 block text-xs">
-                Missing: {feature.missing_scopes.join(', ')}
+              <span className="mt-2 block">
+                {isAdmin
+                  ? 'Choose Re-authorise Slack and approve the request. Nothing else changes.'
+                  : 'Ask a workspace administrator to reconnect Slack.'}
               </span>
-              {!isAdmin && (
-                <span className="mt-2 block">
-                  Ask a workspace administrator to reconnect Slack.
-                </span>
-              )}
             </>
           }
           action={

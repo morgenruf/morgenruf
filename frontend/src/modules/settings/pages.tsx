@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import {
+  AlertTriangle,
   Copy,
   ExternalLink,
   Globe,
@@ -28,6 +29,7 @@ import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { useConfirm } from '@/common/hooks/use-confirm';
 import { formatDateTime, formatWeekdays, plural } from '@/common/lib/format';
+import { describeScopes } from '@/common/lib/slack-scopes';
 
 import { useSettings, useSettingsMutations } from './hooks';
 import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
@@ -239,12 +241,22 @@ export function SettingsPage() {
                             {featureDescriptions[item.name]}
                           </p>
                           {!!item.missing_scopes?.length && (
-                            <p className="text-xs text-amber-600">
-                              Needs Slack permissions:{' '}
-                              {item.missing_scopes.join(', ')}.{' '}
-                              <a href="/install" className="underline">
-                                Re-authorise Slack
-                              </a>
+                            <p className="flex items-start gap-1 text-xs text-amber-700 dark:text-amber-500">
+                              <AlertTriangle
+                                className="mt-0.5 size-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                Needs permission to{' '}
+                                {describeScopes(item.missing_scopes)}.{' '}
+                                {isAdmin ? (
+                                  <a href="/install" className="underline">
+                                    Re-authorise Slack to grant it
+                                  </a>
+                                ) : (
+                                  'Ask a workspace administrator to reconnect Slack.'
+                                )}
+                              </span>
                             </p>
                           )}
                         </div>

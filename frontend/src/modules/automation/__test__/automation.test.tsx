@@ -24,6 +24,14 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
       deleteRule: vi.fn(),
     },
     workspace: { listChannels: mock.channels },
+    members: {
+      listMembers: vi.fn().mockResolvedValue({
+        data: [
+          { id: 'U1', name: 'Ada' },
+          { id: 'U2', name: 'Grace' },
+        ],
+      }),
+    },
   };
 
   return {
@@ -97,9 +105,11 @@ it('keeps the low participation default and clears a channel target when changin
   await chooseOption(user, 'Slack channel', '#design');
   await chooseOption(user, 'Action', 'Send direct message');
 
-  expect(screen.getByLabelText('Slack user ID')).toHaveValue('');
+  expect(
+    await screen.findByRole('combobox', { name: 'Person to message' }),
+  ).toHaveTextContent('Choose a person');
 
-  await user.type(screen.getByLabelText('Slack user ID'), 'U1');
+  await chooseOption(user, 'Person to message', 'Ada');
   await chooseOption(user, 'Action', 'Post to channel');
 
   expect(
@@ -109,9 +119,11 @@ it('keeps the low participation default and clears a channel target when changin
   await chooseOption(user, 'Slack channel', '#design');
   await chooseOption(user, 'Action', 'Send direct message');
 
-  expect(screen.getByLabelText('Slack user ID')).toHaveValue('');
+  expect(
+    await screen.findByRole('combobox', { name: 'Person to message' }),
+  ).toHaveTextContent('Choose a person');
 
-  await user.type(screen.getByLabelText('Slack user ID'), 'U2');
+  await chooseOption(user, 'Person to message', 'Grace');
   await user.click(screen.getByRole('button', { name: 'Save rule' }));
 
   await waitFor(() =>

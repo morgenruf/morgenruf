@@ -184,7 +184,10 @@ describe('coffee chats', () => {
 
     view();
 
-    expect(await screen.findByText(/Missing: mpim:write/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/needs permission to start group messages/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/mpim:write/)).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Re-authorise Slack' }),
     ).toHaveAttribute('href', '/install');

@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from '@/common/components/ui/select';
 import { formatDate, plural } from '@/common/lib/format';
+import { describeScopes } from '@/common/lib/slack-scopes';
 
 import { Attendance } from './attendance';
 import { cadenceLabel } from './form-utils';
@@ -86,10 +87,12 @@ function ConnectGate({
         title="Coffee chats need more Slack access"
         description={
           <>
-            Morgenruf needs permission to open group messages and check for
-            replies.
+            Morgenruf needs permission to{' '}
+            {describeScopes(feature.missing_scopes)}.
             <br />
-            Missing: {feature.missing_scopes.join(', ')}
+            {isAdmin
+              ? 'Choose Re-authorise Slack and approve the request. Nothing else changes.'
+              : 'Ask a workspace administrator to reconnect Slack.'}
           </>
         }
         action={
