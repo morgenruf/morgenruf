@@ -3,6 +3,8 @@ import {
   CalendarCheck,
   ChevronDown,
   ChevronRight,
+  CircleCheck,
+  CircleX,
   Coffee,
   MessageCircle,
   TrendingUp,
@@ -319,10 +321,22 @@ export function Attendance({ programId }: { programId: number }) {
                                 {person.paired}
                               </td>
                               <td className="px-2 py-3 tabular-nums text-success">
-                                {person.met}
+                                <span className="inline-flex items-center gap-1">
+                                  <CircleCheck
+                                    className="size-3.5"
+                                    aria-hidden="true"
+                                  />
+                                  {person.met}
+                                </span>
                               </td>
                               <td className="px-2 py-3 tabular-nums text-warning">
-                                {person.missed}
+                                <span className="inline-flex items-center gap-1">
+                                  <CircleX
+                                    className="size-3.5"
+                                    aria-hidden="true"
+                                  />
+                                  {person.missed}
+                                </span>
                               </td>
                               <td className="px-2 py-3 tabular-nums text-muted-foreground">
                                 {person.no_reply}

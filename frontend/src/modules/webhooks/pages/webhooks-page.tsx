@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  CircleCheck,
+  CircleX,
   History,
   Pencil,
   Plus,
@@ -11,6 +13,7 @@ import {
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
+import { EmptyValue } from '@/common/components/empty-value';
 import {
   SkeletonRegion,
   SkeletonTable,
@@ -223,7 +226,23 @@ function WebhookCard({
                           <td
                             className={`p-2 ${delivery.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
                           >
-                            {delivery.status_code ?? 'No response'}
+                            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                              {delivery.ok ? (
+                                <CircleCheck
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <CircleX
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              {delivery.ok ? 'Delivered' : 'Failed'}
+                              <span className="text-muted-foreground">
+                                {delivery.status_code ?? 'No response'}
+                              </span>
+                            </span>
                           </td>
                           <td className="p-2">
                             {eventLabels[delivery.event_type] ??
@@ -238,7 +257,9 @@ function WebhookCard({
                           <td className="p-2">
                             {delivery.signed ? 'Signed' : 'Unsigned'}
                           </td>
-                          <td className="p-2">{delivery.error ?? '—'}</td>
+                          <td className="p-2">
+                            {delivery.error ?? <EmptyValue label="No error" />}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

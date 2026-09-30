@@ -428,7 +428,12 @@ export default function ReportsPage() {
                                   }
                                 />
                                 {row.mood && (
-                                  <Badge variant="secondary">{row.mood}</Badge>
+                                  <Badge variant="secondary">
+                                    <span className="text-muted-foreground">
+                                      Mood
+                                    </span>{' '}
+                                    {row.mood}
+                                  </Badge>
                                 )}
                                 {row.has_blockers && (
                                   <Badge variant="destructive">Blocked</Badge>
