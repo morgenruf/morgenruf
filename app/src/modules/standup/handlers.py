@@ -437,7 +437,7 @@ def _complete_standup(user_id: str, session, client) -> None:
     confirmation_text = (
         "✏️ *Standup updated!* Your edits have been saved."
         if is_edit
-        else "✅ *Standup submitted!* You can edit your responses within 30 minutes."
+        else f"✅ *Standup submitted!* {edit_rule_text(session.team_id)}"
     )
     # Block Kit confirmation with edit button
     client.chat_postMessage(
@@ -456,7 +456,7 @@ def _complete_standup(user_id: str, session, client) -> None:
                 "elements": [
                     {
                         "type": "button",
-                        "text": {"type": "plain_text", "text": "✏️ Edit responses"},
+                        "text": {"type": "plain_text", "text": "✏️ Edit my answers"},
                         "action_id": "standup_edit",
                         "value": str(standup_id) if standup_id else "0",
                         "style": "primary",
@@ -780,6 +780,35 @@ def fire_webhooks(team_id: str, event_type: str, payload: dict) -> None:
         deliver_webhook(hook, wanted, payload, team_id=team_id)
 
 
+def _edit_window_hours(team_id: str) -> int | None:
+    """Hours after sending that answers stay editable. None or 0 means no limit."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return (db.get_workspace_config(team_id) or {}).get("edit_window_hours", 4)
+    except Exception:
+        return 4
+
+
+def _hours(n: int) -> str:
+    return f"{n} hour{'s' if n != 1 else ''}"
+
+
+def edit_rule_text(team_id: str) -> str:
+    """The edit rule can_edit_response applies, in words."""
+    hours = _edit_window_hours(team_id)
+    if not hours:
+        return "You can change your answers any time."
+    return f"You can change your answers for {_hours(hours)} after you send them."
+
+
+def edit_closed_text(team_id: str) -> str:
+    hours = _edit_window_hours(team_id)
+    if not hours:
+        return "These answers can no longer be changed."
+    return f"These answers can no longer be changed. Answers stay editable for {_hours(hours)} after you send them."
+
+
 def can_edit_response(team_id: str, user_id: str, standup_id: int) -> bool:
     """Return True if the user is still within their edit window.
 
@@ -896,15 +925,16 @@ def register_handlers(app: App) -> None:
         all_other_standups: list[dict] = []
         standups: list[dict] = []
 
-        # Fetch user timezone and Slack admin status FIRST so is_admin is available below
+        # One rule for who manages standups, the same one the buttons check
+        # when pressed: a workspace admin or a standup admin.
         user_tz = ""
         try:
             user_info = client.users_info(user=user_id)
-            user_data = user_info.get("user", {})
-            user_tz = user_data.get("tz", "")
-            is_admin = user_data.get("is_admin", False) or user_data.get("is_owner", False)
+            user_tz = user_info.get("user", {}).get("tz", "")
         except Exception:
             pass
+        is_admin = may_manage_standups(team_id, user_id)
+        admin_contact = "" if is_admin else _admin_contact(team_id)
 
         try:
             import src.core.db as db  # noqa: PLC0415
@@ -953,6 +983,9 @@ def register_handlers(app: App) -> None:
                     "next_run": _schedule_next_run(s),
                     "is_participant": is_participant,
                     "user_responded_today": user_responded_today if is_participant else False,
+                    "user_last_response_id": (_last_response_for(user_today, s.get("id")) or {}).get("id")
+                    if is_participant
+                    else None,
                     "user_last_response_time": (
                         _local_clock(user_last_response["submitted_at"], user_tz or s.get("schedule_tz"))
                         if user_last_response and user_last_response.get("submitted_at")
@@ -981,6 +1014,7 @@ def register_handlers(app: App) -> None:
             user_tz=user_tz,
             is_admin=is_admin,
             other_standups=all_other_standups if is_admin else [],
+            admin_contact=admin_contact,
         )
 
         # Other active modules add their own sections. Core reads the registry
@@ -1122,16 +1156,20 @@ def register_handlers(app: App) -> None:
         """Acknowledge dashboard link button (URL buttons still need ack)."""
         ack()
 
+    @app.action("open_support")
+    def handle_open_support(ack):  # noqa: ANN001
+        """Acknowledge the support link button (URL buttons still need ack)."""
+        ack()
+
     @app.action("open_configure_mode")
     def handle_open_configure_mode(ack, body, client):  # noqa: ANN001
-        """Switch App Home to configuration mode (admin only)."""
+        """Switch App Home to settings mode (standup admins only)."""
         ack()
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
 
-        import src.core.db as _db  # noqa: PLC0415
-
-        if _db.get_member_role(team_id, user_id) != "admin":
+        if not may_manage_standups(team_id, user_id):
+            _refuse_standup_change(client, user_id)
             return
         _configure_mode_users.add(f"{team_id}:{user_id}")
         _publish_configure_view(team_id, user_id, client)
@@ -1747,20 +1785,24 @@ def register_handlers(app: App) -> None:
 
     @app.action("standup_edit")
     def handle_standup_edit(ack, body, say, client):  # noqa: ANN001
-        """Handle 'Edit my standup' button — re-open DM session for edits."""
+        """Handle 'Edit my answers': reopen the DM session for edits.
+
+        The button sits on the DM confirmation, the channel summary and App
+        Home. App Home has no channel for say(), so replies go to the DM.
+        """
         ack()
         user_id: str = body["user"]["id"]
-        team_id: str = body.get("team", {}).get("id", "")
+        team_id: str = body.get("team", {}).get("id", "") or body["user"].get("team_id", "")
         standup_id_str: str = body.get("actions", [{}])[0].get("value", "")
 
         try:
             standup_id = int(standup_id_str)
         except (ValueError, TypeError):
-            say("⚠️ Could not identify your standup. Please try again.")
+            _say_once(client, user_id, "⚠️ I couldn't find that standup. Please try again.")
             return
 
         if not can_edit_response(team_id, user_id, standup_id):
-            say("⏰ Sorry, the edit window for your standup has closed.")
+            _say_once(client, user_id, "⏰ " + edit_closed_text(team_id))
             return
 
         cache_key = f"{team_id}:{user_id}"
@@ -2060,6 +2102,24 @@ def may_manage_standups(team_id: str, user_id: str) -> bool:
     except Exception as exc:
         logger.warning("Could not check standup admin for %s: %s", user_id, exc)
         return False
+
+
+def _admin_contact(team_id: str) -> str:
+    """Someone to ask about standups: the installer, when we know who that is."""
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return (db.get_installation(team_id) or {}).get("installed_by_user_id") or ""
+    except Exception:
+        return ""
+
+
+def _last_response_for(rows: list[dict], schedule_id) -> dict | None:  # noqa: ANN001
+    """Today's latest answer for this schedule, or the latest one at all."""
+    if not rows:
+        return None
+    own = [r for r in rows if schedule_id and r.get("schedule_id") == schedule_id]
+    return (own or rows)[-1]
 
 
 def _refuse_standup_change(client, user_id: str) -> None:  # noqa: ANN001

@@ -733,7 +733,7 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
         "callback_id": "create_standup_modal",
         "title": {
             "type": "plain_text",
-            "text": "Edit standup" if is_edit else "Create a standup",
+            "text": "Standup settings" if is_edit else "Create a standup",
         },
         "submit": {"type": "plain_text", "text": "Save" if is_edit else "Create"},
         "close": {"type": "plain_text", "text": "Cancel"},
@@ -1073,11 +1073,19 @@ def app_home_view(
     user_tz: str = "",
     is_admin: bool = False,
     other_standups: list[dict] | None = None,
+    admin_contact: str = "",
 ) -> dict:
-    """App Home tab — rich standup cards matching Standup & Prosper quality."""
+    """App Home tab: rich standup cards.
+
+    ``is_admin`` means this person may manage standups (workspace admin or
+    standup admin). ``admin_contact`` is a user id to point everyone else at
+    when there is nothing for them yet.
+    """
     from datetime import datetime
 
     import pytz as _pytz
+
+    from src.core.links import dashboard_url, support_url
 
     # Compute local time string for the user
     local_time_str = ""
@@ -1106,7 +1114,7 @@ def app_home_view(
         },
     ]
 
-    # Top action bar — I'm away, Configure (admin only), Get support, Help
+    # Top action bar: I'm away, Configure (standup admins only), Get support, Help
     configure_btn = {
         "type": "button",
         "action_id": "open_configure_mode",
@@ -1125,8 +1133,14 @@ def app_home_view(
             {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
-                "url": "https://api.morgenruf.dev/dashboard",
+                "text": {"type": "plain_text", "text": "📊 Dashboard", "emoji": True},
+                "url": dashboard_url(),
+            },
+            {
+                "type": "button",
+                "action_id": "open_support",
+                "text": {"type": "plain_text", "text": "💬 Get support", "emoji": True},
+                "url": support_url(),
             },
             {
                 "type": "button",
@@ -1147,8 +1161,14 @@ def app_home_view(
             {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "📊 Get support", "emoji": True},
-                "url": "https://api.morgenruf.dev/dashboard",
+                "text": {"type": "plain_text", "text": "📊 Dashboard", "emoji": True},
+                "url": dashboard_url(),
+            },
+            {
+                "type": "button",
+                "action_id": "open_support",
+                "text": {"type": "plain_text", "text": "💬 Get support", "emoji": True},
+                "url": support_url(),
             },
             {
                 "type": "button",
@@ -1198,7 +1218,7 @@ def app_home_view(
     blocks.append({"type": "divider"})
 
     # Standups section
-    if not standups:
+    if not standups and is_admin:
         blocks.append(
             {
                 "type": "section",
@@ -1206,9 +1226,8 @@ def app_home_view(
                     "type": "mrkdwn",
                     "text": (
                         "*You are not in a standup.*\nAdd yourself to one below, or create a new one."
-                        if (is_admin and other_standups)
-                        else "*No standups yet.*\n"
-                        "Create your first standup to get started, or ask your team admin to add you."
+                        if other_standups
+                        else "*No standups yet.*\nCreate your first standup to get started. It takes a minute."
                     ),
                 },
                 "accessory": {
@@ -1218,6 +1237,14 @@ def app_home_view(
                     "style": "primary",
                     "value": "create",
                 },
+            }
+        )
+    elif not standups:
+        who = f"<@{admin_contact}>" if admin_contact else "a workspace admin"
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*You are not in a standup yet.*\nAsk {who} to add you."},
             }
         )
     else:
@@ -1286,17 +1313,19 @@ def app_home_view(
                 }
             )
 
-            # Action buttons — context-aware
+            # Action buttons, depending on what the person has done today
             actions = []
+            last_id = standup.get("user_last_response_id")
             if active and responded_today:
-                actions.append(
-                    {
-                        "type": "button",
-                        "action_id": "start_standup_now",
-                        "text": {"type": "plain_text", "text": "🔄 Edit standup", "emoji": True},
-                        "value": str(standup_id),
-                    }
-                )
+                if last_id:
+                    actions.append(
+                        {
+                            "type": "button",
+                            "action_id": "standup_edit",
+                            "text": {"type": "plain_text", "text": "✏️ Edit my answers", "emoji": True},
+                            "value": str(last_id),
+                        }
+                    )
             elif active:
                 actions.append(
                     {
@@ -1403,11 +1432,13 @@ def app_home_configure_view(
     user_id: str,
     workspace_name: str = "",
 ) -> dict:
-    """App Home tab — Standup Configuration mode matching competitor."""
+    """App Home tab in settings mode, for people who may manage standups."""
+    from src.core.links import dashboard_url
+
     blocks: list[dict] = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "⚙️ Standup Configuration", "emoji": True},
+            "text": {"type": "plain_text", "text": "⚙️ Standup settings", "emoji": True},
         },
         {
             "type": "actions",
@@ -1415,7 +1446,7 @@ def app_home_configure_view(
                 {
                     "type": "button",
                     "action_id": "close_configure_mode",
-                    "text": {"type": "plain_text", "text": "x Close Configuration"},
+                    "text": {"type": "plain_text", "text": "Close settings"},
                     "value": "close",
                 },
             ],
@@ -1437,16 +1468,15 @@ def app_home_configure_view(
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    "Don't see the standup you are looking for? That means you "
-                    "probably are not a part of it. You can easily join an existing "
-                    "standup and edit it in the <https://api.morgenruf.dev/dashboard|Standup Portal>. 👉"
+                    "Don't see the standup you are looking for? You are probably not in it. "
+                    f"Join an existing standup and edit it in the <{dashboard_url()}|Dashboard>. 👉"
                 ),
             },
             "accessory": {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "Go to Standup Portal 🔗", "emoji": True},
-                "url": "https://api.morgenruf.dev/dashboard",
+                "text": {"type": "plain_text", "text": "Open the Dashboard 🔗", "emoji": True},
+                "url": dashboard_url(),
             },
         },
         {"type": "divider"},
@@ -1530,7 +1560,7 @@ def app_home_configure_view(
                     "type": "button",
                     "action_id": "open_dashboard",
                     "text": {"type": "plain_text", "text": "Details 🔗", "emoji": True},
-                    "url": "https://api.morgenruf.dev/dashboard",
+                    "url": dashboard_url(),
                 }
             )
             row.append(
