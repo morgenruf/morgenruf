@@ -27,11 +27,17 @@ def _serializer():
     return URLSafeTimedSerializer(current_app.secret_key, salt=_SALT)
 
 
-def mint_link_token(team_id: str, user_id: str) -> str:
-    return _serializer().dumps({"t": team_id, "u": user_id})
+_NONCE_KEY = "zoom_oauth_nonce"
 
 
-def read_link_token(token: str) -> tuple[str, str] | None:
+def mint_link_token(team_id: str, user_id: str, nonce: str = "") -> str:
+    data = {"t": team_id, "u": user_id}
+    if nonce:
+        data["n"] = nonce
+    return _serializer().dumps(data)
+
+
+def _load(token: str) -> dict | None:
     from itsdangerous import BadSignature, SignatureExpired  # noqa: PLC0415
 
     try:
@@ -42,8 +48,31 @@ def read_link_token(token: str) -> tuple[str, str] | None:
     except BadSignature:
         logger.warning("zoom: link token rejected")
         return None
-    team_id, user_id = data.get("t"), data.get("u")
-    return (team_id, user_id) if team_id and user_id else None
+    return data if isinstance(data, dict) and data.get("t") and data.get("u") else None
+
+
+def read_link_token(token: str) -> tuple[str, str] | None:
+    data = _load(token)
+    return (data["t"], data["u"]) if data else None
+
+
+def read_callback_state(state: str) -> tuple[str, str] | None:
+    """Who came back, only if this browser started the flow and has not
+    finished it already.
+
+    A signed state alone could be replayed, or completed in another browser
+    with an attacker's code, linking their Zoom account to the victim. The
+    nonce is kept in this browser's session and popped, so it works once.
+    """
+    import hmac  # noqa: PLC0415
+
+    from flask import session  # noqa: PLC0415
+
+    expected = session.pop(_NONCE_KEY, None)
+    data = _load(state)
+    if not data or not expected or not hmac.compare_digest(str(data.get("n") or ""), expected):
+        return None
+    return data["t"], data["u"]
 
 
 def _result(status: str):
@@ -67,18 +96,27 @@ def register_zoom_routes(bp) -> None:
             return _result("expired")
         team_id, user_id = who
         # The state is signed the same way, so the callback can trust who came
-        # back without keeping server-side state for a redirect that may never
-        # return.
-        return redirect(zoom.authorize_url(mint_link_token(team_id, user_id)))
+        # back, and carries a nonce held in this browser's session so it can
+        # only be completed here, once.
+        import secrets  # noqa: PLC0415
+
+        from flask import session  # noqa: PLC0415
+
+        nonce = secrets.token_urlsafe(16)
+        session[_NONCE_KEY] = nonce
+        return redirect(zoom.authorize_url(mint_link_token(team_id, user_id, nonce)))
 
     @bp.route("/connect/zoom/callback")
     def zoom_callback():  # noqa: ANN202
         import src.modules.connect.db as cdb
 
         if request.args.get("error"):
+            from flask import session  # noqa: PLC0415
+
+            session.pop(_NONCE_KEY, None)
             return _result("denied")
 
-        who = read_link_token(request.args.get("state", ""))
+        who = read_callback_state(request.args.get("state", ""))
         code = request.args.get("code", "")
         if not who or not code:
             return _result("invalid")
