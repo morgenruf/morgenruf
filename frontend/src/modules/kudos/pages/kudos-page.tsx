@@ -135,9 +135,13 @@ export default function KudosPage() {
               /kudos
             </code>
             . The person you thank gets a DM, and it is shared in your kudos
-            channel when one is set. Everyone has{' '}
-            {config.data?.daily_allowance ?? '…'} to give per day; unused kudos
-            reset at midnight in each person’s timezone.
+            channel when one is set.{' '}
+            {config.isPending
+              ? 'Everyone has a daily allowance to give'
+              : config.isError
+                ? 'Everyone has a daily allowance to give (the exact number could not be loaded)'
+                : `Everyone has ${config.data.daily_allowance} to give per day`}
+            ; unused kudos reset at midnight in each person’s timezone.
           </CardDescription>
         </CardHeader>
       </Card>

@@ -11,7 +11,6 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import type { Api } from '@/common/api/client';
-import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
@@ -222,8 +221,6 @@ export function SettingsPage() {
                                     toast.success(
                                       `${featureNames[item.name] ?? item.name} ${enabled ? 'enabled' : 'disabled'}`,
                                     ),
-                                  onError: (error) =>
-                                    toast.error(errorMessage(error)),
                                 },
                               )
                             }
@@ -368,8 +365,6 @@ export function SettingsPage() {
                                       ? 'Public feed enabled'
                                       : 'Public feed disabled',
                                   ),
-                                onError: (error) =>
-                                  toast.error(errorMessage(error)),
                               })
                             }
                           />
@@ -417,12 +412,7 @@ export function SettingsPage() {
                       {first.feed_public && !feedUrl && isAdmin && (
                         <Button
                           disabled={feed.isPending}
-                          onClick={() =>
-                            feed.mutate(true, {
-                              onError: (error) =>
-                                toast.error(errorMessage(error)),
-                            })
-                          }
+                          onClick={() => feed.mutate(true)}
                         >
                           Generate feed URL
                         </Button>

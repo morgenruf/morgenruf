@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
@@ -121,7 +120,6 @@ function ConnectGate({
               onClick={() =>
                 enable.mutate(undefined, {
                   onSuccess: () => toast.success('Coffee chats enabled'),
-                  onError: (error) => toast.error(errorMessage(error)),
                 })
               }
             >
@@ -137,7 +135,7 @@ function ConnectGate({
 
 function ProgramActions({ program }: { program: Program }) {
   const { canAdminister } = usePermissions();
-  const { save, remove, run } = useConnectMutations();
+  const { setEnabled, remove, run } = useConnectMutations();
   const navigate = useNavigate();
 
   const [runOpen, setRunOpen] = useState(false);
@@ -181,7 +179,6 @@ function ProgramActions({ program }: { program: Program }) {
                     setRunOpen(false);
                     toast.success('Introductions sent');
                   },
-                  onError: (error) => toast.error(errorMessage(error)),
                 })
               }
             >
@@ -194,10 +191,10 @@ function ProgramActions({ program }: { program: Program }) {
       <Button
         size="sm"
         variant="outline"
-        disabled={save.isPending}
+        disabled={setEnabled.isPending}
         onClick={() =>
-          save.mutate(
-            { id: program.id, body: { enabled: !program.enabled } },
+          setEnabled.mutate(
+            { id: program.id, enabled: !program.enabled },
             {
               onSuccess: () =>
                 toast.success(
@@ -205,7 +202,6 @@ function ProgramActions({ program }: { program: Program }) {
                     ? 'Introductions paused'
                     : 'Introductions resumed',
                 ),
-              onError: (error) => toast.error(errorMessage(error)),
             },
           )
         }
@@ -227,7 +223,6 @@ function ProgramActions({ program }: { program: Program }) {
                 toast.success('Coffee chat deleted');
                 void navigate({ to: '/dashboard/connect' });
               },
-              onError: (error) => toast.error(errorMessage(error)),
             });
         }}
       >

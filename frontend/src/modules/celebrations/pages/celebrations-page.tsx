@@ -113,7 +113,16 @@ function StatusCard() {
   const { feature, modules } = useCelebrationsModule();
   const { settings, enable, isAdmin, canEdit } = useCelebrations();
 
-  if (modules.isPending || !feature) return null;
+  if (modules.isPending) return null;
+
+  // Without the module list the page cannot say whether Celebrations is on;
+  // say so rather than show nothing.
+  if (modules.isError)
+    return (
+      <ErrorState error={modules.error} retry={() => void modules.refetch()} />
+    );
+
+  if (!feature) return null;
 
   if (feature.active)
     return settings.data && !settings.data.can_react ? (
@@ -149,7 +158,6 @@ function StatusCard() {
             onClick={() =>
               enable.mutate(undefined, {
                 onSuccess: () => toast.success('Celebrations are on'),
-                onError: (error) => toast.error(errorMessage(error)),
               })
             }
           >
@@ -510,12 +518,7 @@ function HolidaysCard() {
                       variant="ghost"
                       aria-label={`Remove ${holiday.name}`}
                       disabled={removeHoliday.isPending}
-                      onClick={() =>
-                        removeHoliday.mutate(holiday.date, {
-                          onError: (failure) =>
-                            toast.error(errorMessage(failure)),
-                        })
-                      }
+                      onClick={() => removeHoliday.mutate(holiday.date)}
                     >
                       <Trash />
                     </Button>

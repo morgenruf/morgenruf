@@ -10,7 +10,6 @@ import { useNavigate } from '@tanstack/react-router';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { errorMessage } from '@/common/api/errors';
 import { usePermissions } from '@/common/auth/use-session';
 import { ChannelInviteHint } from '@/common/components/channel-invite-hint';
 import {
@@ -216,8 +215,6 @@ function ProgramMembers({ programId }: { programId: number }) {
                               {
                                 onSuccess: () =>
                                   toast.success('Participation updated'),
-                                onError: (error) =>
-                                  toast.error(errorMessage(error)),
                               },
                             )
                           }

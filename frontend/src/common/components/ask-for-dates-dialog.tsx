@@ -131,7 +131,6 @@ export function AskForDatesDialog({
                   toast.success(`Asking ${people(data.count)} for their dates`);
                   onOpenChange(false);
                 },
-                onError: (error) => toast.error(errorMessage(error)),
               })
             }
           >

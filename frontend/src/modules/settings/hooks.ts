@@ -48,6 +48,8 @@ export function useSettingsMutations() {
   });
 
   const digest = useMutation({
+    // The form shows this error inline; skip the global toast.
+    meta: { silent: true },
     mutationFn: ({
       id,
       body,

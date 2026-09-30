@@ -123,10 +123,10 @@ export function StandupRow({
   editable: boolean;
   onEdit: () => void;
 }) {
-  const { save, remove } = useStandupMutations();
+  const { setActive, remove } = useStandupMutations();
   const [deleting, setDeleting] = useState(false);
   const menuTrigger = useRef<HTMLButtonElement>(null);
-  const busy = save.isPending || remove.isPending;
+  const busy = setActive.isPending || remove.isPending;
   const nextRun = standup.active
     ? nextRunLabel(standup.next_run, standup.schedule_tz)
     : null;
@@ -217,10 +217,10 @@ export function StandupRow({
                 <DropdownMenuItem
                   disabled={busy}
                   onClick={() =>
-                    save.mutate(
-                      { id: standup.id, body: { active: !standup.active } },
-                      { onError: (error) => toast.error(errorMessage(error)) },
-                    )
+                    setActive.mutate({
+                      id: standup.id,
+                      active: !standup.active,
+                    })
                   }
                 >
                   {standup.active ? <Pause /> : <Play />}
