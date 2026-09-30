@@ -2065,12 +2065,18 @@ def get_member_role(team_id: str, user_id: str) -> str:
 
     The installer is the safe choice for this: they hold the Slack side of the
     relationship already, and it grants nothing to anyone else.
+
+    Only while they are still here, though. A person deactivated in Slack is
+    a member, whatever their row or the installation says, so leaving the
+    company ends their admin rights with everything else.
     """
-    sql = "SELECT role FROM members WHERE team_id = %s AND user_id = %s"
+    sql = "SELECT role, active FROM members WHERE team_id = %s AND user_id = %s"
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (team_id, user_id))
             row = cur.fetchone()
+            if row and row[1] is False:
+                return "member"
             role = (row[0] if row else None) or "member"
             if role == "admin":
                 return role
@@ -2079,6 +2085,27 @@ def get_member_role(team_id: str, user_id: str) -> str:
     if inst and inst[0] and user_id and inst[0] == user_id:
         return "admin"
     return role
+
+
+def session_member_active(team_id: str, user_id: str) -> bool:
+    """Whether a dashboard session for this person should still work.
+
+    The installation has to be active and the person must not have been
+    deactivated. A person with no members row yet (the roster sync has not
+    reached them) is let through: departures always leave a row behind,
+    because rows are never deleted, only flagged.
+    """
+    sql = """
+        SELECT COALESCE(i.active, TRUE), m.active
+        FROM installations i
+        LEFT JOIN members m ON m.team_id = i.team_id AND m.user_id = %s
+        WHERE i.team_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id, team_id))
+            row = cur.fetchone()
+    return bool(row and row[0] and row[1] is not False)
 
 
 def set_member_role(team_id: str, user_id: str, role: str) -> None:
@@ -2162,18 +2189,22 @@ import hashlib as _hashlib
 import secrets as _secrets
 
 
-def generate_mcp_key(team_id: str, name: str = "Default") -> str:
-    """Generate a new MCP API key, store its hash, return the full key."""
+def generate_mcp_key(team_id: str, name: str = "Default", created_by: str | None = None) -> str:
+    """Generate a new MCP API key, store its hash, return the full key.
+
+    created_by ties the key to the admin who made it, so it stops working
+    when they leave or stop being an admin (see verify_mcp_key).
+    """
     key = "mrn_" + _secrets.token_urlsafe(32)
     key_hash = _hashlib.sha256(key.encode()).hexdigest()
     key_prefix = key[:12]
     sql = """
-        INSERT INTO mcp_api_keys (team_id, key_hash, key_prefix, name)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO mcp_api_keys (team_id, key_hash, key_prefix, name, created_by)
+        VALUES (%s, %s, %s, %s, %s)
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (team_id, key_hash, key_prefix, name))
+            cur.execute(sql, (team_id, key_hash, key_prefix, name, created_by))
     logger.info("Generated MCP key %s... for team %s", key_prefix, team_id)
     return key
 
@@ -2201,18 +2232,36 @@ def revoke_mcp_key(key_id: int, team_id: str) -> None:
 
 
 def verify_mcp_key(key: str) -> str | None:
-    """Verify an API key, update last_used_at, return team_id or None."""
+    """Verify an API key, update last_used_at, return team_id or None.
+
+    A key is only as good as the admin who made it: once they are deactivated
+    or no longer a workspace admin, it is treated as revoked. Keys from before
+    the creator was recorded have none and keep working until revoked by hand.
+    Nothing is written for a key that fails, so guessing costs one read.
+    """
+    if not key:
+        return None
     key_hash = _hashlib.sha256(key.encode()).hexdigest()
     sql = """
-        UPDATE mcp_api_keys SET last_used_at = NOW()
-        WHERE key_hash = %s AND active = TRUE
-        RETURNING team_id
+        SELECT k.id, k.team_id, k.created_by
+        FROM mcp_api_keys k
+        JOIN installations i ON i.team_id = k.team_id
+        WHERE k.key_hash = %s AND k.active = TRUE AND COALESCE(i.active, TRUE)
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (key_hash,))
             row = cur.fetchone()
-    return row[0] if row else None
+    if not row:
+        return None
+    key_id, team_id, created_by = row
+    if created_by and get_member_role(team_id, created_by) != "admin":
+        logger.info("MCP key %s refused: its creator is no longer an active admin", key_id)
+        return None
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE mcp_api_keys SET last_used_at = NOW() WHERE id = %s", (key_id,))
+    return team_id
 
 
 def delete_installation(team_id: str) -> bool:

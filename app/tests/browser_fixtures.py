@@ -308,7 +308,7 @@ class BrowserData:
             fields["events"] = events
         return self.update(self.hooks, row_id, **fields)
 
-    def create_key(self, team_id, name):
+    def create_key(self, team_id, name, created_by=None):
         key_id = max((k["id"] for k in self.keys), default=0) + 1
         self.keys.append(
             {
@@ -463,6 +463,9 @@ def create_test_app(patcher=None):
             "get_workspace_config": lambda team: deepcopy(state.workspace),
             "upsert_workspace_config": lambda team, **fields: state.workspace.update(fields),
             "get_member_role": lambda team, user: state.roles.get(user, "member"),
+            "session_member_active": lambda team, user: any(
+                m["user_id"] == user and m.get("active", True) for m in state.members
+            ),
             "can_administer": lambda team, user, module=None: (
                 state.roles.get(user) == "admin" or (module is not None and module in state.grants.get(user, set()))
             ),

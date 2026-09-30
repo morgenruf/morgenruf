@@ -53,6 +53,40 @@ def _is_safe_webhook_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+# How often a session is checked against the roster. Each check also re-signs
+# the cookie, which is what makes PERMANENT_SESSION_LIFETIME a sliding window.
+_ACTIVE_CHECK_SECONDS = 60
+
+
+def _session_revoked():
+    """A response ending the session if its person or workspace is gone, else None.
+
+    A signed cookie outlives the job it was issued for: someone deactivated in
+    Slack, or a workspace that removed the app, kept dashboard access until
+    the cookie expired.
+    """
+    import time  # noqa: PLC0415
+
+    now = int(time.time())
+    try:
+        if now - int(session.get("active_checked_at") or 0) < _ACTIVE_CHECK_SECONDS:
+            return None
+    except (TypeError, ValueError):
+        pass
+    try:
+        active = db.session_member_active(session.get("team_id") or "", session.get("user_id") or "")
+    except Exception as exc:
+        logger.warning("session check DB error: %s", exc)
+        return jsonify({"error": "Service unavailable"}), 503
+    if not active:
+        session.clear()
+        if request.path.startswith("/dashboard/api/"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return redirect("/dashboard/login")
+    session["active_checked_at"] = now
+    return None
+
+
 def _login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -60,6 +94,9 @@ def _login_required(f):
             if request.path.startswith("/dashboard/api/"):
                 return jsonify({"error": "Unauthorized"}), 401
             return redirect("/dashboard/login")
+        revoked = _session_revoked()
+        if revoked is not None:
+            return revoked
         return f(*args, **kwargs)
 
     return wrapper
@@ -100,6 +137,9 @@ def _admin_required(arg=None):
             user_id = session.get("user_id")
             if not team_id:
                 return jsonify({"error": "Unauthorized"}), 401
+            revoked = _session_revoked()
+            if revoked is not None:
+                return revoked
             try:
                 if not db.can_administer(team_id, user_id or "", module):
                     return jsonify({"error": "Admin required" if module is None else _no_grant_message(module)}), 403
@@ -1858,7 +1898,7 @@ def api_get_mcp_keys():
 def api_create_mcp_key(data):
     team_id = session["team_id"]
     name = data.get("name", "Default")
-    key = db.generate_mcp_key(team_id, name)
+    key = db.generate_mcp_key(team_id, name, created_by=session.get("user_id") or None)
     return {"key": key, "message": "Save this key — it won't be shown again!"}
 
 
