@@ -60,8 +60,8 @@ def _remaining_note(state) -> str:
     if state.get("allowance", 0) <= 0:
         return ""
     if left == 0:
-        return f"That was your last {emoji} for today. A fresh set arrives at midnight."
-    return f"{left} {emoji} left today."
+        return f"That was your last kudos {emoji} for today. A fresh set arrives at midnight."
+    return f"{left} kudos {emoji} left today."
 
 
 def _context(*lines: str) -> list[dict]:
@@ -88,8 +88,8 @@ def kudos_card(from_user: str, to_user: str, message: str, emoji: str | None = N
         from src.modules.kudos.db import DEFAULT_EMOJI  # noqa: PLC0415
 
         emoji = DEFAULT_EMOJI
-    headline = f"{emoji} *<@{to_user}>* got a {emoji} from <@{from_user}>"
-    text = f"{emoji} <@{from_user}> gave <@{to_user}> a {emoji}"
+    headline = f"{emoji} *<@{to_user}>* got kudos from <@{from_user}>"
+    text = f"{emoji} <@{from_user}> gave <@{to_user}> kudos"
 
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": headline}},
@@ -173,9 +173,9 @@ def recipient_card(from_user: str, message: str, emoji: str) -> tuple[str, list[
     Written to them rather than about them, with the reason quoted as the
     giver wrote it. The giver's remaining allowance is theirs, not shown here.
     """
-    text = f"{emoji} <@{from_user}> sent you a {emoji}"
+    text = f"{emoji} <@{from_user}> sent you kudos"
     blocks = [
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"{emoji} *<@{from_user}>* sent you a {emoji}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"{emoji} *<@{from_user}>* sent you kudos"}},
         {"type": "section", "text": {"type": "mrkdwn", "text": _quote(message)}},
         *_context("Pass one on with `kudos @someone` and a reason, or `/kudos`"),
     ]
