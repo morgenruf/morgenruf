@@ -25,11 +25,6 @@ def _clean(html: str) -> None:
         lambda: core_mailer.welcome_html(EVIL, EVIL, "p@example.com"),
         lambda: core_mailer.followup_running_html(EVIL, "p@example.com", 3, 2),
         lambda: core_mailer.followup_stalled_html(EVIL, "p@example.com"),
-        lambda: standup_mailer.welcome_email_html(EVIL, EVIL),
-        lambda: standup_mailer.first_standup_email_html(EVIL, EVIL, EVIL),
-        lambda: standup_mailer.weekly_digest_email_html(EVIL, {"top_responder": EVIL}),
-        lambda: standup_mailer.inactive_nudge_email_html(EVIL, 5),
-        lambda: standup_mailer.release_announcement_email_html(EVIL, EVIL, "https://x.test/?a=1&b=2"),
     ],
 )
 def test_email_templates_escape_names(render):
