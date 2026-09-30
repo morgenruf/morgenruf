@@ -367,7 +367,9 @@ function ProgramList() {
 
         {zoom.data?.configured && (
           <p className="text-xs text-muted-foreground">
-            {zoom.data.linked} people have linked Zoom
+            {zoom.data.linked === 1
+              ? '1 person has linked Zoom'
+              : `${zoom.data.linked} people have linked Zoom`}
             {zoom.data.needs_reconnect
               ? ` · ${zoom.data.needs_reconnect} need to reconnect`
               : ''}

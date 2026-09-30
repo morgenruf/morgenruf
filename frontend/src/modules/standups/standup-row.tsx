@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@/common/components/ui/dropdown-menu';
 import { Skeleton } from '@/common/components/ui/skeleton';
+import { plural } from '@/common/lib/format';
 import {
   enoughToJudge,
   rateLevel,
@@ -160,7 +161,7 @@ export function StandupRow({
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Users className="size-3.5 shrink-0" aria-hidden="true" />
             {standup.participants?.length
-              ? `${standup.participants.length} participant${standup.participants.length === 1 ? '' : 's'}`
+              ? plural(standup.participants.length, 'participant')
               : 'Everyone in the channel'}
           </p>
         </div>

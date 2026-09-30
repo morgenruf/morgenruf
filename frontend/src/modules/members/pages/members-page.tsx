@@ -35,6 +35,7 @@ import {
 } from '@/common/components/ui/select';
 import { Skeleton } from '@/common/components/ui/skeleton';
 import { useConfirm } from '@/common/hooks/use-confirm';
+import { plural } from '@/common/lib/format';
 import { hasDates, profileFacts } from '@/common/lib/profile';
 
 import { useMembers } from '../hooks';
@@ -351,7 +352,7 @@ export default function MembersPage() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              {filtered.length} of {all.length} members ·{' '}
+              {filtered.length} of {plural(all.length, 'member')} ·{' '}
               {all.filter((member) => member.tracked !== false).length} in
               Morgenruf. People not tracked by Morgenruf do not appear in
               participation figures.
@@ -453,7 +454,7 @@ export default function MembersPage() {
                             ) : (
                               <p>
                                 {count
-                                  ? `${count} standup${count === 1 ? '' : 's'}`
+                                  ? plural(count, 'standup')
                                   : member.tracked === false
                                     ? 'Not in Morgenruf'
                                     : 'No standups'}

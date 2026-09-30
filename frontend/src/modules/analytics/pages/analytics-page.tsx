@@ -422,7 +422,9 @@ export default function AnalyticsPage() {
 
                   {!includeUnenrolled && view.unenrolled.length > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      {view.unenrolled.length} members in no standup are hidden.
+                      {view.unenrolled.length === 1
+                        ? '1 member in no standup is hidden.'
+                        : `${view.unenrolled.length} members in no standup are hidden.`}
                       Turn on “Include unenrolled” to show them.
                     </p>
                   )}

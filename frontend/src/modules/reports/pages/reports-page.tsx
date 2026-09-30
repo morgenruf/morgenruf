@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/common/components/ui/table';
-import { formatDate, formatTime } from '@/common/lib/format';
+import { formatDate, formatTime, plural } from '@/common/lib/format';
 
 import { exportReports, useReports } from '../hooks';
 import { ReportsSkeleton } from '../loading';
@@ -292,7 +292,7 @@ export default function ReportsPage() {
                   <CardHeader>
                     <CardTitle>Participation</CardTitle>
                     <CardDescription>
-                      {reports.data.total_days} days in this window
+                      {plural(reports.data.total_days, 'day')} in this window
                     </CardDescription>
                   </CardHeader>
                   <CardContent>

@@ -27,7 +27,7 @@ import { Input } from '@/common/components/ui/input';
 import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
 import { useConfirm } from '@/common/hooks/use-confirm';
-import { formatDateTime, formatWeekdays } from '@/common/lib/format';
+import { formatDateTime, formatWeekdays, plural } from '@/common/lib/format';
 
 import { useSettings, useSettingsMutations } from './hooks';
 import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
@@ -302,7 +302,7 @@ export function SettingsPage() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {first.participants.length
-                    ? `${first.participants.length} participants`
+                    ? plural(first.participants.length, 'participant')
                     : 'Everyone in the channel'}
                 </p>
                 {first.registration_error ? (

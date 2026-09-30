@@ -29,6 +29,7 @@ import {
   TableRow,
 } from '@/common/components/ui/table';
 import { Textarea } from '@/common/components/ui/textarea';
+import { plural } from '@/common/lib/format';
 import { birthdayLabel } from '@/common/lib/profile';
 
 export function EditProfileDialog({
@@ -126,9 +127,7 @@ export function ImportDatesDialog({
       const { data } = await run({ csv, preview: !write, overwrite });
 
       if (write) {
-        toast.success(
-          `Saved dates for ${data.written} member${data.written === 1 ? '' : 's'}`,
-        );
+        toast.success(`Saved dates for ${plural(data.written, 'member')}`);
         reset();
         onOpenChange(false);
       } else setPreview(data);
@@ -289,7 +288,7 @@ export function ImportDatesDialog({
           >
             {pending && preview
               ? 'Saving…'
-              : `Save ${preview?.ready ?? 0} member${preview?.ready === 1 ? '' : 's'}`}
+              : `Save ${plural(preview?.ready ?? 0, 'member')}`}
           </Button>
         </DialogFooter>
       </DialogContent>

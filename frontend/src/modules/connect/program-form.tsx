@@ -934,8 +934,9 @@ export function ProgramForm({ program }: { program?: Program }) {
                       ) : resources.zoom.data?.configured ? (
                         <>
                           <p>
-                            {resources.zoom.data.linked} people have linked
-                            Zoom.
+                            {resources.zoom.data.linked === 1
+                              ? '1 person has linked Zoom.'
+                              : `${resources.zoom.data.linked} people have linked Zoom.`}
                           </p>
                           {resources.zoom.data.needs_reconnect > 0 && (
                             <p className="mt-1 text-amber-600">
