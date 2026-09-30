@@ -5,6 +5,26 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.6] - 2026-09-29
+
+### Fixed
+- **Zoom meetings are booked only for the time a pair agrees.** A first tap on
+  an offered time created the meeting, so if the pair then settled on another
+  time (a suggested one, say), the meeting stayed at the first.
+- **Standups are no longer delayed by long background work.** Coffee chat
+  delivery, member sync and the other background jobs run on their own
+  threads, so a standup cannot be dropped as missed while they run.
+- **Two pods starting together no longer race on migrations.**
+
+### Changed
+- `LOG_FORMAT=json` writes one JSON object per log line, including gunicorn's
+  access and error logs. The chart sets it by default.
+- Helm chart 0.14.0: a startup probe, seccomp, a read-only root filesystem
+  (toggle `readOnlyRootFilesystem`), image digest pinning, and an optional
+  PodDisruptionBudget for more than one replica.
+- The image scan now fails the build on fixable critical or high findings.
+- An operator runbook, `RUNBOOK.md`.
+
 ## [1.9.5] - 2026-09-29
 
 ### Security
