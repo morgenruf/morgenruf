@@ -5,7 +5,7 @@ TEMPLATES = [
         "id": "daily-standup",
         "name": "Daily Standup",
         "icon": "☀️",
-        "description": "Classic async daily standup — yesterday, today, blockers.",
+        "description": "Classic async daily standup: yesterday, today, blockers.",
         "questions": [
             "What did you complete yesterday?",
             "What are you working on today?",
@@ -49,7 +49,7 @@ TEMPLATES = [
         "id": "sales",
         "name": "Sales Pipeline",
         "icon": "💼",
-        "description": "Sales-focused — deals, calls, and pipeline health.",
+        "description": "Sales-focused: deals, calls and pipeline health.",
         "questions": [
             "What deals did you advance or close yesterday?",
             "What calls, demos, or outreach do you have today?",
@@ -115,7 +115,7 @@ TEMPLATES = [
         "id": "okr-checkin",
         "name": "OKR Check-in",
         "icon": "📊",
-        "description": "Weekly OKR progress — key result updates.",
+        "description": "Weekly OKR progress: key result updates.",
         "questions": [
             "Which key results did you move forward this week?",
             "What's your confidence level on hitting your OKRs? (1–10)",
@@ -269,7 +269,7 @@ TEMPLATES = [
         "id": "personal",
         "name": "Personal Productivity",
         "icon": "🧘",
-        "description": "Individual daily planning — goals, energy, and focus.",
+        "description": "Individual daily planning: goals, energy and focus.",
         "questions": [
             "What's your biggest win from yesterday?",
             "What is the ONE most important thing to accomplish today?",

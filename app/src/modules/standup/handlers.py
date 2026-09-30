@@ -40,7 +40,7 @@ def _clean_thread_cache() -> None:
 # Track which users are in configure mode: "team_id:user_id"
 _configure_mode_users: set[str] = set()
 
-_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
+_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough, or type anything)_"
 
 
 def _send_mood_block(client, user_id: str) -> None:
@@ -197,14 +197,14 @@ def _format_standup(
     date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
     labels = questions or _DEFAULT_LABELS
-    parts = [f"📋 *Standup from <@{user_id}>* — {date_str}\n"]
+    parts = [f"📋 *Standup from <@{user_id}>* · {date_str}\n"]
     for i, label in enumerate(labels):
-        raw = answers[i] if i < len(answers) else "—"
+        raw = answers[i] if i < len(answers) else "n/a"
         # Detect "no blockers" only for the last default question
         if not questions and i == 2 and raw.strip().lower() in ("none", "no", "nope", "-", "n/a", ""):
             formatted_answer = "_None_ ✅"
         else:
-            formatted_answer = _blocks.linkify_issues(raw) if raw != "—" else raw
+            formatted_answer = _blocks.linkify_issues(raw) if raw != "n/a" else raw
         parts.append(f"*{label}:*\n{formatted_answer}")
 
     text = "\n\n".join(parts)
@@ -560,7 +560,7 @@ def _complete_standup(user_id: str, session, client) -> None:
             logger.error("Failed to post standup for %s: %s", user_id, exc)
             client.chat_postMessage(
                 channel=user_id,
-                text=f"⚠️ Could not post to channel — please paste manually:\n\n{formatted}",
+                text=f"⚠️ I couldn't post this to the channel. You can paste it there yourself:\n\n{formatted}",
             )
 
     # Ensure member exists in DB for reports/participation
@@ -1897,7 +1897,7 @@ def register_handlers(app: App) -> None:
         )
         client.chat_postMessage(
             channel=user_id,
-            text="✏️ Let's update your standup — your previous answers are pre-filled, edit what you need.",
+            text="✏️ Let's update your standup. Your previous answers are filled in, so change only what you need.",
         )
         _send_question_block(client, user_id, session.questions[0], 0, _initial_answer_for(session, 0))
 

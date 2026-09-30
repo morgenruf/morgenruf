@@ -45,12 +45,12 @@ class TestPlainSummary:
     def test_no_team_name(self):
         standups = [{"user_id": "U1", "yesterday": "a", "today": "b", "has_blockers": False}]
         result = _plain_summary(standups, "")
-        assert "Team Summary" in result
+        assert "Team summary" in result
 
     def test_with_team_name(self):
         standups = [{"user_id": "U1", "yesterday": "a", "today": "b", "has_blockers": False}]
         result = _plain_summary(standups, "Engineering")
-        assert "Engineering Summary" in result
+        assert "Engineering summary" in result
 
 
 # ---------------------------------------------------------------------------

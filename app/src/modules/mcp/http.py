@@ -48,7 +48,7 @@ TOOLS = [
     },
     {
         "name": "get_participation",
-        "description": "Get standup participation statistics — who submitted, who missed.",
+        "description": "Get standup participation statistics: who submitted and who missed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -305,7 +305,7 @@ def mcp_info():
             "version": APP_VERSION,
             "transport": "http",
             "endpoint": request.host_url.rstrip("/") + "/mcp",
-            "auth": "Bearer token — generate from your Morgenruf dashboard",
+            "auth": "Bearer token. Create one in your Morgenruf dashboard.",
             "docs": "https://docs.morgenruf.dev/mcp.html",
             "tools": [t["name"] for t in TOOLS],
             "note": (
@@ -326,7 +326,7 @@ def mcp_endpoint():
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32001,
-                    "message": "Unauthorized — provide a valid Bearer API key from your Morgenruf dashboard",
+                    "message": "Unauthorized. Send a valid Bearer API key from your Morgenruf dashboard.",
                 },
                 "id": None,
             }

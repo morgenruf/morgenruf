@@ -125,9 +125,9 @@ def _plain_summary(standups: list[dict], team_name: str) -> str:
     total = len(standups)
     with_blockers = sum(1 for s in standups if s.get("has_blockers"))
 
-    summary = f"📊 *Team Summary* — {total} standup{'s' if total != 1 else ''} submitted"
+    summary = f"📊 *Team summary*: {total} standup{'s' if total != 1 else ''} submitted"
     if team_name:
-        summary = f"📊 *{team_name} Summary* — {total} standup{'s' if total != 1 else ''} submitted"
+        summary = f"📊 *{team_name} summary*: {total} standup{'s' if total != 1 else ''} submitted"
 
     if with_blockers:
         summary += f"\n⚠️ {with_blockers} team member{'s' if with_blockers != 1 else ''} reported blockers"
