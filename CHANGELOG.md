@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.8] - 2026-09-30
+
+### Fixed
+- **A blank or out-of-order standup answer is no longer saved.** Slack can
+  deliver the Submit click before it has captured what was typed, and the
+  blank was saved as the answer. The bot now asks you to submit again (send
+  `pass` to leave a question blank on purpose). A Submit on a question already
+  answered is ignored instead of being filed against the current one.
+- **Dates and times follow your team's timezone.** App Home showed the time a
+  standup was reported in UTC, the dashboard's Today page named the UTC date,
+  and Insights called a standup filed today "yesterday" in the evening.
+- **Today's next coffee chat matches the Coffee chats page.** It counted a week
+  from a round run by hand, so a Monday programme showed a Tuesday.
+
 ## [1.9.7] - 2026-09-30
 
 ### Fixed
