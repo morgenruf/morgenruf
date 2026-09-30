@@ -310,6 +310,10 @@ def _slack_dm_with_retry(
     return False
 
 
+def _minutes(n) -> str:  # noqa: ANN001
+    return f"{n} minute{'' if n == 1 else 's'}"
+
+
 def _notify_delivery_failure(
     client: WebClient,
     team_id: str,
@@ -340,7 +344,8 @@ def _notify_delivery_failure(
         client.chat_postMessage(
             channel=owner,
             text=(
-                f"⚠️ I couldn't send {name}{where} to {failed_count} of {total_count} people today. "
+                f"⚠️ I couldn't send {name}{where} to {failed_count} of {total_count} "
+                f"{'person' if total_count == 1 else 'people'} today. "
                 "This is usually a short Slack problem and they will get the next one as normal. "
                 "If it keeps happening, check that those people are still active in Slack."
             ),
@@ -701,7 +706,7 @@ def _send_reminder_to_workspace(
                 client,
                 user_id,
                 team_id=team_id,
-                text=f"⏰ Standup{label} starts in *{reminder_minutes} minutes*. Get ready! 🚀",
+                text=f"⏰ Standup{label} starts in *{_minutes(reminder_minutes)}*. Get ready! 🚀",
             )
         except Exception as exc:
             logger.warning("Failed reminder DM to %s / %s: %s", team_id, user_id, exc)
@@ -846,7 +851,7 @@ def _nudge_missing(team_id: str, bot_token: str, schedule_id: int) -> None:
                 client.chat_postMessage(
                     channel=user_id,
                     text=(
-                        f"Your {name} closes in about {minutes} minutes and I have not heard from you. "
+                        f"Your {name} closes in about {_minutes(minutes)} and I have not heard from you. "
                         "Send me `standup` to file it, or `skip` if today is not one for it."
                     ),
                 )
