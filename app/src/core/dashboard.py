@@ -337,14 +337,23 @@ _WORKSPACE_SETTING_FIELDS = (
     "linear_team",
     "manager_email",
     "manager_digest_enabled",
-    "feed_token",
     "feed_public",
 )
 
 _BOOL_WORKSPACE_FIELDS = ("ai_summary_enabled", "manager_digest_enabled", "feed_public")
 
-# Publishing the workspace's standups is not part of running standups.
-_FEED_FIELDS = ("feed_token", "feed_public")
+# Settings that reach beyond one standup: publishing the feed, mailing every
+# standup to an outside address daily, sending answers to an AI provider, and
+# where issue keys link to. Running a standup does not need any of them.
+# feed_token is not among them at all: only the feed-token endpoint sets it.
+_WORKSPACE_ADMIN_FIELDS = (
+    "feed_public",
+    "manager_email",
+    "manager_digest_enabled",
+    "ai_summary_enabled",
+    "ai_provider",
+    "jira_base_url",
+)
 
 # "Until report time", "4 hours", "No limit" in the form, against the integer
 # hours that can_edit_response reads.
@@ -353,11 +362,18 @@ _HOURS_TO_EDIT_WINDOW = {0: "report", 4: "4h"}
 
 
 def _workspace_settings(team_id: str) -> dict:
-    """Workspace-level settings, for merging into a schedule response."""
+    """Workspace-level settings, for merging into a schedule response.
+
+    The feed token is the only secret guarding the public feed, so it goes
+    to workspace admins only.
+    """
     try:
-        return db.get_workspace_config(team_id) or {}
+        ws = dict(db.get_workspace_config(team_id) or {})
     except Exception:
         return {}
+    if not _is_workspace_admin():
+        ws.pop("feed_token", None)
+    return ws
 
 
 def _is_workspace_admin() -> bool:
@@ -371,17 +387,17 @@ def _is_workspace_admin() -> bool:
 def _split_workspace_fields(data: dict) -> dict:
     """Pull the workspace-level settings out of a schedule payload.
 
-    The standup form also carries the public feed switch, which publishes the
-    team's standups at an unauthenticated URL. Someone who administers
-    standups should not reach that through the form when they cannot reach
-    the feed endpoint directly, so those two fields need workspace admin.
+    The standup form also carries settings for the whole workspace, such as
+    the public feed switch and the manager digest. Someone who administers
+    standups should not reach those through the form when they cannot reach
+    them directly, so they need workspace admin.
     """
     workspace_admin = _is_workspace_admin()
     ws: dict = {}
     for field in _WORKSPACE_SETTING_FIELDS:
         if field not in data:
             continue
-        if field in _FEED_FIELDS and not workspace_admin:
+        if field in _WORKSPACE_ADMIN_FIELDS and not workspace_admin:
             continue
         ws[field] = bool(data[field]) if field in _BOOL_WORKSPACE_FIELDS else data[field]
     if "edit_window" in data:
