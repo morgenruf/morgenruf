@@ -96,7 +96,9 @@ class TestAggregateNotMeanOfRatios:
 class TestBothCardsAgree:
     def test_dashboard_stats_matches_the_overview(self, monkeypatch):
         schedules, members, submissions, now = _workspace()
-        monkeypatch.setattr(db, "_fetch_participation_inputs", lambda team_id, days: (schedules, members, submissions))
+        monkeypatch.setattr(
+            db, "_fetch_participation_inputs", lambda team_id, *bounds: (schedules, members, submissions)
+        )
         monkeypatch.setattr(db, "_utc_now", lambda: now)
 
         overview = db.get_participation_overview("T", days=5)
@@ -110,7 +112,9 @@ class TestBothCardsAgree:
 
     def test_overview_exposes_what_the_headline_needs(self, monkeypatch):
         schedules, members, submissions, now = _workspace()
-        monkeypatch.setattr(db, "_fetch_participation_inputs", lambda team_id, days: (schedules, members, submissions))
+        monkeypatch.setattr(
+            db, "_fetch_participation_inputs", lambda team_id, *bounds: (schedules, members, submissions)
+        )
         monkeypatch.setattr(db, "_utc_now", lambda: now)
 
         overview = db.get_participation_overview("T", days=5)

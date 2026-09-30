@@ -219,7 +219,26 @@ class TestApiReports:
         assert resp.status_code == 200
         earliest = (date.today() - timedelta(days=364)).isoformat()
         assert _db_mock.get_standups.call_args.kwargs["from_date"] == earliest
-        assert _db_mock.get_participation_overview.call_args.kwargs["days"] <= 365
+        assert _db_mock.get_participation_overview.call_args.kwargs["start"].isoformat() == earliest
+
+    def test_participation_uses_the_requested_from_and_to(self, authed_client):
+        """A report for a past range is scored on that range, not up to today."""
+        from datetime import date
+
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview(days=30)
+        resp = authed_client.get("/dashboard/api/reports?date_from=2026-08-01&date_to=2026-08-30")
+        kwargs = _db_mock.get_participation_overview.call_args.kwargs
+        assert kwargs["start"] == date(2026, 8, 1)
+        assert kwargs["end"] == date(2026, 8, 30)
+        assert resp.get_json()["total_days"] == 30
+
+    def test_no_range_means_the_last_week(self, authed_client):
+        _db_mock.get_standups.return_value = []
+        _db_mock.get_participation_overview.return_value = _overview()
+        authed_client.get("/dashboard/api/reports")
+        kwargs = _db_mock.get_participation_overview.call_args.kwargs
+        assert kwargs["start"] is None and kwargs["end"] is None and kwargs["days"] == 7
 
     def test_recent_date_from_is_passed_through(self, authed_client):
         from datetime import date, timedelta

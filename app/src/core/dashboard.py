@@ -1233,6 +1233,19 @@ def _clamp_date_from(date_from: str | None) -> str | None:
     return earliest.isoformat() if parsed < earliest else date_from
 
 
+def _parse_report_date(value: str | None):
+    """A YYYY-MM-DD query value as a date, or None when absent or unreadable."""
+    if not value:
+        return None
+    from datetime import date
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        logger.info("Ignoring unreadable report date %r", value)
+        return None
+
+
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="getReports", tags=["Reports"], security=[{"sessionCookie": []}])
@@ -1258,17 +1271,13 @@ def api_reports(query):
         _attach_questions(team_id, standups)
         channel_names = _resolve_channel_names(token, standups) if (token := _get_bot_token()) else {}
 
-        days = 7
-        if date_from:
-            try:
-                from datetime import datetime as _dt
-
-                d = _dt.fromisoformat(date_from)
-                days = max(1, (_dt.utcnow() - d).days + 1)
-            except Exception as e:
-                logger.warning("Unexpected error in api_reports parsing date_from: %s", e)
-        overview = db.get_participation_overview(team_id, days=days)
-        total_days = days
+        # Participation covers the same from..to range as the standups list.
+        # It used to count from date_from to the server's UTC today and ignore
+        # date_to, so a report for last month was scored against this week.
+        overview = db.get_participation_overview(
+            team_id, days=7, start=_parse_report_date(date_from), end=_parse_report_date(date_to)
+        )
+        total_days = int(overview.get("days") or 7)
 
         member_summary = []
         for p in overview.get("members") or []:

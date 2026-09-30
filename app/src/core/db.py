@@ -1444,8 +1444,16 @@ def _local_creation_date(schedule: dict, zone) -> date | None:
     return None
 
 
-def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
+def _occurrence_dates(
+    schedule: dict, days: int, now: datetime, end: date | None = None, holidays: frozenset[date] = frozenset()
+) -> list[date]:
     """Return the dates a schedule fired on in the last N days, in its own timezone.
+
+    With `end` the window is the N days ending on that date instead of today,
+    which is how a report for a past range is judged; a day after the
+    schedule's own today is never counted, because it has not happened yet.
+    Company holidays are dropped: the standup does not run on them, so they
+    are not a missed day.
 
     Days before the schedule existed are dropped. Counting them asked a
     standup created a few minutes ago for two weeks of answers nobody was ever
@@ -1457,10 +1465,27 @@ def _occurrence_dates(schedule: dict, days: int, now: datetime) -> list[date]:
     """
     zone = _resolve_zone(schedule.get("schedule_tz"))
     local_today = now.astimezone(zone).date()
+    first = (end or local_today) - timedelta(days=days - 1)
+    last = local_today if end is None else min(end, local_today)
     weekdays = parse_schedule_days(schedule.get("schedule_days"))
-    window = [local_today - timedelta(days=offset) for offset in range(days)]
+    window = [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
     created = _local_creation_date(schedule, zone)
-    return sorted(day for day in window if day.weekday() in weekdays and (created is None or day >= created))
+    return [
+        day
+        for day in window
+        if day.weekday() in weekdays and day not in holidays and (created is None or day >= created)
+    ]
+
+
+def _workspace_local_day(schedules: list[dict] | None, now: datetime) -> date:
+    """The day the workspace is on: the first standup's timezone, else UTC.
+
+    The same pick as insights.today.workspace_today, so the analytics grid and
+    the Today view end on the same date. Using the UTC date put a Sydney team's
+    whole morning in yesterday's column.
+    """
+    zone_name = next((s.get("schedule_tz") for s in schedules or [] if s.get("schedule_tz")), None)
+    return now.astimezone(_resolve_zone(zone_name)).date()
 
 
 # Longest window any participation or report query covers. compute_participation
@@ -1475,8 +1500,16 @@ def compute_participation(
     submissions: list[dict] | None,
     days: int = 7,
     now: datetime | None = None,
+    end: date | None = None,
+    start: date | None = None,
+    holidays=None,
 ) -> dict:
     """Compute workspace, per-schedule and per-member participation from raw rows.
+
+    The window is the `days` days ending on `end`, or on the workspace's local
+    today when no end is given. A `start` overrides `days`, so a report for
+    from..to covers exactly that range. `holidays` are company days off, which
+    are not counted as expected.
 
     The unit of "expected" is a (member, schedule, occurrence date) triple, not
     a member. Counting members was wrong in three independent ways on a
@@ -1504,8 +1537,16 @@ def compute_participation(
     are `members` rows and `submissions` are `standups` rows covering at least
     the window (a day of slack either side is fine, it is filtered here).
     """
-    days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
     now = now or _utc_now()
+    active_schedules = sorted(
+        (s for s in (schedules or []) if s.get("active", True)),
+        key=lambda s: (_schedule_minutes(s), int(s.get("id") or 0)),
+    )
+    window_end = end or _workspace_local_day([s for s in (schedules or []) if s.get("active", True)], now)
+    if start is not None:
+        days = (window_end - start).days + 1
+    days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
+    days_off = frozenset(d for d in (_as_date(h) for h in holidays or ()) if d is not None)
 
     known: dict[str, dict] = {}
     for row in members or []:
@@ -1531,7 +1572,7 @@ def compute_participation(
     # dashboard can mark the day rather than only the member.
     blocked_days: set[tuple[str, date]] = set()
     last_standup: dict[str, Any] = {}
-    window_start = now.astimezone(timezone.utc).date() - timedelta(days=days - 1)
+    window_start = window_end - timedelta(days=days - 1)
     for row in submissions or []:
         user_id = row.get("user_id")
         day = _as_date(row.get("standup_date"))
@@ -1541,7 +1582,7 @@ def compute_participation(
         named = row.get("schedule_id")
         if named:
             attributed.setdefault((user_id, day), set()).add(int(named))
-        if day >= window_start:
+        if window_start <= day <= window_end:
             responses[user_id] = responses.get(user_id, 0) + 1
             if row.get("has_blockers"):
                 blockers[user_id] = blockers.get(user_id, 0) + 1
@@ -1554,11 +1595,6 @@ def compute_participation(
                     last_standup[user_id] = submitted_at
             except TypeError:
                 last_standup.setdefault(user_id, submitted_at)
-
-    active_schedules = sorted(
-        (s for s in (schedules or []) if s.get("active", True)),
-        key=lambda s: (_schedule_minutes(s), int(s.get("id") or 0)),
-    )
 
     schedule_rows: dict[int, dict] = {}
     enrolled: set[str] = set()
@@ -1573,7 +1609,7 @@ def compute_participation(
     membership: dict[str, set[int]] = {}
     for schedule in active_schedules:
         schedule_id = int(schedule.get("id") or 0)
-        dates = _occurrence_dates(schedule, days, now)
+        dates = _occurrence_dates(schedule, days, now, end=end, holidays=days_off)
         counted: list[str] = []
         seen: set[str] = set()
         for user_id in schedule.get("participants") or []:
@@ -1721,7 +1757,7 @@ def compute_participation(
     }
 
 
-def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], list[dict], list[dict]]:
+def _fetch_participation_inputs(team_id: str, lower: date, upper: date) -> tuple[list[dict], list[dict], list[dict]]:
     """Load everything the participation model needs, in three fixed queries.
 
     Three round trips whatever the workspace looks like, rather than one query
@@ -1743,12 +1779,12 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
         FROM members
         WHERE team_id = %s AND active = TRUE
     """
-    # One extra day back absorbs the offset between the server's CURRENT_DATE
-    # and a schedule whose local date is behind it.
+    # The bounds carry a day of slack either side, for schedules whose local
+    # date differs from the one the window was computed in.
     sql_submissions = """
         SELECT user_id, standup_date, has_blockers, submitted_at, schedule_id
         FROM standups
-        WHERE team_id = %s AND standup_date >= CURRENT_DATE - %s * INTERVAL '1 day'
+        WHERE team_id = %s AND standup_date >= %s AND standup_date <= %s
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1756,16 +1792,45 @@ def _fetch_participation_inputs(team_id: str, days: int) -> tuple[list[dict], li
             schedules = [dict(r) for r in cur.fetchall()]
             cur.execute(sql_members, (team_id,))
             members = [dict(r) for r in cur.fetchall()]
-            cur.execute(sql_submissions, (team_id, int(days)))
+            cur.execute(sql_submissions, (team_id, lower, upper))
             submissions = [dict(r) for r in cur.fetchall()]
     return schedules, members, submissions
 
 
-def get_participation_overview(team_id: str, days: int = 7) -> dict:
-    """Return workspace, per-schedule and per-member participation for the last N days."""
+def get_participation_overview(team_id: str, days: int = 7, end: date | None = None, start: date | None = None) -> dict:
+    """Return workspace, per-schedule and per-member participation.
+
+    The last N days by default. With `start` and/or `end` the window is that
+    date range instead, which is what a report for a chosen period needs.
+    """
     days = min(max(1, int(days or 1)), MAX_WINDOW_DAYS)
-    schedules, members, submissions = _fetch_participation_inputs(team_id, days)
-    return compute_participation(schedules, members, submissions, days=days)
+    anchor = end or _utc_now().date()
+    upper = anchor + timedelta(days=1)
+    lower = (start or anchor - timedelta(days=days)) - timedelta(days=1)
+    lower = max(lower, upper - timedelta(days=MAX_WINDOW_DAYS + 2))
+    schedules, members, submissions = _fetch_participation_inputs(team_id, lower, upper)
+    return compute_participation(
+        schedules,
+        members,
+        submissions,
+        days=days,
+        end=end,
+        start=start,
+        holidays=_holiday_dates(team_id),
+    )
+
+
+def _holiday_dates(team_id: str) -> list[date]:
+    """The workspace's company holidays, or none when they cannot be read.
+
+    A calendar that fails to load must not break the participation figures, it
+    only means holidays count as ordinary days, as they did before.
+    """
+    try:
+        return [h["date"] for h in list_holidays(team_id)]
+    except Exception as exc:  # noqa: BLE001 - see docstring
+        logger.debug("No holiday list for %s: %s", team_id, exc)
+        return []
 
 
 def get_participation_stats(team_id: str, days: int = 7) -> list[dict]:
