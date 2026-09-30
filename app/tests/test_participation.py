@@ -471,8 +471,11 @@ class TestPublicHelpers:
         assert stats["completed_responses"] == 13
         assert len(stats["schedules"]) == 3
 
-    def test_fetch_runs_three_queries_regardless_of_schedule_count(self):
-        """The expansion must not be a query per schedule per day per person."""
+    def test_fetch_runs_fixed_queries_regardless_of_schedule_count(self):
+        """The expansion must not be a query per schedule per day per person.
+
+        Schedules, members, submissions and the holiday list: four, always.
+        """
         cur = MagicMock()
         cur.__enter__ = lambda s: s
         cur.__exit__ = MagicMock(return_value=False)
@@ -485,7 +488,7 @@ class TestPublicHelpers:
         pool.getconn.return_value = conn
         with patch.object(db, "_pool", pool):
             db.get_participation_overview("T1", days=7)
-        assert cur.execute.call_count == 3
+        assert cur.execute.call_count == 4
 
 
 class TestSubmissionsNameTheirSchedule:
@@ -834,3 +837,65 @@ def test_window_is_capped_at_a_year():
     result = db.compute_participation(schedules, [_member("U1")], [], days=740_000, now=NOW)
     assert result["days"] == db.MAX_WINDOW_DAYS
     assert result["expected"] <= db.MAX_WINDOW_DAYS
+
+
+class TestWindowBounds:
+    """The window ends on the workspace's local day, or on a requested range."""
+
+    def test_grid_ends_on_the_workspaces_local_day(self):
+        # 2026-03-15 23:00 UTC is already Monday 03-16 in Sydney. The grid,
+        # responses and blockers used to end on the UTC Sunday.
+        now = dt.datetime(2026, 3, 15, 23, 0, tzinfo=UTC)
+        sched = _schedule(1, "Sydney", ["U1"], tz="Australia/Sydney")
+        result = db.compute_participation([sched], [_member("U1")], [_submission("U1", "2026-03-16")], 7, now)
+        assert result["window_days"][-1] == "2026-03-16"
+        row = _by_user(result)["U1"]
+        assert row["responses"] == 1
+        assert row["days"][-1] == {"date": "2026-03-16", "expected": 1, "completed": 1, "blocked": False}
+
+    def test_a_past_range_is_scored_on_that_range(self):
+        # Mon 03-02 .. Fri 03-06: five occurrences, two answered. Answers in
+        # the following week are outside the range and not counted.
+        sched = _schedule(1, "Daily", ["U1"])
+        subs = [_submission("U1", "2026-03-02"), _submission("U1", "2026-03-04"), _submission("U1", MON)]
+        result = db.compute_participation(
+            [sched], [_member("U1")], subs, now=NOW, start=dt.date(2026, 3, 2), end=dt.date(2026, 3, 6)
+        )
+        assert result["days"] == 5
+        assert result["window_days"] == ["2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06"]
+        assert result["expected"] == 5
+        assert result["completed"] == 2
+        assert _by_user(result)["U1"]["responses"] == 2
+
+    def test_future_days_in_a_range_are_not_expected(self):
+        # Range Mon 03-09 .. Sun 03-15 asked on Friday 03-13: only Mon to Fri so far.
+        sched = _schedule(1, "Daily", ["U1"])
+        result = db.compute_participation(
+            [sched], [_member("U1")], [], now=NOW, start=dt.date(2026, 3, 9), end=dt.date(2026, 3, 15)
+        )
+        assert result["days"] == 7
+        assert result["expected"] == 5
+
+
+class TestHolidays:
+    def test_a_company_holiday_is_not_a_missed_day(self):
+        # Wed 03-11 is a holiday: four occurrences in the week, all answered.
+        sched = _schedule(1, "Daily", ["U1"])
+        subs = [_submission("U1", day) for day in (MON, TUE, THU, FRI)]
+        result = db.compute_participation(
+            [sched], [_member("U1")], subs, days=7, now=NOW, holidays=[dt.date(2026, 3, 11)]
+        )
+        assert result["expected"] == 4
+        assert result["completion_rate"] == 100
+        wed = next(d for d in _by_user(result)["U1"]["days"] if d["date"] == WED)
+        assert wed["expected"] == 0
+
+    def test_overview_reads_the_holiday_list(self):
+        schedules = [_schedule(1, "Daily", ["U1"])]
+        with (
+            patch.object(db, "_fetch_participation_inputs", return_value=(schedules, [_member("U1")], [])),
+            patch.object(db, "list_holidays", return_value=[{"date": dt.date(2026, 3, 11), "name": "X"}]),
+            patch.object(db, "_utc_now", return_value=NOW),
+        ):
+            result = db.get_participation_overview("T1", days=7)
+        assert result["expected"] == 4

@@ -28,7 +28,6 @@ from src.core.api import api_errors, csrf_token
 from src.core.oauth import consume_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
 from src.core.scopes import SCOPE_STRING
-from src.core.slack_users import is_human
 from src.core.url_guard import is_safe_webhook_url
 
 logger = logging.getLogger(__name__)
@@ -763,6 +762,51 @@ def _set_module_admin(user_id: str, module: str):
 # ---------------------------------------------------------------------------
 
 
+# The Slack directory, per workspace, for a few minutes. users.list is Tier 2
+# (about 20 calls a minute) and the Members page and every participant picker
+# used to page through it on each load, so a few admins clicking around could
+# rate limit the workspace for everyone, the standup jobs included. The members
+# table cannot stand in for it: it only holds people the bot has met, and the
+# pickers need everyone. Five minutes means someone who just joined Slack shows
+# up shortly, which is all the page needs.
+_DIRECTORY_TTL_SECONDS = 300
+_directory_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _rate_limited_slack_client(token: str):
+    """A WebClient that waits and retries when Slack answers 429."""
+    from slack_sdk import WebClient  # noqa: PLC0415
+
+    client = WebClient(token=token)
+    try:
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler  # noqa: PLC0415
+
+        client.retry_handlers.append(RateLimitErrorRetryHandler(max_retry_count=2))
+    except Exception as exc:  # pragma: no cover - depends on slack_sdk internals
+        logger.debug("Could not attach the rate limit retry handler: %s", exc)
+    return client
+
+
+def _slack_directory(team_id: str, client) -> dict:
+    """Every real person in the workspace as {id: user}, cached briefly.
+
+    Raises when Slack cannot be read, so callers keep their own fallback to
+    the members table. A failure is not cached.
+    """
+    import time  # noqa: PLC0415
+
+    from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
+
+    cached = _directory_cache.get(team_id)
+    if cached and time.monotonic() - cached[0] < _DIRECTORY_TTL_SECONDS:
+        return cached[1]
+    directory, error = fetch_workspace_directory(client)
+    if directory is None:
+        raise RuntimeError(f"users.list failed: {error or 'unknown'}")
+    _directory_cache[team_id] = (time.monotonic(), directory)
+    return directory
+
+
 @dashboard_bp.route("/dashboard/api/members", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="listMembers", tags=["Members"], security=[{"sessionCookie": []}])
@@ -801,9 +845,7 @@ def api_members(query):
     privileged = _sees_every_standup()
 
     try:
-        from slack_sdk import WebClient  # noqa: PLC0415
-
-        client = WebClient(token=token)
+        client = _rate_limited_slack_client(token)
         if channel_id and not privileged and not _can_see_channel(client, channel_id, session.get("user_id") or ""):
             return []
 
@@ -819,21 +861,8 @@ def api_members(query):
                 if not cursor:
                     break
 
-        # Paginate through all workspace users
-        all_users = []
-        cursor = None
-        while True:
-            result = client.users_list(limit=200, cursor=cursor or "")
-            all_users.extend(result.get("members", []))
-            cursor = result.get("response_metadata", {}).get("next_cursor")
-            if not cursor:
-                break
-
         members = []
-        for u in all_users:
-            if not is_human(u):
-                continue
-            uid = u["id"]
+        for uid, u in _slack_directory(team_id, client).items():
             if channel_member_ids is not None and uid not in channel_member_ids:
                 continue
             profile = u.get("profile", {})
@@ -1024,11 +1053,7 @@ def _import_candidates(team_id: str) -> list[dict]:
     token = _get_bot_token()
     if token:
         try:
-            from slack_sdk import WebClient  # noqa: PLC0415
-
-            from src.core.slack_users import fetch_workspace_directory  # noqa: PLC0415
-
-            directory, _error = fetch_workspace_directory(WebClient(token=token))
+            directory = _slack_directory(team_id, _rate_limited_slack_client(token))
             if directory:
                 return [
                     {"user_id": uid, "email": (user.get("profile") or {}).get("email", "")}
@@ -1286,13 +1311,14 @@ def _clamp_date_from(date_from: str | None) -> str | None:
     """
     if not date_from:
         return date_from
-    from datetime import date, timedelta
+    from datetime import date, datetime, timedelta, timezone
 
     try:
         parsed = date.fromisoformat(date_from)
     except ValueError:
         return date_from
-    earliest = date.today() - timedelta(days=_MAX_REPORT_DAYS - 1)
+    # A memory bound, not a calendar day, so the UTC date is precise enough.
+    earliest = datetime.now(timezone.utc).date() - timedelta(days=_MAX_REPORT_DAYS - 1)
     return earliest.isoformat() if parsed < earliest else date_from
 
 
@@ -1398,6 +1424,19 @@ def _visible_rows(rows: list[dict], visible: set[int] | None) -> list[dict]:
     ]
 
 
+def _parse_report_date(value: str | None):
+    """A YYYY-MM-DD query value as a date, or None when absent or unreadable."""
+    if not value:
+        return None
+    from datetime import date
+
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        logger.info("Ignoring unreadable report date %r", value)
+        return None
+
+
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="getReports", tags=["Reports"], security=[{"sessionCookie": []}])
@@ -1425,17 +1464,13 @@ def api_reports(query):
         _attach_questions(team_id, standups)
         channel_names = _resolve_channel_names(token, standups) if (token := _get_bot_token()) else {}
 
-        days = 7
-        if date_from:
-            try:
-                from datetime import datetime as _dt
-
-                d = _dt.fromisoformat(date_from)
-                days = max(1, (_dt.utcnow() - d).days + 1)
-            except Exception as e:
-                logger.warning("Unexpected error in api_reports parsing date_from: %s", e)
-        overview = db.get_participation_overview(team_id, days=days)
-        total_days = days
+        # Participation covers the same from..to range as the standups list.
+        # It used to count from date_from to the server's UTC today and ignore
+        # date_to, so a report for last month was scored against this week.
+        overview = db.get_participation_overview(
+            team_id, days=7, start=_parse_report_date(date_from), end=_parse_report_date(date_to)
+        )
+        total_days = int(overview.get("days") or 7)
 
         overview_schedules = overview.get("schedules") or []
         overview_members = overview.get("members") or []
@@ -1968,17 +2003,20 @@ def api_delete_rule(rule_id: int):
 @dashboard_bp.response(200, schemas.PublicFeed)
 @rate_limit.rate_limited(rate_limit.FEED)
 def public_feed(token: str):
-    from datetime import date
-
     config = db.get_workspace_by_feed_token(token)
     if not config or not config.get("feed_public"):
         return jsonify(error="Feed not found or not public"), 404
     team_id = config["team_id"]
     public = _public_schedule_ids(team_id)
+    # The team's own day, not the server's: the feed showed an empty "today"
+    # to a Sydney team every morning because answers are filed on local dates.
+    today = db.workspace_local_today(team_id).isoformat()
     return {
         "title": config.get("standup_name") or "Team Standup",
-        "date": date.today().isoformat(),
-        "standups": [r for r in db.get_standups(team_id, days=1) if r.get("schedule_id") in public],
+        "date": today,
+        "standups": [
+            r for r in db.get_standups(team_id, from_date=today, to_date=today) if r.get("schedule_id") in public
+        ],
     }
 
 

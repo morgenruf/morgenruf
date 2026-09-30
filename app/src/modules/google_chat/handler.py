@@ -117,9 +117,9 @@ def _handle_message(payload: dict):
                 logger.warning("Could not persist standup for %s/%s: %s", team_id, user_id, exc)
 
             # Post summary to space
-            from datetime import datetime
+            from datetime import datetime, timezone
 
-            date_str = datetime.utcnow().strftime("%B %d, %Y")
+            date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
             summary = (
                 f"📋 *Standup from {user_id}* — {date_str}\n\n"
                 f"*✅ Yesterday:*\n{answers[0] if len(answers) > 0 else '—'}\n\n"

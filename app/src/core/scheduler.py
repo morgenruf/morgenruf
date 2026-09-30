@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -27,6 +28,7 @@ from src.core.slack_users import (
 )
 from src.core.state import state_store
 from src.core.timezones import canonical_tz, local_today
+from src.core.workspace_calendar import is_company_holiday
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
@@ -404,6 +406,10 @@ def _send_standup_to_workspace(
             standup_name = config.get("standup_name", "Team Standup")
             local_day = local_today(config.get("schedule_tz") or "UTC")
 
+        if is_company_holiday(team_id, local_day):
+            logger.info("Standup %s/%s not sent: %s is a company holiday", team_id, schedule_id, local_day)
+            return
+
         members = db.get_active_members(team_id)
         if participants_filter:
             # Register anyone selected who has never interacted with the bot,
@@ -489,7 +495,7 @@ def _send_standup_to_workspace(
         user_id = member["user_id"]
         cache_key = f"{team_id}:{user_id}"
         try:
-            if state_store.is_active(cache_key):
+            if state_store.blocks_scheduled_dm(cache_key, schedule_id):
                 logger.debug("Skipping %s — already has active session", user_id)
                 continue
 
@@ -670,6 +676,9 @@ def _send_reminder_to_workspace(
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
         return
+    if is_company_holiday(team_id, local_day):
+        logger.info("Reminder %s/%s not sent: %s is a company holiday", team_id, schedule_id, local_day)
+        return
     client = WebClient(token=bot_token)
     for member in members:
         user_id = member["user_id"]
@@ -688,16 +697,9 @@ def _send_reminder_to_workspace(
         except Exception as exc:
             logger.warning("Failed reminder DM to %s / %s: %s", team_id, user_id, exc)
 
-    # Evaluate low_participation workflow rules
-    try:
-        import src.core.db as db  # noqa: PLC0415
-        from src.modules.standup.workflow import evaluate_rules  # noqa: PLC0415
-
-        stats = db.get_participation_stats(team_id, days=1)
-        pct = participation_pct(stats)
-        evaluate_rules(team_id, "low_participation", {"participation_pct": pct, "team": team_id}, client)
-    except Exception as exc:
-        logger.warning("Participation workflow rules failed for %s: %s", team_id, exc)
+    # low_participation rules are evaluated when the report is posted, not
+    # here. Before the standup nobody has answered yet, so a check at this
+    # point always saw 0 percent and fired every day.
 
 
 def _send_weekly_digest(team_id: str, bot_token: str) -> None:
@@ -802,6 +804,9 @@ def _nudge_missing(team_id: str, bot_token: str, schedule_id: int) -> None:
         # is the day to look them up by. The UTC date nagged a Sydney team
         # every morning for answers they had already given.
         local_day = _schedule_today(team_id, schedule)
+        if is_company_holiday(team_id, local_day):
+            logger.info("nudge %s: %s is a company holiday", schedule_id, local_day)
+            return
         answered = {
             row["user_id"] for row in db.get_standups_for_schedule(team_id, schedule_id, days=1, for_date=local_day)
         }
@@ -859,8 +864,23 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             except Exception:
                 pass
         local_day = _schedule_today(team_id, sched_cfg)
+        if is_company_holiday(team_id, local_day):
+            # No standup was sent, so there is nothing to report and no
+            # participation to judge.
+            logger.info("Report %s/%s skipped: %s is a company holiday", team_id, schedule_id, local_day)
+            return
 
         today_standups = db.get_today_standups(team_id, for_date=local_day)
+        # Report time is when the standup's window has closed, so this is the
+        # one moment a participation figure means something. It runs before
+        # the "nothing to report" exit because a day nobody answered is exactly
+        # the day the rule exists for.
+        try:
+            from src.modules.standup.workflow import evaluate_low_participation  # noqa: PLC0415
+
+            evaluate_low_participation(team_id, sched_cfg, local_day, today_standups, WebClient(token=bot_token))
+        except Exception as exc:
+            logger.warning("Participation check failed for %s/%s: %s", team_id, schedule_id, exc)
         if not today_standups:
             logger.info("No submissions for team %s — skipping report", team_id)
             return
@@ -1032,7 +1052,7 @@ def register_workspace_job(
     # Reminder job
     reminder_minutes = int(config.get("reminder_minutes") or 0)
     if reminder_minutes > 0:
-        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
+        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))  # noqa: DTZ001 - wall clock arithmetic only, never an instant
         reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
         reminder_days = schedule_days
         if reminder_dt.date() < standup_dt.date():
@@ -1065,7 +1085,7 @@ def register_workspace_job(
 
     # Manager digest job — runs daily at standup time (after standup completes)
     # Use a 30-minute offset after the standup time so responses are in by then
-    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)
+    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)  # noqa: DTZ001 - wall clock arithmetic only, never an instant
     scheduler.add_job(
         _send_manager_digest,
         trigger=CronTrigger(
@@ -1152,7 +1172,7 @@ def register_workspace_digests_only(
     )
 
     # Manager digest
-    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)
+    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)  # noqa: DTZ001 - wall clock arithmetic only, never an instant
     scheduler.add_job(
         _send_manager_digest,
         trigger=CronTrigger(
@@ -1274,7 +1294,7 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     )
 
     if reminder_minutes > 0:
-        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
+        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))  # noqa: DTZ001 - wall clock arithmetic only, never an instant
         reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
         reminder_days = schedule_days
         if reminder_dt.date() < standup_dt.date():
@@ -1337,7 +1357,7 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     # the scheduler.
     if schedule.get("nudge_missing"):
         before = int(schedule.get("nudge_minutes_before") or 20)
-        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)
+        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)  # noqa: DTZ001 - wall clock arithmetic only, never an instant
         scheduler.add_job(
             _nudge_missing,
             trigger=CronTrigger(
@@ -1529,6 +1549,35 @@ def get_unregistered_schedules(
     return problems
 
 
+# The last schedules_change_marker seen by this process's scheduler.
+_schedule_marker: tuple | None = None
+# The change poll and the interval sync can overlap on the bulk executor.
+_sync_lock = threading.Lock()
+
+# How often the scheduler asks whether any schedule changed. Schedules are
+# edited in the web workers, which cannot reach the scheduler: it runs in the
+# gunicorn master, and a forked worker only holds a dead copy of it. The
+# database is the source of truth, and this poll is what makes an App Home or
+# dashboard change apply within seconds instead of at the next full sync.
+_CHANGE_POLL_SECONDS = 15
+
+
+def _poll_schedule_changes() -> None:
+    """Run the schedule sync when any schedule row changed since the last look."""
+    global _schedule_marker
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        marker = db.schedules_change_marker()
+    except Exception as exc:
+        logger.debug("Schedule change poll failed: %s", exc)
+        return
+    if marker == _schedule_marker:
+        return
+    _sync_jobs_from_db()
+    _schedule_marker = marker
+
+
 def _sync_jobs_from_db() -> None:
     """Reconcile the running scheduler's jobs with the DB.
 
@@ -1537,6 +1586,11 @@ def _sync_jobs_from_db() -> None:
     """
     if _scheduler is None:
         return
+    with _sync_lock:
+        _sync_jobs_from_db_locked()
+
+
+def _sync_jobs_from_db_locked() -> None:
     try:
         import src.core.db as db  # noqa: PLC0415
 
@@ -1897,6 +1951,18 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         executor=BULK_EXECUTOR,
         name="DB → scheduler schedule sync",
         replace_existing=True,
+    )
+    # The quick path for schedule edits: a cheap poll that runs the same sync
+    # only when a schedule row changed. The full sync above still covers
+    # workspace settings and anything the marker cannot see.
+    scheduler.add_job(
+        _poll_schedule_changes,
+        trigger=IntervalTrigger(seconds=_CHANGE_POLL_SECONDS),
+        id="schedule_change_poll",
+        executor=BULK_EXECUTOR,
+        name="Schedule change poll",
+        replace_existing=True,
+        max_instances=1,
     )
 
     # Modules declare their own jobs. Reconciled on an interval as well as at

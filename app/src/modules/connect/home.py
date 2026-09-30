@@ -9,7 +9,6 @@ rounds.
 from __future__ import annotations
 
 import logging
-from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ def _context(text: str) -> dict:
 def home_blocks(team_id: str, user_id: str) -> list[dict]:
     """Blocks for this person's coffee chats, or nothing if they are in none."""
     import src.modules.connect.db as cdb  # noqa: PLC0415
-    from src.modules.connect.rounds import cadence_phrase, upcoming_round_date  # noqa: PLC0415
+    from src.modules.connect.rounds import cadence_phrase, programme_today, upcoming_round_date  # noqa: PLC0415
 
     try:
         programs = [p for p in cdb.get_programs(team_id) if p.get("enabled")]
@@ -31,7 +30,6 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
     if not programs:
         return []
 
-    today = date.today()
     blocks: list[dict] = [
         {"type": "divider"},
         {"type": "section", "text": {"type": "mrkdwn", "text": "*☕ Coffee chats*"}},
@@ -43,7 +41,9 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
         except Exception:
             personal = {"state": "in", "until": None}
         state = personal["state"]
-        nxt = upcoming_round_date(p, today)
+        # Each programme's own calendar day: the server's date put a Sydney
+        # programme's "next introduction" a day behind for half of each day.
+        nxt = upcoming_round_date(p, programme_today(p))
         when = nxt.strftime("%A, %d %B")
         cadence = cadence_phrase(p.get("interval_weeks"))
 

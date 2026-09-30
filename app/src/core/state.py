@@ -9,7 +9,7 @@ Cache keys are `team_id:user_id` to support multi-workspace.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Optional
 
@@ -29,7 +29,7 @@ class UserSession:
     channel: str  # target channel for the summary post
     step: int = 0  # 0=sent q1, 1=sent q2, 2=sent q3, 3=mood, 4=done
     answers: list[str] = field(default_factory=list)
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     questions: list[str] = field(default_factory=lambda: list(QUESTIONS))
     standup_name: str = "Team Standup"
     schedule_id: Optional[int] = None  # source schedule — avoids channel-based lookup ambiguity
@@ -53,7 +53,19 @@ def _serialize(session: "UserSession") -> dict:
         "schedule_id": session.schedule_id,
         "editing_standup_id": session.editing_standup_id,
         "edit_initial_answers": session.edit_initial_answers,
+        "started_at": session.started_at.isoformat(),
     }
+
+
+def _parse_started_at(value: object) -> datetime:
+    """The stored start time. A session written before it was stored reads as now."""
+    if isinstance(value, str) and value:
+        try:
+            parsed = datetime.fromisoformat(value)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
 
 
 def _deserialize(data: dict) -> "UserSession":
@@ -68,7 +80,12 @@ def _deserialize(data: dict) -> "UserSession":
         schedule_id=data.get("schedule_id"),
         editing_standup_id=data.get("editing_standup_id"),
         edit_initial_answers=data.get("edit_initial_answers") or [],
+        started_at=_parse_started_at(data.get("started_at")),
     )
+
+
+# How long an open session for one standup holds off the DM for another.
+OTHER_STANDUP_BLOCK = timedelta(hours=4)
 
 
 class StateStore:
@@ -127,6 +144,23 @@ class StateStore:
 
     def is_active(self, cache_key: str) -> bool:
         return session_store.has_session(cache_key)
+
+    def blocks_scheduled_dm(self, cache_key: str, schedule_id: Optional[int], now: datetime | None = None) -> bool:
+        """Whether an open session should stop a scheduled standup DM.
+
+        A session for the same standup is still in progress, so it is left
+        alone (the DM job's own retries hit this). A session for another
+        standup blocks only while it is recent, which is what the old 4 hour
+        TTL gave. Sessions now live for a working day, and without this an
+        abandoned morning standup would have swallowed the evening one.
+        """
+        session = self.get(cache_key)
+        if session is None:
+            return False
+        if schedule_id is not None and session.schedule_id == schedule_id:
+            return True
+        now = now or datetime.now(timezone.utc)
+        return now - session.started_at < OTHER_STANDUP_BLOCK
 
 
 state_store = StateStore()

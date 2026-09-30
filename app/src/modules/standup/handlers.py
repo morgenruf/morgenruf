@@ -37,6 +37,49 @@ def _clean_thread_cache() -> None:
         del _daily_thread_cache[k]
 
 
+def _daily_thread_parent(
+    client, db, team_id: str, channel: str, today_str: str, schedule_id: int, header_text: str
+) -> str:
+    """Return the ts of today's thread header, posting it when there is none.
+
+    The stored ts is the one everybody threads under, including the scheduled
+    report. When two people finish together both see no thread and both post
+    a header; the database keeps the first. The loser adopts the stored ts and
+    deletes its own header, so the channel does not show two, and only a ts
+    that is actually stored is cached.
+    """
+    thread_key = f"{team_id}:{channel}:{today_str}:{schedule_id}"
+    parent_ts = _daily_thread_cache.get(thread_key)
+    if parent_ts:
+        return parent_ts
+    try:
+        # The in-memory cache is lost on restart and not shared between workers.
+        parent_ts = db.get_daily_thread_ts(team_id, channel, today_str, schedule_id)
+    except Exception:
+        parent_ts = None
+    if parent_ts:
+        _daily_thread_cache[thread_key] = parent_ts
+        return parent_ts
+
+    ours = client.chat_postMessage(channel=channel, text=header_text)["ts"]
+    try:
+        stored = db.upsert_daily_thread(team_id, channel, today_str, ours, schedule_id)
+    except Exception as exc:
+        logger.warning("Could not persist daily thread ts: %s", exc)
+        stored = None
+    if not stored:
+        # Not stored, so another worker cannot find it: use it for this post
+        # but do not cache it, and the next answer checks the database again.
+        return ours
+    if stored != ours:
+        try:
+            client.chat_delete(channel=channel, ts=ours)
+        except Exception as exc:
+            logger.info("Could not delete duplicate thread header %s in %s: %s", ours, channel, exc)
+    _daily_thread_cache[thread_key] = stored
+    return stored
+
+
 # Track which users are in configure mode: "team_id:user_id"
 _configure_mode_users: set[str] = set()
 
@@ -514,31 +557,16 @@ def _complete_standup(user_id: str, session, client) -> None:
             schedule_id = int(getattr(session, "schedule_id", 0) or sched_config.get("id") or 0)
             local_day = standup_local_date(session.team_id, schedule_id or None, user_id)
             today_str = local_day.isoformat()
-            thread_key = f"{session.team_id}:{channel}:{today_str}:{schedule_id}"
-            parent_ts = _daily_thread_cache.get(thread_key)
-
-            if not parent_ts:
-                # Check DB first — the in-memory cache is lost on pod restart.
-                try:
-                    parent_ts = _db.get_daily_thread_ts(session.team_id, channel, today_str, schedule_id)
-                except Exception:
-                    parent_ts = None
-
-            if not parent_ts:
-                # Create parent message for today's thread — polished like competitors
-                standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
-                display_date = local_day.strftime("%a, %b %d.")
-                parent = client.chat_postMessage(
-                    channel=channel,
-                    text=f"✨ {standup_name} Completed - {display_date} ✨",
-                )
-                parent_ts = parent["ts"]
-                try:
-                    _db.upsert_daily_thread(session.team_id, channel, today_str, parent_ts, schedule_id)
-                except Exception as e:
-                    logger.warning("Could not persist daily thread ts: %s", e)
-
-            _daily_thread_cache[thread_key] = parent_ts
+            standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
+            parent_ts = _daily_thread_parent(
+                client,
+                _db,
+                session.team_id,
+                channel,
+                today_str,
+                schedule_id,
+                header_text=f"✨ {standup_name} Completed - {local_day.strftime('%a, %b %d.')} ✨",
+            )
 
             # Mark edits so teammates can tell which message is the latest version;
             # we don't have the original reply's ts to update in place, so post
@@ -593,17 +621,43 @@ def _complete_standup(user_id: str, session, client) -> None:
     if len(question_answers) > 2:
         answers_dict["blockers"] = question_answers[2]
 
+    schedule_id = getattr(session, "schedule_id", None)
+    timestamp = datetime.now(timezone.utc).isoformat()
     fire_webhooks(
         session.team_id,
         "standup.completed",
         {
             "team_id": session.team_id,
             "user_id": user_id,
+            "schedule_id": schedule_id,
             "answers": answers_dict,
             "mood": mood,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": timestamp,
         },
     )
+
+    # blocker.detected was offered as a webhook event but never sent. The
+    # check is the one save_standup stores as has_blockers, so a webhook and
+    # the dashboard agree on which standups reported a blocker.
+    try:
+        import src.modules.standup.blockers as _blockers  # noqa: PLC0415
+
+        blocker_answer = _blockers.find_blocker_answer(session.questions, question_answers)
+        if _blockers.has_blockers(session.questions, question_answers):
+            fire_webhooks(
+                session.team_id,
+                "blocker.detected",
+                {
+                    "team_id": session.team_id,
+                    "user_id": user_id,
+                    "schedule_id": schedule_id,
+                    "blockers": blocker_answer or "",
+                    "answers": answers_dict,
+                    "timestamp": timestamp,
+                },
+            )
+    except Exception as exc:
+        logger.warning("blocker.detected webhook failed for %s/%s: %s", session.team_id, user_id, exc)
 
     # Report posting is handled by the scheduled report job (_post_scheduled_report)
     # which fires at report_time regardless of whether all members submitted.
@@ -1318,19 +1372,11 @@ def register_handlers(app: App) -> None:
             import src.core.db as db  # noqa: PLC0415
 
             db.delete_standup_schedule(team_id, int(standup_id))
-            # Remove from scheduler
-            try:
-                from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-                sched_obj = get_scheduler()
-                if sched_obj:
-                    for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                        try:
-                            sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            # No scheduler call here. The scheduler runs in the gunicorn
+            # master and this handler in a forked worker, whose copy of it is
+            # never started, so removing or adding jobs here changed nothing.
+            # The database is the source of truth: the scheduler's change poll
+            # (_poll_schedule_changes) applies this within about 15 seconds.
             # Refresh App Home (respects configure mode)
             _refresh_home(team_id, user_id, client)
         except Exception as exc:
@@ -1364,20 +1410,9 @@ def register_handlers(app: App) -> None:
             try:
                 import src.core.db as db  # noqa: PLC0415
 
+                # The scheduler's change poll removes the jobs; see the delete
+                # handler above for why nothing is done to the scheduler here.
                 db.update_standup_schedule(team_id, int(standup_id), active=False)
-                # Remove from scheduler
-                try:
-                    from src.core.scheduler import get_scheduler  # noqa: PLC0415
-
-                    sched_obj = get_scheduler()
-                    if sched_obj:
-                        for prefix in ("schedule_", "reminder_schedule_", "weekend_reminder_schedule_"):
-                            try:
-                                sched_obj.remove_job(f"{prefix}{team_id}_{standup_id}")
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
                 _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow pause error: %s", exc)
@@ -1386,20 +1421,9 @@ def register_handlers(app: App) -> None:
             try:
                 import src.core.db as db  # noqa: PLC0415
 
-                schedule = db.update_standup_schedule(team_id, int(standup_id), active=True)
-                # Re-register in scheduler
-                if schedule:
-                    try:
-                        from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-                        inst = db.get_installation(team_id)
-                        sched_obj = get_scheduler()
-                        if inst and sched_obj:
-                            sched_with_token = dict(schedule)
-                            sched_with_token["bot_token"] = inst["bot_token"]
-                            register_schedule_job(sched_obj, sched_with_token)
-                    except Exception:
-                        pass
+                # The scheduler's change poll registers the jobs; see the
+                # delete handler above for why nothing is done here.
+                db.update_standup_schedule(team_id, int(standup_id), active=True)
                 _refresh_home(team_id, user_id, client)
             except Exception as exc:
                 logger.warning("overflow enable error: %s", exc)
@@ -1667,20 +1691,9 @@ def register_handlers(app: App) -> None:
                 # Creating new schedule
                 schedule = db.create_standup_schedule(team_id, **kwargs)
 
-            # Register/update in scheduler
+            # The scheduler picks the saved row up through its change poll
+            # (_poll_schedule_changes); it cannot be reached from this worker.
             if schedule:
-                try:
-                    from src.core.scheduler import get_scheduler, register_schedule_job  # noqa: PLC0415
-
-                    inst = db.get_installation(team_id)
-                    sched_obj = get_scheduler()
-                    if inst and sched_obj:
-                        sched_with_token = dict(schedule)
-                        sched_with_token["bot_token"] = inst["bot_token"]
-                        register_schedule_job(sched_obj, sched_with_token)
-                except Exception as exc2:
-                    logger.warning("Could not register schedule job from modal: %s", exc2)
-
                 # Tell the creator what was saved and when it will run (#119).
                 # Without this, a standup that fires perfectly is indistinguishable
                 # from one that never registered: the creator sees nothing at the

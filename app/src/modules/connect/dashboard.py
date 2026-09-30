@@ -70,7 +70,9 @@ def register_routes(flask_app) -> None:
                 token = inst.get("bot_token") or ""
                 in_channel = set(api.channel_member_ids(WebClient(token=token), p["channel_id"])) if token else None
                 eligible = {m.user_id for m in eligible_members(team_id)}
-                opted_out = cdb.optout_user_ids(team_id, p["id"])
+                from src.modules.connect.rounds import programme_today  # noqa: PLC0415
+
+                opted_out = cdb.optout_user_ids(team_id, p["id"], programme_today(p))
                 pool = eligible if in_channel is None else (eligible & in_channel)
                 p["pool_size"] = len(pool - opted_out)
             except Exception as exc:
@@ -368,10 +370,12 @@ def register_routes(flask_app) -> None:
             elif state == "out":
                 cdb.opt_out(team_id, program_id, user_id, mode="off")
             elif state == "snoozed":
-                from datetime import date, timedelta
+                from datetime import timedelta
+
+                from src.modules.connect.rounds import programme_today  # noqa: PLC0415
 
                 weeks = int(data.get("weeks") or 2)
-                cdb.snooze(team_id, program_id, user_id, date.today() + timedelta(weeks=weeks))
+                cdb.snooze(team_id, program_id, user_id, programme_today(program) + timedelta(weeks=weeks))
             else:
                 return jsonify({"error": "state must be in, out or snoozed"}), 400
         except Exception as exc:

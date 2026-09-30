@@ -1,10 +1,15 @@
 line-length = 120
 
 [lint]
-select = ["E", "F", "W", "I"]
+# DTZ: a naive "today" or "now" is the server clock, which is the wrong day
+# for most teams for part of every day. Use timezones.local_today, the
+# workspace or programme helpers, or an explicit UTC datetime.
+select = ["E", "F", "W", "I", "DTZ"]
 ignore = ["E501"]
 
 [lint.per-file-ignores]
 "app/src/main.py" = ["E402"]
 "app/src/core/db.py" = ["E402"]
 "app/src/migrate.py" = ["E402"]
+# Tests build fixed naive dates and datetimes on purpose.
+"app/tests/**" = ["DTZ"]

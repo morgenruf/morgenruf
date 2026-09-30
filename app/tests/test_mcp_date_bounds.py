@@ -19,6 +19,7 @@ def db(monkeypatch):
     fake = MagicMock()
     fake.get_standups.return_value = []
     fake.get_participation_stats.return_value = {}
+    fake.workspace_local_today.return_value = date.today()
     monkeypatch.setattr(mcp_http, "db", fake)
     return fake
 
@@ -49,3 +50,22 @@ def test_days_are_clamped(db, tool, given, used):
     assert 1 <= days <= 365
     if used is not None:
         assert days == used
+
+
+SYDNEY_TODAY = date(2026, 9, 30)
+
+
+@pytest.mark.parametrize("tool", ["get_today_standups", "get_workspace_summary"])
+def test_today_is_the_workspaces_local_day(db, tool):
+    """At 23:30 UTC a Sydney team is already on the next day; its answers are filed there."""
+    db.workspace_local_today.return_value = SYDNEY_TODAY
+    mcp_http._call_tool(tool, {}, "T1")
+    kwargs = db.get_standups.call_args_list[0].kwargs
+    assert kwargs["from_date"] == kwargs["to_date"] == "2026-09-30"
+
+
+def test_default_range_ends_on_the_local_day(db):
+    db.workspace_local_today.return_value = SYDNEY_TODAY
+    mcp_http._call_tool("get_standups", {}, "T1")
+    assert db.get_standups.call_args.kwargs["to_date"] == "2026-09-30"
+    assert db.get_standups.call_args.kwargs["from_date"] == "2026-09-23"

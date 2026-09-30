@@ -71,14 +71,16 @@ def register_handlers(app) -> None:
     def handle_home_snooze(ack, body, client):  # noqa: ANN001
         """A fortnight off, which is what most people want rather than leaving."""
         ack()
-        from datetime import date, timedelta  # noqa: PLC0415
-
         user_id = body["user"]["id"]
         team_id = body.get("team", {}).get("id", "")
         program_id = int(body["actions"][0]["value"])
-        until = date.today() + timedelta(weeks=2)
         try:
             import src.modules.connect.db as cdb  # noqa: PLC0415
+            from src.modules.connect.rounds import programme_today  # noqa: PLC0415
+
+            # Counted from the programme's calendar day, the day the snooze
+            # check compares against.
+            until = programme_today(cdb.get_program(program_id) or {}) + timedelta(weeks=2)
 
             cdb.snooze(team_id, program_id, user_id, until)
             _confirm(client, body, f"Snoozed until {until.strftime('%d %B')}. You will be matched again after that.")
@@ -689,7 +691,6 @@ def on_channel_join(event, client):  # noqa: ANN001
     Slack shows nothing about a bot's schedule, so without this a person
     joins and waits, with no idea whether anything is coming or when.
     """
-    from datetime import date  # noqa: PLC0415
 
     user_id = event.get("user", "")
     channel_id = event.get("channel", "")
@@ -704,12 +705,12 @@ def on_channel_join(event, client):  # noqa: ANN001
         return
     try:
         import src.modules.connect.db as cdb  # noqa: PLC0415
-        from src.modules.connect.rounds import cadence_phrase, upcoming_round_date  # noqa: PLC0415
+        from src.modules.connect.rounds import cadence_phrase, programme_today, upcoming_round_date  # noqa: PLC0415
 
         program = cdb.program_for_channel(team_id, channel_id)
         if not program:
             return
-        nxt = upcoming_round_date(program, date.today())
+        nxt = upcoming_round_date(program, programme_today(program))
         message = (
             f"Thanks for joining <#{channel_id}>. "
             f"I introduce you to someone else from this channel {cadence_phrase(program.get('interval_weeks'))}.\n"

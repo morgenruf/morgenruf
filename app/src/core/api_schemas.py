@@ -1,6 +1,6 @@
 """Backend-owned browser API contracts, shared by serialization and OpenAPI."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from marshmallow import EXCLUDE, Schema, ValidationError, fields, pre_load, validate, validates_schema
 
@@ -474,7 +474,7 @@ class MemberProfile(ApiSchema):
             return
         # A start date a few months ahead is normal for a new hire, so the
         # future is allowed, up to a year.
-        if start.year < 1900 or start > date.today() + timedelta(days=366):
+        if start.year < 1900 or start > datetime.now(timezone.utc).date() + timedelta(days=366):
             raise ValidationError("Enter a start date after 1900 and no more than a year ahead.", "start_date")
 
 
