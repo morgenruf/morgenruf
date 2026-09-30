@@ -1,5 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 
+import { EmptyValue } from './empty-value';
+
 function decodeSlackEntities(value: string) {
   // Decode only Slack's three entities, in one pass so &amp;lt; stays &lt;.
   return value.replace(/&(amp|lt|gt);/g, (entity) =>
@@ -17,7 +19,7 @@ export function SlackText({
   members?: Record<string, string>;
   channels?: Record<string, string>;
 }) {
-  if (!text) return <span className="text-muted-foreground">—</span>;
+  if (!text) return <EmptyValue label="No text" />;
 
   const pieces = text.split(/(<[^>]+>|\*[^*\n]+\*|`[^`\n]+`)/g);
 

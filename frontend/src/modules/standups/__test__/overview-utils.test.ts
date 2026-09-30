@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { nextRunLabel, scheduleDays } from '../overview-utils';
 
 describe('standup display helpers', () => {
-  it('orders weekdays and summarizes common schedules', () => {
+  it('orders weekdays and summarises common schedules', () => {
     expect(scheduleDays(['fri', 'mon', 'wed'])).toBe('Mon, Wed, Fri');
-    expect(scheduleDays(['mon', 'tue', 'wed', 'thu', 'fri'])).toBe('Mon–Fri');
+    expect(scheduleDays(['mon', 'tue', 'wed', 'thu', 'fri'])).toBe('Weekdays');
     expect(
       scheduleDays(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']),
     ).toBe('Every day');
