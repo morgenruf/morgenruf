@@ -59,6 +59,11 @@ def assert_unique_basenames(paths) -> None:
         seen[name] = p
 
 
+# pg_advisory_lock key for the migration run. Any constant works; this one
+# spells "MIGR" in ASCII, like _PROFILE_PURGE_LOCK in db.py spells "PROF".
+MIGRATION_LOCK_KEY = 0x4D494752
+
+
 def run_migrations():
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -81,6 +86,12 @@ def run_migrations():
     try:
         conn.autocommit = False
         with conn.cursor() as cur:
+            # Every pod runs this in an init container, so two pods starting
+            # together used to race: both saw a migration as unapplied, and
+            # the loser failed on the duplicate and crash-looped. A session
+            # lock makes the second runner wait, then skip what the first
+            # applied. It is released when the connection closes.
+            cur.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS schema_migrations (
                     filename TEXT PRIMARY KEY,

@@ -17,13 +17,15 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
         - name: migrate
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "morgenruf.image" (dict "image" .Values.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["python", "src/migrate.py"]
           env:
@@ -38,9 +40,13 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+            readOnlyRootFilesystem: {{ .Values.readOnlyRootFilesystem }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
       containers:
         - name: morgenruf
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "morgenruf.image" (dict "image" .Values.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 3000
@@ -50,7 +56,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: {{ .Values.readOnlyRootFilesystem }}
           env:
             - name: SESSION_COOKIE_SECURE
               value: "true"
@@ -112,6 +118,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: LOG_LEVEL
+            - name: LOG_FORMAT
+              value: {{ .Values.ops.logFormat | default "text" | quote }}
             - name: MORGENRUF_OPS_EMAIL
               valueFrom:
                 secretKeyRef:
@@ -156,6 +164,12 @@ spec:
             - name: teams-config
               mountPath: /app/teams.yaml
               subPath: teams.yaml
+            - name: tmp
+              mountPath: /tmp
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
@@ -163,6 +177,9 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.tmpSizeLimit }}
         - name: teams-config
           configMap:
             name: {{ include "morgenruf.fullname" . }}-teams

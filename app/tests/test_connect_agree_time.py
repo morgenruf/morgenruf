@@ -9,7 +9,7 @@ the same one, with no calendar access and no OAuth.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.modules.connect import blocks as cb
 from src.modules.connect.hours import local_label, zone_city
@@ -452,3 +452,33 @@ class TestSuggestAnotherTime:
         db.agree_slot.assert_called_once()
         assert db.agree_slot.call_args.args == (77, when)
         assert "Settled" in tap_client.chat_postMessage.call_args.kwargs["text"]
+
+
+class TestZoomOnlyForTheAgreedTime:
+    """A tap that does not settle the match must not book a Zoom meeting.
+
+    Building the label used to resolve the room, and in Zoom mode that created
+    the meeting on the first tap. If the pair then agreed a different time (a
+    suggestion, say), the meeting stayed booked for the first one.
+    """
+
+    def _run(self, votes, user):
+        from src.modules.connect import handlers
+
+        db = TestAcceptSlotHandler()._db(votes=votes)
+        db.program_for_round.return_value = {"video_mode": "zoom"}
+        zoom_room = MagicMock(return_value="https://zoom.us/j/1")
+        client = MagicMock()
+        with patch_modules({"src.modules.connect.db": db}), patch.object(handlers, "_zoom_room", zoom_room):
+            handlers._accept_slot(TestAcceptSlotHandler()._body(user), client)
+        return zoom_room, client
+
+    def test_a_first_tap_books_nothing(self):
+        zoom_room, _ = self._run({SLOT: ["U1"]}, "U1")
+        zoom_room.assert_not_called()
+
+    def test_the_settling_tap_books_the_agreed_time_once(self):
+        zoom_room, client = self._run({SLOT: ["U1", "U2"]}, "U2")
+        zoom_room.assert_called_once()
+        assert zoom_room.call_args.args[2] == SLOT
+        assert "https://zoom.us/j/1" in str(client.chat_postMessage.call_args.kwargs["blocks"])

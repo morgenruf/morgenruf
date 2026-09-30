@@ -276,7 +276,11 @@ def _record_acceptance(
         # other one unaware that a time is now on the table, which is the
         # only thing that makes them tap. The whole mechanism depends on
         # this being visible to both.
-        label, _ = _slot_label_and_link(match, members, slot)
+        # The label alone: building the calendar link resolves the room, and
+        # in Zoom mode that creates the meeting. A time only one person has
+        # accepted must never book one, or a later agreement on a different
+        # time (a suggestion, say) is left with a meeting at the first.
+        label = _slot_label(match, members, slot)
         if suggested:
             # A new time needs its own button: it is not one of the intro's
             # slots, so there is nothing else for the others to tap.
@@ -306,7 +310,6 @@ def _record_acceptance(
     if not cdb.agree_slot(match_id, slot):
         return
 
-    label, add_url = _slot_label_and_link(match, members, slot)
     # A real meeting at the time they agreed, if anyone in the match has
     # linked Zoom. Donut hands you a room to join now; this schedules it
     # for the slot both people accepted, which is what they will actually
@@ -316,6 +319,7 @@ def _record_acceptance(
     # made on somebody's account, and one that picked Zoom does not want
     # a stale room link offered instead.
     room = _room_for(match, members, slot)
+    label, add_url = _slot_label_and_link(match, members, slot, room)
     text, blocks = cblocks.agreed_message(members, label, add_url, room)
     client.chat_postMessage(channel=channel_id, text=text, blocks=blocks)
 
@@ -461,20 +465,31 @@ def _room_for(match: dict, members: list, slot) -> str:
     return program.get("meeting_link") or ""
 
 
-def _slot_label_and_link(match: dict, members: list, slot) -> tuple:
-    """The settled time in everyone's own clock, plus a calendar link."""
+def _slot_label(match: dict, members: list, slot) -> str:
+    """The time in everyone's own clock."""
     try:
         from src.core.roster import eligible_members  # noqa: PLC0415
-        from src.modules.connect.calendar import google_link  # noqa: PLC0415
         from src.modules.connect.hours import local_label  # noqa: PLC0415
 
         zones = {m.user_id: (getattr(m, "tz", "") or "") for m in eligible_members(match["team_id"])}
-        label = local_label(slot, [zones.get(m, "") for m in members])
-        return label, google_link(
-            slot, 30, "Coffee chat", "Your Morgenruf coffee chat.", _room_for(match, members, slot)
-        )
+        return local_label(slot, [zones.get(m, "") for m in members])
     except Exception:
-        return slot.strftime("%A %H:%M UTC"), ""
+        return slot.strftime("%A %H:%M UTC")
+
+
+def _slot_label_and_link(match: dict, members: list, slot, room: str) -> tuple:
+    """The settled time in everyone's own clock, plus a calendar link to `room`.
+
+    Takes the room rather than resolving it, so only the settled path, which
+    has already called _room_for, can create a Zoom meeting.
+    """
+    label = _slot_label(match, members, slot)
+    try:
+        from src.modules.connect.calendar import google_link  # noqa: PLC0415
+
+        return label, google_link(slot, 30, "Coffee chat", "Your Morgenruf coffee chat.", room)
+    except Exception:
+        return label, ""
 
 
 def _zoom_room(match: dict, members: list, slot) -> str:

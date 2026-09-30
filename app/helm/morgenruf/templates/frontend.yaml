@@ -28,9 +28,11 @@ spec:
         runAsUser: 101
         runAsGroup: 101
         fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
-          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          image: {{ include "morgenruf.image" (dict "image" .Values.frontend.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
           ports:
             - name: http

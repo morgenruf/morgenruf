@@ -24,7 +24,7 @@ class FakeScheduler:
     def get_jobs(self):
         return list(self.jobs.values())
 
-    def add_job(self, func, trigger, args=(), id=None, replace_existing=False):
+    def add_job(self, func, trigger, args=(), id=None, replace_existing=False, executor="default"):
         self.added.append(id)
         self.jobs[id] = MagicMock(id=id)
 
@@ -158,3 +158,20 @@ def test_unresolvable_modules_keep_every_live_job_of_that_workspace(wiring, monk
     s = FakeScheduler(existing=["connect:T1:round:7", "celebrations:T1:daily:0900:UTC"])
     _, removed = sync_module_jobs(s)
     assert removed == []
+
+
+def test_module_jobs_run_on_the_bulk_executor(wiring):
+    """Module jobs can run for minutes (a coffee round pauses per match), so
+    they must not share a thread pool with standups, whose misfire grace is
+    checked inside the worker thread."""
+    from src.core.scheduler import BULK_EXECUTOR
+
+    calls = []
+
+    class Recording(FakeScheduler):
+        def add_job(self, *a, **k):
+            calls.append(k.get("executor"))
+            super().add_job(*a, **k)
+
+    sync_module_jobs(Recording())
+    assert calls == [BULK_EXECUTOR]

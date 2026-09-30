@@ -88,7 +88,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.cache }}
           provenance: true
           sbom: true
+      # A fixable CRITICAL or HIGH finding fails the build, so the digest is
+      # never signed or promoted to a release tag.
       - name: Scan the staged digest
+        id: scan
         if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -103,9 +106,10 @@ jobs:
           # once Debian ships a fix.
           ignore-unfixed: true
           version: v0.74.0
-          exit-code: '0'
+          exit-code: '1'
+      # Runs after a failed scan too, so the findings reach code scanning.
       - name: Upload scan results
-        if: github.event_name != 'pull_request'
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.scan.outcome != 'skipped' }}
         uses: github/codeql-action/upload-sarif@v4.38.2
         with:
           sarif_file: trivy-${{ matrix.cache }}.sarif

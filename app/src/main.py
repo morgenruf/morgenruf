@@ -30,6 +30,7 @@ from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 
+from src.core import logjson
 from src.core.dm_router import DMContext, route_dm
 from src.core.installation_store import PostgresInstallationStore
 from src.core.modules import active_modules, deploy_allowlist
@@ -37,10 +38,9 @@ from src.core.scheduler import build_scheduler
 from src.modules import REGISTRY
 
 log_level = logging.DEBUG if os.environ.get("LOG_LEVEL", "").upper() == "DEBUG" else logging.INFO
-logging.basicConfig(
-    level=log_level,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+# LOG_FORMAT=json writes one JSON object per line for a log shipper; the
+# default stays plain text for local runs.
+logjson.configure(log_level)
 logger = logging.getLogger(__name__)
 # slack_sdk logs every API request and response at DEBUG, including OAuth
 # token exchanges and refreshes, so LOG_LEVEL=DEBUG would write live bot and
@@ -395,5 +395,12 @@ if __name__ == "__main__":
                 "accesslog": "-",
                 "errorlog": "-",
                 "loglevel": "info",
+                "logger_class": logjson.gunicorn_logger_class(),
+                # The heartbeat file lives in memory, so the root filesystem
+                # can be mounted read only. /dev/shm is missing on macOS.
+                "worker_tmp_dir": "/dev/shm" if os.path.isdir("/dev/shm") else None,
+                # Nothing uses gunicornc, and its socket would be created
+                # under $HOME, which is read only in the container.
+                "control_socket_disable": True,
             },
         ).run()

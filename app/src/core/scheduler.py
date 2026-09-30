@@ -1819,12 +1819,21 @@ def _claim_run(job_id: str, run_at: datetime) -> bool:
 # coalesce folds a backlog of missed firings into one run.
 MISFIRE_GRACE_SECS = 300
 
+# Executor for jobs that may run long: syncs, purges and every module job.
+BULK_EXECUTOR = "bulk"
+
 
 def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundScheduler:
     """Build scheduler from a list of (team_id, bot_token, config) tuples."""
     global _scheduler
     scheduler = BackgroundScheduler(
-        executors={"default": ClaimingExecutor()},
+        # Two pools. APScheduler checks the misfire grace inside the worker
+        # thread, and connect delivery (a pause per match plus Retry-After
+        # waits), member sync and the DB syncs can hold every thread of one
+        # shared pool for minutes, so a standup queued behind them was dropped
+        # as missed. Background upkeep and module jobs run on "bulk"; standups,
+        # reminders, reports, digests and nudges keep "default" to themselves.
+        executors={"default": ClaimingExecutor(), BULK_EXECUTOR: ClaimingExecutor(max_workers=6)},
         job_defaults={"misfire_grace_time": MISFIRE_GRACE_SECS, "coalesce": True},
     )
     _synced_schedule_fps.clear()
@@ -1860,6 +1869,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         _refresh_all_tokens_job,
         trigger=IntervalTrigger(minutes=30),
         id="token_maintenance",
+        executor=BULK_EXECUTOR,
         name="Background bot-token refresh",
         replace_existing=True,
         next_run_time=datetime.now(tz=timezone.utc) + timedelta(minutes=1),
@@ -1871,6 +1881,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         sync_members_from_slack,
         trigger=IntervalTrigger(hours=_MEMBER_SYNC_INTERVAL_HOURS),
         id="member_sync",
+        executor=BULK_EXECUTOR,
         name="Slack member reconciliation",
         replace_existing=True,
         next_run_time=datetime.now(tz=timezone.utc) + timedelta(minutes=2),
@@ -1882,6 +1893,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         _sync_jobs_from_db,
         trigger=IntervalTrigger(minutes=_SYNC_INTERVAL_MINUTES),
         id="schedule_sync",
+        executor=BULK_EXECUTOR,
         name="DB → scheduler schedule sync",
         replace_existing=True,
     )
@@ -1893,6 +1905,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         sync_module_jobs,
         trigger=IntervalTrigger(minutes=_SYNC_INTERVAL_MINUTES),
         id="module_job_sync",
+        executor=BULK_EXECUTOR,
         name="Module job sync",
         replace_existing=True,
         next_run_time=datetime.now(tz=timezone.utc) + timedelta(seconds=20),
@@ -1906,6 +1919,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         _send_install_followups,
         trigger=CronTrigger(hour=15, minute=0, timezone="UTC"),
         id="install_followups",
+        executor=BULK_EXECUTOR,
         name="Install follow-up email",
         replace_existing=True,
     )
@@ -1917,6 +1931,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         _purge_departed_profiles,
         trigger=CronTrigger(hour=3, minute=17, timezone="UTC"),
         id="profile_purge",
+        executor=BULK_EXECUTOR,
         name="Remove profiles of people who left",
         replace_existing=True,
     )
@@ -1928,6 +1943,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         _purge_old_holidays,
         trigger=CronTrigger(hour=3, minute=27, timezone="UTC"),
         id="holiday_purge",
+        executor=BULK_EXECUTOR,
         name="Remove holidays more than a year old",
         replace_existing=True,
     )
@@ -1936,6 +1952,7 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         _purge_scheduler_runs,
         trigger=CronTrigger(hour=3, minute=37, timezone="UTC"),
         id="scheduler_run_purge",
+        executor=BULK_EXECUTOR,
         name="Remove week-old cron claims",
         replace_existing=True,
     )
@@ -2070,7 +2087,9 @@ def reconcile_jobs(scheduler, desired: dict, keep: tuple[str, ...] = ()) -> tupl
         scheduler.remove_job(jid)
     for jid in added + changed:
         spec = desired[jid]
-        scheduler.add_job(spec.func, spec.trigger, args=spec.args, id=jid, replace_existing=True)
+        scheduler.add_job(
+            spec.func, spec.trigger, args=spec.args, id=jid, replace_existing=True, executor=BULK_EXECUTOR
+        )
     if changed:
         logger.info("module jobs replaced after a trigger or args change: %d", len(changed))
     return added, removed

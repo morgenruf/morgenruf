@@ -5,7 +5,12 @@ replicaCount: 1
 image:
   repository: morgenruf/morgenruf
   pullPolicy: Always
+  # Empty falls back to the chart's appVersion.
   tag: "latest"
+  # Pin the exact image, e.g. "sha256:3f1c...". When set it replaces the tag
+  # for the app and the migrate init container. CI prints the digest of every
+  # release it scans and signs.
+  digest: ""
 
 # Frontend serves the browser application and proxies API/integration requests.
 # Set image.tag to the same immutable release as image.tag above.
@@ -14,6 +19,8 @@ frontend:
   image:
     repository: morgenruf/morgenruf-frontend
     tag: "latest"
+    # Same as image.digest, for the frontend image.
+    digest: ""
     pullPolicy: Always
   resources:
     requests:
@@ -194,6 +201,8 @@ zoom:
 #
 # logLevel: set to DEBUG for verbose logs. It never turns on Flask's debug
 #   server, and Slack SDK request logs (which carry tokens) stay at INFO.
+# logFormat: "json" writes one JSON object per line (app and gunicorn logs),
+#   which a log shipper can parse. Set "text" for the plain format.
 # opsEmail: where the bot emails when a scheduled job fails. Blank disables it.
 # alertWebhook: a Slack incoming-webhook URL in the operator's own workspace.
 #   Posts a line when a workspace installs the app and when one removes it.
@@ -202,6 +211,7 @@ zoom:
 # ---------------------------------------------------------------------------
 ops:
   logLevel: ""
+  logFormat: "json"
   email: ""
   alertWebhook: ""
 
@@ -223,6 +233,22 @@ resources:
     cpu: 500m
     memory: 512Mi
 
+# Mount the backend's root filesystem read only. /tmp is an emptyDir and
+# gunicorn keeps its heartbeat file in /dev/shm, so nothing else needs to be
+# writable. Set false if a custom image or plugin has to write elsewhere.
+readOnlyRootFilesystem: true
+tmpSizeLimit: 64Mi
+
+# Holds off liveness and readiness until the app has booted, so a slow start
+# (cold image pull, busy node, long migration) is not killed mid boot.
+# 30 x 5s gives it 150 seconds.
+startupProbe:
+  httpGet:
+    path: /livez
+    port: 3000
+  periodSeconds: 5
+  failureThreshold: 30
+
 livenessProbe:
   httpGet:
     path: /livez
@@ -236,6 +262,12 @@ readinessProbe:
     port: 3000
   initialDelaySeconds: 10
   periodSeconds: 10
+
+# PodDisruptionBudget for the backend. Only rendered when replicaCount is
+# above 1: with a single replica, minAvailable 1 would block node drains.
+pdb:
+  enabled: true
+  minAvailable: 1
 
 autoscaling:
   enabled: false
