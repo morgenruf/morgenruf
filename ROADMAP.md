@@ -89,6 +89,12 @@ it will never fire. Release by release in [CHANGELOG.md](CHANGELOG.md).
       their profile
 - [ ] **Celebrations** — birthdays and work anniversaries announced in a
       channel on the day, with the roster held in Morgenruf
+- [ ] **Polls**: `/morgenruf-poll` with single or multiple choice, anonymous
+      votes, results hidden until close and a closing time
+      ([discussion](https://github.com/orgs/morgenruf/discussions/211))
+- [ ] **Anonymous pulse and eNPS**: a short recurring survey by DM with trends
+      in Insights. Answers stored with no user id, results hidden below five
+      responses ([discussion](https://github.com/orgs/morgenruf/discussions/212))
 - [ ] **Onboarding buddies**: each new hire paired with a volunteer buddy,
       with a short checklist over the first month (replaces Onboarding journeys)
 - [ ] **Calendar** — hold the hour a coffee chat pair agreed on their
