@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.10] - 2026-09-30
+
+### Changed
+- **Setup emails need an opt-in.** Installing Morgenruf no longer emails the
+  installer. The welcome DM and the installer's Home tab offer an "Email me
+  setup tips" button, and only after it is pressed does Morgenruf send the
+  welcome email, the one-week check-in, the Sunday digest and the uninstall
+  note to their Slack address. "Stop setup emails" on the Home tab turns them
+  off, and every email carries an unsubscribe link. Emails reply to
+  hello@morgenruf.dev.
+- **The AI summary switch only shows when it can work.** The standup editor
+  hides the AI provider and summary settings when the server has no OpenAI or
+  Anthropic key, and the scheduler ignores the saved setting in that case.
+
 ## [1.9.9] - 2026-09-30
 
 ### Security
