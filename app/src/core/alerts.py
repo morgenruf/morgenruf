@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 TIMEOUT = 5
 
 
+def _escape(text: str) -> str:
+    """Names and titles come from a stranger's workspace and are posted into
+    ours, so `<!channel>` or a disguised link in them must stay text."""
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _webhook() -> str:
     return os.environ.get("MORGENRUF_ALERT_WEBHOOK", "").strip()
 
@@ -113,8 +119,9 @@ def installed(team_id: str, team_name: str, installed_by: str = "", bot_token: s
         total = 0
 
     workspace, person = _describe_install(bot_token, team_id, installed_by)
+    workspace, person, installed_by = _escape(workspace), _escape(person), _escape(installed_by)
 
-    name = team_name or team_id
+    name = _escape(team_name or team_id)
     lines = [f":tada: *{name}* installed Morgenruf"]
     lines.append(f"Workspace: {workspace or team_id}")
     if person:
@@ -132,7 +139,7 @@ def uninstalled(team_id: str, team_name: str, days: int = 0, standups: int = 0) 
     The numbers are the whole point: a workspace that ran zero standups in
     three weeks left for a different reason than one that ran forty.
     """
-    name = team_name or team_id
+    name = _escape(team_name or team_id)
     line = f":wave: *{name}* removed Morgenruf"
     if days:
         line += f" after {days} day{'s' if days != 1 else ''}"

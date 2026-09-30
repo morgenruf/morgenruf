@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as _html
 import logging
 import os
 
@@ -51,7 +52,7 @@ def send_weekly_digest(
 
     rows_html = ""
     for p in participation:
-        name = p.get("real_name") or p.get("user_id", "")
+        name = _html.escape(p.get("real_name") or p.get("user_id", ""))
         responses = p.get("responses", 0)
         blockers = p.get("days_with_blockers", 0)
         last = str(p.get("last_standup", ""))[:10] if p.get("last_standup") else "—"
@@ -71,7 +72,7 @@ def send_weekly_digest(
 <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 8px rgba(0,0,0,.06);">
 <tr><td style="background:linear-gradient(135deg,#6366f1,#4f46e5);padding:32px 40px;">
   <h1 style="margin:0;color:#fff;font-size:22px;">☀️ Weekly Standup Digest</h1>
-  <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:14px;">{team_name} · This week's summary</p>
+  <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:14px;">{_html.escape(team_name or "")} · This week's summary</p>
 </td></tr>
 <tr><td style="padding:32px 40px;">
   <table width="100%" cellpadding="0" cellspacing="0">
@@ -145,6 +146,7 @@ def send_welcome_email(to_email: str, team_name: str, installed_by: str) -> None
 
 
 def welcome_email_html(team_name: str, installed_by: str) -> str:
+    team_name, installed_by = _html.escape(team_name or ""), _html.escape(installed_by or "")
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -285,7 +287,7 @@ def _email_wrapper(content: str, footer_extra: str = "") -> str:
 
 def _cta_button(label: str, url: str) -> str:
     return (
-        '<a href="' + url + '" '
+        '<a href="' + _html.escape(url) + '" '
         'style="display:inline-block;margin-top:28px;padding:12px 28px;'
         "background:#22c55e;color:#0a0a0a;font-weight:600;font-size:15px;"
         'border-radius:8px;text-decoration:none;">' + label + "</a>"
@@ -305,7 +307,7 @@ def _stat_row(label: str, value: str) -> str:
         "<tr>"
         '<td style="padding:10px 0;font-size:14px;color:#a3a3a3;border-bottom:1px solid #1f1f1f;">' + label + "</td>"
         '<td style="padding:10px 0;font-size:14px;font-weight:600;color:#e5e5e5;'
-        'text-align:right;border-bottom:1px solid #1f1f1f;">' + value + "</td>"
+        'text-align:right;border-bottom:1px solid #1f1f1f;">' + _html.escape(value) + "</td>"
         "</tr>"
     )
 
@@ -353,6 +355,7 @@ def first_standup_email_html(
     standup_name: str,
     first_standup_time: str,
 ) -> str:
+    team_name = _html.escape(team_name or "")
     content = (
         _h1("Your first standup is set up \U0001f389")
         + _p(
@@ -419,6 +422,7 @@ def send_weekly_digest_email(
 
 def weekly_digest_email_html(team_name: str, stats: dict) -> str:
     completion = str(stats.get("completion_rate", 0)) + "%"
+    team_name = _html.escape(team_name or "")
     content = (
         _h1("Your week in standups \U0001f4ca")
         + _p("Here's how <strong style='color:#e5e5e5;'>" + team_name + "</strong> did this week:")
@@ -481,6 +485,7 @@ def send_inactive_nudge_email(
 
 def inactive_nudge_email_html(team_name: str, days_inactive: int) -> str:
     days_str = str(days_inactive)
+    team_name = _html.escape(team_name or "")
     content = (
         _h1("It's been " + days_str + " days \U0001f4ac")
         + _p(
@@ -547,6 +552,7 @@ def release_announcement_email_html(
     version: str,
     changelog_url: str,
 ) -> str:
+    team_name, version = _html.escape(team_name or ""), _html.escape(version or "")
     content = (
         _h1("Morgenruf " + version + " is here \u2728")
         + _p(
@@ -594,10 +600,10 @@ def send_manager_digest(
         blocker_style = "background:#fff3cd;padding:4px 8px;border-radius:4px;" if has_blocker else ""
         rows += (
             "<tr>"
-            f"<td style='padding:12px;border-bottom:1px solid #eee;font-weight:600'>{s.get('user_name') or s.get('user_id', '')}</td>"
-            f"<td style='padding:12px;border-bottom:1px solid #eee'>{s.get('yesterday', '')}</td>"
-            f"<td style='padding:12px;border-bottom:1px solid #eee'>{s.get('today', '')}</td>"
-            f"<td style='padding:12px;border-bottom:1px solid #eee;{blocker_style}'>{s.get('blockers', '') or '—'}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee;font-weight:600'>{_html.escape(s.get('user_name') or s.get('user_id', ''))}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee'>{_html.escape(s.get('yesterday') or '')}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee'>{_html.escape(s.get('today') or '')}</td>"
+            f"<td style='padding:12px;border-bottom:1px solid #eee;{blocker_style}'>{_html.escape(s.get('blockers') or '') or '—'}</td>"
             "</tr>"
         )
 
@@ -605,8 +611,8 @@ def send_manager_digest(
 
     html = f"""<!DOCTYPE html>
 <html><body style="font-family:-apple-system,sans-serif;max-width:800px;margin:0 auto;padding:20px">
-<h2 style="color:#1a1a2e">📋 Daily Standup Digest — {date_str}</h2>
-<p style="color:#666">{workspace_name} · {participation} response(s){blocker_notice}</p>
+<h2 style="color:#1a1a2e">📋 Daily Standup Digest — {_html.escape(str(date_str))}</h2>
+<p style="color:#666">{_html.escape(workspace_name or "")} · {participation} response(s){blocker_notice}</p>
 <table style="width:100%;border-collapse:collapse;margin-top:20px">
   <thead><tr style="background:#f8f9fa">
     <th style="padding:12px;text-align:left">Member</th>

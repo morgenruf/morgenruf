@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import html
 import logging
 import os
 
@@ -175,6 +176,9 @@ def welcome_html(team_name: str, installed_by: str, email: str) -> str:
     first twenty workspaces never did, so this one says that plainly and gives
     one thing to press.
     """
+    # Names come from the installing workspace, so they are data, not markup.
+    team_name = html.escape(team_name or "")
+    installed_by = html.escape(installed_by or "")
     body = f"""
 <p style="margin:0 0 6px;font-size:23px;font-weight:700;color:{TEXT};letter-spacing:-0.02em;">
   Morgenruf is in {team_name}</p>
@@ -201,6 +205,8 @@ def followup_running_html(team_name: str, email: str, standups: int, people: int
     Asks one question. A survey link would get ignored; a reply to a human is
     the thing people actually answer.
     """
+    # Names come from the installing workspace, so they are data, not markup.
+    team_name = html.escape(team_name or "")
     body = f"""
 <p style="margin:0 0 6px;font-size:23px;font-weight:700;color:{TEXT};letter-spacing:-0.02em;">
   A week of standups in {team_name}</p>
@@ -226,6 +232,8 @@ def followup_stalled_html(team_name: str, email: str) -> str:
     The useful message, and the one that was missing: most workspaces that go
     quiet never created a schedule, and nobody ever asked them why.
     """
+    # Names come from the installing workspace, so they are data, not markup.
+    team_name = html.escape(team_name or "")
     body = f"""
 <p style="margin:0 0 6px;font-size:23px;font-weight:700;color:{TEXT};letter-spacing:-0.02em;">
   Nothing has run in {team_name} yet</p>
