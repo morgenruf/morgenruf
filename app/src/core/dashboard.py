@@ -402,7 +402,7 @@ def api_list_standups():
         # workspace settings always came back as their defaults, which is why
         # choosing Anthropic and reloading snapped the dropdown to OpenAI.
         ws = _workspace_settings(team_id)
-        return [_schedule_to_standup(r, ws) for r in rows]
+        return [_schedule_to_standup(r, ws) for r in _visible_schedules(rows)]
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
         return []
@@ -777,11 +777,16 @@ def api_members(query):
         grants = {}
 
     channel_id = query.get("channel_id")
+    # Addresses are for the people who set standups up; membership of a
+    # channel only for someone who could see that channel in Slack.
+    privileged = _sees_every_standup()
 
     try:
         from slack_sdk import WebClient  # noqa: PLC0415
 
         client = WebClient(token=token)
+        if channel_id and not privileged and not _can_see_channel(client, channel_id, session.get("user_id") or ""):
+            return []
 
         # If channel_id provided, fetch only that channel's members
         channel_member_ids = None
@@ -819,7 +824,7 @@ def api_members(query):
                     "name": profile.get("real_name") or u.get("name", ""),
                     "display_name": profile.get("display_name") or u.get("name", ""),
                     "avatar": profile.get("image_48", ""),
-                    "email": profile.get("email", ""),
+                    "email": profile.get("email", "") if privileged else "",
                     "tz": u.get("tz", "UTC"),
                     "role": role_map.get(uid, "member"),
                     "module_admin": sorted(grants.get(uid, ())),
@@ -842,7 +847,7 @@ def api_members(query):
                     # shows faces and handles when Slack is unreachable.
                     "display_name": r.get("display_name") or "",
                     "avatar": r.get("avatar_url") or "",
-                    "email": r.get("email", ""),
+                    "email": r.get("email", "") if privileged else "",
                     "tz": r.get("tz", "UTC"),
                     "role": r.get("role", "member"),
                     "module_admin": sorted(grants.get(r["user_id"], ())),
@@ -1272,6 +1277,108 @@ def _clamp_date_from(date_from: str | None) -> str | None:
     return earliest.isoformat() if parsed < earliest else date_from
 
 
+# Whether a channel is public, per process for a few minutes. Visibility checks
+# run on every report and feed load, and privacy changes rarely.
+_CHANNEL_PUBLIC_CACHE: dict[str, tuple[float, bool]] = {}
+_CHANNEL_PUBLIC_TTL = 600
+
+
+def _channel_is_public(client, channel_id: str) -> bool:
+    """True for a public channel. Anything that cannot be confirmed is not."""
+    import time  # noqa: PLC0415
+
+    cached = _CHANNEL_PUBLIC_CACHE.get(channel_id)
+    if cached and time.monotonic() - cached[0] < _CHANNEL_PUBLIC_TTL:
+        return cached[1]
+    try:
+        info = client.conversations_info(channel=channel_id).get("channel") or {}
+    except Exception as exc:
+        logger.info("Could not read channel %s: %s", channel_id, exc)
+        return False
+    public = not (info.get("is_private") or info.get("is_im") or info.get("is_mpim") or info.get("is_group"))
+    _CHANNEL_PUBLIC_CACHE[channel_id] = (time.monotonic(), public)
+    return public
+
+
+def _in_channel(client, channel_id: str, user_id: str) -> bool:
+    """Whether this person is a member of the channel, bounded to 20 pages."""
+    cursor = None
+    try:
+        for _ in range(20):
+            resp = client.conversations_members(channel=channel_id, limit=1000, cursor=cursor or "")
+            if user_id in (resp.get("members") or []):
+                return True
+            cursor = (resp.get("response_metadata") or {}).get("next_cursor")
+            if not cursor:
+                break
+    except Exception as exc:
+        logger.info("Could not list members of %s: %s", channel_id, exc)
+    return False
+
+
+def _can_see_channel(client, channel_id: str, user_id: str) -> bool:
+    """What Slack would show them: any public channel, or a private one they are in."""
+    return _channel_is_public(client, channel_id) or _in_channel(client, channel_id, user_id)
+
+
+def _sees_every_standup() -> bool:
+    """Workspace and standup admins see every schedule, answer and email."""
+    try:
+        return db.can_administer(session.get("team_id") or "", session.get("user_id") or "", "standup")
+    except Exception as exc:
+        logger.warning("visibility check failed: %s", exc)
+        return False
+
+
+def _visible_schedules(schedules: list[dict]) -> list[dict]:
+    """The schedules this viewer may read.
+
+    A member sees a standup they are in, or one posting to a channel they
+    could read in Slack anyway. Without this anyone signed in could read the
+    answers from a private channel's standup.
+    """
+    if _sees_every_standup():
+        return schedules
+    user_id = session.get("user_id") or ""
+    client = None
+    token = _get_bot_token()
+    if token:
+        from slack_sdk import WebClient  # noqa: PLC0415
+
+        client = WebClient(token=token)
+    visible = []
+    for sched in schedules:
+        channel_id = sched.get("channel_id") or ""
+        if user_id in (sched.get("participants") or []) or (
+            client is not None and channel_id and _can_see_channel(client, channel_id, user_id)
+        ):
+            visible.append(sched)
+    return visible
+
+
+def _visible_schedule_ids(team_id: str) -> set[int] | None:
+    """Ids of the schedules this viewer may read, or None for all of them."""
+    if _sees_every_standup():
+        return None
+    try:
+        schedules = db.get_standup_schedules(team_id)
+    except Exception as exc:
+        logger.warning("Could not load schedules for visibility: %s", exc)
+        return set()
+    return {int(s["id"]) for s in _visible_schedules(schedules) if s.get("id") is not None}
+
+
+def _visible_rows(rows: list[dict], visible: set[int] | None) -> list[dict]:
+    """Answers from visible schedules. A row older than schedule ids is shown
+    only to the person who wrote it, since its standup cannot be told."""
+    if visible is None:
+        return rows
+    user_id = session.get("user_id") or ""
+    return [
+        r for r in rows if (int(r["schedule_id"]) in visible if r.get("schedule_id") else r.get("user_id") == user_id)
+    ]
+
+
 @dashboard_bp.route("/dashboard/api/reports", methods=["GET"])
 @_login_required
 @dashboard_bp.doc(operationId="getReports", tags=["Reports"], security=[{"sessionCookie": []}])
@@ -1293,6 +1400,8 @@ def api_reports(query):
         )
         if user_id_filter:
             standups = [s for s in standups if s.get("user_id") == user_id_filter]
+        visible = _visible_schedule_ids(team_id)
+        standups = _visible_rows(standups, visible)
 
         _attach_questions(team_id, standups)
         channel_names = _resolve_channel_names(token, standups) if (token := _get_bot_token()) else {}
@@ -1309,8 +1418,18 @@ def api_reports(query):
         overview = db.get_participation_overview(team_id, days=days)
         total_days = days
 
+        overview_schedules = overview.get("schedules") or []
+        overview_members = overview.get("members") or []
+        if visible is not None:
+            overview_schedules = [r for r in overview_schedules if r.get("schedule_id") in visible]
+            overview_members = [
+                p
+                for p in overview_members
+                if p.get("user_id") == session.get("user_id") or set(p.get("schedule_ids") or []) & visible
+            ]
+
         member_summary = []
-        for p in overview.get("members") or []:
+        for p in overview_members:
             expected = int(p.get("expected") or 0)
             rate = int(p.get("completion_rate") or 0)
             member_summary.append(
@@ -1338,7 +1457,7 @@ def api_reports(query):
             "participation": member_summary,
             "total_days": total_days,
             "summary": _participation_summary(overview),
-            "schedules": overview.get("schedules") or [],
+            "schedules": overview_schedules,
         }
     except Exception as exc:
         logger.error("api_reports error: %s", exc)
@@ -1706,6 +1825,7 @@ def api_export_csv(query):
         rows = db.export_standups(team_id, from_date, to_date)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+    rows = _visible_rows(rows, _visible_schedule_ids(team_id))
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
