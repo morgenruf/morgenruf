@@ -621,17 +621,43 @@ def _complete_standup(user_id: str, session, client) -> None:
     if len(question_answers) > 2:
         answers_dict["blockers"] = question_answers[2]
 
+    schedule_id = getattr(session, "schedule_id", None)
+    timestamp = datetime.now(timezone.utc).isoformat()
     fire_webhooks(
         session.team_id,
         "standup.completed",
         {
             "team_id": session.team_id,
             "user_id": user_id,
+            "schedule_id": schedule_id,
             "answers": answers_dict,
             "mood": mood,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": timestamp,
         },
     )
+
+    # blocker.detected was offered as a webhook event but never sent. The
+    # check is the one save_standup stores as has_blockers, so a webhook and
+    # the dashboard agree on which standups reported a blocker.
+    try:
+        import src.modules.standup.blockers as _blockers  # noqa: PLC0415
+
+        blocker_answer = _blockers.find_blocker_answer(session.questions, question_answers)
+        if _blockers.has_blockers(session.questions, question_answers):
+            fire_webhooks(
+                session.team_id,
+                "blocker.detected",
+                {
+                    "team_id": session.team_id,
+                    "user_id": user_id,
+                    "schedule_id": schedule_id,
+                    "blockers": blocker_answer or "",
+                    "answers": answers_dict,
+                    "timestamp": timestamp,
+                },
+            )
+    except Exception as exc:
+        logger.warning("blocker.detected webhook failed for %s/%s: %s", session.team_id, user_id, exc)
 
     # Report posting is handled by the scheduled report job (_post_scheduled_report)
     # which fires at report_time regardless of whether all members submitted.

@@ -693,49 +693,6 @@ def _send_reminder_to_workspace(
     # point always saw 0 percent and fired every day.
 
 
-def schedule_participation_pct(
-    team_id: str, schedule: dict | None, local_day: date, answered: set[str], eligible: set[str]
-) -> int:
-    """Percentage of one standup's expected members who answered on `local_day`.
-
-    Expected means on this standup (everyone eligible when it names nobody),
-    eligible (active, not on leave) and not skipping today. Returns 100 when
-    nobody was expected, so an empty or fully skipped day never trips a rule.
-    """
-    import src.core.db as db  # noqa: PLC0415
-
-    participants = [p for p in ((schedule or {}).get("participants") or []) if p]
-    pool = list(dict.fromkeys(participants)) if participants else sorted(eligible)
-    stats = []
-    for user_id in pool:
-        if user_id not in eligible:
-            continue
-        try:
-            if db.is_skipped_today(team_id, user_id, for_date=local_day):
-                continue
-        except Exception as exc:
-            logger.debug("Skip lookup failed for %s/%s: %s", team_id, user_id, exc)
-        stats.append({"user_id": user_id, "enrolled": True, "responses": 1 if user_id in answered else 0})
-    return participation_pct(stats)
-
-
-def _evaluate_low_participation(
-    team_id: str, schedule: dict | None, local_day: date, today_standups: list[dict], client
-) -> None:
-    """Fire low_participation rules for one standup, once its window has closed."""
-    try:
-        from src.core.roster import eligible_members  # noqa: PLC0415
-        from src.modules.standup.workflow import evaluate_rules  # noqa: PLC0415
-
-        eligible = {m.user_id for m in eligible_members(team_id)}
-        answered = {s.get("user_id") for s in today_standups or [] if s.get("user_id")}
-        pct = schedule_participation_pct(team_id, schedule, local_day, answered, eligible)
-        context = {"participation_pct": pct, "team": team_id, "standup": (schedule or {}).get("name") or ""}
-        evaluate_rules(team_id, "low_participation", context, client)
-    except Exception as exc:
-        logger.warning("Participation workflow rules failed for %s: %s", team_id, exc)
-
-
 def _send_weekly_digest(team_id: str, bot_token: str) -> None:
     """Send a weekly summary email to the workspace admin."""
     try:
@@ -901,7 +858,12 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
         # one moment a participation figure means something. It runs before
         # the "nothing to report" exit because a day nobody answered is exactly
         # the day the rule exists for.
-        _evaluate_low_participation(team_id, sched_cfg, local_day, today_standups, WebClient(token=bot_token))
+        try:
+            from src.modules.standup.workflow import evaluate_low_participation  # noqa: PLC0415
+
+            evaluate_low_participation(team_id, sched_cfg, local_day, today_standups, WebClient(token=bot_token))
+        except Exception as exc:
+            logger.warning("Participation check failed for %s/%s: %s", team_id, schedule_id, exc)
         if not today_standups:
             logger.info("No submissions for team %s — skipping report", team_id)
             return
