@@ -1942,23 +1942,35 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
     return dict(row)
 
 
-def upsert_daily_thread(team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0) -> None:
-    """Persist the parent message ts for today's standup thread.
+def upsert_daily_thread(
+    team_id: str, channel_id: str, thread_date: str, parent_ts: str, schedule_id: int = 0
+) -> str | None:
+    """Persist the parent message ts for today's standup thread; return the stored one.
 
     Scoped by schedule_id so workspaces running multiple standups on the same
     channel (morning + evening) get a distinct thread parent per schedule.
+
+    Two people finishing at the same moment both post a header. Only the first
+    insert wins, so this returns whichever ts is actually stored: the caller's
+    own when it won, the other one when it lost. The no-op DO UPDATE is there
+    because DO NOTHING returns no row on conflict. None means the write failed.
     """
     sql = """
         INSERT INTO daily_standup_threads (team_id, channel_id, thread_date, schedule_id, parent_ts)
         VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (team_id, channel_id, thread_date, schedule_id) DO NOTHING
+        ON CONFLICT (team_id, channel_id, thread_date, schedule_id)
+        DO UPDATE SET parent_ts = daily_standup_threads.parent_ts
+        RETURNING parent_ts
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             try:
                 cur.execute(sql, (team_id, channel_id, thread_date, int(schedule_id or 0), parent_ts))
-            except Exception:
-                pass
+                row = cur.fetchone()
+            except Exception as exc:
+                logger.warning("Could not store daily thread for %s/%s: %s", team_id, channel_id, exc)
+                return None
+    return row[0] if row else None
 
 
 def get_daily_thread_ts(team_id: str, channel_id: str, thread_date: str, schedule_id: int = 0) -> str | None:

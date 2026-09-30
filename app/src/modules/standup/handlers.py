@@ -37,6 +37,49 @@ def _clean_thread_cache() -> None:
         del _daily_thread_cache[k]
 
 
+def _daily_thread_parent(
+    client, db, team_id: str, channel: str, today_str: str, schedule_id: int, header_text: str
+) -> str:
+    """Return the ts of today's thread header, posting it when there is none.
+
+    The stored ts is the one everybody threads under, including the scheduled
+    report. When two people finish together both see no thread and both post
+    a header; the database keeps the first. The loser adopts the stored ts and
+    deletes its own header, so the channel does not show two, and only a ts
+    that is actually stored is cached.
+    """
+    thread_key = f"{team_id}:{channel}:{today_str}:{schedule_id}"
+    parent_ts = _daily_thread_cache.get(thread_key)
+    if parent_ts:
+        return parent_ts
+    try:
+        # The in-memory cache is lost on restart and not shared between workers.
+        parent_ts = db.get_daily_thread_ts(team_id, channel, today_str, schedule_id)
+    except Exception:
+        parent_ts = None
+    if parent_ts:
+        _daily_thread_cache[thread_key] = parent_ts
+        return parent_ts
+
+    ours = client.chat_postMessage(channel=channel, text=header_text)["ts"]
+    try:
+        stored = db.upsert_daily_thread(team_id, channel, today_str, ours, schedule_id)
+    except Exception as exc:
+        logger.warning("Could not persist daily thread ts: %s", exc)
+        stored = None
+    if not stored:
+        # Not stored, so another worker cannot find it: use it for this post
+        # but do not cache it, and the next answer checks the database again.
+        return ours
+    if stored != ours:
+        try:
+            client.chat_delete(channel=channel, ts=ours)
+        except Exception as exc:
+            logger.info("Could not delete duplicate thread header %s in %s: %s", ours, channel, exc)
+    _daily_thread_cache[thread_key] = stored
+    return stored
+
+
 # Track which users are in configure mode: "team_id:user_id"
 _configure_mode_users: set[str] = set()
 
@@ -514,31 +557,16 @@ def _complete_standup(user_id: str, session, client) -> None:
             schedule_id = int(getattr(session, "schedule_id", 0) or sched_config.get("id") or 0)
             local_day = standup_local_date(session.team_id, schedule_id or None, user_id)
             today_str = local_day.isoformat()
-            thread_key = f"{session.team_id}:{channel}:{today_str}:{schedule_id}"
-            parent_ts = _daily_thread_cache.get(thread_key)
-
-            if not parent_ts:
-                # Check DB first — the in-memory cache is lost on pod restart.
-                try:
-                    parent_ts = _db.get_daily_thread_ts(session.team_id, channel, today_str, schedule_id)
-                except Exception:
-                    parent_ts = None
-
-            if not parent_ts:
-                # Create parent message for today's thread — polished like competitors
-                standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
-                display_date = local_day.strftime("%a, %b %d.")
-                parent = client.chat_postMessage(
-                    channel=channel,
-                    text=f"✨ {standup_name} Completed - {display_date} ✨",
-                )
-                parent_ts = parent["ts"]
-                try:
-                    _db.upsert_daily_thread(session.team_id, channel, today_str, parent_ts, schedule_id)
-                except Exception as e:
-                    logger.warning("Could not persist daily thread ts: %s", e)
-
-            _daily_thread_cache[thread_key] = parent_ts
+            standup_name = sched_config.get("name") or session.standup_name or "Team Standup"
+            parent_ts = _daily_thread_parent(
+                client,
+                _db,
+                session.team_id,
+                channel,
+                today_str,
+                schedule_id,
+                header_text=f"✨ {standup_name} Completed - {local_day.strftime('%a, %b %d.')} ✨",
+            )
 
             # Mark edits so teammates can tell which message is the latest version;
             # we don't have the original reply's ts to update in place, so post
