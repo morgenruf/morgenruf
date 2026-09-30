@@ -195,8 +195,9 @@ def oauth_callback():
             bot_client.chat_postMessage(
                 channel=dm_channel,
                 text=(
-                    "👋 Welcome to Morgenruf! I'll ping you every morning for your standup. "
-                    "Type `help` to see what I can do."
+                    "👋 Morgenruf is installed. Nothing runs until you create a standup: "
+                    "open the Home tab and press *Create a standup*. It takes a minute. "
+                    "Type `/morgenruf help` to see everything else."
                 ),
             )
         except Exception as exc:
