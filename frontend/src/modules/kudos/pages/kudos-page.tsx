@@ -59,7 +59,9 @@ export default function KudosPage() {
           daily_allowance: config.data.daily_allowance,
           channel_id: config.data.channel_id,
         }
-      : { emoji: '☕', daily_allowance: 5, channel_id: '' },
+      : // Matches the backend default (kudos DEFAULT_EMOJI), so the form
+        // never flashes a coffee cup that belongs to coffee chats.
+        { emoji: '🍁', daily_allowance: 5, channel_id: '' },
   });
 
   // Only channels the bot is in come back, which are the only ones it can

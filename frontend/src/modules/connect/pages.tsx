@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/common/components/ui/select';
-import { formatDate } from '@/common/lib/format';
+import { formatDate, plural } from '@/common/lib/format';
 
 import { Attendance } from './attendance';
 import { cadenceLabel } from './form-utils';
@@ -76,7 +76,7 @@ function ConnectGate({
     return (
       <EmptyState
         title="Coffee chats are unavailable"
-        description="This deployment does not include the coffee chat module."
+        description="This deployment does not include coffee chats."
       />
     );
 
@@ -111,7 +111,7 @@ function ConnectGate({
         title="Coffee chats are switched off"
         description={
           isAdmin
-            ? 'Turn on introductions for your workspace. Nothing is sent until you create a coffee chat.'
+            ? 'Turn on coffee chats for your workspace. No introductions are sent until you create a coffee chat.'
             : 'A workspace administrator can turn coffee chats on in Settings.'
         }
         action={
@@ -326,7 +326,7 @@ function ProgramList() {
                       <Users className="size-3.5" />
                       {program.pool_size == null
                         ? 'Pool size unavailable'
-                        : `${program.pool_size} in the pool`}
+                        : `${plural(program.pool_size, 'person', 'people')} in the pool`}
                     </span>
                   </div>
                   {program.upcoming_round && (
@@ -446,7 +446,7 @@ export function ConnectNewPage() {
         ) : (
           <EmptyState
             title="Administrator access required"
-            description="A coffee chat administrator can create an introduction program."
+            description="A coffee chat administrator can set one up."
           />
         )}
       </ConnectGate>

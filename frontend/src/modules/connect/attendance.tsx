@@ -27,7 +27,7 @@ import {
   CardTitle,
 } from '@/common/components/ui/card';
 import { ScrollArea } from '@/common/components/ui/scroll-area';
-import { formatDate, formatDateTime } from '@/common/lib/format';
+import { formatDate, formatDateTime, plural } from '@/common/lib/format';
 
 import { AttendanceChart } from './attendance-chart';
 import {
@@ -51,10 +51,7 @@ function RoundMatches({
   function renderContent() {
     if (query.isPending)
       return (
-        <SkeletonRegion
-          label="Loading pairings…"
-          className="border-t px-4 py-3"
-        >
+        <SkeletonRegion label="Loading pairs…" className="border-t px-4 py-3">
           <SkeletonPeople rows={3} />
         </SkeletonRegion>
       );
@@ -93,7 +90,7 @@ function RoundMatches({
           ))
         ) : (
           <p className="text-sm text-muted-foreground">
-            No pairings in this round.
+            No pairs in this round.
           </p>
         )}
       </div>
@@ -151,9 +148,9 @@ export function Attendance({ programId }: { programId: number }) {
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Answered pairings that met"
+            label="Answered pairs that met"
             value={rate == null ? 'No outcomes yet' : `${rate}%`}
-            description={`${totals.matches} ${totals.matches === 1 ? 'introduction' : 'introductions'} across ${rounds.data.length} ${rounds.data.length === 1 ? 'round' : 'rounds'}`}
+            description={`${plural(totals.matches, 'introduction')} across ${plural(rounds.data.length, 'round')}`}
             icon={TrendingUp}
             tone="primary"
           />
@@ -182,7 +179,7 @@ export function Attendance({ programId }: { programId: number }) {
               <span
                 className={totals.undelivered ? 'text-destructive' : undefined}
               >
-                {totals.undelivered} introductions not delivered
+                {plural(totals.undelivered, 'introduction')} not delivered
               </span>
             }
             icon={CalendarCheck}
@@ -193,7 +190,7 @@ export function Attendance({ programId }: { programId: number }) {
         <div className="grid gap-5 xl:grid-cols-2">
           <Card className="min-w-0">
             <CardHeader>
-              <CardTitle>Pairings</CardTitle>
+              <CardTitle>Pairs</CardTitle>
               <CardDescription>
                 Open a round to see who was paired and whether they met.
               </CardDescription>
@@ -223,9 +220,9 @@ export function Attendance({ programId }: { programId: number }) {
                             : 'Unscheduled'}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
-                          {round.matches} pairings
+                          {plural(round.matches, 'pair')}
                           {round.rematch_requests
-                            ? ` · ${round.rematch_requests} requested a new match`
+                            ? ` · ${round.rematch_requests} asked for a new pair`
                             : ''}
                         </span>
                         <span className="mt-2 flex flex-wrap gap-1">

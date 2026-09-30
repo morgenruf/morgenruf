@@ -52,7 +52,7 @@ const featureNames: Record<string, string> = {
 
 const featureDescriptions: Record<string, string> = {
   standup: 'Collect updates from your team and share the summary.',
-  connect: 'Introduce people from a channel on a regular cadence.',
+  connect: 'Pair people from a channel for a coffee chat on a regular cadence.',
   kudos: 'Peer recognition with a daily allowance.',
   celebrations: 'Post birthdays and work anniversaries to a channel.',
   insights: 'See who needs recognition and where blockers persist.',
