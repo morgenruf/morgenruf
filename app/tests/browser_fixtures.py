@@ -490,7 +490,7 @@ def create_test_app(patcher=None):
             "delete_standup_schedule": lambda team, schedule_id: state.delete(state.schedules, schedule_id),
             "get_standups": lambda team, **kwargs: deepcopy(state.responses),
             "export_standups": lambda *args: deepcopy(state.responses),
-            "get_participation_overview": lambda team, days=7: state.overview(days),
+            "get_participation_overview": lambda team, days=7, start=None, end=None: state.overview(days),
             "granted_scopes": lambda team: {
                 scope
                 for spec in __import__("src.modules", fromlist=["REGISTRY"]).REGISTRY
