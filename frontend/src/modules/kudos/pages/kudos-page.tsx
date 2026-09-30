@@ -151,7 +151,7 @@ export default function KudosPage() {
       <div className="grid gap-5 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Most recognized</CardTitle>
+            <CardTitle>Most recognised</CardTitle>
             <CardDescription>Teammates receiving appreciation.</CardDescription>
           </CardHeader>
           <CardContent>

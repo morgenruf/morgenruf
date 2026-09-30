@@ -448,7 +448,7 @@ export default function MembersPage() {
                           <p>{member.tz || 'UTC'}</p>
                           <LoadingTransition pending={standups.isPending}>
                             {standups.isPending ? (
-                              <SkeletonRegion label="Loading standup enrollment…">
+                              <SkeletonRegion label="Loading standup enrolment…">
                                 <Skeleton className="h-4 w-24" />
                               </SkeletonRegion>
                             ) : (
