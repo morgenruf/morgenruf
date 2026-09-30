@@ -232,7 +232,8 @@ def register_routes(flask_app) -> None:
         team_id = session["team_id"]
         try:
             settings = cdb.get_settings(team_id)
-            today = jobs.local_today(settings.get("timezone") or "UTC") or date.today()
+            # An unusable stored timezone reads as UTC rather than the server clock.
+            today = jobs.local_today(settings.get("timezone") or "UTC") or jobs.local_today("UTC")
             cal = from_rows(db.get_working_days(team_id), db.list_holidays(team_id))
             people = jobs.people_from_rows(cdb.celebrants(team_id))
         except Exception as exc:

@@ -16,7 +16,7 @@ import csv
 import io
 import re
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 DEFAULT_WORKING_DAYS = "mon,tue,wed,thu,fri"
@@ -181,7 +181,7 @@ def read_holiday_csv(text: str, today: date | None = None) -> list[dict]:
     invalid rather than silently replacing the first. A date more than a year
     back is refused, because the nightly purge would delete it anyway.
     """
-    today = today or date.today()
+    today = today or datetime.now(timezone.utc).date()
     oldest = today - timedelta(days=HOLIDAY_RETENTION_DAYS)
     reader = csv.reader(io.StringIO((text or "").lstrip("﻿")))
     rows: list[dict] = []

@@ -1248,13 +1248,14 @@ def _clamp_date_from(date_from: str | None) -> str | None:
     """
     if not date_from:
         return date_from
-    from datetime import date, timedelta
+    from datetime import date, datetime, timedelta, timezone
 
     try:
         parsed = date.fromisoformat(date_from)
     except ValueError:
         return date_from
-    earliest = date.today() - timedelta(days=_MAX_REPORT_DAYS - 1)
+    # A memory bound, not a calendar day, so the UTC date is precise enough.
+    earliest = datetime.now(timezone.utc).date() - timedelta(days=_MAX_REPORT_DAYS - 1)
     return earliest.isoformat() if parsed < earliest else date_from
 
 

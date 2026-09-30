@@ -1034,7 +1034,7 @@ def register_workspace_job(
     # Reminder job
     reminder_minutes = int(config.get("reminder_minutes") or 0)
     if reminder_minutes > 0:
-        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
+        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))  # noqa: DTZ001 - wall clock arithmetic only, never an instant
         reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
         reminder_days = schedule_days
         if reminder_dt.date() < standup_dt.date():
@@ -1067,7 +1067,7 @@ def register_workspace_job(
 
     # Manager digest job — runs daily at standup time (after standup completes)
     # Use a 30-minute offset after the standup time so responses are in by then
-    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)
+    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)  # noqa: DTZ001 - wall clock arithmetic only, never an instant
     scheduler.add_job(
         _send_manager_digest,
         trigger=CronTrigger(
@@ -1154,7 +1154,7 @@ def register_workspace_digests_only(
     )
 
     # Manager digest
-    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)
+    standup_plus_30 = datetime(2000, 1, 1, int(hour), int(minute)) + timedelta(minutes=30)  # noqa: DTZ001 - wall clock arithmetic only, never an instant
     scheduler.add_job(
         _send_manager_digest,
         trigger=CronTrigger(
@@ -1276,7 +1276,7 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     )
 
     if reminder_minutes > 0:
-        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))
+        standup_dt = datetime(2000, 1, 1, int(hour), int(minute))  # noqa: DTZ001 - wall clock arithmetic only, never an instant
         reminder_dt = standup_dt - timedelta(minutes=reminder_minutes)
         reminder_days = schedule_days
         if reminder_dt.date() < standup_dt.date():
@@ -1339,7 +1339,7 @@ def register_schedule_job(scheduler: BackgroundScheduler, schedule: dict) -> Non
     # the scheduler.
     if schedule.get("nudge_missing"):
         before = int(schedule.get("nudge_minutes_before") or 20)
-        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)
+        nudge_dt = datetime(2000, 1, 1, int(r_hour), int(r_minute)) - timedelta(minutes=before)  # noqa: DTZ001 - wall clock arithmetic only, never an instant
         scheduler.add_job(
             _nudge_missing,
             trigger=CronTrigger(
