@@ -193,3 +193,21 @@ class TestStandupAdminGuard:
         self.db.can_administer.side_effect = RuntimeError("db down")
         with patch_modules({"src.core.db": self.db}):
             assert handlers.may_manage_standups("T1", "U1") is False
+
+
+class TestReportedAtIsLocal:
+    """App Home said "Reported at 12:25 AM" for an 8:25 PM New York answer."""
+
+    def test_utc_timestamp_shown_in_the_readers_zone(self):
+        from datetime import datetime, timezone
+
+        moment = datetime(2026, 9, 30, 0, 25, tzinfo=timezone.utc)
+        assert handlers._local_clock(moment, "America/New_York") == "8:25 PM"
+
+    def test_legacy_alias_and_bad_zone(self):
+        from datetime import datetime, timezone
+
+        moment = datetime(2026, 9, 30, 0, 25, tzinfo=timezone.utc)
+        assert handlers._local_clock(moment, "Asia/Calcutta") == "5:55 AM"
+        assert handlers._local_clock(moment, "Not/AZone") == "12:25 AM"
+        assert handlers._local_clock(moment.replace(tzinfo=None), None) == "12:25 AM"

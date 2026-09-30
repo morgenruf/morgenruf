@@ -21,6 +21,7 @@ from typing import Iterable
 from zoneinfo import ZoneInfo
 
 from src.core.db import parse_schedule_days
+from src.core.timezones import canonical_tz
 
 
 def _zone(name: object):
@@ -104,6 +105,18 @@ def blocked_from(responses: Iterable[dict]) -> list[dict]:
     return out
 
 
+def workspace_today(schedules: Iterable[dict], program: dict | None, now: datetime) -> date:
+    """The calendar day the team is on: the first standup's timezone, then the
+    coffee chat programme's, then UTC."""
+    zones = [s.get("schedule_tz") for s in schedules or []] + [(program or {}).get("timezone")]
+    zone = next((z for z in zones if z), "UTC")
+    utc_now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    try:
+        return utc_now.astimezone(ZoneInfo(str(canonical_tz(zone)))).date()
+    except Exception:
+        return utc_now.date()
+
+
 def _next_weekday(today: date, day_of_week: object) -> date:
     """The next occurrence of the programme's weekday, today included.
 
@@ -122,24 +135,31 @@ def _next_weekday(today: date, day_of_week: object) -> date:
 def next_chat_date(program: dict | None, today: date) -> date | None:
     """When the next coffee chat round falls, or None without a programme.
 
-    A round already on the books wins. Otherwise the date is derived the same
-    way connect's own scheduler derives it, from the last round plus the
-    cadence, so the two cannot disagree. A programme that has never run is due
-    the moment its job next fires, which is today at the earliest.
+    A round already on the books wins. Otherwise connect's own
+    upcoming_round_date decides, the function its Coffee chats page and App
+    Home use, so the pages cannot disagree. Counting from the last round of
+    any kind named a Tuesday for a Monday programme after a round was run by
+    hand on a Tuesday.
     """
     if not program:
         return None
     scheduled = as_date(program.get("next_scheduled"))
     if scheduled:
         return scheduled
-    last = as_date(program.get("last_round"))
-    if last is None:
-        # Never run, so the next round is the programme's own weekday, not
-        # today. Returning today told a Thursday that its Monday coffee chat
-        # was about to happen.
-        return _next_weekday(today, program.get("day_of_week"))
-    try:
-        weeks = max(1, int(program.get("interval_weeks") or 1))
-    except (TypeError, ValueError):
-        weeks = 1
-    return last + timedelta(days=weeks * 7)
+    from src.modules.connect.rounds import upcoming_round_date  # noqa: PLC0415
+
+    timing = dict(program)
+    if "last_scheduled_round" not in timing:
+        timing["last_scheduled_round"] = timing.get("last_round")
+    # A round that was due and did not run is reported as that past date, so
+    # the page can say it is overdue rather than quietly moving on a week.
+    last = as_date(timing.get("last_scheduled_round"))
+    if last is not None:
+        try:
+            weeks = max(1, int(timing.get("interval_weeks") or 1))
+        except (TypeError, ValueError):
+            weeks = 1
+        due = _next_weekday(last + timedelta(days=weeks * 7), timing.get("day_of_week"))
+        if due < today:
+            return due
+    return upcoming_round_date(timing, today)

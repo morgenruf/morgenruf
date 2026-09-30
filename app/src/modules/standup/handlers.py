@@ -954,7 +954,7 @@ def register_handlers(app: App) -> None:
                     "is_participant": is_participant,
                     "user_responded_today": user_responded_today if is_participant else False,
                     "user_last_response_time": (
-                        user_last_response["submitted_at"].strftime("%-I:%M %p")
+                        _local_clock(user_last_response["submitted_at"], user_tz or s.get("schedule_tz"))
                         if user_last_response and user_last_response.get("submitted_at")
                         else None
                     ),
@@ -2039,6 +2039,26 @@ def _refuse_standup_change(client, user_id: str) -> None:  # noqa: ANN001
         client.chat_postMessage(channel=user_id, text=_NOT_A_STANDUP_ADMIN)
     except Exception as exc:
         logger.warning("Could not tell %s they cannot change standups: %s", user_id, exc)
+
+
+def _local_clock(moment, tz_name: str | None) -> str:  # noqa: ANN001
+    """A stored timestamp as a clock time in the reader's timezone.
+
+    submitted_at comes back from Postgres in UTC, and formatting it as it was
+    told a New York member they reported at 12:25 AM for an 8:25 PM answer.
+    """
+    from datetime import timezone as _tz  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+    from src.core.timezones import canonical_tz  # noqa: PLC0415
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=_tz.utc)
+    try:
+        zone = ZoneInfo(canonical_tz(tz_name)) if tz_name else _tz.utc
+    except Exception:
+        zone = _tz.utc
+    return moment.astimezone(zone).strftime("%-I:%M %p")
 
 
 def answer_value(text: str | None) -> str:
