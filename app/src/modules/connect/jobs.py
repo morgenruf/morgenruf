@@ -19,6 +19,7 @@ from slack_sdk import WebClient
 
 from src.core.scheduler import JobSpec
 from src.core.timezones import canonical_tz
+from src.core.workspace_calendar import is_company_holiday
 from src.modules.connect import blocks as cblocks
 from src.modules.connect import slack_api as api
 from src.modules.connect.matcher import match
@@ -157,6 +158,11 @@ def run_round(program_id: int, bot_token: str = "", force: bool = False) -> None
     # The programme's calendar day, not the server's: the cron fires in the
     # programme's timezone and the same-day guard in create_round uses it too.
     today = programme_today(program, datetime.now(timezone.utc))
+    # Nobody should be introduced on a company holiday. The round is not
+    # lost: the cadence check uses >=, so the next firing catches it up.
+    if not force and is_company_holiday(program["team_id"], today):
+        logger.info("connect: programme %s skipped, %s is a company holiday", program_id, today)
+        return
     # Manual rounds are extras, so the cadence counts scheduled rounds only.
     if not force and not is_round_due(
         program["interval_weeks"], program.get("last_scheduled_round"), today, program.get("next_round_date")

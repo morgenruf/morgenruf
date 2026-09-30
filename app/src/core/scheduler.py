@@ -27,6 +27,7 @@ from src.core.slack_users import (
 )
 from src.core.state import state_store
 from src.core.timezones import canonical_tz, local_today
+from src.core.workspace_calendar import is_company_holiday
 
 # Refresh bot tokens this many seconds before their stated expiry.
 _TOKEN_REFRESH_LEEWAY_SECS = 15 * 60
@@ -404,6 +405,10 @@ def _send_standup_to_workspace(
             standup_name = config.get("standup_name", "Team Standup")
             local_day = local_today(config.get("schedule_tz") or "UTC")
 
+        if is_company_holiday(team_id, local_day):
+            logger.info("Standup %s/%s not sent: %s is a company holiday", team_id, schedule_id, local_day)
+            return
+
         members = db.get_active_members(team_id)
         if participants_filter:
             # Register anyone selected who has never interacted with the bot,
@@ -670,6 +675,9 @@ def _send_reminder_to_workspace(
     except Exception as exc:
         logger.error("Could not load members for reminder %s: %s", team_id, exc)
         return
+    if is_company_holiday(team_id, local_day):
+        logger.info("Reminder %s/%s not sent: %s is a company holiday", team_id, schedule_id, local_day)
+        return
     client = WebClient(token=bot_token)
     for member in members:
         user_id = member["user_id"]
@@ -795,6 +803,9 @@ def _nudge_missing(team_id: str, bot_token: str, schedule_id: int) -> None:
         # is the day to look them up by. The UTC date nagged a Sydney team
         # every morning for answers they had already given.
         local_day = _schedule_today(team_id, schedule)
+        if is_company_holiday(team_id, local_day):
+            logger.info("nudge %s: %s is a company holiday", schedule_id, local_day)
+            return
         answered = {
             row["user_id"] for row in db.get_standups_for_schedule(team_id, schedule_id, days=1, for_date=local_day)
         }
@@ -852,6 +863,11 @@ def _post_scheduled_report(team_id: str, bot_token: str, channel_id: str, schedu
             except Exception:
                 pass
         local_day = _schedule_today(team_id, sched_cfg)
+        if is_company_holiday(team_id, local_day):
+            # No standup was sent, so there is nothing to report and no
+            # participation to judge.
+            logger.info("Report %s/%s skipped: %s is a company holiday", team_id, schedule_id, local_day)
+            return
 
         today_standups = db.get_today_standups(team_id, for_date=local_day)
         # Report time is when the standup's window has closed, so this is the
