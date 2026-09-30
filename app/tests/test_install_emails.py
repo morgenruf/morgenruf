@@ -132,6 +132,7 @@ class TestTheFollowUpRunsOnce:
         def go(rows, *, email="p@example.com", delivers=True):
             db = MagicMock()
             db.workspaces_awaiting_followup.return_value = rows
+            db.setup_email_consent.return_value = {"user_id": "U1"}
             db.email_is_suppressed.return_value = False
             db.get_all_members.return_value = [{"user_id": "U1", "email": email}]
             monkeypatch.setattr(mailer, "send", lambda *a, **k: delivers)

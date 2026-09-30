@@ -12,6 +12,10 @@
 
 export type AddHolidayError = ApiError;
 
+export interface AiSummaryStatus {
+  configured: boolean;
+}
+
 export interface AnalyticsData {
   completed: number;
   completion_rate: number;
@@ -273,6 +277,8 @@ export interface FeedToken {
   token: string;
   url: string;
 }
+
+export type GetAiSummaryError = ApiError;
 
 export type GetAnalyticsError = ApiError;
 

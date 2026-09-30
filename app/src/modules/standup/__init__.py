@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
+from src.modules.standup.dashboard import register_routes
 from src.modules.standup.handlers import claim_dm, claim_dm_command, on_channel_join, register_handlers
 
 MODULE = ModuleSpec(
@@ -16,7 +17,7 @@ MODULE = ModuleSpec(
     required_scopes=(),
     migrations_dir=Path(__file__).parent / "migrations",
     register_slack=register_handlers,
-    register_routes=None,
+    register_routes=register_routes,
     plan_jobs=None,
     claim_dm=claim_dm,
     claim_dm_command=claim_dm_command,

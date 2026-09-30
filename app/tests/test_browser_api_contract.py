@@ -47,6 +47,7 @@ GET_PATHS = [
     "/dashboard/api/analytics",
     "/dashboard/api/export/csv",
     "/dashboard/api/templates",
+    "/dashboard/api/ai-summary",
     "/dashboard/api/rules",
     "/dashboard/api/mcp/keys",
     "/dashboard/api/modules",
@@ -323,7 +324,7 @@ print(json.dumps(spec, sort_keys=True))
         for method, operation in path.items()
         if method in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == 68
+    assert len(operations) == 69
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
 

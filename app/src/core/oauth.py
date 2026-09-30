@@ -190,25 +190,28 @@ def oauth_callback():
         except Exception as exc:
             logger.warning("Could not set admin role: %s", exc)
 
-    # Send welcome DM and email only on first install, not on reinstall
+    # Welcome DM only on first install, not on reinstall. No email: the DM
+    # offers one, and nothing goes to the installer's Slack address unless
+    # they press the button (src/core/email_consent.py).
     if is_new_install and authed_user_id:
         try:
+            from src.core.email_consent import offer_blocks  # noqa: PLC0415
+
+            text = (
+                "👋 Morgenruf is installed. Nothing runs until you create a standup: "
+                "open the Home tab and press *Create a standup*. It takes a minute. "
+                "Type `/morgenruf help` to see everything else."
+            )
             bot_client = WebClient(token=bot_token)
             dm = bot_client.conversations_open(users=authed_user_id)
             dm_channel = dm["channel"]["id"]
             bot_client.chat_postMessage(
                 channel=dm_channel,
-                text=(
-                    "👋 Morgenruf is installed. Nothing runs until you create a standup: "
-                    "open the Home tab and press *Create a standup*. It takes a minute. "
-                    "Type `/morgenruf help` to see everything else."
-                ),
+                text=text,
+                blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": text}}, *offer_blocks()],
             )
         except Exception as exc:
             logger.warning("Could not send welcome DM to %s: %s", authed_user_id, exc)
-
-        # Send welcome email (best-effort)
-        _try_send_welcome_email(bot_token, team_name, authed_user_id, team_id)
 
         # Tell the operator, in their own workspace, that this happened.
         try:
@@ -238,46 +241,6 @@ def oauth_callback():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _try_send_welcome_email(bot_token: str, team_name: str, user_id: str, team_id: str = "") -> None:
-    """Welcome the person who installed it, if Slack will tell us their address.
-
-    Seven of the first twenty workspaces had no address on file, and this
-    returned quietly, so nobody knew the welcome had not been sent. It says so
-    now.
-    """
-    if not user_id:
-        logger.info("No installing user for %s; no welcome email", team_name)
-        return
-    try:
-        bot_client = WebClient(token=bot_token)
-        info = bot_client.users_info(user=user_id)
-        profile = info["user"]["profile"]
-        email = profile.get("email", "")
-        real_name = profile.get("real_name", user_id)
-        if not email:
-            logger.info(
-                "Slack returned no email for the installer of %s, so no welcome email. "
-                "This usually means users:read.email was not granted.",
-                team_name,
-            )
-            return
-        if email:
-            from src.core import mailer  # noqa: PLC0415
-
-            sent = mailer.send(
-                email,
-                f"Morgenruf is installed in {team_name}",
-                mailer.welcome_html(team_name, real_name, email),
-                kind="welcome",
-            )
-            if sent:
-                import src.core.db as _db  # noqa: PLC0415
-
-                _db.record_install_email(team_id, "welcome", email)
-    except Exception as exc:
-        logger.warning("Could not retrieve user email for welcome message: %s", exc)
 
 
 def _is_slack_admin(bot_token: str, user_id: str) -> bool:

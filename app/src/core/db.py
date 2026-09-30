@@ -2623,7 +2623,7 @@ def record_install_email(team_id: str, kind: str, to_email: str = "") -> None:
 
 
 def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
-    """Installed at least `days` ago, still live, and not yet followed up.
+    """Installed at least `days` ago, still live, opted in, and not yet followed up.
 
     Returns enough to choose which of the two messages to send: a workspace
     with no schedule has never run a standup, which is the case worth asking
@@ -2637,6 +2637,7 @@ def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
                (SELECT COUNT(DISTINCT user_id) FROM standups st
                  WHERE st.team_id = i.team_id) AS people
         FROM installations i
+        JOIN setup_email_consents c ON c.team_id = i.team_id AND c.revoked_at IS NULL
         WHERE i.active
           AND i.installed_at < NOW() - make_interval(days => %s)
           AND NOT EXISTS (
@@ -2707,6 +2708,45 @@ def mark_contact_synced(email: str) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("UPDATE email_consents SET synced_at = NOW() WHERE email = %s", (email.lower(),))
+
+
+# ── Consent to email the installer's Slack address ──────────────────────────
+
+
+def grant_setup_email_consent(team_id: str, user_id: str) -> None:
+    """Record that this person pressed "Email me setup tips"."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO setup_email_consents (team_id, user_id, granted_at, revoked_at)
+                VALUES (%s, %s, NOW(), NULL)
+                ON CONFLICT (team_id) DO UPDATE
+                   SET user_id = EXCLUDED.user_id, granted_at = NOW(), revoked_at = NULL
+                """,
+                (team_id, user_id),
+            )
+
+
+def revoke_setup_email_consent(team_id: str) -> None:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE setup_email_consents SET revoked_at = NOW() WHERE team_id = %s AND revoked_at IS NULL",
+                (team_id,),
+            )
+
+
+def setup_email_consent(team_id: str) -> dict | None:
+    """The live consent for a workspace, or None when nobody has opted in."""
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT user_id, granted_at FROM setup_email_consents WHERE team_id = %s AND revoked_at IS NULL",
+                (team_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
 
 
 def count_standups(team_id: str) -> int:
