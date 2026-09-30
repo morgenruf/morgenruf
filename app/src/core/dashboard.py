@@ -23,6 +23,7 @@ from flask_smorest import Blueprint
 
 import src.core.db as db
 from src.core import api_schemas as schemas
+from src.core import rate_limit
 from src.core.api import api_errors, csrf_token
 from src.core.oauth import consume_login_token
 from src.core.schedule_validation import schedule_config_error, schedule_payload_error
@@ -555,6 +556,7 @@ def api_delete_standup(standup_id: str):
 
 
 @browser_bp.route("/email/subscribe", methods=["GET", "POST"])
+@rate_limit.rate_limited(rate_limit.EMAIL_LINKS)
 def email_subscribe():
     """Record an express opt-in to product update emails.
 
@@ -578,6 +580,7 @@ def email_subscribe():
 
 
 @browser_bp.route("/email/unsubscribe", methods=["GET", "POST"])
+@rate_limit.rate_limited(rate_limit.EMAIL_LINKS)
 def email_unsubscribe():
     """Stop emailing this address. No login, one click, works from the header.
 
@@ -1963,17 +1966,41 @@ def api_delete_rule(rule_id: int):
 @dashboard_bp.doc(operationId="getFeed", tags=["Public"], security=[])
 @dashboard_bp.alt_response(404, schema=schemas.Error)
 @dashboard_bp.response(200, schemas.PublicFeed)
+@rate_limit.rate_limited(rate_limit.FEED)
 def public_feed(token: str):
     from datetime import date
 
     config = db.get_workspace_by_feed_token(token)
     if not config or not config.get("feed_public"):
         return jsonify(error="Feed not found or not public"), 404
+    team_id = config["team_id"]
+    public = _public_schedule_ids(team_id)
     return {
         "title": config.get("standup_name") or "Team Standup",
         "date": date.today().isoformat(),
-        "standups": db.get_standups(config["team_id"], days=1),
+        "standups": [r for r in db.get_standups(team_id, days=1) if r.get("schedule_id") in public],
     }
+
+
+def _public_schedule_ids(team_id: str) -> set:
+    """Schedules posting to a public channel, the only ones the feed shows.
+
+    Publishing the feed is meant to share what the team already shares in
+    Slack, not a private channel's standup. A channel that cannot be checked
+    counts as private, and so does an answer with no schedule.
+    """
+    try:
+        inst = db.get_installation(team_id) or {}
+        schedules = db.get_standup_schedules(team_id)
+    except Exception as exc:
+        logger.warning("feed: could not load schedules for %s: %s", team_id, exc)
+        return set()
+    if not inst.get("bot_token"):
+        return set()
+    from slack_sdk import WebClient  # noqa: PLC0415
+
+    client = WebClient(token=inst["bot_token"])
+    return {s["id"] for s in schedules if s.get("channel_id") and _channel_is_public(client, s["channel_id"])}
 
 
 @dashboard_bp.route("/dashboard/api/logout", methods=["POST"])

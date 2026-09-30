@@ -24,6 +24,10 @@ def create_http_app(*, modules=None, schema_only=False):
         # not. The dashboard re-signs it as it is used, so this is how long an
         # idle session lasts, not a limit on an active one.
         PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+        # The largest legitimate body is a profile CSV import, capped at a
+        # million characters by its schema: up to about 3 MB as UTF-8 JSON.
+        # Anything past this is refused before it is read into memory.
+        MAX_CONTENT_LENGTH=4 * 1024 * 1024,
     )
     init_api(app)
     install_browser_security(app)

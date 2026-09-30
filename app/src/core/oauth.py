@@ -15,6 +15,7 @@ from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import src.core.db as db
+from src.core import rate_limit
 from src.core.scopes import BOT_SCOPES
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,7 @@ def install():
 
 
 @oauth_bp.route("/oauth/callback")
+@rate_limit.rate_limited(rate_limit.OAUTH_CALLBACK)
 def oauth_callback():
     """Exchange the OAuth code for a bot token and store the installation."""
     code = request.args.get("code")

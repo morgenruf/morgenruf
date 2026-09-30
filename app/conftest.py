@@ -66,3 +66,14 @@ def _no_dns_in_tests(monkeypatch):
             return ["93.184.215.14"]
 
     monkeypatch.setattr("src.core.url_guard._resolve", resolve)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """The limiters count per process, so without this the suite's own
+    requests from one address would trip them partway through."""
+    from src.core import rate_limit
+
+    for limiter in rate_limit.ALL:
+        limiter.reset()
+    yield

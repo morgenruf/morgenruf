@@ -107,12 +107,21 @@ _NO_BLOCKER = {"", "none", "n/a", "no", "-", "nothing"}
 
 
 def _auth() -> str | None:
-    """Extract and verify Bearer token, return team_id or None."""
+    """Extract and verify Bearer token, return team_id or None.
+
+    Failures are counted per address (mcp_endpoint refuses a caller over the
+    budget before the key is looked up), so guessing keys cannot also hammer
+    the database. A client using a good key never counts against it.
+    """
+    from src.core import rate_limit  # noqa: PLC0415
+
+    who = rate_limit.client_key()
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    key = auth[7:].strip()
-    return db.verify_mcp_key(key)
+    key = auth[7:].strip() if auth.startswith("Bearer ") else ""
+    team_id = db.verify_mcp_key(key) if key else None
+    if not team_id:
+        rate_limit.MCP_AUTH_FAILURES.hit(who)
+    return team_id
 
 
 def _fmt(obj) -> str:
@@ -318,6 +327,10 @@ def mcp_info():
 @mcp_bp.route("/mcp", methods=["POST"])
 def mcp_endpoint():
     """MCP JSON-RPC 2.0 endpoint."""
+    from src.core import rate_limit  # noqa: PLC0415
+
+    if rate_limit.MCP_AUTH_FAILURES.limited(rate_limit.client_key()):
+        return rate_limit.too_many()
     team_id = _auth()
     if not team_id:
         return jsonify(
