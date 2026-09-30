@@ -17,6 +17,11 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY src/ ./src/
 COPY teams.yaml.example ./teams.yaml
 
+# The release version, passed by the release workflow. The index route and
+# the MCP server report it.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 ENV PYTHONUNBUFFERED=1
 ENV PORT=3000
 

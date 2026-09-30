@@ -87,7 +87,7 @@ class TestFormatStandup:
 
         result = _format_standup("U1", ["only one answer"])
         assert "only one answer" in result
-        assert "—" in result  # missing answers show —
+        assert "n/a" in result  # missing answers show n/a
 
 
 # ---------------------------------------------------------------------------

@@ -312,20 +312,48 @@ def _slack_dm_with_retry(
     return False
 
 
-def _notify_delivery_failure(client: WebClient, channel_id: str, failed_count: int, total_count: int) -> None:
-    """Post a warning to the standup channel when DM delivery fails."""
-    if not channel_id or failed_count == 0:
+def _minutes(n) -> str:  # noqa: ANN001
+    return f"{n} minute{'' if n == 1 else 's'}"
+
+
+def _notify_delivery_failure(
+    client: WebClient,
+    team_id: str,
+    channel_id: str,
+    failed_count: int,
+    total_count: int,
+    standup_name: str = "",
+) -> None:
+    """Tell whoever installed Morgenruf, privately, that some standup DMs failed.
+
+    This used to be posted in the standup channel, in front of the whole team,
+    about something only an admin can look into.
+    """
+    if failed_count == 0:
         return
     try:
+        import src.core.db as db  # noqa: PLC0415
+
+        owner = (db.get_installation(team_id) or {}).get("installed_by_user_id")
+    except Exception as exc:
+        logger.warning("Could not find who to tell about failed standup DMs in %s: %s", team_id, exc)
+        return
+    if not owner:
+        return
+    name = standup_name or "the standup"
+    where = f" in <#{channel_id}>" if channel_id else ""
+    try:
         client.chat_postMessage(
-            channel=channel_id,
+            channel=owner,
             text=(
-                f"⚠️ *Standup delivery issue:* Failed to send standup DMs to {failed_count}/{total_count} members. "
-                "This is usually a temporary Slack API issue — standups will retry on the next scheduled run."
+                f"⚠️ I couldn't send {name}{where} to {failed_count} of {total_count} "
+                f"{'person' if total_count == 1 else 'people'} today. "
+                "This is usually a short Slack problem and they will get the next one as normal. "
+                "If it keeps happening, check that those people are still active in Slack."
             ),
         )
     except Exception as exc:
-        logger.warning("Could not post delivery failure notice to %s: %s", channel_id, exc)
+        logger.warning("Could not tell %s about failed standup DMs: %s", owner, exc)
 
 
 def standup_local_date(team_id: str, schedule_id: int | None = None, user_id: str | None = None) -> date:
@@ -525,17 +553,12 @@ def _send_standup_to_workspace(
             dm_count += 1
 
             # Send DM first — only start session if delivery succeeds
+            from src.core.schedule_validation import DEFAULT_QUESTIONS  # noqa: PLC0415
             from src.modules.standup.blocks import standup_dm_message  # noqa: PLC0415
 
-            default_questions = questions or [
-                "What did you complete yesterday?",
-                "What are you working on today?",
-                "Any blockers?",
-            ]
+            default_questions = questions or list(DEFAULT_QUESTIONS)
             dm_msg = standup_dm_message(default_questions, standup_name)
-            _slack_dm_with_retry(
-                client, user_id, team_id=team_id, text=f"🌅 Time for your standup, {standup_name}", **dm_msg
-            )
+            _slack_dm_with_retry(client, user_id, team_id=team_id, text=f"🌅 Time for {standup_name}", **dm_msg)
 
             state_store.start(
                 cache_key,
@@ -551,7 +574,7 @@ def _send_standup_to_workspace(
             logger.error("Failed to DM %s / %s: %s", team_id, user_id, exc)
 
     if failed_count > 0:
-        _notify_delivery_failure(client, channel_id, failed_count, dm_count)
+        _notify_delivery_failure(client, team_id, channel_id, failed_count, dm_count, standup_name)
 
 
 def participation_pct(stats: list[dict] | None) -> int:
@@ -692,7 +715,7 @@ def _send_reminder_to_workspace(
                 client,
                 user_id,
                 team_id=team_id,
-                text=f"⏰ Standup{label} starts in *{reminder_minutes} minutes*. Get ready! 🚀",
+                text=f"⏰ Standup{label} starts in *{_minutes(reminder_minutes)}*. Get ready! 🚀",
             )
         except Exception as exc:
             logger.warning("Failed reminder DM to %s / %s: %s", team_id, user_id, exc)
@@ -833,7 +856,7 @@ def _nudge_missing(team_id: str, bot_token: str, schedule_id: int) -> None:
                 client.chat_postMessage(
                     channel=user_id,
                     text=(
-                        f"Your {name} closes in about {minutes} minutes and I have not heard from you. "
+                        f"Your {name} closes in about {_minutes(minutes)} and I have not heard from you. "
                         "Send me `standup` to file it, or `skip` if today is not one for it."
                     ),
                 )

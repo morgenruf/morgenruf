@@ -304,7 +304,7 @@ def test_the_command_posts_the_card_to_the_configured_channel(world):
     _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
     channels = [p["channel"] for p in world.posts]
     assert channels == ["C0KUDOS", ANMOL, GIVER]
-    assert f"*<@{ANMOL}>* got a" in _all_text(world.posts[:1])
+    assert f"*<@{ANMOL}>* got kudos" in _all_text(world.posts[:1])
 
 
 def test_a_failed_save_does_not_pretend_it_worked(world):
@@ -331,7 +331,7 @@ def test_a_dm_kudos_is_sent_to_the_recipient(world):
     assert len(dms) == 1
     card = _all_text(dms)
     assert f"<@{GIVER}>" in card
-    assert "sent you a" in card
+    assert "sent you kudos" in card
     assert "for reviewing the fix" in card
 
 
@@ -372,7 +372,7 @@ def test_no_dm_for_a_self_kudos(world):
     _slash(world.app, f"<@{GIVER}|giver> for being me")
     assert len(world.posts) == 2
     assert all("other people" in p["text"] for p in world.posts)
-    assert "sent you a" not in _all_text(world.posts)
+    assert "sent you kudos" not in _all_text(world.posts)
 
 
 def test_the_card_goes_to_the_kudos_channel(world):
@@ -392,7 +392,7 @@ def test_the_card_falls_back_to_the_legacy_workspace_channel(world):
 def test_no_channel_post_when_neither_channel_is_set(world):
     _slash(world.app, f"<@{ANMOL}> for reviewing the fix")
     assert [p["channel"] for p in world.posts] == [ANMOL, GIVER]
-    assert "got a" not in _all_text(world.posts)
+    assert "got kudos" not in _all_text(world.posts)
 
 
 def test_the_giver_hears_it_was_sent_to_the_recipient(world):

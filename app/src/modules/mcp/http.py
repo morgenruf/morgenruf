@@ -8,13 +8,14 @@ import logging
 from flask import Blueprint, jsonify, request
 
 import src.core.db as db
+from src.core.version import APP_VERSION
 
 logger = logging.getLogger(__name__)
 mcp_bp = Blueprint("mcp", __name__)
 
 MCP_SERVER_INFO = {
     "name": "morgenruf",
-    "version": "1.0.0",
+    "version": APP_VERSION,
 }
 
 TOOLS = [
@@ -47,7 +48,7 @@ TOOLS = [
     },
     {
         "name": "get_participation",
-        "description": "Get standup participation statistics — who submitted, who missed.",
+        "description": "Get standup participation statistics: who submitted and who missed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -313,10 +314,10 @@ def mcp_info():
     return jsonify(
         {
             "name": "Morgenruf MCP Server",
-            "version": "1.0.0",
+            "version": APP_VERSION,
             "transport": "http",
             "endpoint": request.host_url.rstrip("/") + "/mcp",
-            "auth": "Bearer token — generate from your Morgenruf dashboard",
+            "auth": "Bearer token. Create one in your Morgenruf dashboard.",
             "docs": "https://docs.morgenruf.dev/mcp.html",
             "tools": [t["name"] for t in TOOLS],
             "note": (
@@ -341,7 +342,7 @@ def mcp_endpoint():
                 "jsonrpc": "2.0",
                 "error": {
                     "code": -32001,
-                    "message": "Unauthorized — provide a valid Bearer API key from your Morgenruf dashboard",
+                    "message": "Unauthorized. Send a valid Bearer API key from your Morgenruf dashboard.",
                 },
                 "id": None,
             }

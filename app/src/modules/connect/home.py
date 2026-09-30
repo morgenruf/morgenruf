@@ -48,7 +48,7 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
         cadence = cadence_phrase(p.get("interval_weeks"))
 
         if state == "out":
-            status = "_You are out of this one, so you will not be matched._"
+            status = "_Coffee chats paused. You will not be matched until you resume._"
         elif state == "snoozed":
             status = f"_Snoozed until {personal['until'].strftime('%d %B')}._"
         else:
@@ -72,7 +72,7 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
                 {
                     "type": "button",
                     "action_id": "connect:home_pause",
-                    "text": {"type": "plain_text", "text": "Leave this one"},
+                    "text": {"type": "plain_text", "text": "Pause coffee chats"},
                     "value": str(p["id"]),
                 },
             ]
@@ -81,14 +81,14 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
                 {
                     "type": "button",
                     "action_id": "connect:home_resume",
-                    "text": {"type": "plain_text", "text": "Count me back in"},
+                    "text": {"type": "plain_text", "text": "Resume coffee chats"},
                     "style": "primary",
                     "value": str(p["id"]),
                 }
             ]
         blocks.append({"type": "actions", "elements": elements})
 
-    blocks.append(_context("Snoozing or leaving stops future introductions. Neither cancels one already sent."))
+    blocks.append(_context("Snoozing or pausing stops future introductions. Neither cancels one already sent."))
     blocks.extend(_zoom_blocks(team_id, user_id))
     return blocks
 

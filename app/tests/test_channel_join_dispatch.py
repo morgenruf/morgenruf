@@ -140,9 +140,9 @@ def test_standup_welcomes_a_join_to_a_standup_channel(monkeypatch):
     client.chat_postMessage.assert_called_once()
     assert client.chat_postMessage.call_args.kwargs["channel"] == "U1"
     assert client.chat_postMessage.call_args.kwargs["text"] == (
-        "👋 Welcome to the team! I'm Morgenruf, your daily standup bot.\n\n"
-        "I'll DM you each morning with a few quick questions to share with your team. "
-        "Use `/standup` to try a standup now, or `/help` to learn more."
+        f"👋 Welcome! I'm Morgenruf. <#{STANDUP_CHANNEL}> has a standup: when it runs, "
+        "I'll DM you a few quick questions and share your answers with the team.\n\n"
+        "Use `/standup` to try one now, or `/morgenruf help` to see everything I do."
     )
 
 

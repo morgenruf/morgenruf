@@ -45,6 +45,8 @@ NOT_OPERATOR_SET = {
     "REDIS_URL",
     "DATABASE_URL",
     "SENTRY_ENV",
+    # Baked into the image by the release workflow, not set by an operator.
+    "APP_VERSION",
 }
 
 # Documented for a local checkout, deliberately absent from the chart: turning

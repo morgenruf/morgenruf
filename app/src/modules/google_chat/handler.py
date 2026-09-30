@@ -13,7 +13,7 @@ from src.core.state import QUESTIONS, state_store
 logger = logging.getLogger(__name__)
 google_chat_bp = Blueprint("google_chat", __name__)
 
-_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough — or type anything)_"
+_MOOD_QUESTION = "🎭 *How are you feeling today?* _(😊 great · 😐 okay · 😔 rough, or type anything)_"
 _GC_QUESTIONS = list(QUESTIONS) + [_MOOD_QUESTION]
 
 
@@ -84,9 +84,9 @@ def _handle_message(payload: dict):
             {
                 "text": (
                     "*Morgenruf Standup Bot* 🌅\n"
-                    "• `/standup` — start your standup\n"
-                    "• `/skip` — skip today\n"
-                    "• `/help` — show this message"
+                    "• `/standup`: start your standup\n"
+                    "• `/skip`: skip today\n"
+                    "• `/help`: show this message"
                 )
             }
         )
@@ -121,10 +121,10 @@ def _handle_message(payload: dict):
 
             date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
             summary = (
-                f"📋 *Standup from {user_id}* — {date_str}\n\n"
-                f"*✅ Yesterday:*\n{answers[0] if len(answers) > 0 else '—'}\n\n"
-                f"*🎯 Today:*\n{answers[1] if len(answers) > 1 else '—'}\n\n"
-                f"*🚧 Blockers:*\n{answers[2] if len(answers) > 2 else '—'}"
+                f"📋 *Standup from {user_id}* · {date_str}\n\n"
+                f"*✅ Yesterday:*\n{answers[0] if len(answers) > 0 else 'n/a'}\n\n"
+                f"*🎯 Today:*\n{answers[1] if len(answers) > 1 else 'n/a'}\n\n"
+                f"*🚧 Blockers:*\n{answers[2] if len(answers) > 2 else 'None'}"
             )
             if mood:
                 summary += f"\n\n*🎭 Mood:* {mood}"

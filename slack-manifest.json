@@ -1,9 +1,9 @@
 {
   "display_information": {
     "name": "Morgenruf",
-    "description": "Daily standups for Slack \u2014 open-source & self-hosted",
+    "description": "Async daily standups in Slack: private DMs, one clean channel summary, AI summaries and analytics. Hosted or self-hosted.",
     "background_color": "#0d1117",
-    "long_description": "Morgenruf runs your team's daily standups directly in Slack \u2014 no expensive SaaS required.\r\n \r\nEach day at your configured time, it DMs team members 3 questions, \r\ncollects answers privately, and posts a clean summary to your team channel.\r\n \r\n Features:\r\n \u2022 Configurable schedule (time, timezone, days)\r\n \u2022 Per-project tagging for automated reporting\r\n \u2022 Blocker detection and highlighting\r\n \u2022 Open source (MIT) \u2014 self-host or use our hosted version at morgenruf.dev"
+    "long_description": "Morgenruf runs your team's daily standups in Slack. At the time you choose, it DMs each person your standup questions, then posts one tidy summary to your channel, with an optional AI summary (OpenAI or Anthropic).\n\nKey features:\n\u2022 AI standup summaries\n\u2022 Dashboard with participation charts\n\u2022 Several standups per workspace\n\u2022 Each person's own timezone\n\u2022 Skip a day, edit your answers, mood check-in\n\u2022 Kudos with a leaderboard\n\u2022 Coffee chats, birthdays and work anniversaries\n\u2022 Jira, GitHub and Linear issue links\n\u2022 Webhooks\n\u2022 MCP server: connect Claude, Cursor or GitHub Copilot to your standup data\n\u2022 Admin roles\n\u2022 Weekly digest emails\n\u2022 Use the hosted version at morgenruf.dev, or self-host on Kubernetes, Docker Compose or AWS\n\nMIT licensed and free forever.\n\nDocs: https://docs.morgenruf.dev"
   },
   "features": {
     "app_home": {

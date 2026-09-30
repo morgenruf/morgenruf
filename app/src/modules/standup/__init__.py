@@ -28,6 +28,8 @@ MODULE = ModuleSpec(
     help_lines=(
         "`/standup`: start your standup now",
         "`/skip`: skip today's standup",
-        "Reply to a standup DM at any time to start",
+        "In a DM with me, send `standup`, `skip`, `I'm away`, `I'm back`, `help` "
+        "or `timezone America/New_York` as a message on its own",
+        "While answering, send `pass` to leave a question blank. Press *Edit my answers* to change what you sent",
     ),
 )

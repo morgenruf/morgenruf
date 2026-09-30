@@ -14,6 +14,9 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
+_PAUSED = "Coffee chats paused. Resume any time from the Home tab."
+_DID_NOT_SAVE = "That did not save. Please try again."
+
 
 def register_handlers(app) -> None:
     @app.action("connect:skip_round")
@@ -42,13 +45,11 @@ def register_handlers(app) -> None:
             import src.modules.connect.db as cdb  # noqa: PLC0415
 
             cdb.opt_out(team_id, program_id, user_id, mode="off")
-            client.chat_postEphemeral(
-                channel=body["channel"]["id"],
-                user=user_id,
-                text="You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
-            )
         except Exception:
             logger.exception("connect: could not pause %s", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, _PAUSED)
 
     def _confirm(client, body, text: str) -> None:
         """Say what happened, wherever the button was pressed.
@@ -83,9 +84,11 @@ def register_handlers(app) -> None:
             until = programme_today(cdb.get_program(program_id) or {}) + timedelta(weeks=2)
 
             cdb.snooze(team_id, program_id, user_id, until)
-            _confirm(client, body, f"Snoozed until {until.strftime('%d %B')}. You will be matched again after that.")
         except Exception:
             logger.exception("connect: could not snooze %s", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, f"Snoozed until {until.strftime('%-d %B')}. You will be matched again after that.")
 
     @app.action("connect:home_pause")
     def handle_home_pause(ack, body, client):  # noqa: ANN001
@@ -98,13 +101,11 @@ def register_handlers(app) -> None:
             import src.modules.connect.db as cdb  # noqa: PLC0415
 
             cdb.opt_out(team_id, program_id, user_id, mode="off")
-            _confirm(
-                client,
-                body,
-                "Paused. You will not be matched until you resume, and the App Home will say so next time you open it.",
-            )
         except Exception:
             logger.exception("connect: could not pause %s from the App Home", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, _PAUSED)
 
     @app.action("connect:home_resume")
     def handle_home_resume(ack, body, client):  # noqa: ANN001
@@ -117,9 +118,11 @@ def register_handlers(app) -> None:
             import src.modules.connect.db as cdb  # noqa: PLC0415
 
             cdb.opt_in(team_id, program_id, user_id)
-            _confirm(client, body, "You are back in. You will be matched in the next round.")
         except Exception:
             logger.exception("connect: could not resume %s from the App Home", user_id)
+            _confirm(client, body, _DID_NOT_SAVE)
+            return
+        _confirm(client, body, "Coffee chats resumed. You will be matched in the next round.")
 
     # The action id carries the match and the slot, so one regex handler serves
     # every proposed time without the message having to hold state.
@@ -317,7 +320,7 @@ def _record_acceptance(
                         "type": "mrkdwn",
                         "text": f"*{label}* works for <@{user_id}>.\n"
                         + ", ".join(f"<@{m}>" for m in waiting)
-                        + (" — tap it too and it is settled." if len(waiting) == 1 else " — tap it to settle it."),
+                        + (": tap it too and it is settled." if len(waiting) == 1 else ": tap it to settle it."),
                     },
                 }
             ],
@@ -651,11 +654,16 @@ def _want_new_match(client, channel_id: str, user_id: str, match_id: int) -> Non
 
         members = sorted([user_id, partner])
         new_channel = api.open_group_dm(client, members)
+        try:
+            program = cdb.get_program(match.get("program_id") or 0) or {}
+        except Exception:
+            program = {}
         text, blocks = cblocks.intro_message(
             members,
             cblocks.random_seed_for(round_id, match_id + 1),
             match.get("program_id") or 0,
             match_id=0,
+            channel_id=str(program.get("channel_id") or ""),
         )
         api.post(client, new_channel, text, blocks)
         _quiet(client, channel_id, user_id, f"Introduced you to <@{partner}>, who also wanted a new match.")
@@ -671,14 +679,9 @@ def _pause_for(client, channel_id: str, user_id: str, team_id: str, program_id: 
         cdb.opt_out(team_id, program_id, user_id, mode="off")
     except Exception:
         logger.exception("connect: could not pause %s", user_id)
-        _quiet(client, channel_id, user_id, "That did not save. Please try again.")
+        _quiet(client, channel_id, user_id, _DID_NOT_SAVE)
         return
-    _quiet(
-        client,
-        channel_id,
-        user_id,
-        "You are paused. Ask an admin to turn coffee chats back on for you whenever you like.",
-    )
+    _quiet(client, channel_id, user_id, _PAUSED)
 
 
 def on_channel_join(event, client):  # noqa: ANN001

@@ -111,7 +111,7 @@ def test_enabling_a_module_without_its_scopes_returns_409(monkeypatch):
     resp = client.post("/dashboard/api/modules/connect", json={"enabled": True})
     assert resp.status_code == 409
     body = resp.get_json()
-    assert body["error"] == "missing_scopes"
+    assert "permissions" in body["error"]
     assert body["required"] == ["mpim:write"]
     assert body["reauthorise_url"] == "/install"
 

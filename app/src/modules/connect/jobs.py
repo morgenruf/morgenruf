@@ -344,6 +344,7 @@ def _deliver_matches(client, round_id: int, team_id: str, program_id: int) -> bo
                 # The accept buttons carry the match, so the message needs it.
                 match_id=m["id"],
                 tone=str(program.get("intro_tone") or "hybrid"),
+                channel_id=str(program.get("channel_id") or ""),
             )
             api.post(client, channel, text, blocks)
             if video_mode == "zoom":
