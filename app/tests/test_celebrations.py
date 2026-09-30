@@ -230,10 +230,10 @@ class TestMessages:
         text = messages.nudge_text("Priya", "C_CELEBRATE")
         assert text == (
             "👋 Hi Priya! Your team celebrates birthdays and work anniversaries in <#C_CELEBRATE>.\n\n"
-            "Add yours so nobody misses it. Only day and month are kept."
+            "Add yours so nobody misses it. For your birthday only the day and month are kept."
         )
         buttons = messages.nudge_blocks("Priya", "C_CELEBRATE")[1]["elements"]
-        assert [b["text"]["text"] for b in buttons] == ["Add my dates", "Skip me"]
+        assert [b["text"]["text"] for b in buttons] == ["Add my dates", "Don't celebrate me"]
         assert all(b["action_id"].startswith("celebrations:") for b in buttons)
 
 

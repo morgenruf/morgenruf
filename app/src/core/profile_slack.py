@@ -33,6 +33,15 @@ _TEXT_FIELDS = (
 _NOT_SET = "0"
 
 _EMPTY_HINT = "Add your birthday and start date so the team can celebrate with you."
+_EMPTY_HINT_PLAIN = "Add your role, location and what people can ask you about."
+_COULD_NOT_OPEN = "I couldn't open your profile just now. Please try again in a minute."
+
+
+def _celebrations_on(team_id: str) -> bool:
+    """Whether to talk about celebrating. Off, the profile says nothing of it."""
+    from src.core.modules import is_active_for  # noqa: PLC0415
+
+    return is_active_for(team_id, "celebrations")
 
 
 def _escape(text: str) -> str:
@@ -63,12 +72,14 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
         "text": {"type": "plain_text", "text": "Edit", "emoji": True},
         "value": "home",
     }
+    celebrations = _celebrations_on(team_id)
     if is_empty(row):
+        hint = _EMPTY_HINT if celebrations else _EMPTY_HINT_PLAIN
         return [
             {"type": "divider"},
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Your profile*\n{_EMPTY_HINT}"},
+                "text": {"type": "mrkdwn", "text": f"*Your profile*\n{hint}"},
                 "accessory": edit,
             },
         ]
@@ -98,7 +109,7 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
             }
         )
     notes = []
-    if not row.get("celebrate", True):
+    if celebrations and not row.get("celebrate", True):
         notes.append("You asked not to be celebrated publicly.")
     if row.get("updated_by") and row.get("updated_by") != user_id:
         notes.append("Last changed by an admin. Edit it if anything is wrong.")
@@ -110,8 +121,11 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
 # ── Modal ───────────────────────────────────────────────────────────────────
 
 
-def profile_modal(row: dict | None, source: str = "home") -> dict:
-    """The profile form, filled in with what is stored."""
+def profile_modal(row: dict | None, source: str = "home", celebrations: bool = True) -> dict:
+    """The profile form, filled in with what is stored.
+
+    Without the Celebrations module the celebrate option is left out.
+    """
     row = row or {}
     month = row.get("birth_month")
     day = row.get("birth_day")
@@ -198,23 +212,24 @@ def profile_modal(row: dict | None, source: str = "home") -> dict:
         )
 
     no_celebrate = _option("Don't celebrate me publicly", "no_celebrate")
-    options = [no_celebrate]
+    options = [no_celebrate] if celebrations else []
     # A datepicker cannot be emptied once it holds a date, so clearing the
     # start date needs a control of its own.
     if start:
         options.append(_option("Remove my start date", "clear_start"))
-    checkboxes: dict = {"type": "checkboxes", "action_id": "profile:options", "options": options}
-    if not row.get("celebrate", True):
-        checkboxes["initial_options"] = [no_celebrate]
-    blocks.append(
-        {
-            "type": "input",
-            "block_id": "options",
-            "optional": True,
-            "label": {"type": "plain_text", "text": "Options"},
-            "element": checkboxes,
-        }
-    )
+    if options:
+        checkboxes: dict = {"type": "checkboxes", "action_id": "profile:options", "options": options}
+        if celebrations and not row.get("celebrate", True):
+            checkboxes["initial_options"] = [no_celebrate]
+        blocks.append(
+            {
+                "type": "input",
+                "block_id": "options",
+                "optional": True,
+                "label": {"type": "plain_text", "text": "Options"},
+                "element": checkboxes,
+            }
+        )
 
     return {
         "type": "modal",
@@ -261,7 +276,7 @@ def modal_errors(messages: dict) -> dict:
     return out
 
 
-def saved_view(row: dict) -> dict:
+def saved_view(row: dict, celebrations: bool = True) -> dict:
     """What the modal turns into after saving, so the person sees it took."""
     lines = []
     birthday = birthday_label(row.get("birth_month"), row.get("birth_day"))
@@ -271,7 +286,7 @@ def saved_view(row: dict) -> dict:
     for field, label, *_ in _TEXT_FIELDS:
         if row.get(field):
             lines.append(f"{label}: {_escape(row[field])}")
-    if not row.get("celebrate", True):
+    if celebrations and not row.get("celebrate", True):
         lines.append("You will not be celebrated publicly.")
     return {
         "type": "modal",
@@ -298,6 +313,9 @@ def save_submission(team_id: str, user_id: str, values: dict) -> tuple[dict | No
     import src.core.db as db  # noqa: PLC0415
 
     fields = fields_from_submission(values)
+    if not _celebrations_on(team_id):
+        # The option was not on the form, so its absence is not an answer.
+        fields.pop("celebrate", None)
     try:
         row = db.upsert_member_profile(team_id, user_id, fields, updated_by=user_id)
     except ValueError as exc:
@@ -398,7 +416,15 @@ def open_profile_modal(client, trigger_id: str, team_id: str, user_id: str, sour
     except Exception as exc:
         logger.warning("profile: could not load %s in %s: %s", user_id, team_id, exc)
         row = None
-    client.views_open(trigger_id=trigger_id, view=profile_modal(row, source=source))
+    view = profile_modal(row, source=source, celebrations=_celebrations_on(team_id))
+    client.views_open(trigger_id=trigger_id, view=view)
+
+
+def _say_could_not_open(client, user_id: str) -> None:  # noqa: ANN001
+    try:
+        client.chat_postMessage(channel=user_id, text=_COULD_NOT_OPEN)
+    except Exception:
+        logger.info("profile: could not tell %s the modal failed", user_id)
 
 
 def register_slack(app) -> None:
@@ -418,6 +444,7 @@ def register_slack(app) -> None:
                 open_profile_modal(client, body.get("trigger_id", ""), team_id, user_id, source="command")
             except Exception:
                 logger.exception("profile: could not open the modal for %s", user_id)
+                _say_could_not_open(client, user_id)
             return
 
         prefix = "" if sub in ("", "help") else f"I don't know `{_escape(sub)}`. Here is what I can do:"
@@ -435,6 +462,7 @@ def register_slack(app) -> None:
             open_profile_modal(client, body.get("trigger_id", ""), team_id, user_id, source="home")
         except Exception:
             logger.exception("profile: could not open the modal for %s", user_id)
+            _say_could_not_open(client, user_id)
 
     @app.view(MODAL_CALLBACK)
     def handle_profile_submit(ack, body, view):  # noqa: ANN001
@@ -450,4 +478,4 @@ def register_slack(app) -> None:
         if errors:
             ack(response_action="errors", errors=errors)
             return
-        ack(response_action="update", view=saved_view(row or {}))
+        ack(response_action="update", view=saved_view(row or {}, celebrations=_celebrations_on(team_id)))

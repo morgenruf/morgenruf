@@ -185,10 +185,18 @@ class TestTheModal:
 
 
 class TestTheAppHome:
-    def test_empty_profile_invites_you_to_fill_it_in(self, db):
+    def test_empty_profile_invites_you_to_fill_it_in(self, db, monkeypatch):
+        monkeypatch.setattr(profile_slack, "_celebrations_on", lambda team_id: True)
         blocks = profile_slack.home_blocks("T1", "U1")
         assert "Add your birthday and start date" in blocks[1]["text"]["text"]
         assert blocks[1]["accessory"]["action_id"] == "profile:edit"
+
+    def test_without_celebrations_nothing_mentions_celebrating(self, db, monkeypatch):
+        monkeypatch.setattr(profile_slack, "_celebrations_on", lambda team_id: False)
+        blocks = profile_slack.home_blocks("T1", "U1")
+        assert "celebrat" not in json.dumps(blocks).lower()
+        modal = profile_slack.profile_modal({"celebrate": False}, celebrations=False)
+        assert "celebrat" not in json.dumps(modal).lower()
 
     def test_a_filled_profile(self, db):
         db.get_member_profile.return_value = {

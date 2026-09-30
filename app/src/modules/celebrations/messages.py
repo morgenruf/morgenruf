@@ -149,7 +149,7 @@ def nudge_text(name: str, channel_id: str) -> str:
     greeting = f"👋 Hi {name}!" if name else "👋 Hi!"
     return (
         f"{greeting} Your team celebrates birthdays and work anniversaries in <#{channel_id}>.\n\n"
-        "Add yours so nobody misses it. Only day and month are kept."
+        "Add yours so nobody misses it. For your birthday only the day and month are kept."
     )
 
 
@@ -170,7 +170,7 @@ def nudge_blocks(name: str, channel_id: str) -> list[dict]:
                 {
                     "type": "button",
                     "action_id": SKIP_ACTION,
-                    "text": {"type": "plain_text", "text": "Skip me", "emoji": True},
+                    "text": {"type": "plain_text", "text": "Don't celebrate me", "emoji": True},
                     "value": "skip",
                 },
             ],
