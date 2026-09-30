@@ -1452,6 +1452,20 @@ def register_handlers(app: App) -> None:
             )
             return
 
+        if step != session.step:
+            # A Submit on a question already answered. Recording it would file
+            # it as the answer to the current question and shift every answer
+            # after it by one.
+            _say_once(client, user_id, _ALREADY_ANSWERED)
+            return
+
+        if not answer.strip():
+            # Slack can deliver the click before it has captured what was
+            # typed, and a blank used to be saved as the answer without a word.
+            # Leaving a question blank on purpose is what `pass` is for.
+            _say_once(client, user_id, _NO_ANSWER_RECEIVED)
+            return
+
         session = state_store.record_answer(cache_key, answer_value(answer))
         n_questions = len(session.questions)
 
@@ -2010,6 +2024,20 @@ def match_dm_command(text: str | None) -> tuple[str, str] | None:
     if tz:
         return "timezone", tz.group(1)
     return None
+
+
+_NO_ANSWER_RECEIVED = (
+    "I didn't get an answer for that one. Type it in the box and press *Submit* again, "
+    "or send `pass` to leave it blank."
+)
+_ALREADY_ANSWERED = "That question is already answered. Carry on with the latest one below."
+
+
+def _say_once(client, user_id: str, text: str) -> None:  # noqa: ANN001
+    try:
+        client.chat_postMessage(channel=user_id, text=text)
+    except Exception as exc:
+        logger.warning("Could not tell %s about their answer: %s", user_id, exc)
 
 
 _NOT_A_STANDUP_ADMIN = (

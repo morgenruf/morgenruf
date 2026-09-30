@@ -211,3 +211,48 @@ class TestReportedAtIsLocal:
         assert handlers._local_clock(moment, "Asia/Calcutta") == "5:55 AM"
         assert handlers._local_clock(moment, "Not/AZone") == "12:25 AM"
         assert handlers._local_clock(moment.replace(tzinfo=None), None) == "12:25 AM"
+
+
+class TestInlineAnswerSubmit:
+    """Found in the end-to-end test: Slack can send the Submit click before it
+    has captured the typed text, and a blank was saved as the answer. A Submit
+    on an older question was filed as the answer to the current one."""
+
+    def _submit(self, value, step, session_step):
+        handler = _handlers()[("action", r"submit_answer_\d+")]
+        session = MagicMock(step=session_step, questions=["Q1", "Q2", "Q3"])
+        store = MagicMock()
+        store.get.return_value = session
+        store.record_answer.return_value = MagicMock(step=session_step + 1, questions=["Q1", "Q2", "Q3"])
+        client = MagicMock()
+        body = {
+            "user": {"id": "U1"},
+            "team": {"id": "T1"},
+            "actions": [{"value": str(step)}],
+            "state": {"values": {f"answer_{step}": {f"standup_answer_{step}": {"value": value}}}},
+        }
+        with patch.object(handlers, "state_store", store), patch.object(handlers, "_send_question_block"):
+            handler(MagicMock(), body, client)
+        return store, client
+
+    def test_a_blank_submit_is_not_saved(self):
+        store, client = self._submit(None, 1, 1)
+        store.record_answer.assert_not_called()
+        assert "didn't get an answer" in client.chat_postMessage.call_args.kwargs["text"]
+
+    def test_whitespace_counts_as_blank(self):
+        store, _ = self._submit("   \n ", 1, 1)
+        store.record_answer.assert_not_called()
+
+    def test_pass_still_leaves_it_blank_on_purpose(self):
+        store, _ = self._submit("pass", 1, 1)
+        store.record_answer.assert_called_once_with("T1:U1", "")
+
+    def test_an_old_questions_submit_is_ignored(self):
+        store, client = self._submit("late edit", 0, 2)
+        store.record_answer.assert_not_called()
+        assert "already answered" in client.chat_postMessage.call_args.kwargs["text"]
+
+    def test_a_normal_answer_is_saved(self):
+        store, _ = self._submit("Shipping 1.9.8", 1, 1)
+        store.record_answer.assert_called_once_with("T1:U1", "Shipping 1.9.8")
