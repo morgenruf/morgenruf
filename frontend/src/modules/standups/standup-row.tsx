@@ -216,12 +216,34 @@ export function StandupRow({
               <DropdownMenuContent align="end" className="w-40">
                 <DropdownMenuItem
                   disabled={busy}
-                  onClick={() =>
-                    setActive.mutate({
-                      id: standup.id,
-                      active: !standup.active,
-                    })
-                  }
+                  onClick={() => {
+                    // Pausing is one click to reverse, so it offers an undo
+                    // rather than asking first.
+                    const active = !standup.active;
+                    setActive.mutate(
+                      { id: standup.id, active },
+                      {
+                        onSuccess: () =>
+                          toast.success(
+                            active
+                              ? `${standup.name} resumed`
+                              : `${standup.name} paused. No reminders go out until you resume it.`,
+                            active
+                              ? undefined
+                              : {
+                                  action: {
+                                    label: 'Undo',
+                                    onClick: () =>
+                                      setActive.mutate({
+                                        id: standup.id,
+                                        active: true,
+                                      }),
+                                  },
+                                },
+                          ),
+                      },
+                    );
+                  }}
                 >
                   {standup.active ? <Pause /> : <Play />}
                   {standup.active ? 'Pause' : 'Resume'}

@@ -26,6 +26,7 @@ import {
 import { Input } from '@/common/components/ui/input';
 import { Switch } from '@/common/components/ui/switch';
 import { applyApiErrors } from '@/common/forms/api-errors';
+import { useConfirm } from '@/common/hooks/use-confirm';
 
 import { useSettings, useSettingsMutations } from './hooks';
 import { FeatureSettingsSkeleton, StandupSettingsSkeleton } from './loading';
@@ -147,6 +148,45 @@ export function SettingsPage() {
   const { standups, modules } = useSettings();
   const { module, feed } = useSettingsMutations();
   const { isAdmin, canAdminister } = usePermissions();
+  const { confirm, dialog } = useConfirm();
+
+  async function toggleModule(name: string, enabled: boolean) {
+    const label = featureNames[name] ?? name;
+    if (
+      !enabled &&
+      !(await confirm({
+        title: `Turn off ${label}?`,
+        description: `${label} stops running for the whole workspace and leaves the navigation. Nothing is deleted; turn it back on at any time.`,
+        confirmLabel: `Turn off ${label}`,
+        destructive: true,
+      }))
+    )
+      return;
+    module.mutate(
+      { name, enabled },
+      {
+        onSuccess: () =>
+          toast.success(`${label} ${enabled ? 'turned on' : 'turned off'}`),
+      },
+    );
+  }
+
+  async function toggleFeed(enabled: boolean) {
+    if (
+      enabled &&
+      !(await confirm({
+        title: 'Publish standups to a public link?',
+        description:
+          'Anyone who has the link can read today’s standup answers without signing in, including people outside your company. Turn it off at any time to break the link.',
+        confirmLabel: 'Publish feed',
+      }))
+    )
+      return;
+    feed.mutate(enabled, {
+      onSuccess: () =>
+        toast.success(enabled ? 'Public feed on' : 'Public feed off'),
+    });
+  }
 
   const first = standups.data?.[0];
   const feedUrl = first?.feed_token
@@ -214,15 +254,7 @@ export function SettingsPage() {
                             className="mt-0.5"
                             disabled={module.isPending}
                             onCheckedChange={(enabled) =>
-                              module.mutate(
-                                { name: item.name, enabled },
-                                {
-                                  onSuccess: () =>
-                                    toast.success(
-                                      `${featureNames[item.name] ?? item.name} ${enabled ? 'enabled' : 'disabled'}`,
-                                    ),
-                                },
-                              )
+                              void toggleModule(item.name, enabled)
                             }
                           />
                         ) : (
@@ -358,14 +390,7 @@ export function SettingsPage() {
                             aria-label="Public standup feed enabled"
                             disabled={feed.isPending}
                             onCheckedChange={(enabled) =>
-                              feed.mutate(enabled, {
-                                onSuccess: () =>
-                                  toast.success(
-                                    enabled
-                                      ? 'Public feed enabled'
-                                      : 'Public feed disabled',
-                                  ),
-                              })
+                              void toggleFeed(enabled)
                             }
                           />
                         ) : (
@@ -446,6 +471,7 @@ export function SettingsPage() {
           </>
         )}
       </div>
+      {dialog}
     </div>
   );
 }

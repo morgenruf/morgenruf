@@ -518,7 +518,26 @@ function HolidaysCard() {
                       variant="ghost"
                       aria-label={`Remove ${holiday.name}`}
                       disabled={removeHoliday.isPending}
-                      onClick={() => removeHoliday.mutate(holiday.date)}
+                      onClick={() =>
+                        // Deleting one holiday is easy to reverse, so it
+                        // offers an undo rather than asking first.
+                        removeHoliday.mutate(holiday.date, {
+                          onSuccess: () =>
+                            toast.success(`${holiday.name} removed`, {
+                              action: {
+                                label: 'Undo',
+                                onClick: () =>
+                                  addHoliday.mutate(
+                                    { date: holiday.date, name: holiday.name },
+                                    {
+                                      onError: (failure) =>
+                                        toast.error(errorMessage(failure)),
+                                    },
+                                  ),
+                              },
+                            }),
+                        })
+                      }
                     >
                       <Trash />
                     </Button>

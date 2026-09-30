@@ -201,8 +201,21 @@ function ProgramMembers({ programId }: { programId: number }) {
                           items={memberStateOptions}
                           value={person.state}
                           disabled={member.isPending}
-                          onValueChange={(value) =>
-                            value !== null &&
+                          onValueChange={(value) => {
+                            if (value === null || value === person.state)
+                              return;
+                            // One change is one click to reverse, so it offers
+                            // an undo rather than asking first.
+                            const previous = person.state;
+                            const change = (state: string) =>
+                              member.mutate({
+                                id: programId,
+                                userId: person.user_id,
+                                body: {
+                                  state: state as ProgramMemberInput['state'],
+                                  weeks: 2,
+                                },
+                              });
                             member.mutate(
                               {
                                 id: programId,
@@ -214,10 +227,22 @@ function ProgramMembers({ programId }: { programId: number }) {
                               },
                               {
                                 onSuccess: () =>
-                                  toast.success('Participation updated'),
+                                  toast.success(
+                                    `${person.name || person.user_id}: ${
+                                      memberStateOptions.find(
+                                        (item) => item.value === value,
+                                      )?.label ?? value
+                                    }`,
+                                    {
+                                      action: {
+                                        label: 'Undo',
+                                        onClick: () => change(previous),
+                                      },
+                                    },
+                                  ),
                               },
-                            )
-                          }
+                            );
+                          }}
                         >
                           <SelectTrigger
                             aria-label={`Status for ${person.name || person.user_id}`}

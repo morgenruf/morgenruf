@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 
 import { usePermissions } from '@/common/auth/use-session';
+import { ConfirmDialog } from '@/common/components/confirm-dialog';
 import { LoadingTransition } from '@/common/components/loading-transition';
 import { EmptyState, ErrorState, PageHeader } from '@/common/components/page';
 import { Badge } from '@/common/components/ui/badge';
@@ -139,6 +140,7 @@ function ProgramActions({ program }: { program: Program }) {
   const navigate = useNavigate();
 
   const [runOpen, setRunOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!canAdminister('connect')) return null;
 
@@ -193,14 +195,28 @@ function ProgramActions({ program }: { program: Program }) {
         variant="outline"
         disabled={setEnabled.isPending}
         onClick={() =>
+          // Pausing is one click to reverse, so it offers an undo rather
+          // than asking first.
           setEnabled.mutate(
             { id: program.id, enabled: !program.enabled },
             {
               onSuccess: () =>
                 toast.success(
                   program.enabled
-                    ? 'Introductions paused'
-                    : 'Introductions resumed',
+                    ? `${program.name} paused. No introductions go out until you resume it.`
+                    : `${program.name} resumed`,
+                  program.enabled
+                    ? {
+                        action: {
+                          label: 'Undo',
+                          onClick: () =>
+                            setEnabled.mutate({
+                              id: program.id,
+                              enabled: true,
+                            }),
+                        },
+                      }
+                    : undefined,
                 ),
             },
           )
@@ -213,22 +229,33 @@ function ProgramActions({ program }: { program: Program }) {
         variant="destructiveGhost"
         disabled={remove.isPending}
         onClick={() => {
-          if (
-            window.confirm(
-              `Delete ${program.name}? Its past rounds will also be deleted.`,
-            )
-          )
-            remove.mutate(program.id, {
-              onSuccess: () => {
-                toast.success('Coffee chat deleted');
-                void navigate({ to: '/dashboard/connect' });
-              },
-            });
+          remove.reset();
+          setDeleting(true);
         }}
       >
         <Trash />
-        <span className="sr-only">Delete</span>
+        <span className="sr-only">Delete {program.name}</span>
       </Button>
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={`Delete ${program.name}?`}
+        description="Its past rounds and attendance are deleted too. This cannot be undone."
+        confirmLabel="Delete coffee chat"
+        pendingLabel="Deleting…"
+        destructive
+        pending={remove.isPending}
+        error={remove.error}
+        onConfirm={() =>
+          remove.mutate(program.id, {
+            onSuccess: () => {
+              setDeleting(false);
+              toast.success('Coffee chat deleted');
+              void navigate({ to: '/dashboard/connect' });
+            },
+          })
+        }
+      />
     </div>
   );
 }
