@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.7] - 2026-09-30
+
+### Fixed
+- **The web worker no longer shares database connections with the
+  scheduler.** The connection pool was opened in gunicorn's master before
+  the worker was forked, so a web request and a scheduled job could use one
+  Postgres connection at the same time. It showed up as occasional failed
+  webhook lookups, member updates and health checks ("no results to fetch").
+  The worker now opens its own connections.
+
 ## [1.9.6] - 2026-09-29
 
 ### Fixed
