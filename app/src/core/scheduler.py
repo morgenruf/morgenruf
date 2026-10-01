@@ -479,11 +479,16 @@ def _send_standup_to_workspace(
         return
     bot_token = client.token  # pick up any refreshed token
 
-    # Channel member sync: auto-add/remove participants based on Slack channel membership
+    # Channel member sync: auto-add/remove participants based on Slack channel membership.
+    # A synced standup asks the channel's people. When the channel cannot be
+    # read or holds nobody, the run is skipped rather than falling back to
+    # every member of the workspace.
     if schedule_id and channel_id:
+        syncing = False
         try:
             schedule = db.get_standup_schedule(team_id, schedule_id)
             if schedule and schedule.get("sync_with_channel"):
+                syncing = True
                 channel_members = set()
                 cursor = None
                 while True:
@@ -499,6 +504,11 @@ def _send_standup_to_workspace(
                 # API cost instead of showing up as a raw Slack id (#68).
                 human_users = fetch_human_users(client, channel_members)
                 channel_members = set(human_users)
+                if not channel_members:
+                    logger.warning(
+                        "Standup %s/%s not sent: channel %s has nobody to ask", team_id, schedule_id, channel_id
+                    )
+                    return
                 for uid, user in human_users.items():
                     try:
                         db.upsert_member(team_id, uid, **member_profile(user))
@@ -515,6 +525,11 @@ def _send_standup_to_workspace(
                     members = [m for m in members if m["user_id"] in channel_members]
                 logger.info("Synced %d channel members for schedule %s", len(channel_members), schedule_id)
         except Exception as exc:
+            if syncing:
+                logger.warning(
+                    "Standup %s/%s not sent: could not read channel %s: %s", team_id, schedule_id, channel_id, exc
+                )
+                return
             logger.warning("Channel member sync failed for %s/%s: %s", team_id, schedule_id, exc)
 
     failed_count = 0
@@ -2026,6 +2041,29 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # Two days after install, one Slack DM to an installer whose workspace
+    # has no standup yet. Hourly so it lands near hour 48, not up to a day
+    # late; the claiming executor keeps each firing to one replica.
+    scheduler.add_job(
+        _send_day2_nudges,
+        trigger=CronTrigger(minute=17, timezone="UTC"),
+        id="day2_nudge",
+        executor=BULK_EXECUTOR,
+        name="Day-2 nudge for workspaces with no standup",
+        replace_existing=True,
+    )
+
+    # Monday morning, one message to the operator's alert channel saying
+    # whether outside teams used Morgenruf last week.
+    scheduler.add_job(
+        _post_usage_report,
+        trigger=CronTrigger(day_of_week="mon", hour=7, minute=30, timezone="UTC"),
+        id="weekly_usage_report",
+        executor=BULK_EXECUTOR,
+        name="Monday usage report",
+        replace_existing=True,
+    )
+
     # Profiles of people who left the workspace more than 30 days ago are
     # deleted. Every pod schedules this; the advisory lock inside the purge
     # lets exactly one of them do the work.
@@ -2122,6 +2160,33 @@ def _alert_on_job_problem(event) -> None:  # noqa: ANN001
         notify(text)
     except Exception:
         logger.exception("Could not alert on scheduler event for %s", getattr(event, "job_id", "?"))
+
+
+def _send_day2_nudges() -> None:
+    """Hourly: one DM to installers two days in with no standup, and switch
+    on quick start standups whose channel the bot is now in."""
+    try:
+        from src.core.activation import send_day2_nudges  # noqa: PLC0415
+
+        send_day2_nudges()
+    except Exception:
+        logger.exception("Day-2 nudge failed")
+    try:
+        from src.core.standup_invites import sweep_waiting_standups  # noqa: PLC0415
+
+        sweep_waiting_standups()
+    except Exception:
+        logger.exception("Waiting standup sweep failed")
+
+
+def _post_usage_report() -> None:
+    """Mondays: the weekly usage report to the operator's alert channel."""
+    try:
+        from src.core.usage_report import post_weekly  # noqa: PLC0415
+
+        post_weekly()
+    except Exception:
+        logger.exception("Usage report failed")
 
 
 def _refresh_workspace_history() -> None:

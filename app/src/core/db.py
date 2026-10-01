@@ -1951,6 +1951,7 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
         "digest_enabled",
         "nudge_missing",
         "nudge_minutes_before",
+        "awaiting_invite_by",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
@@ -1969,6 +1970,47 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
             cur.execute(sql, [team_id] + list(fields.values()))
             row = cur.fetchone()
     return dict(row)
+
+
+def waiting_standups(team_id: str, channel_id: str) -> list[dict]:
+    """Standups saved from the quick start that wait for the bot to join this channel."""
+    sql = """
+        SELECT id, awaiting_invite_by, schedule_time, schedule_tz FROM standup_schedules
+        WHERE team_id = %s AND channel_id = %s AND awaiting_invite_by IS NOT NULL
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, channel_id))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def teams_with_waiting_standups() -> list[dict]:
+    """Live installs with quick start standups waiting for an invite, and their channels."""
+    sql = """
+        SELECT i.team_id, i.bot_token, ARRAY_AGG(DISTINCT s.channel_id) AS channel_ids
+        FROM standup_schedules s
+        JOIN installations i ON i.team_id = s.team_id
+        WHERE s.awaiting_invite_by IS NOT NULL AND i.active AND i.purged_at IS NULL
+        GROUP BY i.team_id, i.bot_token
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
+def activate_waiting_standup(schedule_id: int) -> bool:
+    """Switch a waiting standup on. True only for the call that did it, so the
+    creator is told once. updated_at moves, so the scheduler's change poll
+    registers the job."""
+    sql = """
+        UPDATE standup_schedules SET active = TRUE, awaiting_invite_by = NULL, updated_at = NOW()
+        WHERE id = %s AND awaiting_invite_by IS NOT NULL RETURNING 1
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (schedule_id,))
+            return cur.fetchone() is not None
 
 
 def upsert_daily_thread(
@@ -2171,7 +2213,9 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         fields["questions"] = json.dumps(fields["questions"])
     if "schedule_tz" in fields:
         fields["schedule_tz"] = canonical_tz(fields["schedule_tz"])
-    set_clause = ", ".join(f"{k} = %s" for k in fields) + ", updated_at = NOW()"
+    # Any edit takes a quick start standup out of waiting for its invite:
+    # whoever edited or resumed it has decided its state by hand.
+    set_clause = ", ".join(f"{k} = %s" for k in fields) + ", awaiting_invite_by = NULL, updated_at = NOW()"
     sql = f"UPDATE standup_schedules SET {set_clause} WHERE id = %s AND team_id = %s RETURNING *"
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -2492,13 +2536,14 @@ KEPT_TABLES: tuple[str, ...] = ("installations", "workspace_history", "email_con
 # A purged workspace is skipped, because its counts would all read zero.
 _HISTORY_SQL = """
     INSERT INTO workspace_history (
-        team_id, team_name, installed_at, removed_at, removal_reason,
+        team_id, team_name, installed_at, removed_at, removal_reason, install_source,
         members_count, standups_created, standup_answers, first_answer_at,
         last_activity_at, kudos_count, coffee_rounds, modules_used,
         days_installed, updated_at)
     SELECT i.team_id, i.team_name, i.installed_at,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_at END,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_reason END,
+           i.install_source,
            (SELECT COUNT(*) FROM members m WHERE m.team_id = i.team_id AND m.active),
            sc.n, st.n, st.first_at,
            GREATEST(st.last_at, k.last_at, c.last_at),
@@ -2530,6 +2575,7 @@ _HISTORY_SQL = """
         installed_at = EXCLUDED.installed_at,
         removed_at = EXCLUDED.removed_at,
         removal_reason = EXCLUDED.removal_reason,
+        install_source = COALESCE(workspace_history.install_source, EXCLUDED.install_source),
         members_count = EXCLUDED.members_count,
         standups_created = EXCLUDED.standups_created,
         standup_answers = EXCLUDED.standup_answers,
@@ -2669,6 +2715,76 @@ def purge_candidates() -> list[dict]:
         FROM installations
         WHERE NOT active AND purged_at IS NULL AND deactivated_at IS NOT NULL
         ORDER BY deactivated_at
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
+def set_install_source(team_id: str, source: str) -> None:
+    """Remember where the first install of a workspace came from.
+
+    Only fills an empty source, so a reinstall or a dashboard sign-in through
+    a tagged link never rewrites where the workspace first came from.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE installations SET install_source = %s WHERE team_id = %s AND install_source IS NULL",
+                (source, team_id),
+            )
+
+
+def usage_report_rows() -> list[dict]:
+    """One row per workspace for the Monday usage report: counts, never people.
+
+    Live installations, and those removed in the last week. A removed
+    workspace whose data is purged keeps a bare installations row, and its
+    history row fills in what the purge cleared; a workspace with only a
+    history row left is added from workspace_history. people_7d counts
+    distinct people who answered a standup or gave kudos in the last week.
+    """
+    sql = """
+        SELECT i.team_id,
+               COALESCE(i.team_name, h.team_name) AS team_name,
+               i.active,
+               i.installed_at,
+               CASE WHEN i.active THEN NULL ELSE COALESCE(i.deactivated_at, h.removed_at) END AS removed_at,
+               COALESCE(i.install_source, h.install_source) AS install_source,
+               p.n AS people_7d,
+               st.n AS answers_7d,
+               k.n AS kudos_7d,
+               EXISTS (SELECT 1 FROM standup_schedules s WHERE s.team_id = i.team_id) AS has_standup,
+               i.installed_at > NOW() - INTERVAL '7 days' AS installed_this_week,
+               (NOT i.active AND COALESCE(i.deactivated_at, h.removed_at) > NOW() - INTERVAL '7 days')
+                   AS removed_this_week,
+               COALESCE(st.first_at > NOW() - INTERVAL '7 days', FALSE) AS activated_this_week,
+               EXISTS (SELECT 1 FROM install_emails e WHERE e.team_id = i.team_id AND e.kind = 'nudge:day2')
+                   AS nudged
+        FROM installations i
+        LEFT JOIN workspace_history h ON h.team_id = i.team_id
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) FILTER (WHERE submitted_at > NOW() - INTERVAL '7 days') AS n,
+                   MIN(submitted_at) AS first_at
+            FROM standups WHERE team_id = i.team_id) st
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS n FROM kudos
+            WHERE team_id = i.team_id AND created_at > NOW() - INTERVAL '7 days') k
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS n FROM (
+                SELECT user_id FROM standups
+                WHERE team_id = i.team_id AND submitted_at > NOW() - INTERVAL '7 days'
+                UNION
+                SELECT from_user FROM kudos
+                WHERE team_id = i.team_id AND created_at > NOW() - INTERVAL '7 days') u) p
+        WHERE i.active OR COALESCE(i.deactivated_at, h.removed_at) > NOW() - INTERVAL '7 days'
+        UNION ALL
+        SELECT h.team_id, h.team_name, FALSE, h.installed_at, h.removed_at, h.install_source,
+               0, 0, 0, FALSE, h.installed_at > NOW() - INTERVAL '7 days', TRUE, FALSE, FALSE
+        FROM workspace_history h
+        WHERE h.removed_at > NOW() - INTERVAL '7 days'
+          AND NOT EXISTS (SELECT 1 FROM installations i WHERE i.team_id = h.team_id)
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -2847,17 +2963,42 @@ def install_email_sent(team_id: str, kind: str) -> bool:
             return cur.fetchone() is not None
 
 
-def record_install_email(team_id: str, kind: str, to_email: str = "") -> None:
-    """Remember that this workspace has had this message, so it cannot go twice."""
+def record_install_email(team_id: str, kind: str, to_email: str = "") -> bool:
+    """Remember that this workspace has had this message, so it cannot go twice.
+
+    True when this call wrote the record, False when it was already there, so
+    a caller that records before sending can tell whether it should send.
+    """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO install_emails (team_id, kind, to_email) VALUES (%s, %s, %s)
-                ON CONFLICT (team_id, kind) DO NOTHING
+                ON CONFLICT (team_id, kind) DO NOTHING RETURNING 1
                 """,
                 (team_id, kind, to_email or None),
             )
+            return cur.fetchone() is not None
+
+
+def workspaces_without_standup(hours: int) -> list[dict]:
+    """Live installs older than `hours` and under two weeks old, with no standup
+    at all (a quick start one waiting for its invite counts as started), whose
+    installer has not had the day-2 nudge."""
+    sql = """
+        SELECT i.team_id, i.bot_token, i.installed_by_user_id
+        FROM installations i
+        WHERE i.active
+          AND i.purged_at IS NULL
+          AND i.installed_at < NOW() - make_interval(hours => %s)
+          AND i.installed_at > NOW() - INTERVAL '14 days'
+          AND NOT EXISTS (SELECT 1 FROM standup_schedules s WHERE s.team_id = i.team_id)
+          AND NOT EXISTS (SELECT 1 FROM install_emails e WHERE e.team_id = i.team_id AND e.kind = 'nudge:day2')
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (hours,))
+            return [dict(r) for r in cur.fetchall()]
 
 
 def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
@@ -2870,7 +3011,8 @@ def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
     sql = """
         SELECT i.team_id, i.team_name, i.installed_by_user_id,
                (SELECT COUNT(*) FROM standup_schedules s
-                 WHERE s.team_id = i.team_id AND s.active) AS schedules,
+                 WHERE s.team_id = i.team_id
+                   AND (s.active OR s.awaiting_invite_by IS NOT NULL)) AS schedules,
                (SELECT COUNT(*) FROM standups st WHERE st.team_id = i.team_id) AS standups,
                (SELECT COUNT(DISTINCT user_id) FROM standups st
                  WHERE st.team_id = i.team_id) AS people

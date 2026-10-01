@@ -159,3 +159,28 @@ class TestOneTimeLoginToken:
     def test_database_error_refuses_the_token(self, oauth):
         oauth.db.claim_login_token.side_effect = RuntimeError("db down")
         assert oauth.consume_login_token(oauth._make_login_token("T1", "U1")) is None
+
+
+class TestInstallSource:
+    def _install_with(self, client, oauth, query: str, new_install: bool = True):
+        resp = client.get(f"/install{query}")
+        state = parse_qs(urlparse(resp.location).query)["state"][0]
+        oauth.db.save_installation.return_value = new_install
+        with patch.object(oauth, "WebClient", return_value=_slack({})):
+            client.get(f"/oauth/callback?code=c&state={state}")
+
+    def test_the_ref_is_recorded_after_the_install_is_saved(self, client, oauth):
+        self._install_with(client, oauth, "?ref=LinkedIn")
+        oauth.db.set_install_source.assert_called_once_with("T1", "linkedin")
+
+    def test_no_ref_records_nothing(self, client, oauth):
+        self._install_with(client, oauth, "")
+        oauth.db.set_install_source.assert_not_called()
+
+    def test_a_ref_that_is_not_a_plain_tag_records_nothing(self, client, oauth):
+        self._install_with(client, oauth, "?ref=%3Cscript%3E")
+        oauth.db.set_install_source.assert_not_called()
+
+    def test_signing_in_through_a_tagged_link_records_nothing(self, client, oauth):
+        self._install_with(client, oauth, "?ref=linkedin", new_install=False)
+        oauth.db.set_install_source.assert_not_called()

@@ -312,3 +312,13 @@ class TestConsentIsAskedForNotAssumed:
         """A self-hosted install must never post its users to our contact list."""
         monkeypatch.delenv("RESEND_AUDIENCE_ID", raising=False)
         assert mailer.sync_contact("someone@example.com") is False
+
+
+def test_a_standup_waiting_for_its_invite_counts_as_set_up(fake_cursor_db):
+    """The follow-up asks a workspace with no standup what stopped them. One
+    that started a standup and has yet to invite the bot did not stop."""
+    import src.core.db as real_db
+
+    real_db.workspaces_awaiting_followup()
+    sql = fake_cursor_db.calls[0][0]
+    assert "(s.active OR s.awaiting_invite_by IS NOT NULL)" in sql

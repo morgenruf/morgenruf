@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from src.core.schedule_validation import DEFAULT_QUESTIONS
 from src.modules.standup.blockers import is_blocker_question, reports_a_blocker
+from src.modules.standup.quickstart import OPEN_ACTION as QUICKSTART_ACTION
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,6 +43,10 @@ def _summary_on_by_default(cfg: dict) -> bool:
     if cfg.get("standup_id"):
         return bool(cfg.get("post_summary"))
     return bool(cfg.get("post_summary", True))
+
+
+def _waiting_text(channel_id: str) -> str:
+    return f"Waiting for `/invite @Morgenruf` in <#{channel_id}>"
 
 
 def _plus_an_hour(hhmm: str) -> str:
@@ -1246,9 +1251,11 @@ def app_home_view(
                         else "*No standups yet.*\nCreate your first standup to get started. It takes a minute."
                     ),
                 },
+                # A workspace with no standup at all gets the two-field quick
+                # start; the full form stays one click away in settings.
                 "accessory": {
                     "type": "button",
-                    "action_id": "open_create_standup",
+                    "action_id": "open_create_standup" if other_standups else QUICKSTART_ACTION,
                     "text": {"type": "plain_text", "text": "➕ Create a standup", "emoji": True},
                     "style": "primary",
                     "value": "create",
@@ -1284,8 +1291,12 @@ def app_home_view(
             responded_today = standup.get("user_responded_today", False)
             response_time = standup.get("user_last_response_time")
 
-            # Status indicator
-            if not active:
+            # Status indicator. A quick start standup for a channel the bot is
+            # not in yet is off until the invite, which is not the same as paused.
+            if standup.get("awaiting_invite_by"):
+                status_icon = "✉️"
+                status_text = _waiting_text(channel)
+            elif not active:
                 status_icon = "⏸️"
                 status_text = "Paused"
             elif responded_today:
@@ -1539,7 +1550,9 @@ def app_home_configure_view(
             next_run = _format_next_run(standup.get("next_run"))
             if next_run:
                 detail_lines.append(f"Next: {next_run}")
-            if not active:
+            if standup.get("awaiting_invite_by"):
+                detail_lines.append(f"*{_waiting_text(channel)}*")
+            elif not active:
                 detail_lines.append("*Paused*")
 
             blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(detail_lines)}})

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 OPT_IN_ACTION = "email:opt_in"
 OPT_OUT_ACTION = "email:opt_out"
+OFFER_BLOCK_ID = "email_offer"
 
 OFFER_TEXT = (
     "*Want setup tips by email?*\n"
@@ -50,7 +51,11 @@ def offer_blocks() -> list[dict]:
     """The ask, for the install DM."""
     return [
         {"type": "section", "text": {"type": "mrkdwn", "text": OFFER_TEXT}},
-        {"type": "actions", "elements": [_button(OPT_IN_ACTION, "Email me setup tips", "primary")]},
+        {
+            "type": "actions",
+            "block_id": OFFER_BLOCK_ID,
+            "elements": [_button(OPT_IN_ACTION, "Email me setup tips", "primary")],
+        },
     ]
 
 
@@ -118,20 +123,27 @@ def _ids(body: dict) -> tuple[str, str]:
     return team_id, user_id
 
 
+def _is_offer(block: dict) -> bool:
+    """The offer's text or its button. Other buttons in the message, such as
+    the quick start, are not part of it. A DM sent before the offer had a
+    block_id carries a random one from Slack, so the button is matched too."""
+    if block.get("block_id") == OFFER_BLOCK_ID or (block.get("text") or {}).get("text") == OFFER_TEXT:
+        return True
+    if block.get("type") != "actions":
+        return False
+    return any(e.get("action_id") in (OPT_IN_ACTION, OPT_OUT_ACTION) for e in block.get("elements") or [])
+
+
 def _reply(client, body: dict, user_id: str, text: str) -> None:  # noqa: ANN001
     """Answer where they pressed it.
 
     Pressed in the install DM, the offer in that message is swapped for the
-    answer and the rest of the welcome stays. Pressed on the App Home, the
+    answer and the rest of the welcome, quick start button included, stays. Pressed on the App Home, the
     answer arrives as a DM.
     """
     container = body.get("container") or {}
     if container.get("type") == "message" and container.get("channel_id"):
-        kept = [
-            block
-            for block in (body.get("message") or {}).get("blocks") or []
-            if block.get("type") != "actions" and (block.get("text") or {}).get("text") != OFFER_TEXT
-        ]
+        kept = [block for block in (body.get("message") or {}).get("blocks") or [] if not _is_offer(block)]
         try:
             client.chat_update(
                 channel=container["channel_id"],

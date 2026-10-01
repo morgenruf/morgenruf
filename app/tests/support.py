@@ -59,3 +59,28 @@ def patch_modules(mapping: dict):
                     continue
             stack.enter_context(mock.patch.object(parent, attr, replacement, create=True))
         yield
+
+
+class FakeCursor:
+    """Records every statement, answers fetchone/fetchall/rowcount from a script."""
+
+    def __init__(self, fetchone=None, fetchall=None, rowcount=2):
+        self.calls: list[tuple[str, tuple]] = []
+        self._fetchone = list(fetchone or [])
+        self._fetchall = list(fetchall or [])
+        self.rowcount = rowcount
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql, params=()):
+        self.calls.append((" ".join(sql.split()), tuple(params)))
+
+    def fetchone(self):
+        return self._fetchone.pop(0) if self._fetchone else None
+
+    def fetchall(self):
+        return self._fetchall.pop(0) if self._fetchall else []

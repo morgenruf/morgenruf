@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from datetime import timezone as tz
@@ -90,6 +91,15 @@ def _verify_state(state: str) -> bool:
     return _state_nonce(state) is not None
 
 
+_REF_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+
+
+def clean_ref(raw: str | None) -> str:
+    """The ?ref= of an install link, or "" when it is missing or not a plain tag."""
+    ref = (raw or "").strip().lower()
+    return ref if _REF_RE.fullmatch(ref) else ""
+
+
 @oauth_bp.route("/")
 def index():
     from src.core.version import APP_VERSION  # noqa: PLC0415
@@ -102,6 +112,7 @@ def install():
     """Redirect the browser to the Slack OAuth authorisation page."""
     nonce = os.urandom(16).hex()
     session["oauth_nonce"] = nonce
+    session["install_ref"] = clean_ref(request.args.get("ref"))
     url = _url_generator.generate(state=_make_state(nonce))
     return redirect(url)
 
@@ -179,6 +190,15 @@ def oauth_callback():
     except Exception as exc:
         logger.error("Failed to persist installation for %s: %s", team_id, exc)
         # Don't fail the flow — continue to send welcome messages
+    else:
+        # Only a new install is tagged: sign-in runs through the same flow,
+        # and a member signing in from a tagged link did not install anything.
+        install_ref = session.get("install_ref", "")
+        if install_ref and is_new_install:
+            try:
+                db.set_install_source(team_id, install_ref)
+            except Exception:
+                logger.warning("Could not record the install source for %s", team_id)
 
     # Admin goes to whoever first installs the app, and to Slack's own admins
     # and owners. Anyone else finishing OAuth is only signing in: dashboard
@@ -195,21 +215,10 @@ def oauth_callback():
     # they press the button (src/core/email_consent.py).
     if is_new_install and authed_user_id:
         try:
-            from src.core.email_consent import offer_blocks  # noqa: PLC0415
-
-            text = (
-                "👋 Morgenruf is installed. Nothing runs until you create a standup: "
-                "open the Home tab and press *Create a standup*. It takes a minute. "
-                "Type `/morgenruf help` to see everything else."
-            )
             bot_client = WebClient(token=bot_token)
             dm = bot_client.conversations_open(users=authed_user_id)
             dm_channel = dm["channel"]["id"]
-            bot_client.chat_postMessage(
-                channel=dm_channel,
-                text=text,
-                blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": text}}, *offer_blocks()],
-            )
+            bot_client.chat_postMessage(channel=dm_channel, text=WELCOME_TEXT, blocks=_welcome_blocks())
         except Exception as exc:
             logger.warning("Could not send welcome DM to %s: %s", authed_user_id, exc)
 
@@ -241,6 +250,24 @@ def oauth_callback():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+WELCOME_TEXT = (
+    "👋 Morgenruf is installed. Start your team's standup now: pick a channel and a time, that's it. "
+    "Type `/morgenruf help` to see everything else."
+)
+
+
+def _welcome_blocks() -> list[dict]:
+    """The first DM to the installer: the quick start first, then the email offer."""
+    from src.core.email_consent import offer_blocks  # noqa: PLC0415
+    from src.core.quickstart_button import button_block  # noqa: PLC0415
+
+    return [
+        {"type": "section", "text": {"type": "mrkdwn", "text": WELCOME_TEXT}},
+        button_block(),
+        *offer_blocks(),
+    ]
 
 
 def _is_slack_admin(bot_token: str, user_id: str) -> bool:
