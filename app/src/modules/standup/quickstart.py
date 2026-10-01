@@ -190,7 +190,9 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
         text = f"Your standup is set. Everyone in <#{channel_id}> gets the questions {when_text(time, tz)}."
     else:
         text = (
-            f"Saved for {when_text(time, tz)}. One step left: type `/invite @Morgenruf` in <#{channel_id}>. "
+            f"Saved for {when_text(time, tz)}. One step left: add me to <#{channel_id}>. "
+            "Type `/invite @Morgenruf` there. If Slack opens a menu instead, pick "
+            "*Add agents and apps to this channel* and press *Add* next to Morgenruf. "
             "The standup switches on the moment I'm in, and I'll tell you here."
         )
     try:
