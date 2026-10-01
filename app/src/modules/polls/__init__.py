@@ -14,6 +14,7 @@ from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.polls.handlers import handle_poll_command, home_blocks, register_handlers
+from src.modules.polls.jobs import plan_jobs
 
 MODULE = ModuleSpec(
     name="polls",
@@ -21,7 +22,7 @@ MODULE = ModuleSpec(
     migrations_dir=Path(__file__).parent / "migrations",
     register_slack=register_handlers,
     register_routes=None,
-    plan_jobs=None,
+    plan_jobs=plan_jobs,
     claim_dm=None,
     purge=None,
     nav=(NavItem(label="Polls", path="#polls"),),
