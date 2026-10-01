@@ -92,7 +92,7 @@ def cur(fake_cursor_db, monkeypatch):
 
 def result_script(cur, respondents, mood, enps=(), invited=8, includes_enps=True):
     cur._fetchone = [
-        (1, "T1", invited, includes_enps, "2026-10-01"),
+        (1, "T1", invited, includes_enps, "2026-10-01", None, None),
         (respondents,),
     ]
     counts = {}

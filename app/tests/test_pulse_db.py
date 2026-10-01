@@ -124,3 +124,98 @@ class TestPurge:
         steps = dict(real_db._PURGE_STEPS)
         for child in ("pulse_tallies", "pulse_respondents", "pulse_invites"):
             assert steps[child] == "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"
+
+
+class TestClosingARound:
+    """Once a round closes, nothing about who answered is left to link."""
+
+    def test_the_scrub_is_one_transaction_that_keeps_only_counts(self, cur, monkeypatch):
+        opened = []
+        real = real_db.db_conn
+
+        def counting():
+            opened.append(1)
+            return real()
+
+        monkeypatch.setattr(pdb, "db_conn", counting)
+        cur._fetchone = [(3,)]
+        assert pdb.scrub_round(3) is True
+        assert len(opened) == 1
+        sqls = [sql for sql, _ in cur.calls]
+        lock = sqls[0]
+        assert "FOR UPDATE" in lock and "scrubbed_at IS NULL" in lock and "closes_at <= NOW()" in lock
+        stored = next(s for s in sqls if s.startswith("UPDATE pulse_rounds"))
+        assert "respondents =" in stored and "question_respondents =" in stored and "scrubbed_at = NOW()" in stored
+        assert "DELETE FROM pulse_respondents WHERE round_id = %s" in sqls
+        assert "DELETE FROM pulse_invites WHERE round_id = %s" in sqls
+        assert "UPDATE pulse_tallies SET count = count WHERE round_id = %s" in sqls
+        # Counts are stored before the rows they are counted from are deleted.
+        assert sqls.index(stored) < sqls.index("DELETE FROM pulse_respondents WHERE round_id = %s")
+
+    def test_a_round_already_scrubbed_or_still_open_is_left_alone(self, cur):
+        cur._fetchone = [None]
+        assert pdb.scrub_round(3) is False
+        assert not any(sql.startswith(("DELETE", "UPDATE")) for sql, _ in cur.calls)
+
+    def test_close_due_rounds_scrubs_then_vacuums(self, cur, monkeypatch):
+        cur._fetchall = [[(3,), (4,)]]
+        monkeypatch.setattr(pdb, "scrub_round", lambda round_id: round_id == 3)
+        vacuumed = []
+        monkeypatch.setattr(pdb, "vacuum", lambda: vacuumed.append(1))
+        assert pdb.close_due_rounds("T1") == [3]
+        sql = cur.calls[0][0]
+        assert "scrubbed_at IS NULL" in sql and "closes_at <= NOW()" in sql
+        assert vacuumed == [1]
+
+    def test_nothing_closed_no_vacuum(self, cur, monkeypatch):
+        cur._fetchall = [[]]
+        monkeypatch.setattr(pdb, "vacuum", lambda: (_ for _ in ()).throw(AssertionError("vacuumed")))
+        assert pdb.close_due_rounds("T1") == []
+
+    def test_a_failed_vacuum_does_not_undo_the_close(self, cur, monkeypatch):
+        cur._fetchall = [[(3,)]]
+        monkeypatch.setattr(pdb, "scrub_round", lambda round_id: True)
+
+        def boom_conn():
+            raise RuntimeError("no connection")
+
+        monkeypatch.setattr(pdb, "get_conn", boom_conn)
+        assert pdb.close_due_rounds("T1") == [3]
+
+    def test_vacuum_runs_outside_a_transaction(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        released = []
+        monkeypatch.setattr(pdb, "get_conn", lambda: conn)
+        monkeypatch.setattr(pdb, "release_conn", lambda c: released.append(c))
+        pdb.vacuum()
+        assert conn.autocommit is False  # set back before the connection goes home
+        cursor.execute.assert_called_once_with("VACUUM pulse_tallies, pulse_respondents")
+        assert released == [conn]
+
+
+class TestResultsAfterClose:
+    def _script(self, cur, scrubbed, respondents_column, live=None):
+        cur._fetchone = [(1, "T1", 8, False, "2026-10-01", scrubbed, respondents_column)]
+        if live is not None:
+            cur._fetchone.append((live,))
+        cur._fetchall = [[("mood", 5, 2), ("mood", 4, 2), ("mood", 2, 2)]]
+
+    def test_a_scrubbed_round_reads_its_stored_count(self, cur):
+        self._script(cur, scrubbed=True, respondents_column=6)
+        result = pdb.round_results(1)
+        assert result["respondents"] == 6 and result["mood_avg"] == 3.67
+        assert not any("pulse_respondents" in sql for sql, _ in cur.calls)
+
+    def test_an_open_round_counts_live_rows(self, cur):
+        self._script(cur, scrubbed=False, respondents_column=None, live=6)
+        result = pdb.round_results(1)
+        assert result["respondents"] == 6 and result["mood_avg"] == 3.67
+        assert any("FROM pulse_respondents" in sql for sql, _ in cur.calls)
+
+    def test_a_scrubbed_round_under_five_stays_hidden(self, cur):
+        self._script(cur, scrubbed=True, respondents_column=4)
+        result = pdb.round_results(1)
+        assert result["hidden"] is True and result["mood_avg"] is None

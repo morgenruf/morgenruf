@@ -3,8 +3,9 @@
    timestamp. Who answered is kept apart in pulse_respondents (no values),
    only to stop double answers and to remind people who have not answered,
    and is written in a separate transaction from the count, so no transaction
-   id ties a person to a value. Results are shown only for rounds with at
-   least five respondents.
+   id ties a person to a value. When a round closes the respondent and invite
+   rows are deleted and only the counts stay. Results are shown only for
+   rounds with at least five respondents.
 
    Additive only. */
 CREATE TABLE IF NOT EXISTS pulse_programs (
@@ -26,6 +27,11 @@ CREATE TABLE IF NOT EXISTS pulse_rounds (
     invited      INTEGER NOT NULL DEFAULT 0,
     reminded_at  TIMESTAMPTZ,
     closes_at    TIMESTAMPTZ NOT NULL,
+    /* Filled in when the round closes, when its respondent and invite rows
+       are deleted: the counts are all that is kept. */
+    respondents  INTEGER,
+    question_respondents JSONB,
+    scrubbed_at  TIMESTAMPTZ,
     UNIQUE (team_id, sent_on)
 );
 CREATE TABLE IF NOT EXISTS pulse_respondents (

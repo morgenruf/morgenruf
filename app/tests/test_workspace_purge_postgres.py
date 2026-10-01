@@ -345,3 +345,55 @@ def test_the_sweep_is_a_dry_run_until_switched_on(pg, monkeypatch, caplog):
     assert [r["action"] for r in report if r["team_id"] == team] == ["purged"]
     assert db.workspace_data_counts(team)["standups"] == 0
     assert [r for r in workspace_retention.sweep_inactive_workspaces() if r["team_id"] == team] == []
+
+
+def test_a_closed_pulse_round_names_nobody(pg, monkeypatch):
+    """After close: counts on the round, tallies, and not one user id anywhere."""
+    import psycopg2
+    import src.modules.pulse.db as pdb
+
+    db, conn, teams = pg
+    team = new_team(teams)
+    seed(conn, team)
+    monkeypatch.setattr(pdb, "db_conn", db.db_conn)
+    monkeypatch.setattr(pdb, "get_conn", lambda: psycopg2.connect(URL))
+    monkeypatch.setattr(pdb, "release_conn", lambda c: c.close())
+
+    users = [f"UP{team}{i}" for i in range(6)]
+    created = pdb.create_round(team, "2026-01-01", datetime.now(timezone.utc) + timedelta(hours=1))
+    round_id = created["id"]
+    pdb.record_invites(round_id, [*users, f"UP{team}X"])
+    for i, user in enumerate(users):
+        assert pdb.record_answer(round_id, user, "mood", 1 + i % 5)
+        assert pdb.record_answer(round_id, user, "enps", 9 + i % 2)
+    before = pdb.round_results(round_id)
+    assert before["hidden"] is False
+
+    with conn.cursor() as cur:
+        cur.execute("UPDATE pulse_rounds SET closes_at = NOW() - INTERVAL '1 minute' WHERE id = %s", (round_id,))
+    conn.commit()
+    assert round_id in pdb.close_due_rounds(team)  # the seed's own round is due too
+    assert pdb.close_due_rounds(team) == []
+    assert pdb.record_answer(round_id, f"UP{team}X", "mood", 3) is False
+
+    after = pdb.round_results(round_id)
+    assert after == before
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT respondents, question_respondents, scrubbed_at FROM pulse_rounds WHERE id = %s", (round_id,)
+        )
+        respondents, per_question, scrubbed_at = cur.fetchone()
+        assert respondents == 6 and per_question == {"mood": 6, "enps": 6} and scrubbed_at is not None
+        for table in ("pulse_respondents", "pulse_invites"):
+            cur.execute(f"SELECT COUNT(*) FROM {table} WHERE round_id = %s", (round_id,))
+            assert cur.fetchone()[0] == 0, table
+        cur.execute("SELECT DISTINCT xmin::text FROM pulse_tallies WHERE round_id = %s", (round_id,))
+        assert len(cur.fetchall()) == 1, "every tally row carries the closing transaction id"
+        dump = []
+        for table in ("pulse_rounds", "pulse_respondents", "pulse_invites", "pulse_tallies"):
+            column = "id" if table == "pulse_rounds" else "round_id"
+            cur.execute(f"SELECT t::text FROM {table} t WHERE {column} = %s", (round_id,))
+            dump.extend(r[0] for r in cur.fetchall())
+    text = " ".join(dump)
+    assert dump and not any(user in text for user in [*users, f"UP{team}X"])

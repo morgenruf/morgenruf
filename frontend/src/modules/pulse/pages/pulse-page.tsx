@@ -48,7 +48,8 @@ const days = [
 ].map((label, value) => ({ value, label }));
 
 const promises = [
-  'Answers are not stored one by one: Morgenruf only keeps how many people picked each value, with no names and no times. Who answered is kept apart, only to stop a second answer and to send one reminder.',
+  'Answers are not stored one by one: Morgenruf only keeps how many people picked each value, with no names and no times.',
+  'While a check-in is open, Morgenruf keeps who has answered (not what) so it can remind people. When it closes, that list is deleted and only the counts stay.',
   'Results show only as team averages, and only for a week at least 5 people answered. Below that the week shows as a gap.',
   'There is no free text: two taps on buttons, nothing to recognise someone by.',
   'Nobody, admins included, can see what one person said. There is no per person view or export.',

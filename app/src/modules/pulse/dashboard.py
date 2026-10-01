@@ -102,6 +102,12 @@ def register_routes(flask_app) -> None:
     @bp.response(200, schemas.Round(many=True))
     def get_trend():
         """Team results per round, oldest first. Rounds under five carry counts only."""
+        # Close what is due before reading, so a round whose tick has not run
+        # yet (the module switched off, say) is not shown from live rows.
+        try:
+            pdb.close_due_rounds(session["team_id"])
+        except Exception as exc:
+            logger.warning("pulse get_trend could not close due rounds: %s", exc)
         try:
             rows = pdb.trend(session["team_id"])
         except Exception as exc:

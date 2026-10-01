@@ -11,16 +11,26 @@ the database could join a person to the value they picked through it. A
 count row is shared by everyone who picked that value, so its xmin only
 names the last writer, and the claim it follows is a different transaction.
 
+When a round closes, scrub_round stores its respondent counts on the round,
+deletes the respondent and invite rows, and rewrites every tally row so they
+all carry the closing transaction id. VACUUM then clears the dead row
+versions an older count could be read back from. After that nothing about
+the round names a person.
+
 Results leave this module only through round_results and trend, which apply
 privacy.MIN_GROUP.
 """
 
 from __future__ import annotations
 
+import logging
+
 import psycopg2.extras
 
-from src.core.db import db_conn
+from src.core.db import db_conn, get_conn, release_conn
 from src.modules.pulse import privacy, questions
+
+logger = logging.getLogger(__name__)
 
 _PROGRAM_FIELDS = ("enabled", "day_of_week", "hour", "minute", "timezone", "audience_channel_id")
 
@@ -250,20 +260,25 @@ def round_results(round_id: int) -> dict:
 
     Hidden below MIN_GROUP respondents, and then the counts are not even
     read. A question answered by fewer than MIN_GROUP people stays None even
-    when the round is shown.
+    when the round is shown. A closed round's respondent count is the one
+    stored when it was scrubbed; an open round's is counted live.
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, team_id, invited, includes_enps, sent_on FROM pulse_rounds WHERE id = %s",
+                "SELECT id, team_id, invited, includes_enps, sent_on, scrubbed_at IS NOT NULL, respondents"
+                " FROM pulse_rounds WHERE id = %s",
                 (round_id,),
             )
             row = cur.fetchone()
             if not row:
                 return {}
-            _, _, invited, includes_enps, sent_on = row
-            cur.execute("SELECT COUNT(DISTINCT user_id) FROM pulse_respondents WHERE round_id = %s", (round_id,))
-            respondents = int((cur.fetchone() or (0,))[0])
+            _, _, invited, includes_enps, sent_on, scrubbed, stored = row
+            if scrubbed:
+                respondents = int(stored or 0)
+            else:
+                cur.execute("SELECT COUNT(DISTINCT user_id) FROM pulse_respondents WHERE round_id = %s", (round_id,))
+                respondents = int((cur.fetchone() or (0,))[0])
             result = {
                 "round_id": round_id,
                 "sent_on": sent_on,
@@ -314,3 +329,86 @@ def trend(team_id: str, limit: int = 12) -> list[dict]:
         else:
             out.append(result)
     return out
+
+
+# ── Closing a round ─────────────────────────────────────────────────────────
+
+
+def unscrubbed_count(team_id: str) -> int:
+    """Rounds that still hold who answered: open ones, and closed ones not yet scrubbed."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM pulse_rounds WHERE team_id = %s AND scrubbed_at IS NULL", (team_id,))
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+def scrub_round(round_id: int) -> bool:
+    """Close one round for good: keep its counts, forget who answered. True when this call did it.
+
+    One transaction: store the respondent counts on the round, delete its
+    respondent and invite rows, and rewrite its tally rows so every one of
+    them carries this transaction's id instead of the id of the last person
+    who picked that value. Only for a round past closes_at and not scrubbed
+    yet, so running it again does nothing.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM pulse_rounds WHERE id = %s AND scrubbed_at IS NULL AND closes_at <= NOW() FOR UPDATE",
+                (round_id,),
+            )
+            if cur.fetchone() is None:
+                return False
+            cur.execute(
+                """
+                UPDATE pulse_rounds SET
+                    respondents = (SELECT COUNT(DISTINCT user_id) FROM pulse_respondents WHERE round_id = %s),
+                    question_respondents = (
+                        SELECT COALESCE(jsonb_object_agg(question_key, n), '{}'::jsonb)
+                        FROM (SELECT question_key, COUNT(*) AS n FROM pulse_respondents
+                              WHERE round_id = %s GROUP BY question_key) q
+                    ),
+                    scrubbed_at = NOW()
+                WHERE id = %s
+                """,
+                (round_id, round_id, round_id),
+            )
+            cur.execute("DELETE FROM pulse_respondents WHERE round_id = %s", (round_id,))
+            cur.execute("DELETE FROM pulse_invites WHERE round_id = %s", (round_id,))
+            cur.execute("UPDATE pulse_tallies SET count = count WHERE round_id = %s", (round_id,))
+            return True
+
+
+def vacuum() -> None:
+    """Clear dead row versions, so an older count or a deleted respondent row
+    cannot be read back from the table pages. VACUUM cannot run inside a
+    transaction, so this borrows a connection in autocommit mode. Raises on
+    failure; close_due_rounds logs it and carries on."""
+    conn = get_conn()
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("VACUUM pulse_tallies, pulse_respondents")
+    finally:
+        conn.autocommit = False
+        release_conn(conn)
+
+
+def close_due_rounds(team_id: str) -> list[int]:
+    """Scrub every round of this workspace past its closing time. Returns the ids closed now."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM pulse_rounds WHERE team_id = %s AND scrubbed_at IS NULL AND closes_at <= NOW()"
+                " ORDER BY id",
+                (team_id,),
+            )
+            due = [r[0] for r in cur.fetchall()]
+    closed = [round_id for round_id in due if scrub_round(round_id)]
+    if closed:
+        try:
+            vacuum()
+        except Exception as exc:
+            logger.warning("pulse: closed %d round(s) for %s but VACUUM failed: %s", len(closed), team_id, exc)
+    return closed

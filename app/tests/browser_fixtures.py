@@ -738,6 +738,7 @@ def create_test_app(patcher=None):
                 state.pulse_program.update(fields, updated_by=updated_by) or deepcopy(state.pulse_program)
             ),
             "trend": lambda team, limit=12: deepcopy(state.pulse_trend),
+            "close_due_rounds": lambda team: [],
         },
     )
     install(

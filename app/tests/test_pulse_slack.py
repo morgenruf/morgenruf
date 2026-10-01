@@ -96,6 +96,16 @@ class Store:
         self.rounds[round_id]["reminded_at"] = NOW
         return True
 
+    def close_due_rounds(self, team_id):
+        closed = []
+        for r in self.rounds.values():
+            if r.get("scrubbed_at") is None and r["closes_at"] <= NOW:
+                r["scrubbed_at"] = NOW
+                self.respondents = {x for x in self.respondents if x[0] != r["id"]}
+                self.invites.pop(r["id"], None)
+                closed.append(r["id"])
+        return closed
+
     def non_respondents(self, round_id):
         answered = {u for r, u, _ in self.respondents if r == round_id}
         return [u for u in self.invites.get(round_id, []) if u not in answered]
@@ -131,6 +141,7 @@ def world(monkeypatch):
         "rounds_to_remind",
         "claim_reminder",
         "non_respondents",
+        "close_due_rounds",
     ):
         monkeypatch.setattr(pdb, name, getattr(store, name))
     monkeypatch.setattr(core_db, "granted_scopes", lambda team_id: set())
@@ -322,6 +333,16 @@ class TestReminder:
         before = len(world.posts)
         tick(TEAM)
         assert len(world.posts) == before
+
+    def test_a_closed_round_forgets_who_answered(self, world):
+        from src.modules.pulse.jobs import tick
+
+        send(world)
+        click(world, "pulse:answer:1:mood:4", user="U1")
+        world.store.rounds[1]["closes_at"] = NOW - timedelta(minutes=1)
+        tick(TEAM)
+        assert world.store.respondents == set() and 1 not in world.store.invites
+        assert world.store.answers == [(1, "mood", 4)]
 
 
 class TestTheCommand:

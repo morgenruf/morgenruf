@@ -43,8 +43,11 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
     # Raises on a failed read: module job sync then keeps the live jobs, where
     # an empty plan would delete them.
     program = pdb.get_program(team_id)
+    tick_job = JobSpec(key="tick", trigger=IntervalTrigger(hours=1), func=tick, args=(team_id,))
     if not program.get("enabled"):
-        return []
+        # Switched off with a round still holding who answered: keep the tick
+        # until that round has closed and been scrubbed.
+        return [tick_job] if pdb.unscrubbed_count(team_id) > 0 else []
     tz = canonical_tz(program.get("timezone") or "UTC")
     if _zone(tz) is None:
         logger.warning("pulse: unusable timezone for %s", team_id)
@@ -58,7 +61,7 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
             func=send_round,
             args=(team_id,),
         ),
-        JobSpec(key="tick", trigger=IntervalTrigger(hours=1), func=tick, args=(team_id,)),
+        tick_job,
     ]
 
 
@@ -136,13 +139,22 @@ def send_round(team_id: str) -> int:
 
 
 def tick(team_id: str) -> int:
-    """Remind, once, the people who have not answered a round that closes within two days.
+    """Close rounds that are due, then remind, once, the people who have not
+    answered a round that closes within two days.
 
-    Closing needs no work: a round past closes_at refuses answers on its own.
+    A round past closes_at refuses answers on its own. Closing it here deletes
+    who answered and keeps only the counts, and runs whether or not the module
+    is still on, so switching Pulse off never leaves that list behind.
     """
     import src.modules.pulse.db as pdb  # noqa: PLC0415
     from src.modules.pulse import blocks  # noqa: PLC0415
 
+    try:
+        closed = pdb.close_due_rounds(team_id)
+        if closed:
+            logger.info("pulse: closed %d round(s) for %s", len(closed), team_id)
+    except Exception:
+        logger.exception("pulse: could not close due rounds for %s", team_id)
     if not _active(team_id):
         return 0
     due = pdb.rounds_to_remind(team_id)
