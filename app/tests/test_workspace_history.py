@@ -61,7 +61,7 @@ def history_columns() -> list[str]:
 class TestTheHistoryTable:
     def test_it_is_the_next_migration(self):
         numbers = sorted(int(p.name[:3]) for p in SRC.rglob("migrations/*.sql"))
-        assert numbers[-1] == 65
+        assert numbers[-1] == 66
         assert MIGRATION.exists()
 
     def test_it_has_the_columns_we_learn_from(self):
@@ -116,6 +116,28 @@ class TestRecordHistory:
         assert "FROM kudos" in sql
         assert "FROM connect_matches" in sql and "delivered_at IS NOT NULL" in sql
         assert "modules_used" in sql and "days_installed" in sql
+
+    def test_it_counts_polls_and_pulse_rounds_but_nothing_in_them(self, cursor):
+        real_db.record_workspace_history("T1")
+        sql = cursor.calls[0][0]
+        assert "polls_created" in sql and "pulse_rounds" in sql
+        assert "FROM polls WHERE team_id = i.team_id" in sql
+        assert "FROM pulse_rounds WHERE team_id = i.team_id" in sql
+        assert "'polls'" in sql and "'pulse'" in sql
+        assert "polls_created = EXCLUDED.polls_created" in sql
+        assert "pulse_rounds = EXCLUDED.pulse_rounds" in sql
+        for column in ("question", "options", "voter_key", "pulse_answers", "value", "created_by"):
+            assert column not in sql, column
+
+    def test_polls_and_pulse_count_as_activity(self, cursor):
+        real_db.record_workspace_history("T1")
+        sql = cursor.calls[0][0]
+        assert "GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at)" in sql
+
+    def test_the_new_columns_are_counts(self):
+        sql = (SRC / "core/migrations/066_history_polls_pulse.sql").read_text()
+        assert "ADD COLUMN IF NOT EXISTS polls_created INTEGER NOT NULL DEFAULT 0" in sql
+        assert "ADD COLUMN IF NOT EXISTS pulse_rounds INTEGER NOT NULL DEFAULT 0" in sql
 
     def test_it_reads_no_personal_column(self, cursor):
         real_db.record_workspace_history("T1")

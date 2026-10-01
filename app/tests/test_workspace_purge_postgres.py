@@ -223,7 +223,8 @@ def test_history_counts_what_the_workspace_did(pg):
     assert row["standup_answers"] == 2
     assert row["kudos_count"] == 1
     assert row["coffee_rounds"] == 1, "only the delivered match counts"
-    assert set(row["modules_used"]) == {"standup", "kudos", "connect", "celebrations", "mcp"}
+    assert row["polls_created"] == 1 and row["pulse_rounds"] == 1
+    assert set(row["modules_used"]) == {"standup", "kudos", "polls", "pulse", "connect", "celebrations", "mcp"}
     assert row["days_installed"] == 40
     assert row["first_answer_at"] is not None and row["last_activity_at"] > row["first_answer_at"]
     assert row["removed_at"] is None, "still installed"

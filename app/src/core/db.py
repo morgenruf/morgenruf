@@ -2547,19 +2547,21 @@ _HISTORY_SQL = """
     INSERT INTO workspace_history (
         team_id, team_name, installed_at, removed_at, removal_reason, install_source,
         members_count, standups_created, standup_answers, first_answer_at,
-        last_activity_at, kudos_count, coffee_rounds, modules_used,
-        days_installed, updated_at)
+        last_activity_at, kudos_count, coffee_rounds, polls_created, pulse_rounds,
+        modules_used, days_installed, updated_at)
     SELECT i.team_id, i.team_name, i.installed_at,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_at END,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_reason END,
            i.install_source,
            (SELECT COUNT(*) FROM members m WHERE m.team_id = i.team_id AND m.active),
            sc.n, st.n, st.first_at,
-           GREATEST(st.last_at, k.last_at, c.last_at),
-           k.n, c.n,
+           GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at),
+           k.n, c.n, po.n, pr.n,
            ARRAY_REMOVE(ARRAY[
                CASE WHEN sc.n > 0 OR st.n > 0 THEN 'standup' END,
                CASE WHEN k.n > 0 THEN 'kudos' END,
+               CASE WHEN po.n > 0 THEN 'polls' END,
+               CASE WHEN pr.n > 0 THEN 'pulse' END,
                CASE WHEN c.n > 0 THEN 'connect' END,
                CASE WHEN EXISTS (SELECT 1 FROM celebration_posts p WHERE p.team_id = i.team_id)
                     THEN 'celebrations' END,
@@ -2578,6 +2580,10 @@ _HISTORY_SQL = """
     CROSS JOIN LATERAL (
         SELECT COUNT(*) AS n, MAX(delivered_at) AS last_at
         FROM connect_matches WHERE team_id = i.team_id AND delivered_at IS NOT NULL) c
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM polls WHERE team_id = i.team_id) po
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(sent_on)::timestamptz AS last_at FROM pulse_rounds WHERE team_id = i.team_id) pr
     WHERE {where}
     ON CONFLICT (team_id) DO UPDATE SET
         team_name = EXCLUDED.team_name,
@@ -2592,6 +2598,8 @@ _HISTORY_SQL = """
         last_activity_at = EXCLUDED.last_activity_at,
         kudos_count = EXCLUDED.kudos_count,
         coffee_rounds = EXCLUDED.coffee_rounds,
+        polls_created = EXCLUDED.polls_created,
+        pulse_rounds = EXCLUDED.pulse_rounds,
         modules_used = EXCLUDED.modules_used,
         days_installed = EXCLUDED.days_installed,
         updated_at = NOW()
