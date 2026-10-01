@@ -19,7 +19,6 @@ import logging
 import pathlib
 import re
 import sys
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -34,43 +33,9 @@ MIGRATION = SRC / "core/migrations/062_workspace_history.sql"
 NOW = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
 
 
-class FakeCursor:
-    """Records every statement, answers fetchone/fetchall/rowcount from a script."""
-
-    def __init__(self, fetchone=None, fetchall=None, rowcount=2):
-        self.calls: list[tuple[str, tuple]] = []
-        self._fetchone = list(fetchone or [])
-        self._fetchall = list(fetchall or [])
-        self.rowcount = rowcount
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-    def execute(self, sql, params=()):
-        self.calls.append((" ".join(sql.split()), tuple(params)))
-
-    def fetchone(self):
-        return self._fetchone.pop(0) if self._fetchone else None
-
-    def fetchall(self):
-        return self._fetchall.pop(0) if self._fetchall else []
-
-
 @pytest.fixture
-def cursor(monkeypatch):
-    cur = FakeCursor()
-    conn = MagicMock()
-    conn.cursor.return_value = cur
-
-    @contextmanager
-    def fake_conn():
-        yield conn
-
-    monkeypatch.setattr(real_db, "db_conn", fake_conn)
-    return cur
+def cursor(fake_cursor_db):
+    return fake_cursor_db
 
 
 def every_table_name() -> list[tuple[str]]:
@@ -96,7 +61,7 @@ def history_columns() -> list[str]:
 class TestTheHistoryTable:
     def test_it_is_the_next_migration(self):
         numbers = sorted(int(p.name[:3]) for p in SRC.rglob("migrations/*.sql"))
-        assert numbers[-1] == 62
+        assert numbers[-1] == 63
         assert MIGRATION.exists()
 
     def test_it_has_the_columns_we_learn_from(self):
@@ -172,10 +137,12 @@ class TestRecordHistory:
         real_db.record_workspace_history("T1")
         assert "i.purged_at IS NULL" in cursor.calls[0][0]
 
-    def test_install_source_is_never_overwritten(self, cursor):
+    def test_install_source_keeps_the_first_value(self, cursor):
         real_db.record_workspace_history("T1")
-        update = cursor.calls[0][0].split("DO UPDATE SET", 1)[1]
-        assert "install_source" not in update
+        sql = cursor.calls[0][0]
+        assert "i.install_source" in sql.split("FROM installations i", 1)[0]
+        update = sql.split("DO UPDATE SET", 1)[1]
+        assert "install_source = COALESCE(workspace_history.install_source, EXCLUDED.install_source)" in update
 
     def test_the_nightly_refresh_covers_every_installation(self, cursor):
         cursor.rowcount = 12

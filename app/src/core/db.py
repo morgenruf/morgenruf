@@ -2492,13 +2492,14 @@ KEPT_TABLES: tuple[str, ...] = ("installations", "workspace_history", "email_con
 # A purged workspace is skipped, because its counts would all read zero.
 _HISTORY_SQL = """
     INSERT INTO workspace_history (
-        team_id, team_name, installed_at, removed_at, removal_reason,
+        team_id, team_name, installed_at, removed_at, removal_reason, install_source,
         members_count, standups_created, standup_answers, first_answer_at,
         last_activity_at, kudos_count, coffee_rounds, modules_used,
         days_installed, updated_at)
     SELECT i.team_id, i.team_name, i.installed_at,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_at END,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_reason END,
+           i.install_source,
            (SELECT COUNT(*) FROM members m WHERE m.team_id = i.team_id AND m.active),
            sc.n, st.n, st.first_at,
            GREATEST(st.last_at, k.last_at, c.last_at),
@@ -2530,6 +2531,7 @@ _HISTORY_SQL = """
         installed_at = EXCLUDED.installed_at,
         removed_at = EXCLUDED.removed_at,
         removal_reason = EXCLUDED.removal_reason,
+        install_source = COALESCE(workspace_history.install_source, EXCLUDED.install_source),
         members_count = EXCLUDED.members_count,
         standups_created = EXCLUDED.standups_created,
         standup_answers = EXCLUDED.standup_answers,
@@ -2674,6 +2676,20 @@ def purge_candidates() -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)
             return [dict(r) for r in cur.fetchall()]
+
+
+def set_install_source(team_id: str, source: str) -> None:
+    """Remember where the first install of a workspace came from.
+
+    Only fills an empty source, so a reinstall or a dashboard sign-in through
+    a tagged link never rewrites where the workspace first came from.
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE installations SET install_source = %s WHERE team_id = %s AND install_source IS NULL",
+                (source, team_id),
+            )
 
 
 def parse_scope_field(scope: str | None) -> list[str]:

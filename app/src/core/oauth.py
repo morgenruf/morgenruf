@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from datetime import timezone as tz
@@ -90,6 +91,15 @@ def _verify_state(state: str) -> bool:
     return _state_nonce(state) is not None
 
 
+_REF_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+
+
+def clean_ref(raw: str | None) -> str:
+    """The ?ref= of an install link, or "" when it is missing or not a plain tag."""
+    ref = (raw or "").strip().lower()
+    return ref if _REF_RE.fullmatch(ref) else ""
+
+
 @oauth_bp.route("/")
 def index():
     from src.core.version import APP_VERSION  # noqa: PLC0415
@@ -102,6 +112,7 @@ def install():
     """Redirect the browser to the Slack OAuth authorisation page."""
     nonce = os.urandom(16).hex()
     session["oauth_nonce"] = nonce
+    session["install_ref"] = clean_ref(request.args.get("ref"))
     url = _url_generator.generate(state=_make_state(nonce))
     return redirect(url)
 
@@ -179,6 +190,15 @@ def oauth_callback():
     except Exception as exc:
         logger.error("Failed to persist installation for %s: %s", team_id, exc)
         # Don't fail the flow — continue to send welcome messages
+    else:
+        # Only a new install is tagged: sign-in runs through the same flow,
+        # and a member signing in from a tagged link did not install anything.
+        install_ref = session.get("install_ref", "")
+        if install_ref and is_new_install:
+            try:
+                db.set_install_source(team_id, install_ref)
+            except Exception:
+                logger.warning("Could not record the install source for %s", team_id)
 
     # Admin goes to whoever first installs the app, and to Slack's own admins
     # and owners. Anyone else finishing OAuth is only signing in: dashboard

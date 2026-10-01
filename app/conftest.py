@@ -77,3 +77,27 @@ def _fresh_rate_limits():
     for limiter in rate_limit.ALL:
         limiter.reset()
     yield
+
+
+@pytest.fixture
+def fake_cursor_db(monkeypatch):
+    """Point src.core.db at a FakeCursor (tests/support.py) and return it.
+
+    Each statement is recorded with its whitespace collapsed, so a test can
+    assert on the SQL a db function sends without a database.
+    """
+    from contextlib import contextmanager
+
+    import src.core.db as real_db
+    from tests.support import FakeCursor
+
+    cur = FakeCursor()
+    conn = MagicMock()
+    conn.cursor.return_value = cur
+
+    @contextmanager
+    def fake_conn():
+        yield conn
+
+    monkeypatch.setattr(real_db, "db_conn", fake_conn)
+    return cur
