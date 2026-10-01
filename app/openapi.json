@@ -2008,6 +2008,9 @@
           "needed": {
             "type": "integer"
           },
+          "open": {
+            "type": "boolean"
+          },
           "respondents": {
             "type": "integer"
           },

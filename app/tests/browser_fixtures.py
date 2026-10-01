@@ -153,16 +153,16 @@ class BrowserData:
         }
         # As pulse.db.trend returns it: a round under five keeps only its counts.
         self.pulse_trend = [
-            {"sent_on": self.today - timedelta(days=14), "respondents": 3, "invited": 9, "hidden": True, "needed": 5},
+            {"sent_on": self.today - timedelta(days=14), "respondents": 3, "invited": 14, "hidden": True, "needed": 5},
             {
                 "round_id": 2,
                 "sent_on": self.today - timedelta(days=7),
                 "includes_enps": True,
-                "respondents": 7,
-                "invited": 9,
+                "respondents": 12,
+                "invited": 14,
                 "hidden": False,
                 "mood_avg": 3.71,
-                "mood_dist": [0, 1, 2, 2, 2],
+                "mood_dist": [0, 2, 3, 4, 3],
                 "enps": 14,
             },
         ]

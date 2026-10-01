@@ -209,13 +209,24 @@ class TestResultsAfterClose:
         assert result["respondents"] == 6 and result["mood_avg"] == 3.67
         assert not any("pulse_respondents" in sql for sql, _ in cur.calls)
 
-    def test_an_open_round_counts_live_rows(self, cur):
+    def test_an_open_round_counts_live_rows_and_shows_no_result(self, cur):
         self._script(cur, scrubbed=False, respondents_column=None, live=6)
         result = pdb.round_results(1)
-        assert result["respondents"] == 6 and result["mood_avg"] == 3.67
+        assert result["respondents"] == 6 and result["open"] is True and result["mood_avg"] is None
         assert any("FROM pulse_respondents" in sql for sql, _ in cur.calls)
 
     def test_a_scrubbed_round_under_five_stays_hidden(self, cur):
         self._script(cur, scrubbed=True, respondents_column=4)
         result = pdb.round_results(1)
         assert result["hidden"] is True and result["mood_avg"] is None
+
+
+class TestClosingNow:
+    def test_closing_every_open_round_moves_closes_at_then_scrubs(self, cur, monkeypatch):
+        closed = []
+        monkeypatch.setattr(pdb, "close_due_rounds", lambda team_id: closed.append(team_id) or [7])
+        assert pdb.close_open_rounds("T1") == [7]
+        sql, params = cur.calls[0]
+        assert sql.startswith("UPDATE pulse_rounds SET closes_at = NOW()")
+        assert "scrubbed_at IS NULL" in sql and "closes_at > NOW()" in sql and params == ("T1",)
+        assert closed == ["T1"]

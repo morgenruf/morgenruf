@@ -910,6 +910,7 @@ export interface PulseRound {
   mood_avg?: number | null;
   mood_dist?: number[] | null;
   needed?: number;
+  open?: boolean;
   respondents: number;
   /** @format date */
   sent_on: string;

@@ -387,9 +387,9 @@ def dispatch_subcommand(body: dict, client, respond) -> bool:  # noqa: ANN001
     Returns True when a module took it. False means core should answer, so a
     word whose module is off here gets the help, like any unknown word.
     """
-    text = (body.get("text") or "").strip()
-    word, _, rest = text.partition(" ")
-    word = word.lower()
+    parts = (body.get("text") or "").split(maxsplit=1)
+    word = parts[0].lower() if parts else ""
+    rest = parts[1] if len(parts) > 1 else ""
     if word in _CORE_SUBCOMMANDS:
         return False
     try:

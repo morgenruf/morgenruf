@@ -15,15 +15,23 @@ _HIDDEN_KEYS = ("sent_on", "respondents", "invited")
 
 
 def public_round(row: dict) -> dict:
-    """One trend row for the browser, through the five person gate."""
+    """One trend row for the browser, through the privacy rules once more.
+
+    A round still open, or under MIN_GROUP respondents, leaves with its date
+    and counts only. Under MIN_DETAIL the breakdown and eNPS are dropped and
+    only the average stays.
+    """
     from src.modules.pulse import privacy  # noqa: PLC0415
 
-    if row.get("hidden") or not privacy.visible(row.get("respondents") or 0):
+    respondents = row.get("respondents") or 0
+    if row.get("open") or row.get("hidden") or not privacy.visible(respondents):
         return {
             **{k: row.get(k) for k in _HIDDEN_KEYS},
-            **privacy.hidden_payload(row.get("respondents") or 0),
+            **privacy.hidden_payload(respondents, open_round=bool(row.get("open"))),
         }
-    keep = ("sent_on", "respondents", "invited", "hidden", "includes_enps", "mood_avg", "mood_dist", "enps")
+    keep = ["sent_on", "respondents", "invited", "hidden", "includes_enps", "mood_avg"]
+    if privacy.detailed(respondents):
+        keep += ["mood_dist", "enps"]
     return {k: row.get(k) for k in keep}
 
 
@@ -33,7 +41,7 @@ def register_routes(flask_app) -> None:
 
     import src.modules.pulse.db as pdb
     from src.core.api import api_errors, register_api_blueprint
-    from src.core.dashboard import _admin_required, _login_required
+    from src.core.dashboard import _admin_required, _get_bot_token, _login_required
     from src.core.schedule_validation import schedule_timezone_error
     from src.core.timezones import canonical_tz
     from src.modules.pulse import schemas
@@ -80,6 +88,25 @@ def register_routes(flask_app) -> None:
         audience = (data.get("audience_channel_id") or "").strip() or None
         if audience and not audience.startswith(("C", "G")):
             return _error("audience_channel_id", "Choose a channel from the list")
+        if audience:
+            # The audience is read from the channel's members, which the bot
+            # can only do in a channel it is in.
+            from slack_sdk import WebClient  # noqa: PLC0415
+
+            from src.core.standup_invites import bot_channel_ids  # noqa: PLC0415
+
+            token = _get_bot_token()
+            try:
+                if not token:
+                    raise RuntimeError("no bot token")
+                member = audience in bot_channel_ids(WebClient(token=token))
+            except Exception as exc:
+                logger.warning("pulse settings could not check the audience channel: %s", exc)
+                return jsonify(
+                    {"error": "Could not check that channel with Slack just now. Try again in a minute."}
+                ), 502
+            if not member:
+                return _error("audience_channel_id", "Invite @Morgenruf to that channel first")
         fields = {
             "enabled": bool(data["enabled"]),
             "day_of_week": int(data["day_of_week"]),

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.polls.dashboard import register_routes
-from src.modules.polls.handlers import handle_poll_command, home_blocks, register_handlers
+from src.modules.polls.handlers import close_all, handle_poll_command, home_blocks, register_handlers
 from src.modules.polls.jobs import plan_jobs
 
 MODULE = ModuleSpec(
@@ -31,6 +31,7 @@ MODULE = ModuleSpec(
     delegable=True,
     home_blocks=home_blocks,
     slash_subcommands={"poll": handle_poll_command},
+    on_disable=close_all,
     help_lines=(
         '`/morgenruf poll`: start a poll, or `/morgenruf poll "Question" "Option 1" "Option 2"` to post one here',
     ),

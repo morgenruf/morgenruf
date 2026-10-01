@@ -6,6 +6,7 @@ question or option cannot ping a channel or disguise a link.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from src.modules.polls.parse import MAX_OPTION, MAX_OPTIONS, MAX_QUESTION
@@ -29,9 +30,31 @@ _BAR_CELLS = 10
 _VOTERS_SHOWN = 10
 
 
+def _plain_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+# What Slack sends for a person, a channel or a link someone typed or picked:
+# <@U123|name>, <#C123|name>, <https://example.com|label>.
+_TOKEN = re.compile(r"<(@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|https?://[^>|\s]+)(?:\|[^>]*)?>")
+
+
 def escape(text: str) -> str:
-    """Keep what a person typed as text, so `<!channel>` cannot ping anyone."""
-    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """Keep what a person typed as text, so `<!channel>` cannot ping anyone.
+
+    Mentions of a person or a channel stay real mentions (`<@U123>`,
+    `<#C123>`). A link shows its real address as plain text, never a label
+    that could disguise it. Everything else is escaped, broadcasts included.
+    """
+    text = text or ""
+    out, last = [], 0
+    for match in _TOKEN.finditer(text):
+        out.append(_plain_escape(text[last : match.start()]))
+        target = match.group(1)
+        out.append(f"<{target}>" if target[0] in "@#" else _plain_escape(target))
+        last = match.end()
+    out.append(_plain_escape(text[last:]))
+    return "".join(out)
 
 
 def _plain(text: str) -> dict:

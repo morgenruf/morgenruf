@@ -50,8 +50,10 @@ def plan_jobs(ctx: dict) -> list[JobSpec]:
         return [tick_job] if pdb.unscrubbed_count(team_id) > 0 else []
     tz = canonical_tz(program.get("timezone") or "UTC")
     if _zone(tz) is None:
+        # No weekly round without a usable clock, but the tick stays: it is
+        # what closes and scrubs the rounds already sent.
         logger.warning("pulse: unusable timezone for %s", team_id)
-        return []
+        return [tick_job]
     dow, hour, minute = int(program["day_of_week"]), int(program["hour"]), int(program["minute"])
     return [
         JobSpec(
@@ -122,20 +124,26 @@ def send_round(team_id: str) -> int:
     if created is None:
         return 0
     round_id = created["id"]
-    invited = pdb.record_invites(round_id, audience)
 
-    sent = 0
+    # Someone is invited only once their DM arrived, so the response rate
+    # counts people who could answer. A failed DM is a count in the log.
+    invited, failed = 0, 0
     for user_id in audience:
         try:
             client.chat_postMessage(channel=user_id, text=blocks.INTRO, blocks=blocks.mood_question(round_id))
-            sent += 1
         except Exception as exc:
+            failed += 1
             logger.info("pulse: a round %s DM failed: %s", round_id, exc)
+        else:
+            try:
+                invited = pdb.record_invites(round_id, [user_id])
+            except Exception as exc:
+                logger.warning("pulse: could not record an invite on round %s: %s", round_id, exc)
         if DM_PAUSE_SECONDS:
             time.sleep(DM_PAUSE_SECONDS)
     analytics.capture("pulse_round_sent", team_id, invited=invited)
-    logger.info("pulse: round %s for %s sent to %d of %d", round_id, team_id, sent, invited)
-    return sent
+    logger.info("pulse: round %s for %s sent to %d, %d DM(s) failed", round_id, team_id, invited, failed)
+    return invited
 
 
 def tick(team_id: str) -> int:

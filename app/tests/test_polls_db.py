@@ -170,3 +170,48 @@ class TestPurge:
         steps = dict(real_db._PURGE_STEPS)
         assert steps["poll_votes"] == "poll_id IN (SELECT id FROM polls WHERE team_id = %s)"
         assert steps["polls"] == "team_id = %s"
+
+
+class TestRedraw:
+    POLL = {
+        "id": 5,
+        "team_id": "T1",
+        "created_by": "U1",
+        "channel_id": "C1",
+        "message_ts": "1.0",
+        "question": "Q",
+        "options": ["a", "b"],
+        "anonymous": False,
+        "multiple": False,
+        "hide_results": False,
+        "salt": None,
+        "closes_at": None,
+        "closed_at": "now",
+        "created_at": None,
+    }
+
+    def test_the_lock_comes_before_the_reads_on_one_connection(self, cur):
+        cur._fetchone = [dict(self.POLL)]
+        cur._fetchall = [[{"option_idx": 0, "voter_key": "U2"}, {"option_idx": 0, "voter_key": "U3"}]]
+        drawn = []
+        assert pdb.redraw(5, lambda poll, counts, names: drawn.append((poll, counts, names))) is True
+        sqls = [sql for sql, _ in cur.calls]
+        assert "pg_advisory_xact_lock" in sqls[0] and "polls:redraw:" in cur.calls[0][1][0]
+        assert sqls[1].startswith("SELECT") and "FROM polls" in sqls[1]
+        poll, counts, names = drawn[0]
+        assert poll["closed_at"] == "now" and counts == [2, 0] and names == {0: ["U2", "U3"]}
+
+    def test_an_anonymous_poll_draws_no_names(self, cur):
+        cur._fetchone = [{**self.POLL, "anonymous": True, "salt": b"s" * 32}]
+        cur._fetchall = [[{"option_idx": 1, "voter_key": "a" * 64}]]
+        drawn = []
+        pdb.redraw(5, lambda poll, counts, names: drawn.append((counts, names)))
+        assert drawn == [([0, 1], None)]
+
+    def test_a_missing_poll_draws_nothing(self, cur):
+        assert pdb.redraw(5, lambda *a: (_ for _ in ()).throw(AssertionError("drew"))) is False
+
+
+def test_the_auto_close_job_only_counts_polls_with_a_closing_time(cur):
+    pdb.open_poll_count("T1")
+    assert "closes_at IS NOT NULL" in cur.calls[0][0]

@@ -35,6 +35,9 @@ def pdb(monkeypatch):
     fake.due_polls.return_value = [dict(POLL)]
     fake.get_poll.return_value = {**POLL, "closed_at": "now", "salt": None}
     fake.tally.return_value = [1, 2]
+    monkeypatch.setattr(
+        real, "redraw", lambda poll_id, draw: draw(fake.get_poll.return_value, fake.tally.return_value, None) or True
+    )
     monkeypatch.setattr(analytics, "capture", MagicMock())
     return fake
 

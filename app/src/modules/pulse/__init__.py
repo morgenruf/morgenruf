@@ -18,6 +18,14 @@ from src.modules.pulse.dashboard import register_routes
 from src.modules.pulse.handlers import handle_pulse_command, home_blocks, register_handlers
 from src.modules.pulse.jobs import plan_jobs
 
+
+def on_disable(team_id: str) -> None:
+    """Turned off: close every open round now and scrub it, so no list of who answered is left."""
+    import src.modules.pulse.db as pdb  # noqa: PLC0415
+
+    pdb.close_open_rounds(team_id)
+
+
 MODULE = ModuleSpec(
     name="pulse",
     required_scopes=(),
@@ -32,5 +40,6 @@ MODULE = ModuleSpec(
     delegable=True,
     home_blocks=home_blocks,
     slash_subcommands={"pulse": handle_pulse_command},
+    on_disable=on_disable,
     help_lines=("`/morgenruf pulse`: how the anonymous weekly check-in works and whether it is on",),
 )

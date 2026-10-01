@@ -141,6 +141,31 @@ describe('trend', () => {
     expect(within(table).getByText('3.5')).toBeInTheDocument();
   });
 
+  it('shows an open week as a gap that says why', async () => {
+    mock.trend.mockResolvedValue({
+      data: [
+        ...rounds,
+        {
+          sent_on: '2026-10-02',
+          respondents: 9,
+          invited: 10,
+          hidden: true,
+          needed: 5,
+          open: true,
+        },
+      ],
+    });
+    renderPage();
+
+    await screen.findByRole('group', { name: /Team mood by week/ });
+    await userEvent.setup().click(screen.getByText('View chart data'));
+    expect(
+      within(screen.getByRole('table')).getByText(
+        'Still open. Results show when it closes',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('explains an empty history', async () => {
     mock.trend.mockResolvedValue({ data: [] });
     renderPage();
@@ -151,7 +176,7 @@ describe('trend', () => {
     mock.trend.mockResolvedValue({ data: [rounds[1]] });
     renderPage();
     expect(
-      await screen.findByText('No week has 5 answers yet'),
+      await screen.findByText('No closed week has 5 answers yet'),
     ).toBeInTheDocument();
   });
 });

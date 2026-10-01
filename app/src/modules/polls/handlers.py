@@ -87,24 +87,28 @@ def closes_at_for(choice: str, now: datetime, zone: ZoneInfo) -> datetime | None
 # ── Showing a poll ──────────────────────────────────────────────────────────
 
 
-def render(poll: dict, closed: bool | None = None) -> list[dict]:
-    """The poll's message as it stands in the database."""
+def refresh(client, poll_id: int, ts: str | None = None) -> bool:  # noqa: ANN001
+    """Redraw the poll message from the database, as it is right now.
+
+    The poll and its votes are read inside polls.db.redraw, under a lock per
+    poll that is held across the chat.update, so a vote that races a close
+    always draws after it and draws it closed. `ts` is the clicked message,
+    used only when the poll row never got its own message_ts.
+    """
     import src.modules.polls.db as pdb  # noqa: PLC0415
 
-    closed = bool(poll.get("closed_at")) if closed is None else closed
-    counts = pdb.tally(poll["id"])
-    names = None if poll.get("anonymous") else pdb.voters(poll["id"])
-    return pblocks.poll_message(poll, counts, names, closed)
+    def draw(poll: dict, counts: list[int], names: dict | None) -> None:
+        target = poll.get("message_ts") or ts
+        if not target:
+            return
+        client.chat_update(
+            channel=poll["channel_id"],
+            ts=target,
+            text=pblocks.fallback_text(poll),
+            blocks=pblocks.poll_message(poll, counts, names, closed=bool(poll.get("closed_at"))),
+        )
 
-
-def refresh(client, poll: dict, ts: str | None = None) -> None:  # noqa: ANN001
-    """Redraw the poll message in place."""
-    client.chat_update(
-        channel=poll["channel_id"],
-        ts=poll.get("message_ts") or ts,
-        text=pblocks.fallback_text(poll),
-        blocks=render(poll),
-    )
+    return pdb.redraw(poll_id, draw)
 
 
 def finish_poll(client, poll_id: int) -> bool:  # noqa: ANN001
@@ -112,7 +116,7 @@ def finish_poll(client, poll_id: int) -> bool:  # noqa: ANN001
 
     The database close comes first and is what counts: a Slack error on the
     final redraw is logged and the poll stays closed. Used by the Close
-    button, the auto-close job and the dashboard.
+    button, the auto-close job, the dashboard and turning Polls off.
     """
     import src.core.analytics as analytics  # noqa: PLC0415
     import src.modules.polls.db as pdb  # noqa: PLC0415
@@ -122,20 +126,31 @@ def finish_poll(client, poll_id: int) -> bool:  # noqa: ANN001
     poll = pdb.get_poll(poll_id)
     if not poll:
         return True
-    counts = pdb.tally(poll_id)
-    analytics.capture("poll_closed", poll["team_id"], options=len(poll["options"]), votes=sum(counts))
-    if client is None or not poll.get("message_ts"):
+    analytics.capture("poll_closed", poll["team_id"], options=len(poll["options"]), votes=sum(pdb.tally(poll_id)))
+    if client is None:
         return True
     try:
-        client.chat_update(
-            channel=poll["channel_id"],
-            ts=poll["message_ts"],
-            text=pblocks.fallback_text(poll),
-            blocks=render(poll, closed=True),
-        )
+        refresh(client, poll_id)
     except Exception as exc:
         logger.warning("polls: closed poll %s but could not update its message: %s", poll_id, exc)
     return True
+
+
+def close_all(team_id: str) -> int:
+    """Close every open poll in a workspace. For when Polls is turned off. Returns how many."""
+    import src.modules.polls.db as pdb  # noqa: PLC0415
+    from src.modules.polls.jobs import bot_client  # noqa: PLC0415
+
+    client = bot_client(team_id)
+    closed = 0
+    for poll_id in pdb.open_poll_ids(team_id):
+        try:
+            if finish_poll(client, poll_id):
+                closed += 1
+        except Exception:
+            logger.exception("polls: could not close poll %s while turning Polls off", poll_id)
+    logger.info("polls: turned off in %s, closed %d open poll(s)", team_id, closed)
+    return closed
 
 
 # ── Creating a poll ─────────────────────────────────────────────────────────
@@ -193,7 +208,6 @@ def post_new_poll(
             text=pblocks.fallback_text(poll),
             blocks=pblocks.poll_message(poll, [0] * len(options), {}, closed=False),
         )
-        pdb.set_message(poll_id, resp["ts"])
     except Exception as exc:
         logger.warning("polls: could not post poll %s in %s: %s", poll_id, team_id, exc)
         try:
@@ -207,6 +221,9 @@ def post_new_poll(
         tell(f"I couldn't post the poll in <#{channel_id}> ({error}). Nothing was saved, so you can try again.")
         return None
 
+    if not _save_message(client, tell, poll_id, channel_id, resp["ts"]):
+        return None
+
     analytics.capture(
         "poll_created",
         team_id,
@@ -216,6 +233,36 @@ def post_new_poll(
         hide_results=bool(hide_results),
     )
     return poll_id
+
+
+def _save_message(client, tell, poll_id: int, channel_id: str, ts: str) -> bool:  # noqa: ANN001
+    """Store the posted message's ts on the poll, so votes can redraw it.
+
+    Tried twice. If it still fails the message is taken down and the row
+    deleted, so the person can simply try again. If the message cannot be
+    taken down the row stays: a live poll message with no row behind it would
+    take votes that go nowhere, while a row without its ts still works off
+    the clicked message.
+    """
+    import src.modules.polls.db as pdb  # noqa: PLC0415
+
+    for attempt in (1, 2):
+        try:
+            pdb.set_message(poll_id, ts)
+            return True
+        except Exception as exc:
+            logger.warning("polls: could not save the message of poll %s (attempt %d): %s", poll_id, attempt, exc)
+    try:
+        client.chat_delete(channel=channel_id, ts=ts)
+    except Exception as exc:
+        logger.error("polls: poll %s is posted but its message could not be saved or removed: %s", poll_id, exc)
+        return True
+    try:
+        pdb.delete_poll(poll_id)
+    except Exception:
+        logger.exception("polls: could not remove poll %s after taking its message down", poll_id)
+    tell("Something went wrong saving that poll, so I took it down again. Please try again in a minute.")
+    return False
 
 
 def handle_poll_command(body: dict, client, respond, args_text: str) -> None:  # noqa: ANN001
@@ -324,7 +371,7 @@ def handle_vote(ack, body, client) -> None:  # noqa: ANN001
 
     ts = (body.get("container") or {}).get("message_ts") or (body.get("message") or {}).get("ts")
     try:
-        refresh(client, poll, ts)
+        refresh(client, poll_id, ts)
     except Exception as exc:
         logger.warning("polls: vote saved but could not update poll %s: %s", poll_id, exc)
 

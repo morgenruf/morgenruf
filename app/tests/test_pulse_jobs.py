@@ -54,9 +54,10 @@ def test_on_it_plans_the_weekly_round_and_an_hourly_tick(pdb):
     assert tick_job.func is jobs.tick and tick_job.args == ("T1",)
 
 
-def test_an_unusable_timezone_plans_nothing(pdb):
+def test_an_unusable_timezone_still_keeps_the_tick(pdb):
     pdb.get_program.return_value = {**PROGRAM, "timezone": "Mars/Base"}
-    assert jobs.plan_jobs({"team_id": "T1", "bot_token": "x"}) == []
+    (job,) = jobs.plan_jobs({"team_id": "T1", "bot_token": "x"})
+    assert job.key == "tick"
 
 
 def test_the_module_plans_with_it():

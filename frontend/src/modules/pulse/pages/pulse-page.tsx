@@ -34,7 +34,7 @@ import { formatDate } from '@/common/lib/format';
 
 import { usePulse } from '../hooks';
 import { PulseSettingsSkeleton, PulseTrendSkeleton } from '../loading';
-import { trendData } from '../trend-utils';
+import { gapReason, trendData } from '../trend-utils';
 
 // 0 is Monday, as the scheduler counts.
 const days = [
@@ -50,7 +50,7 @@ const days = [
 const promises = [
   'Answers are not stored one by one: Morgenruf only keeps how many people picked each value, with no names and no times.',
   'While a check-in is open, Morgenruf keeps who has answered (not what) so it can remind people. When it closes, that list is deleted and only the counts stay.',
-  'Results show only as team averages, and only for a week at least 5 people answered. Below that the week shows as a gap.',
+  'Results show only once a check-in has closed, never while answers are coming in. Then the team average shows from 5 answers, and the breakdown and eNPS from 10. Below 5 the week shows as a gap.',
   'There is no free text: two taps on buttons, nothing to recognise someone by.',
   'Nobody, admins included, can see what one person said. There is no per person view or export.',
   'eNPS is asked every fourth week, starting with the first.',
@@ -84,7 +84,7 @@ function RoundTooltip({ active, point }: { active?: boolean; point?: Point }) {
       <p className="font-medium">{formatDate(point.sent_on)}</p>
       <p className="mt-1 text-muted-foreground">
         {point.hidden
-          ? 'Fewer than 5 answers, so nothing is shown'
+          ? `${gapReason(point)}, so nothing is shown`
           : `Mood ${point.mood?.toFixed(1) ?? 'n/a'} of 5`}
       </p>
       {!point.hidden && point.enps != null && (
@@ -137,8 +137,8 @@ function TrendCard() {
       <CardHeader>
         <CardTitle>Team mood by week</CardTitle>
         <CardDescription>
-          Average of the 1 to 5 answers. Weeks with fewer than 5 answers stay
-          gaps.
+          Average of the 1 to 5 answers, once a week's check-in has closed.
+          Averages show from 5 answers, breakdown and eNPS from 10.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -198,11 +198,11 @@ function TrendCard() {
               ) : (
                 <div className="grid min-h-40 place-content-center rounded-lg bg-muted/30 px-5 text-center">
                   <p className="text-sm font-medium">
-                    No week has 5 answers yet
+                    No closed week has 5 answers yet
                   </p>
                   <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                    Results stay hidden until at least 5 people answer, so
-                    nobody's answer can be worked out.
+                    Results show once a check-in closes with at least 5 answers,
+                    so nobody's answer can be worked out.
                   </p>
                 </div>
               )}
@@ -284,7 +284,7 @@ function TrendCard() {
                           </th>
                           <td className="px-2 py-3 tabular-nums">
                             {point.hidden
-                              ? 'Fewer than 5 answers'
+                              ? gapReason(point)
                               : (point.mood?.toFixed(1) ?? 'n/a')}
                           </td>
                           <td className="px-2 py-3 tabular-nums">

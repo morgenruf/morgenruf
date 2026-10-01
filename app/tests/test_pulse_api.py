@@ -35,6 +35,7 @@ class TestTrend:
         assert set(hidden) == {"sent_on", "respondents", "invited", "hidden", "needed"}
         assert hidden["hidden"] is True and hidden["needed"] == 5 and hidden["respondents"] == 3
         assert shown["hidden"] is False and shown["mood_avg"] == 3.71 and shown["enps"] == 14
+        assert shown["mood_dist"] == [0, 2, 3, 4, 3]
 
     def test_the_route_hides_a_round_even_if_storage_returned_numbers(self, app):
         state = app.extensions["browser_test_data"]
@@ -49,6 +50,33 @@ class TestTrend:
         client, _ = signed_in(app, "admin")
         row = client.get("/dashboard/api/pulse/trend").json[1]
         assert row["hidden"] is True and "mood_avg" not in row
+
+    def test_an_open_round_has_no_result_keys_even_with_many_answers(self, app):
+        state = app.extensions["browser_test_data"]
+        state.pulse_trend.append(
+            {
+                "sent_on": state.today,
+                "respondents": 11,
+                "invited": 14,
+                "hidden": False,
+                "open": True,
+                "mood_avg": 4.2,
+                "mood_dist": [0, 0, 2, 4, 5],
+                "enps": 30,
+            }
+        )
+        client, _ = signed_in(app, "admin")
+        row = client.get("/dashboard/api/pulse/trend").json[2]
+        assert set(row) == {"sent_on", "respondents", "invited", "hidden", "needed", "open"}
+        assert row["open"] is True and row["respondents"] == 11
+
+    def test_under_ten_shows_the_average_but_not_the_breakdown_or_enps(self, app):
+        state = app.extensions["browser_test_data"]
+        state.pulse_trend[1]["respondents"] = 7
+        client, _ = signed_in(app, "admin")
+        row = client.get("/dashboard/api/pulse/trend").json[1]
+        assert row["mood_avg"] == 3.71
+        assert "mood_dist" not in row and "enps" not in row
 
     def test_signed_out_is_refused(self, app):
         assert app.test_client().get("/dashboard/api/pulse/trend").status_code == 401
@@ -95,6 +123,35 @@ class TestSettings:
         client, headers = signed_in(app, "admin")
         response = client.put("/dashboard/api/pulse/settings", json={**SETTINGS, field: value}, headers=headers)
         assert response.status_code == 400
+
+    def test_an_audience_channel_without_the_bot_is_refused(self, app):
+        client, headers = signed_in(app, "admin")
+        response = client.put(
+            "/dashboard/api/pulse/settings", json={**SETTINGS, "audience_channel_id": "C_ELSEWHERE"}, headers=headers
+        )
+        assert response.status_code == 400
+        assert response.json["details"]["audience_channel_id"] == ["Invite @Morgenruf to that channel first"]
+        assert app.extensions["browser_test_data"].pulse_program["audience_channel_id"] is None
+
+    def test_a_slack_error_checking_the_channel_is_a_502(self, app, monkeypatch):
+        import slack_sdk
+
+        def boom(self, **kwargs):
+            raise RuntimeError("ratelimited")
+
+        monkeypatch.setattr(slack_sdk.WebClient, "users_conversations", boom)
+        client, headers = signed_in(app, "admin")
+        response = client.put("/dashboard/api/pulse/settings", json=SETTINGS, headers=headers)
+        assert response.status_code == 502 and response.json["error"]
+
+    def test_turning_the_module_off_closes_open_rounds(self, app, monkeypatch):
+        import src.modules.pulse.db as pdb
+
+        closed = []
+        monkeypatch.setattr(pdb, "close_open_rounds", lambda team: closed.append(team) or [])
+        client, headers = signed_in(app, "admin")
+        assert client.post("/dashboard/api/modules/pulse", json={"enabled": False}, headers=headers).status_code == 200
+        assert closed == ["T_BROWSER"]
 
     def test_an_empty_audience_means_everyone(self, app):
         client, headers = signed_in(app, "admin")

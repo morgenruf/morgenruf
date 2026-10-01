@@ -30,8 +30,9 @@ SettingsInput = model(
         validate=validate.Length(max=40),
     ),
 )
-# A round under five people carries only sent_on, respondents, invited, hidden
-# and needed. The result fields are absent, not null.
+# An open round, or one under five people, carries only sent_on, respondents,
+# invited, hidden, needed (and open). The result fields are absent, not null.
+# Under ten, mood_dist and enps are absent too.
 Round = model(
     "PulseRound",
     sent_on=iso("date"),
@@ -39,6 +40,8 @@ Round = model(
     invited=integer(),
     hidden=boolean(),
     needed=fields.Integer(),
+    # True while the round is still open: no results until it closes.
+    open=fields.Boolean(),
     includes_enps=fields.Boolean(),
     mood_avg=fields.Float(allow_none=True),
     mood_dist=fields.List(fields.Integer(), allow_none=True),

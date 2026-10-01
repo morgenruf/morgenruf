@@ -367,7 +367,7 @@ def test_a_closed_pulse_round_names_nobody(pg, monkeypatch):
         assert pdb.record_answer(round_id, user, "mood", 1 + i % 5)
         assert pdb.record_answer(round_id, user, "enps", 9 + i % 2)
     before = pdb.round_results(round_id)
-    assert before["hidden"] is False
+    assert before["hidden"] is True and before["open"] is True and before["respondents"] == 6
 
     with conn.cursor() as cur:
         cur.execute("UPDATE pulse_rounds SET closes_at = NOW() - INTERVAL '1 minute' WHERE id = %s", (round_id,))
@@ -377,7 +377,9 @@ def test_a_closed_pulse_round_names_nobody(pg, monkeypatch):
     assert pdb.record_answer(round_id, f"UP{team}X", "mood", 3) is False
 
     after = pdb.round_results(round_id)
-    assert after == before
+    assert after["hidden"] is False and after["respondents"] == 6
+    assert after["mood_avg"] == 2.67  # 1, 2, 3, 4, 5, 1
+    assert after["mood_dist"] is None and after["enps"] is None  # under ten
 
     with conn.cursor() as cur:
         cur.execute(
@@ -397,3 +399,19 @@ def test_a_closed_pulse_round_names_nobody(pg, monkeypatch):
             dump.extend(r[0] for r in cur.fetchall())
     text = " ".join(dump)
     assert dump and not any(user in text for user in [*users, f"UP{team}X"])
+
+
+def test_a_poll_redraw_reads_the_stored_state(pg, monkeypatch):
+    import src.modules.polls.db as polls_db
+
+    db, conn, teams = pg
+    team = new_team(teams)
+    seed(conn, team)
+    monkeypatch.setattr(polls_db, "db_conn", db.db_conn)
+    poll_id = polls_db.create_poll(team, "U1", "C1", "Q", ["a", "b"], True, False, False, None)
+    poll = polls_db.get_poll(poll_id)
+    polls_db.toggle_vote(poll_id, 1, polls_db.voter_key(poll, "U2"), False)
+    polls_db.close_poll(poll_id)
+    drawn = []
+    assert polls_db.redraw(poll_id, lambda p, counts, names: drawn.append((bool(p["closed_at"]), counts, names)))
+    assert drawn == [(True, [0, 1], None)]

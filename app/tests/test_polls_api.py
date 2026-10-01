@@ -141,3 +141,42 @@ class TestPayload:
             "closed_at": "x",
         }
         assert poll_payload(poll, [1], {0: ["U9"]}, False)["options"][0]["voters"] is None
+
+
+class TestTurningPollsOff:
+    def test_the_module_switch_closes_open_polls(self, app, monkeypatch):
+        import src.modules.polls.handlers as handlers
+
+        calls = []
+        monkeypatch.setattr(handlers, "close_all", lambda team: calls.append(team))
+        from dataclasses import replace
+
+        import src.modules as modules
+
+        monkeypatch.setattr(
+            modules,
+            "REGISTRY",
+            tuple(replace(s, on_disable=handlers.close_all) if s.name == "polls" else s for s in modules.REGISTRY),
+        )
+        client, headers = signed_in(app, "admin")
+        assert client.post("/dashboard/api/modules/polls", json={"enabled": False}, headers=headers).status_code == 200
+        assert calls == ["T_BROWSER"]
+
+    def test_turning_it_on_closes_nothing(self, app, monkeypatch):
+        import src.modules.polls.db as pdb
+
+        monkeypatch.setattr(pdb, "open_poll_ids", lambda team: (_ for _ in ()).throw(AssertionError("closed")))
+        client, headers = signed_in(app, "admin")
+        assert client.post("/dashboard/api/modules/polls", json={"enabled": True}, headers=headers).status_code == 200
+
+    def test_a_failing_wind_down_still_switches_it_off(self, app, monkeypatch):
+        import src.modules.polls.db as pdb
+
+        def boom(team):
+            raise RuntimeError("db down")
+
+        monkeypatch.setattr(pdb, "open_poll_ids", boom)
+        state = app.extensions["browser_test_data"]
+        client, headers = signed_in(app, "admin")
+        assert client.post("/dashboard/api/modules/polls", json={"enabled": False}, headers=headers).status_code == 200
+        assert state.module_settings["polls"] is False

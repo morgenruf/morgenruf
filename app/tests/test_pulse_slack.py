@@ -62,9 +62,16 @@ class Store:
         return dict(self.rounds[rid])
 
     def record_invites(self, round_id, user_ids):
-        self.invites[round_id] = list(user_ids)
-        self.rounds[round_id]["invited"] = len(user_ids)
-        return len(user_ids)
+        current = self.invites.setdefault(round_id, [])
+        current.extend(u for u in user_ids if u not in current)
+        self.rounds[round_id]["invited"] = len(current)
+        return len(current)
+
+    def close_open_rounds(self, team_id):
+        for r in self.rounds.values():
+            if r.get("scrubbed_at") is None and r["closes_at"] > NOW:
+                r["closes_at"] = NOW
+        return self.close_due_rounds(team_id)
 
     def get_round(self, round_id):
         r = self.rounds.get(round_id)
@@ -130,6 +137,7 @@ def world(monkeypatch):
         members=["U1", "U2", "U3"],
         channel_members=["U1", "UBOT", "U2"],
         humans={"U1", "U2", "U3"},
+        dm_failures=set(),
     )
     for name in (
         "get_program",
@@ -142,6 +150,7 @@ def world(monkeypatch):
         "claim_reminder",
         "non_respondents",
         "close_due_rounds",
+        "close_open_rounds",
     ):
         monkeypatch.setattr(pdb, name, getattr(store, name))
     monkeypatch.setattr(core_db, "granted_scopes", lambda team_id: set())
@@ -153,6 +162,8 @@ def world(monkeypatch):
     monkeypatch.setattr(jobs, "DM_PAUSE_SECONDS", 0)
 
     def chat_postMessage(self, **kwargs):  # noqa: N802
+        if kwargs.get("channel") in state.dm_failures:
+            raise RuntimeError("cannot_dm_bot")
         state.posts.append(kwargs)
         return {"ok": True, "ts": f"{len(state.posts)}.000", "channel": f"D{kwargs.get('channel')}"}
 
@@ -222,6 +233,13 @@ class TestSendingARound:
         text = json.dumps(world.posts[0])
         assert "anonymous" in text and "at least 5 people" in text
         assert ("pulse_round_sent", {"invited": 3}) in world.captures
+
+    def test_only_people_whose_dm_arrived_are_invited(self, world):
+        world.dm_failures = {"U2"}
+        send(world)
+        assert world.store.invites[1] == ["U1", "U3"]
+        assert world.store.rounds[1]["invited"] == 2
+        assert ("pulse_round_sent", {"invited": 2}) in world.captures
 
     def test_twice_on_the_same_day_sends_once(self, world):
         send(world)
@@ -342,6 +360,19 @@ class TestReminder:
         world.store.rounds[1]["closes_at"] = NOW - timedelta(minutes=1)
         tick(TEAM)
         assert world.store.respondents == set() and 1 not in world.store.invites
+        assert world.store.answers == [(1, "mood", 4)]
+
+
+class TestTurningPulseOff:
+    def test_open_rounds_close_now_and_forget_who_answered(self, world):
+        from src.modules.pulse import MODULE
+
+        send(world)
+        click(world, "pulse:answer:1:mood:4", user="U1")
+        MODULE.on_disable(TEAM)
+        assert world.store.rounds[1]["closes_at"] == NOW and world.store.rounds[1]["scrubbed_at"] == NOW
+        assert world.store.respondents == set() and 1 not in world.store.invites
+        click(world, "pulse:answer:1:mood:2", user="U2")
         assert world.store.answers == [(1, "mood", 4)]
 
 

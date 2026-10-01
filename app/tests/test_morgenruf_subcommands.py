@@ -36,6 +36,14 @@ def test_the_word_is_matched_without_case():
     assert handler.call_args.args[3] == ""
 
 
+def test_a_newline_or_tab_after_the_word_still_routes():
+    handler = MagicMock()
+    with patch.object(profile_slack, "_active_specs", return_value=[_spec("polls", {"poll": handler})]):
+        assert profile_slack.dispatch_subcommand(_body('poll\n"Lunch?" "A" "B"'), MagicMock(), MagicMock()) is True
+        assert profile_slack.dispatch_subcommand(_body('poll\t"Q" "A" "B"'), MagicMock(), MagicMock()) is True
+    assert [c.args[3] for c in handler.call_args_list] == ['"Lunch?" "A" "B"', '"Q" "A" "B"']
+
+
 def test_inactive_module_word_falls_back_to_help():
     with patch.object(profile_slack, "_active_specs", return_value=[]):
         routed = profile_slack.dispatch_subcommand(_body("poll x"), MagicMock(), MagicMock())

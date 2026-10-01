@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 from urllib.parse import urlencode
 
 import pytest
@@ -35,6 +36,7 @@ class Store:
         self.polls: dict[int, dict] = {}
         self.votes: set[tuple[int, int, str]] = set()
         self.next_id = 1
+        self.set_message_failures = 0
 
     def create_poll(
         self, team_id, created_by, channel_id, question, options, anonymous, multiple, hide_results, closes_at
@@ -64,7 +66,21 @@ class Store:
         return dict(poll) if poll else None
 
     def set_message(self, pid, ts):
+        if self.set_message_failures:
+            self.set_message_failures -= 1
+            raise RuntimeError("db blip")
         self.polls[pid]["message_ts"] = ts
+
+    def redraw(self, pid, draw):
+        poll = self.get_poll(pid)
+        if not poll:
+            return False
+        names = None if poll["anonymous"] else self.voters(pid)
+        draw(poll, self.tally(pid), names)
+        return True
+
+    def open_poll_ids(self, team_id):
+        return [p["id"] for p in self.polls.values() if p["team_id"] == team_id and not p["closed_at"]]
 
     def delete_poll(self, pid):
         self.polls.pop(pid, None)
@@ -135,6 +151,8 @@ def world(monkeypatch):
         admins=set(),
         membership_error=None,
         post_error=None,
+        deletes=[],
+        delete_error=None,
     )
     for name in (
         "create_poll",
@@ -147,6 +165,8 @@ def world(monkeypatch):
         "my_choices",
         "close_poll",
         "open_polls_by",
+        "redraw",
+        "open_poll_ids",
     ):
         monkeypatch.setattr(pdb, name, getattr(store, name))
     monkeypatch.setattr(core_db, "granted_scopes", lambda team_id: set())
@@ -181,6 +201,13 @@ def world(monkeypatch):
     def users_info(self, **kwargs):
         return {"ok": True, "user": {"id": kwargs.get("user"), "tz": "UTC"}}
 
+    def chat_delete(self, **kwargs):
+        if state.delete_error:
+            raise state.delete_error
+        state.deletes.append(kwargs)
+        return {"ok": True}
+
+    monkeypatch.setattr(WebClient, "chat_delete", chat_delete)
     monkeypatch.setattr(WebClient, "users_conversations", users_conversations)
     monkeypatch.setattr(WebClient, "chat_postMessage", chat_postMessage)
     monkeypatch.setattr(WebClient, "chat_update", chat_update)
@@ -339,6 +366,28 @@ class TestQuickSyntax:
         assert "know `poll`" in json.dumps(world.posts)
 
 
+class TestSavingTheMessage:
+    def test_a_failed_save_is_retried_once_and_the_poll_kept(self, world):
+        world.store.set_message_failures = 1
+        slash(world, 'poll "Lunch?" "Pizza" "Sushi"')
+        assert world.store.polls[1]["message_ts"] == "1.000"
+        assert world.deletes == []
+
+    def test_two_failed_saves_take_the_message_down_and_the_row(self, world):
+        world.store.set_message_failures = 2
+        slash(world, 'poll "Lunch?" "Pizza" "Sushi"')
+        assert world.deletes == [{"channel": IN, "ts": "1.000"}]
+        assert world.store.polls == {}
+        assert "try again" in json.dumps(world.responds).lower()
+
+    def test_if_the_message_cannot_be_taken_down_the_row_stays(self, world):
+        """Never a live message with no row behind it: votes on it would go nowhere."""
+        world.store.set_message_failures = 2
+        world.delete_error = RuntimeError("message_not_found")
+        slash(world, 'poll "Lunch?" "Pizza" "Sushi"')
+        assert 1 in world.store.polls
+
+
 class TestTheForm:
     def errors(self, response):
         return json.loads(response.body)["errors"]
@@ -437,6 +486,23 @@ class TestVoting:
         after = json.dumps(world.updates[-1]["blocks"], ensure_ascii=False)
         assert "▓" in after and "2 (100%)" in after
 
+    def test_a_vote_racing_a_close_never_reopens_the_message(self, world, monkeypatch):
+        import src.modules.polls.db as pdb
+
+        quick_poll(world)
+        real_toggle = world.store.toggle_vote
+
+        def toggle_then_close(*args):
+            result = real_toggle(*args)
+            world.store.close_poll(1)  # the Close lands between the vote and the redraw
+            return result
+
+        monkeypatch.setattr(pdb, "toggle_vote", toggle_then_close)
+        click(world, "polls:vote:1:0")
+        blocks = world.updates[-1]["blocks"]
+        assert vote_ids(blocks) == []
+        assert "Closed" in json.dumps(blocks)
+
     def test_a_closed_poll_takes_no_vote(self, world, monkeypatch):
         import src.modules.polls.db as pdb
 
@@ -505,10 +571,42 @@ class TestEscaping:
         assert "<https://evil.example" not in text
         assert "&lt;!channel&gt;" in text
 
+    def test_mentions_and_channels_stay_real_mentions(self, world):
+        slash(world, 'poll "Who leads, <@U0LEAD|sam>?" "<@U0LEAD|sam>" "<#C0TEAM|team>" "<https://example.com|docs>"')
+        text = json.dumps(world.posts[0]["blocks"])
+        assert "<@U0LEAD>" in text and "<#C0TEAM>" in text
+        assert "|sam" not in text and "<https://" not in text and "https://example.com" in text
+
     def test_slack_encoded_broadcasts_stay_text_too(self, world):
         slash(world, 'poll "Q" "&lt;!channel&gt;" "b"')
         text = json.dumps(world.posts[0]["blocks"])
         assert "<!channel>" not in text
+
+
+class TestTurningPollsOff:
+    def test_every_open_poll_is_closed_and_redrawn(self, world, monkeypatch):
+        import src.modules.polls.jobs as jobs
+        from src.modules.polls import MODULE
+
+        monkeypatch.setattr(jobs, "bot_client", lambda team_id: WebClient(token="xoxb-1"))
+        quick_poll(world)
+        submit(world, checks=("anonymous",))
+        MODULE.on_disable(TEAM)
+        assert all(p["closed_at"] for p in world.store.polls.values())
+        assert world.store.polls[2]["salt"] is None
+        assert all(vote_ids(u["blocks"]) == [] for u in world.updates[-2:])
+
+    def test_a_slack_error_still_closes_the_rest(self, world, monkeypatch):
+        import src.modules.polls.jobs as jobs
+        from src.modules.polls import MODULE
+
+        client = MagicMock()
+        client.chat_update.side_effect = RuntimeError("channel_not_found")
+        monkeypatch.setattr(jobs, "bot_client", lambda team_id: client)
+        quick_poll(world)
+        quick_poll(world)
+        MODULE.on_disable(TEAM)
+        assert all(p["closed_at"] for p in world.store.polls.values())
 
 
 class TestAppHome:

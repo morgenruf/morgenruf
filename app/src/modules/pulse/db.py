@@ -241,16 +241,20 @@ def record_answer(round_id: int, user_id: str, question_key: str, value: int) ->
 
 
 def _question_result(counts: dict[int, int], key: str) -> dict:
-    """One question's numbers from its counts per value, or nothing when too few answered it."""
+    """One question's numbers from its counts per value.
+
+    Nothing under MIN_GROUP answers; the average from MIN_GROUP; the
+    breakdown and eNPS only from MIN_DETAIL.
+    """
     total = sum(counts.values())
     if not privacy.visible(total):
         return {}
     if key == questions.MOOD:
-        return {
-            "mood_avg": round(sum(v * n for v, n in counts.items()) / total, 2),
-            "mood_dist": [counts.get(v, 0) for v in questions.values(questions.MOOD)],
-        }
-    if key == questions.ENPS:
+        result = {"mood_avg": round(sum(v * n for v, n in counts.items()) / total, 2)}
+        if privacy.detailed(total):
+            result["mood_dist"] = [counts.get(v, 0) for v in questions.values(questions.MOOD)]
+        return result
+    if key == questions.ENPS and privacy.detailed(total):
         return {"enps": questions.enps_score_from_counts(counts)}
     return {}
 
@@ -258,10 +262,11 @@ def _question_result(counts: dict[int, int], key: str) -> dict:
 def round_results(round_id: int) -> dict:
     """A round's team results: {respondents, invited, hidden, mood_avg, mood_dist, enps}.
 
-    Hidden below MIN_GROUP respondents, and then the counts are not even
-    read. A question answered by fewer than MIN_GROUP people stays None even
-    when the round is shown. A closed round's respondent count is the one
-    stored when it was scrubbed; an open round's is counted live.
+    Only a closed (scrubbed) round shows anything; an open one returns its
+    live respondent count with open=True and no results, and its counts are
+    not read. A closed round is hidden below MIN_GROUP respondents. Per
+    question, the average needs MIN_GROUP answers and the breakdown and eNPS
+    MIN_DETAIL.
     """
     with db_conn() as conn:
         with conn.cursor() as cur:
@@ -290,6 +295,10 @@ def round_results(round_id: int) -> dict:
                 "mood_dist": None,
                 "enps": None,
             }
+            if not scrubbed:
+                # Open: the live count only, never a number from the answers.
+                result.update(open=True, needed=privacy.MIN_GROUP)
+                return result
             if not privacy.visible(respondents):
                 result["needed"] = privacy.MIN_GROUP
                 return result
@@ -323,7 +332,7 @@ def trend(team_id: str, limit: int = 12) -> list[dict]:
                     "sent_on": result["sent_on"],
                     "respondents": result["respondents"],
                     "invited": result["invited"],
-                    **privacy.hidden_payload(result["respondents"]),
+                    **privacy.hidden_payload(result["respondents"], open_round=bool(result.get("open"))),
                 }
             )
         else:
@@ -393,6 +402,18 @@ def vacuum() -> None:
     finally:
         conn.autocommit = False
         release_conn(conn)
+
+
+def close_open_rounds(team_id: str) -> list[int]:
+    """Close every open round now and scrub it. For when Pulse is turned off."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE pulse_rounds SET closes_at = NOW() WHERE team_id = %s AND scrubbed_at IS NULL"
+                " AND closes_at > NOW()",
+                (team_id,),
+            )
+    return close_due_rounds(team_id)
 
 
 def close_due_rounds(team_id: str) -> list[int]:

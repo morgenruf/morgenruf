@@ -2189,6 +2189,11 @@ def api_set_module(data, name: str):
             }
         ), 409
     db.set_module_enabled(team_id, name, enabled)
+    if not enabled and spec.on_disable is not None:
+        try:
+            spec.on_disable(team_id)
+        except Exception:
+            logger.exception("module %s could not wind down for %s", name, team_id)
 
     from src.core.analytics import capture  # noqa: PLC0415
 

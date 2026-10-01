@@ -90,16 +90,21 @@ def cur(fake_cursor_db, monkeypatch):
     return fake_cursor_db
 
 
-def result_script(cur, respondents, mood, enps=(), invited=8, includes_enps=True):
-    cur._fetchone = [
-        (1, "T1", invited, includes_enps, "2026-10-01", None, None),
-        (respondents,),
-    ]
+def result_script(cur, respondents, mood, enps=(), invited=12, includes_enps=True, closed=True):
+    """A round as storage holds it. Closed rounds carry their stored count."""
+    if closed:
+        cur._fetchone = [(1, "T1", invited, includes_enps, "2026-10-01", True, respondents)]
+    else:
+        cur._fetchone = [(1, "T1", invited, includes_enps, "2026-10-01", False, None), (respondents,)]
     counts = {}
     for key, values in (("mood", mood), ("enps", enps)):
         for v in values:
             counts[(key, v)] = counts.get((key, v), 0) + 1
     cur._fetchall = [[(key, v, n) for (key, v), n in counts.items()]]
+
+
+TEN_MOODS = [5, 4, 3, 2, 1, 5, 4, 3, 2, 1]
+TEN_ENPS = [10, 10, 9, 8, 7, 6, 0, 10, 9, 5]
 
 
 class TestRoundResults:
@@ -114,19 +119,36 @@ class TestRoundResults:
         pdb.round_results(1)
         assert not any("FROM pulse_tallies" in sql for sql, _ in cur.calls)
 
-    def test_five_respondents_shows_the_team_average(self, cur):
+    def test_an_open_round_shows_nothing_however_many_answered(self, cur):
+        """Refreshing an open round's results would show each new answer move them."""
+        result_script(cur, 12, TEN_MOODS + [3, 3], enps=TEN_ENPS, closed=False)
+        result = pdb.round_results(1)
+        assert result["hidden"] is True and result["open"] is True and result["respondents"] == 12
+        assert result["mood_avg"] is None and result["mood_dist"] is None and result["enps"] is None
+        assert not any("FROM pulse_tallies" in sql for sql, _ in cur.calls)
+
+    def test_five_to_nine_show_the_average_only(self, cur):
         result_script(cur, 5, [5, 4, 3, 2, 1], enps=[10, 10, 9, 8, 0])
         result = pdb.round_results(1)
         assert result["hidden"] is False
         assert result["mood_avg"] == 3.0
-        assert result["mood_dist"] == [1, 1, 1, 1, 1]
-        assert result["enps"] == 40
+        assert result["mood_dist"] is None and result["enps"] is None
+
+    def test_ten_show_the_breakdown_and_enps(self, cur):
+        result_script(cur, 10, TEN_MOODS, enps=TEN_ENPS)
+        result = pdb.round_results(1)
+        assert result["mood_avg"] == 3.0
+        assert result["mood_dist"] == [2, 2, 2, 2, 2]
+        assert result["enps"] == 20  # 5 promoters and 3 detractors out of 10
 
     def test_a_question_with_fewer_than_five_answers_stays_hidden(self, cur):
         result_script(cur, 6, [5, 4, 3, 2, 1, 3], enps=[10, 0])
         result = pdb.round_results(1)
         assert result["mood_avg"] is not None
         assert result["enps"] is None
+
+    def test_the_thresholds_live_next_to_each_other(self):
+        assert privacy.MIN_GROUP == 5 and privacy.MIN_DETAIL == 10
 
     def test_trend_drops_every_number_from_a_hidden_round(self, cur, monkeypatch):
         cur._fetchall = [[(2,), (1,)]]
@@ -148,3 +170,23 @@ class TestRoundResults:
         trend = pdb.trend("T1")
         assert trend[0] == {"sent_on": "2026-09-24", "respondents": 3, "invited": 9, "hidden": True, "needed": 5}
         assert trend[1]["mood_avg"] == 3.5
+
+    def test_trend_keeps_an_open_round_to_its_counts(self, cur, monkeypatch):
+        cur._fetchall = [[(3,)]]
+        monkeypatch.setattr(
+            pdb,
+            "round_results",
+            lambda round_id: {
+                "round_id": 3,
+                "sent_on": "2026-10-08",
+                "respondents": 12,
+                "invited": 14,
+                "hidden": True,
+                "open": True,
+                "needed": 5,
+                "mood_avg": None,
+            },
+        )
+        assert pdb.trend("T1") == [
+            {"sent_on": "2026-10-08", "respondents": 12, "invited": 14, "hidden": True, "needed": 5, "open": True}
+        ]

@@ -192,6 +192,37 @@ def get_poll(poll_id: int) -> dict | None:
             return _row(cur.fetchone())
 
 
+def redraw(poll_id: int, draw) -> bool:  # noqa: ANN001
+    """Call draw(poll, counts, voters_by_option) with the poll as stored right now.
+
+    A transaction-scoped advisory lock per poll is held across the read and
+    the draw (the chat.update), so two redraws of one poll run one at a time
+    and the later one always draws the later state. A vote racing a close can
+    then never put the Vote buttons back on a closed poll. voters_by_option is
+    None for an anonymous poll. False when the poll is gone.
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"polls:redraw:{poll_id}",))
+            cur.execute(f"SELECT {_POLL_COLUMNS} FROM polls WHERE id = %s", (poll_id,))
+            poll = _row(cur.fetchone())
+            if not poll:
+                return False
+            cur.execute(
+                "SELECT option_idx, voter_key FROM poll_votes WHERE poll_id = %s ORDER BY option_idx, voter_key",
+                (poll_id,),
+            )
+            rows = [(int(r["option_idx"]), r["voter_key"]) for r in cur.fetchall()]
+            counts = [0] * len(poll["options"])
+            names: dict[int, list[str]] = {}
+            for idx, key in rows:
+                if 0 <= idx < len(counts):
+                    counts[idx] += 1
+                    names.setdefault(idx, []).append(key)
+            draw(poll, counts, None if poll["anonymous"] else names)
+            return True
+
+
 def close_poll(poll_id: int) -> bool:
     """Close an open poll and drop its salt. False when it was already closed."""
     with db_conn() as conn:
@@ -217,11 +248,23 @@ def due_polls(team_id: str) -> list[dict]:
 
 
 def open_poll_count(team_id: str) -> int:
+    """Open polls with a closing time: the ones the auto-close job is for."""
     with db_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM polls WHERE team_id = %s AND closed_at IS NULL", (team_id,))
+            cur.execute(
+                "SELECT COUNT(*) FROM polls WHERE team_id = %s AND closed_at IS NULL AND closes_at IS NOT NULL",
+                (team_id,),
+            )
             row = cur.fetchone()
             return int(row[0]) if row else 0
+
+
+def open_poll_ids(team_id: str) -> list[int]:
+    """Every open poll in a workspace, for closing them all when Polls is turned off."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM polls WHERE team_id = %s AND closed_at IS NULL ORDER BY id", (team_id,))
+            return [int(r[0]) for r in cur.fetchall()]
 
 
 def open_polls_by(team_id: str, user_id: str, limit: int = 3) -> list[dict]:

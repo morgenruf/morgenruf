@@ -66,6 +66,11 @@ class ModuleSpec:
     # command without a new slash command in the Slack app config. `profile`
     # and `help` belong to core and cannot be claimed.
     slash_subcommands: Optional[dict[str, Callable]] = None
+    # Called with the team id when a workspace turns this module off from the
+    # dashboard, so it can wind down what is in flight (close open polls,
+    # close and scrub open pulse rounds) instead of leaving it half running.
+    # Errors are logged by the caller; the switch itself always takes effect.
+    on_disable: Optional[Callable[[str], None]] = None
 
 
 def deploy_allowlist() -> Optional[set[str]]:
