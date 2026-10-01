@@ -141,7 +141,7 @@ def seed(conn, team: str) -> None:
         )
         one("INSERT INTO pulse_invites (round_id, user_id) VALUES (%s, %s)", pulse, user)
         one("INSERT INTO pulse_respondents (round_id, user_id, question_key) VALUES (%s, %s, 'mood')", pulse, user)
-        one("INSERT INTO pulse_answers (round_id, question_key, value) VALUES (%s, 'mood', 4)", pulse)
+        one("INSERT INTO pulse_tallies (round_id, question_key, value, count) VALUES (%s, 'mood', 4, 1)", pulse)
         prog = one("INSERT INTO connect_programs (team_id, channel_id) VALUES (%s, 'C1') RETURNING id", team)
         rnd = one(
             "INSERT INTO connect_rounds (program_id, team_id, scheduled_for) VALUES (%s, %s, NOW()) RETURNING id",

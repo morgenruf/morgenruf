@@ -1,10 +1,15 @@
 """Pulse storage.
 
-An answer is a row in pulse_answers with a random id, the round, the question
-and the value: no user id and no timestamp. Who answered is a separate row in
-pulse_respondents, with no value, used only to stop a second answer and to
-remind the people who have not answered. The two are written in one
-transaction, and the answer only when the respondent row was new.
+No answer is kept as a row of its own. pulse_tallies holds a count per
+round, question and value: no user id and no timestamp. Who answered is a
+separate row in pulse_respondents, with no value, used only to stop a second
+answer and to remind the people who have not answered.
+
+The respondent row and the count are written in two transactions. Written in
+one, both rows would carry the same transaction id (xmin), and anyone with
+the database could join a person to the value they picked through it. A
+count row is shared by everyone who picked that value, so its xmin only
+names the last writer, and the claim it follows is a different transaction.
 
 Results leave this module only through round_results and trend, which apply
 privacy.MIN_GROUP.
@@ -203,36 +208,47 @@ def record_answer(round_id: int, user_id: str, question_key: str, value: int) ->
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(claim, (round_id, user_id, question_key, round_id, round_id, user_id))
-            if cur.fetchone() is None:
-                return False
+            claimed = cur.fetchone() is not None
+    # The claim is committed. The count goes in its own transaction on purpose
+    # (see the module docstring). A crash between the two loses this one
+    # answer: the person is marked as answered but not counted. That is the
+    # accepted price of never writing both in one transaction.
+    if not claimed:
+        return False
+    with db_conn() as conn:
+        with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO pulse_answers (round_id, question_key, value) VALUES (%s, %s, %s)",
+                """
+                INSERT INTO pulse_tallies (round_id, question_key, value, count) VALUES (%s, %s, %s, 1)
+                ON CONFLICT (round_id, question_key, value) DO UPDATE SET count = pulse_tallies.count + 1
+                """,
                 (round_id, question_key, value),
             )
-            return True
+    return True
 
 
 # ── Results, through the privacy gate ───────────────────────────────────────
 
 
-def _question_result(values: list[int], key: str) -> dict:
-    """One question's numbers, or Nones when too few people answered it."""
-    if not privacy.visible(len(values)):
+def _question_result(counts: dict[int, int], key: str) -> dict:
+    """One question's numbers from its counts per value, or nothing when too few answered it."""
+    total = sum(counts.values())
+    if not privacy.visible(total):
         return {}
     if key == questions.MOOD:
         return {
-            "mood_avg": round(sum(values) / len(values), 2),
-            "mood_dist": [values.count(v) for v in questions.values(questions.MOOD)],
+            "mood_avg": round(sum(v * n for v, n in counts.items()) / total, 2),
+            "mood_dist": [counts.get(v, 0) for v in questions.values(questions.MOOD)],
         }
     if key == questions.ENPS:
-        return {"enps": questions.enps_score(values)}
+        return {"enps": questions.enps_score_from_counts(counts)}
     return {}
 
 
 def round_results(round_id: int) -> dict:
     """A round's team results: {respondents, invited, hidden, mood_avg, mood_dist, enps}.
 
-    Hidden below MIN_GROUP respondents, and then the answers are not even
+    Hidden below MIN_GROUP respondents, and then the counts are not even
     read. A question answered by fewer than MIN_GROUP people stays None even
     when the round is shown.
     """
@@ -262,13 +278,13 @@ def round_results(round_id: int) -> dict:
             if not privacy.visible(respondents):
                 result["needed"] = privacy.MIN_GROUP
                 return result
-            cur.execute("SELECT question_key, value FROM pulse_answers WHERE round_id = %s", (round_id,))
-            by_question: dict[str, list[int]] = {}
-            for key, value in cur.fetchall():
-                by_question.setdefault(key, []).append(int(value))
+            cur.execute("SELECT question_key, value, count FROM pulse_tallies WHERE round_id = %s", (round_id,))
+            by_question: dict[str, dict[int, int]] = {}
+            for key, value, count in cur.fetchall():
+                by_question.setdefault(key, {})[int(value)] = int(count)
     result["hidden"] = False
-    for key, values in by_question.items():
-        result.update(_question_result(values, key))
+    for key, counts in by_question.items():
+        result.update(_question_result(counts, key))
     return result
 
 

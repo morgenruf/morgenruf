@@ -2485,7 +2485,7 @@ def verify_mcp_key(key: str) -> str | None:
 # foreign key is not ON DELETE CASCADE (standups before standup_schedules,
 # rematch requests before matches). connect_pair_history has no team_id, only
 # pairs of user IDs keyed by programme, so it is reached through its programme.
-# poll_votes and the pulse answer, respondent and invite rows are reached
+# poll_votes and the pulse tally, respondent and invite rows are reached
 # through their poll or round the same way.
 #
 # A test reads every migration and fails when a table with a team_id is on
@@ -2505,7 +2505,7 @@ _PURGE_STEPS: tuple[tuple[str, str], ...] = (
     ("connect_zoom_links", "team_id = %s"),
     ("celebration_posts", "team_id = %s"),
     ("celebration_settings", "team_id = %s"),
-    ("pulse_answers", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
+    ("pulse_tallies", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
     ("pulse_respondents", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
     ("pulse_invites", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
     ("pulse_rounds", "team_id = %s"),

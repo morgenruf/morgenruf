@@ -32,18 +32,24 @@ def table_columns(name: str) -> dict[str, str]:
 
 
 class TestTheSchema:
-    def test_answers_have_no_user_and_no_time(self):
-        columns = table_columns("pulse_answers")
-        assert set(columns) == {"id", "round_id", "question_key", "value"}
+    def test_there_is_no_table_with_one_row_per_answer(self):
+        sql = MIGRATION.read_text()
+        assert "pulse_answers" not in sql
+        tables = re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", sql)
+        assert set(tables) == {"pulse_programs", "pulse_rounds", "pulse_respondents", "pulse_invites", "pulse_tallies"}
+
+    def test_tallies_have_no_user_and_no_time(self):
+        columns = table_columns("pulse_tallies")
+        assert set(columns) == {"round_id", "question_key", "value", "count"}
         assert not any("TIME" in t or "DATE" in t for t in columns.values())
-        assert "gen_random_uuid()" in columns["id"].lower()
+        assert "PRIMARY KEY (round_id, question_key, value)" in MIGRATION.read_text()
 
     def test_respondents_have_no_value_and_no_time(self):
         columns = table_columns("pulse_respondents")
         assert set(columns) == {"round_id", "user_id", "question_key"}
 
     def test_no_free_text_column_anywhere_an_answer_lives(self):
-        assert table_columns("pulse_answers")["value"].startswith("SMALLINT")
+        assert table_columns("pulse_tallies")["value"].startswith("SMALLINT")
 
 
 class TestTheGate:
@@ -70,6 +76,10 @@ class TestQuestions:
     def test_enps_math(self):
         assert questions.enps_score([10, 10, 9, 8, 7, 6, 0]) == 14
 
+    def test_enps_math_from_counts(self):
+        assert questions.enps_score_from_counts({10: 2, 9: 1, 8: 1, 7: 1, 6: 1, 0: 1}) == 14
+        assert questions.enps_score_from_counts({}) is None
+
     def test_unknown_question_takes_nothing(self):
         assert not questions.valid("comment", 1)
 
@@ -85,8 +95,11 @@ def result_script(cur, respondents, mood, enps=(), invited=8, includes_enps=True
         (1, "T1", invited, includes_enps, "2026-10-01"),
         (respondents,),
     ]
-    rows = [("mood", v) for v in mood] + [("enps", v) for v in enps]
-    cur._fetchall = [rows]
+    counts = {}
+    for key, values in (("mood", mood), ("enps", enps)):
+        for v in values:
+            counts[(key, v)] = counts.get((key, v), 0) + 1
+    cur._fetchall = [[(key, v, n) for (key, v), n in counts.items()]]
 
 
 class TestRoundResults:
@@ -99,7 +112,7 @@ class TestRoundResults:
     def test_answers_are_not_even_read_for_a_hidden_round(self, cur):
         result_script(cur, 4, [5, 4, 3, 2])
         pdb.round_results(1)
-        assert not any("FROM pulse_answers" in sql for sql, _ in cur.calls)
+        assert not any("FROM pulse_tallies" in sql for sql, _ in cur.calls)
 
     def test_five_respondents_shows_the_team_average(self, cur):
         result_script(cur, 5, [5, 4, 3, 2, 1], enps=[10, 10, 9, 8, 0])

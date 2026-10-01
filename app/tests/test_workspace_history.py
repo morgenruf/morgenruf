@@ -126,7 +126,7 @@ class TestRecordHistory:
         assert "'polls'" in sql and "'pulse'" in sql
         assert "polls_created = EXCLUDED.polls_created" in sql
         assert "pulse_rounds = EXCLUDED.pulse_rounds" in sql
-        for column in ("question", "options", "voter_key", "pulse_answers", "value", "created_by"):
+        for column in ("question", "options", "voter_key", "pulse_tallies", "value", "created_by"):
             assert column not in sql, column
 
     def test_polls_and_pulse_count_as_activity(self, cursor):

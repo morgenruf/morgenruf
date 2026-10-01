@@ -1,9 +1,12 @@
-/* Anonymous pulse. Answers carry no user id and no timestamp; who answered is
-   kept apart in pulse_respondents (no values), only to stop double answers and
-   to remind people who have not answered. Results are shown only for rounds
-   with at least five respondents.
+/* Anonymous pulse. No answer is stored as a row of its own: pulse_tallies
+   keeps a count per round, question and value, with no user id and no
+   timestamp. Who answered is kept apart in pulse_respondents (no values),
+   only to stop double answers and to remind people who have not answered,
+   and is written in a separate transaction from the count, so no transaction
+   id ties a person to a value. Results are shown only for rounds with at
+   least five respondents.
 
-   Additive only. gen_random_uuid() is built in from Postgres 13. */
+   Additive only. */
 CREATE TABLE IF NOT EXISTS pulse_programs (
     team_id        TEXT PRIMARY KEY REFERENCES installations(team_id) ON DELETE CASCADE,
     enabled        BOOLEAN NOT NULL DEFAULT FALSE,
@@ -36,10 +39,10 @@ CREATE TABLE IF NOT EXISTS pulse_invites (
     user_id      TEXT NOT NULL,
     PRIMARY KEY (round_id, user_id)
 );
-CREATE TABLE IF NOT EXISTS pulse_answers (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE IF NOT EXISTS pulse_tallies (
     round_id     BIGINT NOT NULL REFERENCES pulse_rounds(id) ON DELETE CASCADE,
     question_key TEXT NOT NULL,
-    value        SMALLINT NOT NULL
+    value        SMALLINT NOT NULL,
+    count        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (round_id, question_key, value)
 );
-CREATE INDEX IF NOT EXISTS pulse_answers_round_idx ON pulse_answers (round_id, question_key);

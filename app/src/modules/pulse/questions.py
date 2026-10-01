@@ -42,3 +42,13 @@ def enps_score(answers: list[int]) -> int | None:
     promoters = sum(1 for v in answers if v >= 9)
     detractors = sum(1 for v in answers if v <= 6)
     return round(100 * (promoters - detractors) / len(answers))
+
+
+def enps_score_from_counts(counts: dict[int, int]) -> int | None:
+    """enps_score, from how many people picked each value."""
+    total = sum(counts.values())
+    if not total:
+        return None
+    promoters = sum(n for v, n in counts.items() if v >= 9)
+    detractors = sum(n for v, n in counts.items() if v <= 6)
+    return round(100 * (promoters - detractors) / total)
