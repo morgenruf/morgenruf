@@ -1975,12 +1975,27 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
 def waiting_standups(team_id: str, channel_id: str) -> list[dict]:
     """Standups saved from the quick start that wait for the bot to join this channel."""
     sql = """
-        SELECT id, awaiting_invite_by, schedule_time FROM standup_schedules
+        SELECT id, awaiting_invite_by, schedule_time, schedule_tz FROM standup_schedules
         WHERE team_id = %s AND channel_id = %s AND awaiting_invite_by IS NOT NULL
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (team_id, channel_id))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def teams_with_waiting_standups() -> list[dict]:
+    """Live installs with quick start standups waiting for an invite, and their channels."""
+    sql = """
+        SELECT i.team_id, i.bot_token, ARRAY_AGG(DISTINCT s.channel_id) AS channel_ids
+        FROM standup_schedules s
+        JOIN installations i ON i.team_id = s.team_id
+        WHERE s.awaiting_invite_by IS NOT NULL AND i.active AND i.purged_at IS NULL
+        GROUP BY i.team_id, i.bot_token
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
             return [dict(r) for r in cur.fetchall()]
 
 
@@ -2198,7 +2213,9 @@ def update_standup_schedule(team_id: str, schedule_id: int, **kwargs) -> dict | 
         fields["questions"] = json.dumps(fields["questions"])
     if "schedule_tz" in fields:
         fields["schedule_tz"] = canonical_tz(fields["schedule_tz"])
-    set_clause = ", ".join(f"{k} = %s" for k in fields) + ", updated_at = NOW()"
+    # Any edit takes a quick start standup out of waiting for its invite:
+    # whoever edited or resumed it has decided its state by hand.
+    set_clause = ", ".join(f"{k} = %s" for k in fields) + ", awaiting_invite_by = NULL, updated_at = NOW()"
     sql = f"UPDATE standup_schedules SET {set_clause} WHERE id = %s AND team_id = %s RETURNING *"
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -2994,7 +3011,8 @@ def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
     sql = """
         SELECT i.team_id, i.team_name, i.installed_by_user_id,
                (SELECT COUNT(*) FROM standup_schedules s
-                 WHERE s.team_id = i.team_id AND s.active) AS schedules,
+                 WHERE s.team_id = i.team_id
+                   AND (s.active OR s.awaiting_invite_by IS NOT NULL)) AS schedules,
                (SELECT COUNT(*) FROM standups st WHERE st.team_id = i.team_id) AS standups,
                (SELECT COUNT(DISTINCT user_id) FROM standups st
                  WHERE st.team_id = i.team_id) AS people

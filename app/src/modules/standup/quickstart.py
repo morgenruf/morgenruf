@@ -13,6 +13,7 @@ import logging
 
 from src.core.quickstart_button import OPEN_ACTION, button_block
 from src.core.schedule_validation import DEFAULT_QUESTIONS, schedule_time_error, schedule_timezone_error
+from src.core.standup_invites import activate_waiting, bot_channel_ids, channel_humans, when_text
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,6 @@ def modal(tz: str) -> dict:
                 "element": {
                     "type": "conversations_select",
                     "action_id": "channel",
-                    "default_to_current_conversation": True,
                     "filter": {"include": ["public", "private"], "exclude_bot_users": True},
                 },
             },
@@ -79,9 +79,11 @@ def _user_tz(client, user_id: str) -> str:
 
 
 def _bot_channel_ids(client) -> set[str]:
-    from src.modules.standup.handlers import _get_bot_channels  # noqa: PLC0415
+    return bot_channel_ids(client)
 
-    return {c["id"] for c in _get_bot_channels(client)}
+
+def _channel_humans(client, channel_id: str) -> list[str]:
+    return channel_humans(client, channel_id)
 
 
 def _may_manage(team_id: str, user_id: str) -> bool:
@@ -101,6 +103,22 @@ def handle_open(ack, body, client) -> None:
     client.views_open(trigger_id=body["trigger_id"], view=modal(_user_tz(client, user_id)))
 
 
+def _channel_error(channel_id: str | None) -> str | None:
+    if not channel_id:
+        return "Pick the channel your team talks in."
+    # Public channels start with C and private ones with G. A DM or a group
+    # DM picked from the list has nobody to sync with.
+    if not channel_id.startswith(("C", "G")):
+        return "Pick a channel, not a direct message."
+    return None
+
+
+def _already_has_standup(team_id: str, channel_id: str) -> bool:
+    import src.core.db as db  # noqa: PLC0415
+
+    return any(s.get("channel_id") == channel_id for s in db.get_standup_schedules(team_id))
+
+
 def handle_submit(ack, body, view, client, on_saved=None) -> None:
     import src.core.db as db  # noqa: PLC0415
 
@@ -109,8 +127,9 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
     time = (values.get("time", {}).get("time") or {}).get("selected_time") or DEFAULT_TIME
     user_id = body["user"]["id"]
     team_id = _team_id(body)
-    if not channel_id:
-        ack(response_action="errors", errors={"channel": "Pick the channel your team talks in."})
+    channel_error = _channel_error(channel_id)
+    if channel_error:
+        ack(response_action="errors", errors={"channel": channel_error})
         return
     if schedule_time_error(time):
         ack(response_action="errors", errors={"time": "Pick a time such as 09:30."})
@@ -120,19 +139,42 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
     if not _may_manage(team_id, user_id):
         ack(response_action="errors", errors={"channel": "Only a workspace admin or a standup admin can do this."})
         return
+    # A second press of the same button must not start a second standup.
+    try:
+        duplicate = _already_has_standup(team_id, channel_id)
+    except Exception as exc:
+        logger.warning("quickstart: could not list standups for %s: %s", team_id, exc)
+        ack(response_action="errors", errors={"channel": "Couldn't check the channel, please try again."})
+        return
+    if duplicate:
+        ack(
+            response_action="errors",
+            errors={"channel": "This channel already has a standup. Change it from the Home tab."},
+        )
+        return
     ack()
 
-    joined = channel_id in _bot_channel_ids(client)
+    # A wrong answer here is worse than none: a joined channel saved as
+    # waiting never switches on, so any Slack error saves nothing.
+    try:
+        joined = channel_id in _bot_channel_ids(client)
+        participants = _channel_humans(client, channel_id) if joined else []
+    except Exception as exc:
+        logger.warning("quickstart: could not check %s in %s: %s", channel_id, team_id, exc)
+        client.chat_postMessage(channel=user_id, text="Couldn't check the channel, please try again.")
+        return
+
+    tz = _user_tz(client, user_id)
     try:
         db.create_standup_schedule(
             team_id,
             name="Daily standup",
             channel_id=channel_id,
             schedule_time=time,
-            schedule_tz=_user_tz(client, user_id),
+            schedule_tz=tz,
             schedule_days=WEEKDAYS,
             questions=list(DEFAULT_QUESTIONS),
-            participants=[],
+            participants=participants,
             sync_with_channel=True,
             active=joined,
             awaiting_invite_by=None if joined else user_id,
@@ -145,10 +187,10 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
         return
 
     if joined:
-        text = f"Your standup is set. Everyone in <#{channel_id}> gets the questions on weekdays at {time}."
+        text = f"Your standup is set. Everyone in <#{channel_id}> gets the questions {when_text(time, tz)}."
     else:
         text = (
-            f"Saved. One step left: type `/invite @Morgenruf` in <#{channel_id}>. "
+            f"Saved for {when_text(time, tz)}. One step left: type `/invite @Morgenruf` in <#{channel_id}>. "
             "The standup switches on the moment I'm in, and I'll tell you here."
         )
     try:
@@ -160,30 +202,6 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
             on_saved(team_id, user_id, client)
         except Exception as exc:
             logger.info("quickstart: could not refresh Home for %s: %s", user_id, exc)
-
-
-def activate_waiting(client, team_id: str, channel_id: str) -> int:
-    """The bot was invited to a channel: switch on standups that were waiting for it.
-
-    Returns how many were switched on. A standup is switched on, and its
-    creator told, only by the call that cleared its waiting flag, so an
-    invite with nothing waiting, or a second invite, does nothing.
-    """
-    import src.core.db as db  # noqa: PLC0415
-
-    switched = 0
-    for row in db.waiting_standups(team_id, channel_id):
-        if not db.activate_waiting_standup(row["id"]):
-            continue
-        switched += 1
-        try:
-            client.chat_postMessage(
-                channel=row["awaiting_invite_by"],
-                text=f"I'm in <#{channel_id}> now, so your standup is on: weekdays at {row['schedule_time']}.",
-            )
-        except Exception:
-            logger.info("quickstart: could not confirm activation for schedule %s", row["id"])
-    return switched
 
 
 def register(app, refresh_home=None) -> None:

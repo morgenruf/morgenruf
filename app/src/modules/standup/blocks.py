@@ -45,6 +45,10 @@ def _summary_on_by_default(cfg: dict) -> bool:
     return bool(cfg.get("post_summary", True))
 
 
+def _waiting_text(channel_id: str) -> str:
+    return f"Waiting for `/invite @Morgenruf` in <#{channel_id}>"
+
+
 def _plus_an_hour(hhmm: str) -> str:
     """`hhmm` shifted forward 60 minutes, wrapping past midnight.
 
@@ -1287,8 +1291,12 @@ def app_home_view(
             responded_today = standup.get("user_responded_today", False)
             response_time = standup.get("user_last_response_time")
 
-            # Status indicator
-            if not active:
+            # Status indicator. A quick start standup for a channel the bot is
+            # not in yet is off until the invite, which is not the same as paused.
+            if standup.get("awaiting_invite_by"):
+                status_icon = "✉️"
+                status_text = _waiting_text(channel)
+            elif not active:
                 status_icon = "⏸️"
                 status_text = "Paused"
             elif responded_today:
@@ -1542,7 +1550,9 @@ def app_home_configure_view(
             next_run = _format_next_run(standup.get("next_run"))
             if next_run:
                 detail_lines.append(f"Next: {next_run}")
-            if not active:
+            if standup.get("awaiting_invite_by"):
+                detail_lines.append(f"*{_waiting_text(channel)}*")
+            elif not active:
                 detail_lines.append("*Paused*")
 
             blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(detail_lines)}})

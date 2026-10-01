@@ -159,3 +159,49 @@ class TestChannelSyncStoresProfiles:
             "avatar_url": None,
             "display_name": None,
         }
+
+
+class TestASyncedStandupNeverFallsBackToEveryone:
+    """A standup synced with its channel asks the channel's people. When the
+    channel cannot be read, or holds no people, the run is skipped: falling
+    back to every member of the workspace would DM people outside the team."""
+
+    def setup_method(self):
+        self.db = MagicMock()
+        self.db.get_standup_schedule.return_value = _schedule()
+        self.db.get_active_members.return_value = [{"user_id": "U1"}, {"user_id": "U_ELSEWHERE"}]
+        self.db.is_skipped_today.return_value = False
+        self.db.is_on_vacation.return_value = False
+        self.client = MagicMock()
+        self.client.conversations_open.return_value = {"channel": {"id": "D1"}}
+
+    def _run(self):
+        with (
+            patch_modules({"src.core.db": self.db}),
+            patch.object(sched_mod, "WebClient", return_value=self.client),
+            patch.object(sched_mod.state_store, "blocks_scheduled_dm", return_value=False),
+        ):
+            sched_mod._send_standup_to_workspace("T1", "xoxb-test", "C1", 1)
+
+    def test_an_unreadable_channel_skips_the_run(self):
+        self.client.conversations_members.side_effect = RuntimeError("not_in_channel")
+        self._run()
+        self.client.conversations_open.assert_not_called()
+        self.client.chat_postMessage.assert_not_called()
+
+    def test_a_channel_with_no_people_skips_the_run(self):
+        self.client.conversations_members.return_value = {"members": ["BOT"], "response_metadata": {}}
+        self.client.users_list.return_value = {
+            "members": [_slack_user("BOT", is_bot=True)],
+            "response_metadata": {},
+        }
+        self._run()
+        self.client.conversations_open.assert_not_called()
+        self.db.update_standup_schedule.assert_not_called()
+
+    def test_a_standup_without_sync_still_runs_for_its_participants(self):
+        self.db.get_standup_schedule.return_value = _schedule(sync_with_channel=False, participants=["U1"])
+        self.db.get_active_members.return_value = [{"user_id": "U1"}]
+        self._run()
+        self.client.conversations_members.assert_not_called()
+        assert {kw["users"] for _, kw in self.client.conversations_open.call_args_list} == {"U1"}

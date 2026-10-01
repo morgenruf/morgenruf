@@ -100,9 +100,9 @@ def test_a_row_left_half_empty_by_a_purge_does_not_crash():
 
 def test_internal_teams_come_from_the_environment(monkeypatch):
     monkeypatch.setenv("MORGENRUF_INTERNAL_TEAMS", " T1, T2 ,,")
-    assert usage_report._internal_teams() == {"T1", "T2"}
+    assert usage_report.internal_teams() == {"T1", "T2"}
     monkeypatch.delenv("MORGENRUF_INTERNAL_TEAMS")
-    assert usage_report._internal_teams() == set()
+    assert usage_report.internal_teams() == set()
 
 
 def test_post_weekly_sends_the_report_to_the_alert_channel(monkeypatch):

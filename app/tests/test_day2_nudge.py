@@ -76,6 +76,38 @@ def test_one_failing_workspace_does_not_stop_the_next():
         assert activation.send_day2_nudges() == (1, 1)
 
 
+def test_internal_workspaces_are_never_nudged(monkeypatch):
+    monkeypatch.setenv("MORGENRUF_INTERNAL_TEAMS", "T1")
+    client = MagicMock()
+    with (
+        patch("src.core.db.workspaces_without_standup", return_value=[ROW]),
+        patch("src.core.db.record_install_email") as record,
+        patch.object(activation, "WebClient", return_value=client),
+    ):
+        assert activation.send_day2_nudges() == (0, 1)
+    record.assert_not_called()
+    client.chat_postMessage.assert_not_called()
+
+
+def test_the_hourly_job_also_runs_the_invite_sweep():
+    with (
+        patch("src.core.activation.send_day2_nudges") as nudges,
+        patch("src.core.standup_invites.sweep_waiting_standups") as sweep,
+    ):
+        scheduler._send_day2_nudges()
+    nudges.assert_called_once()
+    sweep.assert_called_once()
+
+
+def test_a_failing_sweep_does_not_stop_the_nudges():
+    with (
+        patch("src.core.activation.send_day2_nudges") as nudges,
+        patch("src.core.standup_invites.sweep_waiting_standups", side_effect=RuntimeError("db down")),
+    ):
+        scheduler._send_day2_nudges()
+    nudges.assert_called_once()
+
+
 def test_no_installer_is_skipped():
     with (
         patch("src.core.db.workspaces_without_standup", return_value=[{**ROW, "installed_by_user_id": None}]),

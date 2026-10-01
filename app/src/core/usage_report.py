@@ -16,7 +16,9 @@ from datetime import date, datetime, timezone
 ACTIVE_AT = 3
 
 
-def _internal_teams() -> set[str]:
+def internal_teams() -> set[str]:
+    """MORGENRUF_INTERNAL_TEAMS: the operator's own workspaces, left out of
+    the report and never nudged."""
     raw = os.environ.get("MORGENRUF_INTERNAL_TEAMS", "")
     return {t.strip() for t in raw.split(",") if t.strip()}
 
@@ -78,4 +80,4 @@ def post_weekly() -> bool:
     import src.core.db as db  # noqa: PLC0415
     from src.core.alerts import notify  # noqa: PLC0415
 
-    return notify(build(db.usage_report_rows(), _internal_teams()))
+    return notify(build(db.usage_report_rows(), internal_teams()))

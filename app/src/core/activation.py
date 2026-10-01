@@ -30,11 +30,17 @@ def send_day2_nudges() -> tuple[int, int]:
     """DM each eligible installer once. Returns (sent, skipped)."""
     import src.core.db as db  # noqa: PLC0415
     from src.core.quickstart_button import button_block  # noqa: PLC0415
+    from src.core.usage_report import internal_teams  # noqa: PLC0415
 
+    internal = internal_teams()
     sent = skipped = 0
     for row in db.workspaces_without_standup(hours=AFTER_HOURS):
         team_id = row["team_id"]
         user_id = row.get("installed_by_user_id")
+        # The operator's own workspaces are not prospects.
+        if team_id in internal:
+            skipped += 1
+            continue
         # Recorded before sending: a crash after this line loses one nudge,
         # it never sends two.
         if not user_id or not row.get("bot_token") or not db.record_install_email(team_id, KIND):

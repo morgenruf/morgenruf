@@ -1126,6 +1126,7 @@ def register_handlers(app: App) -> None:
                     "days": days,
                     "members": participants,
                     "active": s.get("active", True),
+                    "awaiting_invite_by": s.get("awaiting_invite_by"),
                     "questions": raw_q,
                     "next_run": _schedule_next_run(s),
                     "is_participant": is_participant,
@@ -1382,6 +1383,7 @@ def register_handlers(app: App) -> None:
                         "days": days,
                         "members": participants,
                         "active": s.get("active", True),
+                        "awaiting_invite_by": s.get("awaiting_invite_by"),
                         "questions": raw_q,
                         "next_run": _schedule_next_run(s),
                     }
