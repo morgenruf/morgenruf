@@ -2038,6 +2038,17 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # Monday morning, one message to the operator's alert channel saying
+    # whether outside teams used Morgenruf last week.
+    scheduler.add_job(
+        _post_usage_report,
+        trigger=CronTrigger(day_of_week="mon", hour=7, minute=30, timezone="UTC"),
+        id="weekly_usage_report",
+        executor=BULK_EXECUTOR,
+        name="Monday usage report",
+        replace_existing=True,
+    )
+
     # Profiles of people who left the workspace more than 30 days ago are
     # deleted. Every pod schedules this; the advisory lock inside the purge
     # lets exactly one of them do the work.
@@ -2144,6 +2155,16 @@ def _send_day2_nudges() -> None:
         send_day2_nudges()
     except Exception:
         logger.exception("Day-2 nudge failed")
+
+
+def _post_usage_report() -> None:
+    """Mondays: the weekly usage report to the operator's alert channel."""
+    try:
+        from src.core.usage_report import post_weekly  # noqa: PLC0415
+
+        post_weekly()
+    except Exception:
+        logger.exception("Usage report failed")
 
 
 def _refresh_workspace_history() -> None:

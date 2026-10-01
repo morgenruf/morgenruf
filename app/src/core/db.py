@@ -2719,6 +2719,62 @@ def set_install_source(team_id: str, source: str) -> None:
             )
 
 
+def usage_report_rows() -> list[dict]:
+    """One row per workspace for the Monday usage report: counts, never people.
+
+    Live installations, and those removed in the last week. A removed
+    workspace whose data is purged keeps a bare installations row, and its
+    history row fills in what the purge cleared; a workspace with only a
+    history row left is added from workspace_history. people_7d counts
+    distinct people who answered a standup or gave kudos in the last week.
+    """
+    sql = """
+        SELECT i.team_id,
+               COALESCE(i.team_name, h.team_name) AS team_name,
+               i.active,
+               i.installed_at,
+               CASE WHEN i.active THEN NULL ELSE COALESCE(i.deactivated_at, h.removed_at) END AS removed_at,
+               COALESCE(i.install_source, h.install_source) AS install_source,
+               p.n AS people_7d,
+               st.n AS answers_7d,
+               k.n AS kudos_7d,
+               EXISTS (SELECT 1 FROM standup_schedules s WHERE s.team_id = i.team_id) AS has_standup,
+               i.installed_at > NOW() - INTERVAL '7 days' AS installed_this_week,
+               (NOT i.active AND COALESCE(i.deactivated_at, h.removed_at) > NOW() - INTERVAL '7 days')
+                   AS removed_this_week,
+               COALESCE(st.first_at > NOW() - INTERVAL '7 days', FALSE) AS activated_this_week,
+               EXISTS (SELECT 1 FROM install_emails e WHERE e.team_id = i.team_id AND e.kind = 'nudge:day2')
+                   AS nudged
+        FROM installations i
+        LEFT JOIN workspace_history h ON h.team_id = i.team_id
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) FILTER (WHERE submitted_at > NOW() - INTERVAL '7 days') AS n,
+                   MIN(submitted_at) AS first_at
+            FROM standups WHERE team_id = i.team_id) st
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS n FROM kudos
+            WHERE team_id = i.team_id AND created_at > NOW() - INTERVAL '7 days') k
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS n FROM (
+                SELECT user_id FROM standups
+                WHERE team_id = i.team_id AND submitted_at > NOW() - INTERVAL '7 days'
+                UNION
+                SELECT from_user FROM kudos
+                WHERE team_id = i.team_id AND created_at > NOW() - INTERVAL '7 days') u) p
+        WHERE i.active OR COALESCE(i.deactivated_at, h.removed_at) > NOW() - INTERVAL '7 days'
+        UNION ALL
+        SELECT h.team_id, h.team_name, FALSE, h.installed_at, h.removed_at, h.install_source,
+               0, 0, 0, FALSE, h.installed_at > NOW() - INTERVAL '7 days', TRUE, FALSE, FALSE
+        FROM workspace_history h
+        WHERE h.removed_at > NOW() - INTERVAL '7 days'
+          AND NOT EXISTS (SELECT 1 FROM installations i WHERE i.team_id = h.team_id)
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
 def parse_scope_field(scope: str | None) -> list[str]:
     """Split the comma-separated `scope` field from oauth.v2.access."""
     if not scope:
