@@ -5,6 +5,27 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.13] - 2026-10-01
+
+### Added
+- **Quick start.** "Start a standup" in the welcome DM and on an empty Home
+  tab opens a two-field form: the team's channel and a time. If Morgenruf is
+  not in that channel yet, the standup is saved waiting for
+  `/invite @Morgenruf` and switches on by itself when the invite happens,
+  instead of refusing.
+- **Day-2 nudge.** Two days after install, a workspace with no standup gets
+  one DM to the installer with the same button. Once, never by email.
+- **Monday usage report** to the operator alert channel: weekly active people
+  and workspaces by stage. Internal workspaces are left out with
+  `MORGENRUF_INTERNAL_TEAMS` (Helm: `ops.internalTeams`).
+- **Install source.** `/install?ref=<source>` is stored on a new install and
+  kept in workspace history.
+
+### Fixed
+- **A synced standup no longer falls back to the whole workspace.** When a
+  channel-synced standup cannot read its channel, that run is skipped instead
+  of DMing every known member.
+
 ## [1.9.12] - 2026-09-30
 
 ### Fixed
