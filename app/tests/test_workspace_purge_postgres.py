@@ -126,6 +126,14 @@ def seed(conn, team: str) -> None:
             thanks,
         )
         one("INSERT INTO kudos_config (team_id) VALUES (%s)", team)
+        poll = one(
+            "INSERT INTO polls (team_id, created_by, channel_id, question, options)"
+            " VALUES (%s, %s, 'C1', %s, '[\"a\", \"b\"]') RETURNING id",
+            team,
+            user,
+            answer,
+        )
+        one("INSERT INTO poll_votes (poll_id, option_idx, voter_key) VALUES (%s, 0, %s)", poll, user)
         prog = one("INSERT INTO connect_programs (team_id, channel_id) VALUES (%s, 'C1') RETURNING id", team)
         rnd = one(
             "INSERT INTO connect_rounds (program_id, team_id, scheduled_for) VALUES (%s, %s, NOW()) RETURNING id",
