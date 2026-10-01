@@ -60,6 +60,12 @@ class ModuleSpec:
     # module the deployment permits; each hook decides whether the channel is
     # one it cares about.
     on_channel_join: Optional[Callable] = None
+    # Words this module answers after `/morgenruf`, such as `poll`, mapped to
+    # handler(body, client, respond, args_text). Core calls the handler after
+    # ack() and only while the module is active here, so a module gets a
+    # command without a new slash command in the Slack app config. `profile`
+    # and `help` belong to core and cannot be claimed.
+    slash_subcommands: Optional[dict[str, Callable]] = None
 
 
 def deploy_allowlist() -> Optional[set[str]]:

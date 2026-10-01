@@ -339,16 +339,7 @@ def help_text(team_id: str) -> str:
         "• `/morgenruf profile`: your birthday, start date, role and location",
     ]
     try:
-        import src.core.db as db  # noqa: PLC0415
-        from src.core.modules import active_modules, deploy_allowlist  # noqa: PLC0415
-        from src.modules import REGISTRY  # noqa: PLC0415
-
-        mods = active_modules(
-            REGISTRY,
-            granted_scopes=db.granted_scopes(team_id),
-            settings=db.module_settings(team_id),
-            allowlist=deploy_allowlist(),
-        )
+        mods = _active_specs(team_id)
     except Exception as exc:
         logger.warning("help could not resolve modules for %s: %s", team_id, exc)
         mods = []
@@ -370,6 +361,48 @@ def help_text(team_id: str) -> str:
         f"📖 Docs: <https://docs.morgenruf.dev|docs.morgenruf.dev> · 💬 <{support_url()}|Get support>",
     ]
     return "\n".join(lines)
+
+
+# Core's own words. A module claiming one would hide it.
+_CORE_SUBCOMMANDS = frozenset({"", "profile", "help"})
+
+
+def _active_specs(team_id: str) -> list:
+    """Modules active for one workspace, in registry order."""
+    import src.core.db as db  # noqa: PLC0415
+    from src.core.modules import active_modules, deploy_allowlist  # noqa: PLC0415
+    from src.modules import REGISTRY  # noqa: PLC0415
+
+    return active_modules(
+        REGISTRY,
+        granted_scopes=db.granted_scopes(team_id),
+        settings=db.module_settings(team_id),
+        allowlist=deploy_allowlist(),
+    )
+
+
+def dispatch_subcommand(body: dict, client, respond) -> bool:  # noqa: ANN001
+    """Hand `/morgenruf <word> ...` to the active module that claims <word>.
+
+    Returns True when a module took it. False means core should answer, so a
+    word whose module is off here gets the help, like any unknown word.
+    """
+    text = (body.get("text") or "").strip()
+    word, _, rest = text.partition(" ")
+    word = word.lower()
+    if word in _CORE_SUBCOMMANDS:
+        return False
+    try:
+        specs = _active_specs(body.get("team_id", ""))
+    except Exception as exc:
+        logger.warning("could not resolve /morgenruf %s for %s: %s", word, body.get("team_id", ""), exc)
+        return False
+    for spec in specs:
+        handler = (getattr(spec, "slash_subcommands", None) or {}).get(word)
+        if handler is not None:
+            handler(body, client, respond, rest.strip())
+            return True
+    return False
 
 
 def help_blocks(team_id: str, prefix: str = "", suffix: str = "") -> list[dict]:
@@ -431,8 +464,9 @@ def register_slack(app) -> None:
     """Attach /morgenruf and the profile modal to the Bolt app."""
 
     @app.command("/morgenruf")
-    def handle_morgenruf_command(ack, body, client):  # noqa: ANN001
-        """`/morgenruf profile` opens the modal. Anything else, or nothing, is help."""
+    def handle_morgenruf_command(ack, body, client, respond=None):  # noqa: ANN001
+        """`/morgenruf profile` opens the modal. A word an active module claims
+        goes to that module. Anything else, or nothing, is help."""
         ack()
         user_id = body.get("user_id", "")
         team_id = body.get("team_id", "")
@@ -445,6 +479,9 @@ def register_slack(app) -> None:
             except Exception:
                 logger.exception("profile: could not open the modal for %s", user_id)
                 _say_could_not_open(client, user_id)
+            return
+
+        if dispatch_subcommand(body, client, respond):
             return
 
         prefix = "" if sub in ("", "help") else f"I don't know `{_escape(sub)}`. Here is what I can do:"
