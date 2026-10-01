@@ -2026,6 +2026,18 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
         replace_existing=True,
     )
 
+    # Two days after install, one Slack DM to an installer whose workspace
+    # has no standup yet. Hourly so it lands near hour 48, not up to a day
+    # late; the claiming executor keeps each firing to one replica.
+    scheduler.add_job(
+        _send_day2_nudges,
+        trigger=CronTrigger(minute=17, timezone="UTC"),
+        id="day2_nudge",
+        executor=BULK_EXECUTOR,
+        name="Day-2 nudge for workspaces with no standup",
+        replace_existing=True,
+    )
+
     # Profiles of people who left the workspace more than 30 days ago are
     # deleted. Every pod schedules this; the advisory lock inside the purge
     # lets exactly one of them do the work.
@@ -2122,6 +2134,16 @@ def _alert_on_job_problem(event) -> None:  # noqa: ANN001
         notify(text)
     except Exception:
         logger.exception("Could not alert on scheduler event for %s", getattr(event, "job_id", "?"))
+
+
+def _send_day2_nudges() -> None:
+    """Hourly: one DM to installers two days in with no standup."""
+    try:
+        from src.core.activation import send_day2_nudges  # noqa: PLC0415
+
+        send_day2_nudges()
+    except Exception:
+        logger.exception("Day-2 nudge failed")
 
 
 def _refresh_workspace_history() -> None:

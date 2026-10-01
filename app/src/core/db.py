@@ -2890,17 +2890,42 @@ def install_email_sent(team_id: str, kind: str) -> bool:
             return cur.fetchone() is not None
 
 
-def record_install_email(team_id: str, kind: str, to_email: str = "") -> None:
-    """Remember that this workspace has had this message, so it cannot go twice."""
+def record_install_email(team_id: str, kind: str, to_email: str = "") -> bool:
+    """Remember that this workspace has had this message, so it cannot go twice.
+
+    True when this call wrote the record, False when it was already there, so
+    a caller that records before sending can tell whether it should send.
+    """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO install_emails (team_id, kind, to_email) VALUES (%s, %s, %s)
-                ON CONFLICT (team_id, kind) DO NOTHING
+                ON CONFLICT (team_id, kind) DO NOTHING RETURNING 1
                 """,
                 (team_id, kind, to_email or None),
             )
+            return cur.fetchone() is not None
+
+
+def workspaces_without_standup(hours: int) -> list[dict]:
+    """Live installs older than `hours` and under two weeks old, with no standup
+    at all (a quick start one waiting for its invite counts as started), whose
+    installer has not had the day-2 nudge."""
+    sql = """
+        SELECT i.team_id, i.bot_token, i.installed_by_user_id
+        FROM installations i
+        WHERE i.active
+          AND i.purged_at IS NULL
+          AND i.installed_at < NOW() - make_interval(hours => %s)
+          AND i.installed_at > NOW() - INTERVAL '14 days'
+          AND NOT EXISTS (SELECT 1 FROM standup_schedules s WHERE s.team_id = i.team_id)
+          AND NOT EXISTS (SELECT 1 FROM install_emails e WHERE e.team_id = i.team_id AND e.kind = 'nudge:day2')
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (hours,))
+            return [dict(r) for r in cur.fetchall()]
 
 
 def workspaces_awaiting_followup(days: int = 7) -> list[dict]:
