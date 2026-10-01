@@ -73,6 +73,9 @@ def test_bot_not_in_channel_saves_it_waiting_and_explains_the_invite():
     assert kwargs["participants"] == []
     text = client.chat_postMessage.call_args.kwargs["text"]
     assert "/invite @Morgenruf" in text and "<#C1>" in text
+    # Typing the command and pressing Enter can open Slack's command menu instead
+    # of running it, so the DM also names the menu path that always works.
+    assert "Add agents and apps" in text
     assert "09:30 Europe/Berlin" in text
 
 
