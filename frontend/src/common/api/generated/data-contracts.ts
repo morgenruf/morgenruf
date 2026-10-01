@@ -345,6 +345,10 @@ export interface GetLeaderboardParams {
 
 export type GetMyProfileError = ApiError;
 
+export type GetPulseSettingsError = ApiError;
+
+export type GetPulseTrendError = ApiError;
+
 export type GetReportsError = ApiError;
 
 export interface GetReportsParams {
@@ -898,6 +902,59 @@ export interface PublicFeedResponse {
   yesterday: string | null;
 }
 
+export interface PulseRound {
+  enps?: number | null;
+  hidden: boolean;
+  includes_enps?: boolean;
+  invited: number;
+  mood_avg?: number | null;
+  mood_dist?: number[] | null;
+  needed?: number;
+  respondents: number;
+  /** @format date */
+  sent_on: string;
+}
+
+export interface PulseSettings {
+  audience_channel_id: string | null;
+  day_of_week: number;
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  timezone: string;
+  /** @format date-time */
+  updated_at: string | null;
+}
+
+export interface PulseSettingsInput {
+  /**
+   * @maxLength 40
+   * @default ""
+   */
+  audience_channel_id?: string | null;
+  /**
+   * @min 0
+   * @max 6
+   */
+  day_of_week: number;
+  enabled: boolean;
+  /**
+   * @min 0
+   * @max 23
+   */
+  hour: number;
+  /**
+   * @min 0
+   * @max 59
+   */
+  minute: number;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  timezone: string;
+}
+
 export interface ReportParticipation {
   completed: number;
   completion_rate: number;
@@ -1209,6 +1266,8 @@ export interface UpdateProgramParams {
   /** @min 0 */
   programId: number;
 }
+
+export type UpdatePulseSettingsError = ApiError;
 
 export type UpdateStandupError = ApiError;
 

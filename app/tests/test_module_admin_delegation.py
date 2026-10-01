@@ -233,7 +233,7 @@ class TestOnlyDelegableFeaturesAreOffered:
         from src.modules import REGISTRY
 
         delegable = {s.name for s in REGISTRY if getattr(s, "delegable", False)}
-        assert delegable == {"standup", "connect", "kudos", "polls", "celebrations"}, delegable
+        assert delegable == {"standup", "connect", "kudos", "polls", "pulse", "celebrations"}, delegable
 
     def test_every_delegable_module_has_a_route_that_names_it(self):
         """The flag and the decorators have to agree, or the page offers a

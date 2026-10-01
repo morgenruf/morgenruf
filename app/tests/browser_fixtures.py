@@ -140,6 +140,32 @@ class BrowserData:
                 "closed_at": self.now - timedelta(hours=1),
             },
         ]
+        self.pulse_program = {
+            "team_id": self.team_id,
+            "enabled": True,
+            "day_of_week": 4,
+            "hour": 14,
+            "minute": 0,
+            "timezone": "UTC",
+            "audience_channel_id": None,
+            "updated_by": "U_ADMIN",
+            "updated_at": self.now,
+        }
+        # As pulse.db.trend returns it: a round under five keeps only its counts.
+        self.pulse_trend = [
+            {"sent_on": self.today - timedelta(days=14), "respondents": 3, "invited": 9, "hidden": True, "needed": 5},
+            {
+                "round_id": 2,
+                "sent_on": self.today - timedelta(days=7),
+                "includes_enps": True,
+                "respondents": 7,
+                "invited": 9,
+                "hidden": False,
+                "mood_avg": 3.71,
+                "mood_dist": [0, 1, 2, 2, 2],
+                "enps": 14,
+            },
+        ]
         # option index to voter keys; anonymous keys are opaque, as in the database
         self.poll_votes = {
             1: {0: ["U_ADMIN", "U_LEAD"], 2: ["U_MEMBER"]},
@@ -491,6 +517,7 @@ def create_test_app(patcher=None):
     import src.modules.insights.db as insights_db
     import src.modules.kudos.db as kudos_db
     import src.modules.polls.db as polls_db
+    import src.modules.pulse.db as pulse_db
     import src.modules.standup.ai_summary as ai_summary
     import src.modules.standup.handlers as handlers
     import src.modules.standup.workflow as workflow
@@ -701,6 +728,16 @@ def create_test_app(patcher=None):
             "tally": lambda poll_id: state.poll_counts(poll_id),
             "voters": lambda poll_id: state.poll_voters(poll_id),
             "close_poll": lambda poll_id: state.close_poll(poll_id),
+        },
+    )
+    install(
+        pulse_db,
+        {
+            "get_program": lambda team: deepcopy(state.pulse_program),
+            "save_program": lambda team, fields, updated_by: (
+                state.pulse_program.update(fields, updated_by=updated_by) or deepcopy(state.pulse_program)
+            ),
+            "trend": lambda team, limit=12: deepcopy(state.pulse_trend),
         },
     )
     install(

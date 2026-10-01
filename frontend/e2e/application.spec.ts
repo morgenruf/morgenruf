@@ -80,6 +80,7 @@ test('every migrated feature renders against the Flask contract', async ({
     ['connect', 'Coffee chats'],
     ['kudos', 'Kudos'],
     ['polls', 'Polls'],
+    ['pulse', 'Pulse'],
     ['celebrations', 'Celebrations'],
     ['members', 'Members'],
     ['insights', 'Insights'],

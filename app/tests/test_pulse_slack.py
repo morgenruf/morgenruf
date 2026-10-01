@@ -370,7 +370,7 @@ class TestModule:
         from src.modules.pulse import MODULE
 
         assert MODULE.name == "pulse" and MODULE.required_scopes == ()
-        assert MODULE.default_enabled is False
+        assert MODULE.default_enabled is False and MODULE.delegable
         assert "pulse" in MODULE.slash_subcommands
         names = [s.name for s in REGISTRY]
         assert names.index("pulse") == names.index("polls") + 1

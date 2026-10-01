@@ -36,6 +36,7 @@ for (const [path, endpoint, label] of [
   ['members', 'members', 'Loading members…'],
   ['kudos', 'kudos/leaderboard', 'Loading leaderboard…'],
   ['polls', 'polls', 'Loading polls…'],
+  ['pulse', 'pulse/trend', 'Loading pulse…'],
   ['celebrations', 'celebrations/settings', 'Loading celebrations…'],
   ['settings', 'standups', 'Loading standup settings…'],
   ['automation', 'rules', 'Loading automation…'],

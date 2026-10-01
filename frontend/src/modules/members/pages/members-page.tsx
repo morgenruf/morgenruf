@@ -48,6 +48,7 @@ const moduleLabels: Record<string, string> = {
   connect: 'Coffee chats',
   kudos: 'Kudos',
   polls: 'Polls',
+  pulse: 'Pulse',
   celebrations: 'Celebrations',
   insights: 'Insights',
 };

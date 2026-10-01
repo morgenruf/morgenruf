@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
+from src.modules.pulse.dashboard import register_routes
 from src.modules.pulse.handlers import handle_pulse_command, home_blocks, register_handlers
 from src.modules.pulse.jobs import plan_jobs
 
@@ -22,13 +23,13 @@ MODULE = ModuleSpec(
     required_scopes=(),
     migrations_dir=Path(__file__).parent / "migrations",
     register_slack=register_handlers,
-    register_routes=None,
+    register_routes=register_routes,
     plan_jobs=plan_jobs,
     claim_dm=None,
     purge=None,
     nav=(NavItem(label="Pulse", path="#pulse"),),
     default_enabled=False,
-    delegable=False,
+    delegable=True,
     home_blocks=home_blocks,
     slash_subcommands={"pulse": handle_pulse_command},
     help_lines=("`/morgenruf pulse`: how the anonymous weekly check-in works and whether it is on",),

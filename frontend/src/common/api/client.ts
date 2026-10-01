@@ -11,6 +11,7 @@ import { Members } from './generated/Members';
 import { Polls } from './generated/Polls';
 import { Profile } from './generated/Profile';
 import { Public } from './generated/Public';
+import { Pulse } from './generated/Pulse';
 import { Reports } from './generated/Reports';
 import { Session } from './generated/Session';
 import { Standups } from './generated/Standups';
@@ -120,6 +121,7 @@ export function createApi(options: TransportOptions) {
     connect: new Connect(httpClient),
     kudos: new Kudos(httpClient),
     polls: new Polls(httpClient),
+    pulse: new Pulse(httpClient),
     celebrations: new Celebrations(httpClient),
     insights: new Insights(httpClient),
     public: new Public(httpClient),

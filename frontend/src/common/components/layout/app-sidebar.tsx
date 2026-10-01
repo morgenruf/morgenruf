@@ -9,6 +9,7 @@ import {
   Lightbulb,
   ListChecks,
   LogOut,
+  MessageCircleHeart,
   Plug,
   Settings2,
   Sunrise,
@@ -47,6 +48,7 @@ type DashboardPath =
   | '/dashboard/connect'
   | '/dashboard/kudos'
   | '/dashboard/polls'
+  | '/dashboard/pulse'
   | '/dashboard/celebrations'
   | '/dashboard/members'
   | '/dashboard/insights'
@@ -110,6 +112,13 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: ListChecks,
         color: 'text-emerald-600 dark:text-emerald-400',
         module: 'polls',
+      },
+      {
+        label: 'Pulse',
+        path: '/dashboard/pulse',
+        icon: MessageCircleHeart,
+        color: 'text-pink-500 dark:text-pink-400',
+        module: 'pulse',
       },
       {
         label: 'Celebrations',
