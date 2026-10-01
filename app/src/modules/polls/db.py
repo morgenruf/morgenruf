@@ -174,6 +174,17 @@ def voters(poll_id: int) -> dict[int, list[str]]:
     return result
 
 
+def my_choices(poll_id: int, key: str) -> list[int]:
+    """The options one voter has picked, by their voter_key. For their eyes only."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT option_idx FROM poll_votes WHERE poll_id = %s AND voter_key = %s ORDER BY option_idx",
+                (poll_id, key),
+            )
+            return [int(r[0]) for r in cur.fetchall()]
+
+
 def get_poll(poll_id: int) -> dict | None:
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
