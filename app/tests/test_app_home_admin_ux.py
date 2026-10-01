@@ -45,11 +45,18 @@ def test_member_without_known_admin_gets_a_generic_pointer():
     assert "a workspace admin" in _text(view)
 
 
-def test_standup_admin_gets_create_and_settings():
+def test_standup_admin_in_a_workspace_with_no_standup_gets_the_quick_start_and_settings():
     view = blocks.app_home_view(standups=[], user_id="U1", is_admin=True)
     ids = _action_ids(view)
-    assert "open_create_standup" in ids
+    assert "quickstart:open" in ids
+    assert "open_create_standup" not in ids
     assert "open_configure_mode" in ids
+
+
+def test_standup_admin_outside_existing_standups_gets_the_full_form():
+    other = [{"standup_id": "7", "standup_name": "Team Standup", "channel_id": "C1", "active": True}]
+    view = blocks.app_home_view(standups=[], user_id="U1", is_admin=True, other_standups=other)
+    assert "open_create_standup" in _action_ids(view)
 
 
 def test_edit_after_answering_edits_the_answer():

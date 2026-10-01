@@ -1951,6 +1951,7 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
         "digest_enabled",
         "nudge_missing",
         "nudge_minutes_before",
+        "awaiting_invite_by",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if "questions" in fields and isinstance(fields["questions"], list):
@@ -1969,6 +1970,32 @@ def create_standup_schedule(team_id: str, **kwargs) -> dict:
             cur.execute(sql, [team_id] + list(fields.values()))
             row = cur.fetchone()
     return dict(row)
+
+
+def waiting_standups(team_id: str, channel_id: str) -> list[dict]:
+    """Standups saved from the quick start that wait for the bot to join this channel."""
+    sql = """
+        SELECT id, awaiting_invite_by, schedule_time FROM standup_schedules
+        WHERE team_id = %s AND channel_id = %s AND awaiting_invite_by IS NOT NULL
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, channel_id))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def activate_waiting_standup(schedule_id: int) -> bool:
+    """Switch a waiting standup on. True only for the call that did it, so the
+    creator is told once. updated_at moves, so the scheduler's change poll
+    registers the job."""
+    sql = """
+        UPDATE standup_schedules SET active = TRUE, awaiting_invite_by = NULL, updated_at = NOW()
+        WHERE id = %s AND awaiting_invite_by IS NOT NULL RETURNING 1
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (schedule_id,))
+            return cur.fetchone() is not None
 
 
 def upsert_daily_thread(

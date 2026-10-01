@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from src.core.schedule_validation import DEFAULT_QUESTIONS
 from src.modules.standup.blockers import is_blocker_question, reports_a_blocker
+from src.modules.standup.quickstart import OPEN_ACTION as QUICKSTART_ACTION
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1246,9 +1247,11 @@ def app_home_view(
                         else "*No standups yet.*\nCreate your first standup to get started. It takes a minute."
                     ),
                 },
+                # A workspace with no standup at all gets the two-field quick
+                # start; the full form stays one click away in settings.
                 "accessory": {
                     "type": "button",
-                    "action_id": "open_create_standup",
+                    "action_id": "open_create_standup" if other_standups else QUICKSTART_ACTION,
                     "text": {"type": "plain_text", "text": "➕ Create a standup", "emoji": True},
                     "style": "primary",
                     "value": "create",

@@ -1346,6 +1346,11 @@ def register_handlers(app: App) -> None:
         else:
             handle_app_home({"user": user_id, "team": team_id}, client, body={"team_id": team_id})
 
+    # The quick start: two fields, from the welcome DM or an empty Home tab.
+    from src.modules.standup import quickstart  # noqa: PLC0415
+
+    quickstart.register(app, refresh_home=_refresh_home)
+
     def _publish_configure_view(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Render and publish the configure mode App Home."""
         import src.core.db as db  # noqa: PLC0415
@@ -2006,6 +2011,13 @@ def on_channel_join(event, client):  # noqa: ANN001
 
         user_info = client.users_info(user=user_id).get("user", {})
         if not is_human(user_info):
+            # Morgenruf itself was invited: a quick start standup may be
+            # waiting for exactly this.
+            if user_id == (db.get_installation(team_id) or {}).get("bot_user_id"):
+                from src.modules.standup import quickstart  # noqa: PLC0415
+
+                quickstart.activate_waiting(client, team_id, event.get("channel", ""))
+                return
             # Another bot joined the channel. It can't do a standup and
             # DMing it would fail on every run.
             logger.debug("Ignoring non-human join by %s in %s", user_id, team_id)
