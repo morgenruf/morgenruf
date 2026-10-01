@@ -5,6 +5,44 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.12] - 2026-09-30
+
+### Fixed
+- **Removing the app deletes the workspace's data.** Workspaces whose Slack
+  token stopped working (`account_inactive`, revoked tokens) were marked
+  inactive but kept their members, answers and settings. A daily sweep now
+  deletes that data 24 hours after removal, or 7 days after for
+  `invalid_auth`, which can be a token problem on our side. It runs as a dry
+  run that only logs what it would delete until `PURGE_INACTIVE_WORKSPACES=1`
+  (Helm: `ops.purgeInactiveWorkspaces`).
+- **Uninstall now deletes every table.** Nine tables with a team ID had no
+  cascade and kept data after a normal uninstall, including Zoom tokens,
+  standup threads, away and skip records, workflow rules and assistant keys.
+
+### Added
+- **Workspace history.** One row per workspace with dates and counts only (no
+  names, emails, Slack IDs or message text), refreshed nightly and kept after
+  removal, so it stays possible to see where teams stop during setup.
+
+### Added
+- **Workspace history.** A new `workspace_history` table keeps one row per
+  workspace with counts and dates only: members, standups created, answers,
+  kudos, delivered coffee matches, modules used, days installed. No user IDs,
+  names, addresses or text. A nightly job refreshes it for every installation.
+
+### Fixed
+- **Removed workspaces have their data deleted.** Workspaces Slack reports as
+  `account_inactive` or with a revoked token are purged 24 hours after they
+  are retired, and `invalid_auth` after 7 days, since that can be a token
+  refresh problem a reinstall fixes. A workspace that comes back is never
+  purged. The sweep is a dry run that only logs what it would delete until
+  `PURGE_INACTIVE_WORKSPACES=1` (Helm: `ops.purgeInactiveWorkspaces: true`).
+- **Uninstall deletes everything.** The uninstall events relied on foreign key
+  cascades, which missed Zoom links, standup threads, away and skip days,
+  automation rules, module admins, MCP keys and install email records. The
+  purge now deletes every table explicitly, records history first, and keeps
+  only a bare installation row with its tokens cleared.
+
 ## [1.9.11] - 2026-09-30
 
 ### Security

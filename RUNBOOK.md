@@ -104,6 +104,17 @@ Job ids that appear in alerts and in `scheduler_runs`:
   OAuth callback (`/oauth/callback`) stores the new token and reactivates the
   installation. If Slack sent `tokens_revoked` or `app_uninstalled`, the
   workspace's data was already deleted and the reinstall starts fresh.
+- A retired workspace's data is deleted by the nightly sweep
+  (`inactive_workspace_sweep`, 03:57 UTC): 24 hours after `account_inactive`
+  or a revoked token, 7 days after `invalid_auth` or `not_authed`, never for
+  any other reason. It is a dry run unless `PURGE_INACTIVE_WORKSPACES=1`
+  (Helm `ops.purgeInactiveWorkspaces`); check what it would delete with:
+
+  ```sh
+  kubectl -n $NS logs deploy/morgenruf -c morgenruf --since=24h | grep "Workspace purge"
+  ```
+  After a purge only a bare `installations` row (tokens cleared, `purged_at`
+  set) and the `workspace_history` row remain. A reinstall starts fresh.
 
 ## Database down
 

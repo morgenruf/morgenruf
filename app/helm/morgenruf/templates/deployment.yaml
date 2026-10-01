@@ -120,6 +120,8 @@ spec:
                   key: LOG_LEVEL
             - name: LOG_FORMAT
               value: {{ .Values.ops.logFormat | default "text" | quote }}
+            - name: PURGE_INACTIVE_WORKSPACES
+              value: {{ ternary "1" "0" (.Values.ops.purgeInactiveWorkspaces | default false) | quote }}
             - name: MORGENRUF_OPS_EMAIL
               valueFrom:
                 secretKeyRef:
