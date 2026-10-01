@@ -5,6 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.14] - 2026-10-01
+
+### Added
+- **Polls.** `/morgenruf poll` opens a form, or
+  `/morgenruf poll "Question" "Option 1" "Option 2"` posts one in the current
+  channel. People vote with buttons on the message and the bars update live.
+  Polls can be anonymous, allow more than one choice, hide results until they
+  close, and close on their own. Anonymous votes are stored under a per-poll
+  key that is deleted when the poll closes, so closed votes cannot be tied to
+  anyone. There is a Polls page in the dashboard.
+- **Pulse.** An optional weekly check-in by DM: how work was this week (1 to
+  5), and eNPS every fourth week. Answers are kept only as counts, the list of
+  who answered is deleted when a check-in closes, and results show only after
+  it closes: averages from 5 answers, breakdown and eNPS from 10. Off by
+  default; a workspace admin turns it on from the Pulse page.
+- **Modules can add `/morgenruf` subcommands**, and are told when they are
+  turned off so they can close what they have open.
+
+### Changed
+- The "one step left" DM after a quick start now also names the Slack menu
+  path for adding Morgenruf to a channel, since `/invite` can open a menu.
+
 ## [1.9.13] - 2026-10-01
 
 ### Added
