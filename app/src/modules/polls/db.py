@@ -3,8 +3,10 @@
 A named poll keys each vote by the voter's user id, so the message can show
 who picked what. An anonymous poll keys it by HMAC-SHA256(poll salt, user id):
 while the poll is open that is enough to tell "this person already voted",
-and close_poll clears the salt, after which no one can work out whose vote a
-row is, not even with the database in hand.
+and close_poll deletes the salt, after which no one can work out whose vote a
+row is, not even with the database in hand. The salt has its own table,
+poll_salts, whose data backups leave out, so a restored copy holds no salt
+either.
 """
 
 from __future__ import annotations
@@ -20,9 +22,10 @@ from src.core.db import db_conn
 
 SALT_BYTES = 32
 
-_POLL_COLUMNS = """
-    id, team_id, created_by, channel_id, message_ts, question, options, anonymous,
-    multiple, hide_results, salt, closes_at, closed_at, created_at
+_POLL_SELECT = """
+    SELECT p.id, p.team_id, p.created_by, p.channel_id, p.message_ts, p.question, p.options,
+           p.anonymous, p.multiple, p.hide_results, s.salt, p.closes_at, p.closed_at, p.created_at
+    FROM polls p LEFT JOIN poll_salts s ON s.poll_id = p.id
 """
 
 
@@ -51,8 +54,8 @@ def create_poll(
     salt = os.urandom(SALT_BYTES) if anonymous else None
     sql = """
         INSERT INTO polls (team_id, created_by, channel_id, question, options, anonymous,
-                           multiple, hide_results, salt, closes_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           multiple, hide_results, closes_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """
     params = (
@@ -64,13 +67,15 @@ def create_poll(
         bool(anonymous),
         bool(multiple),
         bool(hide_results),
-        salt,
         closes_at,
     )
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
-            return int(cur.fetchone()[0])
+            poll_id = int(cur.fetchone()[0])
+            if salt is not None:
+                cur.execute("INSERT INTO poll_salts (poll_id, salt) VALUES (%s, %s)", (poll_id, salt))
+            return poll_id
 
 
 def set_message(poll_id: int, message_ts: str) -> None:
@@ -90,7 +95,8 @@ def voter_key(poll: dict, user_id: str) -> str:
     """What a vote by this person is stored under.
 
     The user id on a named poll. On an anonymous poll, an HMAC of it under the
-    poll's salt. An anonymous poll without a salt is closed, and a key for it
+    poll's salt. An anonymous poll without a salt is closed (or was restored
+    from a backup, which leaves salts out), and a key for it
     would be the user id in the clear, so that is refused.
     """
     if not poll.get("anonymous"):
@@ -188,7 +194,7 @@ def my_choices(poll_id: int, key: str) -> list[int]:
 def get_poll(poll_id: int) -> dict | None:
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(f"SELECT {_POLL_COLUMNS} FROM polls WHERE id = %s", (poll_id,))
+            cur.execute(f"{_POLL_SELECT} WHERE p.id = %s", (poll_id,))
             return _row(cur.fetchone())
 
 
@@ -204,7 +210,7 @@ def redraw(poll_id: int, draw) -> bool:  # noqa: ANN001
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"polls:redraw:{poll_id}",))
-            cur.execute(f"SELECT {_POLL_COLUMNS} FROM polls WHERE id = %s", (poll_id,))
+            cur.execute(f"{_POLL_SELECT} WHERE p.id = %s", (poll_id,))
             poll = _row(cur.fetchone())
             if not poll:
                 return False
@@ -224,22 +230,25 @@ def redraw(poll_id: int, draw) -> bool:  # noqa: ANN001
 
 
 def close_poll(poll_id: int) -> bool:
-    """Close an open poll and drop its salt. False when it was already closed."""
+    """Close an open poll and delete its salt, in one transaction. False when it was already closed."""
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE polls SET closed_at = NOW(), salt = NULL WHERE id = %s AND closed_at IS NULL RETURNING 1",
+                "UPDATE polls SET closed_at = NOW() WHERE id = %s AND closed_at IS NULL RETURNING 1",
                 (poll_id,),
             )
-            return cur.fetchone() is not None
+            if cur.fetchone() is None:
+                return False
+            cur.execute("DELETE FROM poll_salts WHERE poll_id = %s", (poll_id,))
+            return True
 
 
 def due_polls(team_id: str) -> list[dict]:
     """Open polls whose closing time has passed."""
     sql = f"""
-        SELECT {_POLL_COLUMNS} FROM polls
-        WHERE team_id = %s AND closed_at IS NULL AND closes_at IS NOT NULL AND closes_at <= NOW()
-        ORDER BY closes_at
+        {_POLL_SELECT}
+        WHERE p.team_id = %s AND p.closed_at IS NULL AND p.closes_at IS NOT NULL AND p.closes_at <= NOW()
+        ORDER BY p.closes_at
     """
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:

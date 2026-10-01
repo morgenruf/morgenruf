@@ -134,6 +134,7 @@ def seed(conn, team: str) -> None:
             answer,
         )
         one("INSERT INTO poll_votes (poll_id, option_idx, voter_key) VALUES (%s, 0, %s)", poll, user)
+        one("INSERT INTO poll_salts (poll_id, salt) VALUES (%s, decode('00', 'hex'))", poll)
         one("INSERT INTO pulse_programs (team_id, enabled) VALUES (%s, TRUE)", team)
         pulse = one(
             "INSERT INTO pulse_rounds (team_id, sent_on, closes_at) VALUES (%s, CURRENT_DATE, NOW()) RETURNING id",
@@ -411,7 +412,13 @@ def test_a_poll_redraw_reads_the_stored_state(pg, monkeypatch):
     poll_id = polls_db.create_poll(team, "U1", "C1", "Q", ["a", "b"], True, False, False, None)
     poll = polls_db.get_poll(poll_id)
     polls_db.toggle_vote(poll_id, 1, polls_db.voter_key(poll, "U2"), False)
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM poll_salts WHERE poll_id = %s", (poll_id,))
+        assert cur.fetchone()[0] == 1
     polls_db.close_poll(poll_id)
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM poll_salts WHERE poll_id = %s", (poll_id,))
+        assert cur.fetchone()[0] == 0
     drawn = []
     assert polls_db.redraw(poll_id, lambda p, counts, names: drawn.append((bool(p["closed_at"]), counts, names)))
     assert drawn == [(True, [0, 1], None)]

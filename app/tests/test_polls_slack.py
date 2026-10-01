@@ -521,6 +521,14 @@ class TestVoting:
         assert world.store.tally(1) == [0, 0]
         assert "turned off" in world.ephemerals[-1]["text"]
 
+    def test_an_open_anonymous_poll_without_its_salt_takes_no_vote(self, world):
+        """Only after a restore: backups leave poll_salts empty on purpose."""
+        submit(world, checks=("anonymous",))
+        world.store.polls[1]["salt"] = None
+        click(world, "polls:vote:1:0")
+        assert world.store.votes == set()
+        assert world.ephemerals[-1]["text"] == "This poll can't take votes any more."
+
     def test_a_vote_for_a_missing_poll(self, world):
         click(world, "polls:vote:99:0")
         assert "This poll is closed." in world.ephemerals[-1]["text"]

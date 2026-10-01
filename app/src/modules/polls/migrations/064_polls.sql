@@ -1,6 +1,8 @@
-/* Polls. Votes on anonymous polls are keyed by HMAC(salt, user_id); the salt
-   is cleared when the poll closes, so closed anonymous votes cannot be tied
-   to anyone. Named polls store the user id so names can be shown.
+/* Polls. Votes on anonymous polls are keyed by HMAC(salt, user_id). The salt
+   lives in poll_salts, apart from the poll, and its row is deleted when the
+   poll closes, so closed anonymous votes cannot be tied to anyone. Backups
+   leave poll_salts' data out, so a restored copy cannot tie open ones either.
+   Named polls store the user id so names can be shown.
 
    Additive only. */
 CREATE TABLE IF NOT EXISTS polls (
@@ -14,12 +16,17 @@ CREATE TABLE IF NOT EXISTS polls (
     anonymous     BOOLEAN NOT NULL DEFAULT FALSE,
     multiple      BOOLEAN NOT NULL DEFAULT FALSE,
     hide_results  BOOLEAN NOT NULL DEFAULT FALSE,
-    salt          BYTEA,
     closes_at     TIMESTAMPTZ,
     closed_at     TIMESTAMPTZ,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS polls_team_open_idx ON polls (team_id) WHERE closed_at IS NULL;
+
+/* The salt of an open anonymous poll. One row per poll, deleted at close. */
+CREATE TABLE IF NOT EXISTS poll_salts (
+    poll_id     BIGINT PRIMARY KEY REFERENCES polls(id) ON DELETE CASCADE,
+    salt        BYTEA NOT NULL
+);
 
 /* One row per person per option they picked. voter_key is the user id on a
    named poll and the HMAC on an anonymous one. */

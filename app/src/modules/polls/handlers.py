@@ -25,6 +25,7 @@ USAGE = (
     "or type `/morgenruf poll` on its own to open the form."
 )
 CLOSED = "This poll is closed."
+NO_SALT = "This poll can't take votes any more."
 TURNED_OFF = "Polls are turned off in this workspace."
 NOT_A_CHANNEL = "Polls go in a channel. Run `/morgenruf poll` in a channel Morgenruf is in, or pick one in the form."
 COULD_NOT_CHECK = "I couldn't check that channel just now. Please try again in a minute."
@@ -358,6 +359,11 @@ def handle_vote(ack, body, client) -> None:  # noqa: ANN001
         return
     if not _module_on(team_id):
         _ephemeral(client, channel_id, user_id, TURNED_OFF)
+        return
+    if poll.get("anonymous") and not poll.get("salt"):
+        # Open but saltless: the database was restored from a backup, which
+        # leaves poll_salts out. Its votes can no longer be keyed.
+        _ephemeral(client, channel_id, user_id, NO_SALT)
         return
     try:
         key = pdb.voter_key(poll, user_id)

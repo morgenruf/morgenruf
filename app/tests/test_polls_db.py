@@ -33,6 +33,17 @@ class TestTheSchema:
         }
         assert columns == {"poll_id", "option_idx", "voter_key"}
 
+    def test_the_salt_lives_in_its_own_table(self):
+        """Backups skip poll_salts' data, so a restored database cannot recompute a voter key."""
+        sql = re.sub(r"/\*.*?\*/", "", MIGRATION.read_text(), flags=re.S)
+        polls = sql[sql.index("CREATE TABLE IF NOT EXISTS polls ") :]
+        polls = polls[: polls.index(");")]
+        assert "salt" not in polls
+        salts = sql[sql.index("CREATE TABLE IF NOT EXISTS poll_salts") :]
+        salts = salts[: salts.index(");")]
+        assert "poll_id     BIGINT PRIMARY KEY REFERENCES polls(id) ON DELETE CASCADE" in salts
+        assert "salt        BYTEA NOT NULL" in salts
+
     def test_polls_belong_to_an_installation(self):
         assert "REFERENCES installations(team_id) ON DELETE CASCADE" in MIGRATION.read_text()
 
@@ -61,29 +72,51 @@ class TestVoterKey:
 
 
 class TestCreate:
-    def test_anonymous_gets_a_fresh_32_byte_salt(self, cur):
+    def test_anonymous_gets_a_fresh_32_byte_salt_in_poll_salts(self, cur):
         cur._fetchone = [(7,), (8,)]
         assert pdb.create_poll("T1", "U1", "C1", "Q?", ["a", "b"], True, False, False, None) == 7
         pdb.create_poll("T1", "U1", "C1", "Q?", ["a", "b"], True, False, False, None)
-        first, second = (params[8] for _, params in cur.calls)
-        assert len(bytes(first)) == 32 and bytes(first) != bytes(second)
+        salts = [params for sql, params in cur.calls if sql.startswith("INSERT INTO poll_salts")]
+        assert [p[0] for p in salts] == [7, 8]
+        first, second = (bytes(p[1]) for p in salts)
+        assert len(first) == 32 and first != second
+        assert all("salt" not in sql for sql, _ in cur.calls if sql.startswith("INSERT INTO polls"))
+
+    def test_the_salt_goes_in_with_the_poll(self, cur, monkeypatch):
+        opened = []
+        real = real_db.db_conn
+
+        def counting():
+            opened.append(1)
+            return real()
+
+        monkeypatch.setattr(pdb, "db_conn", counting)
+        cur._fetchone = [(7,)]
+        pdb.create_poll("T1", "U1", "C1", "Q?", ["a", "b"], True, False, False, None)
+        assert len(opened) == 1
 
     def test_named_has_no_salt(self, cur):
         cur._fetchone = [(7,)]
         pdb.create_poll("T1", "U1", "C1", "Q?", ["a", "b"], False, False, False, None)
-        assert cur.calls[0][1][8] is None
+        assert not any(sql.startswith("INSERT INTO poll_salts") for sql, _ in cur.calls)
+
+    def test_a_poll_is_read_with_its_salt_joined_in(self, cur):
+        pdb.get_poll(5)
+        assert "LEFT JOIN poll_salts" in cur.calls[0][0]
 
 
 class TestClose:
-    def test_close_clears_the_salt_and_only_once(self, cur):
+    def test_close_deletes_the_salt_and_only_once(self, cur):
         cur._fetchone = [(1,)]
         assert pdb.close_poll(5) is True
-        sql, params = cur.calls[0]
-        assert "salt = NULL" in sql and "closed_at = NOW()" in sql
-        assert "closed_at IS NULL" in sql and params == (5,)
+        (update, params), (delete, delete_params) = cur.calls
+        assert "closed_at = NOW()" in update and "closed_at IS NULL" in update and params == (5,)
+        assert "salt" not in update
+        assert delete == "DELETE FROM poll_salts WHERE poll_id = %s" and delete_params == (5,)
 
     def test_close_of_a_closed_poll_says_so(self, cur):
         assert pdb.close_poll(5) is False
+        assert not any("poll_salts" in sql for sql, _ in cur.calls)
 
 
 class TestToggle:
@@ -162,13 +195,15 @@ class TestReads:
 
 
 class TestPurge:
-    def test_votes_go_before_their_polls(self):
+    def test_votes_and_salts_go_before_their_polls(self):
         tables = list(real_db.PURGED_TABLES)
         assert tables.index("poll_votes") < tables.index("polls")
+        assert tables.index("poll_salts") < tables.index("polls")
 
     def test_votes_are_reached_through_their_poll(self):
         steps = dict(real_db._PURGE_STEPS)
         assert steps["poll_votes"] == "poll_id IN (SELECT id FROM polls WHERE team_id = %s)"
+        assert steps["poll_salts"] == "poll_id IN (SELECT id FROM polls WHERE team_id = %s)"
         assert steps["polls"] == "team_id = %s"
 
 
