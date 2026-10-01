@@ -63,6 +63,13 @@ SELF_SERVICE = {
     "/dashboard/api/profile",
 }
 
+# Mutating routes open to whoever owns the thing as well as its feature admins,
+# so the check is in the route rather than a decorator. test_polls_api proves
+# a member who is neither is refused.
+OWNER_OR_ADMIN = {
+    "/dashboard/api/polls/<int:poll_id>/close",
+}
+
 # Every mutating route a member must be refused, with what it would let them do.
 GUARDED = [
     ("POST", "/dashboard/api/feed-token", "publish the team's standups publicly"),
@@ -159,6 +166,8 @@ class TestNoMutatingRouteIsLeftOpen:
                 if path == "/dashboard/api/logout" and "_login_required" in decorators:
                     continue
                 if path in SELF_SERVICE and "_login_required" in decorators:
+                    continue
+                if path in OWNER_OR_ADMIN and "_login_required" in decorators:
                     continue
                 if "_admin_required" not in decorators:
                     out.append(f"{sorted(methods & MUTATING)} {path} ({fn})")

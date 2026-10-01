@@ -101,6 +101,13 @@ export interface Channel {
   name: string;
 }
 
+export type ClosePollError = ApiError;
+
+export interface ClosePollParams {
+  /** @min 0 */
+  pollId: number;
+}
+
 export interface ConnectMatch {
   /** @format date-time */
   agreed_at: string | null;
@@ -338,6 +345,10 @@ export interface GetLeaderboardParams {
 
 export type GetMyProfileError = ApiError;
 
+export type GetPulseSettingsError = ApiError;
+
+export type GetPulseTrendError = ApiError;
+
 export type GetReportsError = ApiError;
 
 export interface GetReportsParams {
@@ -528,6 +539,8 @@ export interface ListParticipationParams {
    */
   rounds?: number;
 }
+
+export type ListPollsError = ApiError;
 
 export type ListProfilesError = ApiError;
 
@@ -763,6 +776,31 @@ export interface PersistentBlocker {
   user_id: string;
 }
 
+export interface Poll {
+  anonymous: boolean;
+  can_close: boolean;
+  channel_id: string;
+  /** @format date-time */
+  closed_at: string | null;
+  /** @format date-time */
+  closes_at: string | null;
+  /** @format date-time */
+  created_at: string;
+  created_by: string;
+  hide_results: boolean;
+  id: number;
+  multiple: boolean;
+  options: PollOption[];
+  question: string;
+  total_votes: number;
+}
+
+export interface PollOption {
+  text: string;
+  voters: string[] | null;
+  votes: number | null;
+}
+
 export type PreviewAskForDatesError = ApiError;
 
 export interface ProfileImportInput {
@@ -862,6 +900,60 @@ export interface PublicFeedResponse {
   user_id: string;
   user_name: string | null;
   yesterday: string | null;
+}
+
+export interface PulseRound {
+  enps?: number | null;
+  hidden: boolean;
+  includes_enps?: boolean;
+  invited: number;
+  mood_avg?: number | null;
+  mood_dist?: number[] | null;
+  needed?: number;
+  open?: boolean;
+  respondents: number;
+  /** @format date */
+  sent_on: string;
+}
+
+export interface PulseSettings {
+  audience_channel_id: string | null;
+  day_of_week: number;
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  timezone: string;
+  /** @format date-time */
+  updated_at: string | null;
+}
+
+export interface PulseSettingsInput {
+  /**
+   * @maxLength 40
+   * @default ""
+   */
+  audience_channel_id?: string | null;
+  /**
+   * @min 0
+   * @max 6
+   */
+  day_of_week: number;
+  enabled: boolean;
+  /**
+   * @min 0
+   * @max 23
+   */
+  hour: number;
+  /**
+   * @min 0
+   * @max 59
+   */
+  minute: number;
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  timezone: string;
 }
 
 export interface ReportParticipation {
@@ -1175,6 +1267,8 @@ export interface UpdateProgramParams {
   /** @min 0 */
   programId: number;
 }
+
+export type UpdatePulseSettingsError = ApiError;
 
 export type UpdateStandupError = ApiError;
 

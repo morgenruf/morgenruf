@@ -26,7 +26,9 @@ import { Route as DashboardAuthenticatedInsightsRouteImport } from './routes/das
 import { Route as DashboardAuthenticatedKudosRouteImport } from './routes/dashboard/_authenticated/kudos'
 import { Route as DashboardAuthenticatedMcpRouteImport } from './routes/dashboard/_authenticated/mcp'
 import { Route as DashboardAuthenticatedMembersRouteImport } from './routes/dashboard/_authenticated/members'
+import { Route as DashboardAuthenticatedPollsRouteImport } from './routes/dashboard/_authenticated/polls'
 import { Route as DashboardAuthenticatedProfileRouteImport } from './routes/dashboard/_authenticated/profile'
+import { Route as DashboardAuthenticatedPulseRouteImport } from './routes/dashboard/_authenticated/pulse'
 import { Route as DashboardAuthenticatedReportsRouteImport } from './routes/dashboard/_authenticated/reports'
 import { Route as DashboardAuthenticatedSettingsRouteImport } from './routes/dashboard/_authenticated/settings'
 import { Route as DashboardAuthenticatedStandupsRouteImport } from './routes/dashboard/_authenticated/standups'
@@ -131,10 +133,22 @@ const DashboardAuthenticatedMembersRoute =
     path: '/members',
     getParentRoute: () => DashboardAuthenticatedRouteRoute,
   } as any)
+const DashboardAuthenticatedPollsRoute =
+  DashboardAuthenticatedPollsRouteImport.update({
+    id: '/polls',
+    path: '/polls',
+    getParentRoute: () => DashboardAuthenticatedRouteRoute,
+  } as any)
 const DashboardAuthenticatedProfileRoute =
   DashboardAuthenticatedProfileRouteImport.update({
     id: '/profile',
     path: '/profile',
+    getParentRoute: () => DashboardAuthenticatedRouteRoute,
+  } as any)
+const DashboardAuthenticatedPulseRoute =
+  DashboardAuthenticatedPulseRouteImport.update({
+    id: '/pulse',
+    path: '/pulse',
     getParentRoute: () => DashboardAuthenticatedRouteRoute,
   } as any)
 const DashboardAuthenticatedReportsRoute =
@@ -208,7 +222,9 @@ export interface FileRoutesByFullPath {
   '/dashboard/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/mcp': typeof DashboardAuthenticatedMcpRoute
   '/dashboard/members': typeof DashboardAuthenticatedMembersRoute
+  '/dashboard/polls': typeof DashboardAuthenticatedPollsRoute
   '/dashboard/profile': typeof DashboardAuthenticatedProfileRoute
+  '/dashboard/pulse': typeof DashboardAuthenticatedPulseRoute
   '/dashboard/reports': typeof DashboardAuthenticatedReportsRoute
   '/dashboard/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/standups': typeof DashboardAuthenticatedStandupsRoute
@@ -235,7 +251,9 @@ export interface FileRoutesByTo {
   '/dashboard/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/mcp': typeof DashboardAuthenticatedMcpRoute
   '/dashboard/members': typeof DashboardAuthenticatedMembersRoute
+  '/dashboard/polls': typeof DashboardAuthenticatedPollsRoute
   '/dashboard/profile': typeof DashboardAuthenticatedProfileRoute
+  '/dashboard/pulse': typeof DashboardAuthenticatedPulseRoute
   '/dashboard/reports': typeof DashboardAuthenticatedReportsRoute
   '/dashboard/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/standups': typeof DashboardAuthenticatedStandupsRoute
@@ -264,7 +282,9 @@ export interface FileRoutesById {
   '/dashboard/_authenticated/kudos': typeof DashboardAuthenticatedKudosRoute
   '/dashboard/_authenticated/mcp': typeof DashboardAuthenticatedMcpRoute
   '/dashboard/_authenticated/members': typeof DashboardAuthenticatedMembersRoute
+  '/dashboard/_authenticated/polls': typeof DashboardAuthenticatedPollsRoute
   '/dashboard/_authenticated/profile': typeof DashboardAuthenticatedProfileRoute
+  '/dashboard/_authenticated/pulse': typeof DashboardAuthenticatedPulseRoute
   '/dashboard/_authenticated/reports': typeof DashboardAuthenticatedReportsRoute
   '/dashboard/_authenticated/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/_authenticated/standups': typeof DashboardAuthenticatedStandupsRoute
@@ -294,7 +314,9 @@ export interface FileRouteTypes {
     | '/dashboard/kudos'
     | '/dashboard/mcp'
     | '/dashboard/members'
+    | '/dashboard/polls'
     | '/dashboard/profile'
+    | '/dashboard/pulse'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/standups'
@@ -321,7 +343,9 @@ export interface FileRouteTypes {
     | '/dashboard/kudos'
     | '/dashboard/mcp'
     | '/dashboard/members'
+    | '/dashboard/polls'
     | '/dashboard/profile'
+    | '/dashboard/pulse'
     | '/dashboard/reports'
     | '/dashboard/settings'
     | '/dashboard/standups'
@@ -349,7 +373,9 @@ export interface FileRouteTypes {
     | '/dashboard/_authenticated/kudos'
     | '/dashboard/_authenticated/mcp'
     | '/dashboard/_authenticated/members'
+    | '/dashboard/_authenticated/polls'
     | '/dashboard/_authenticated/profile'
+    | '/dashboard/_authenticated/pulse'
     | '/dashboard/_authenticated/reports'
     | '/dashboard/_authenticated/settings'
     | '/dashboard/_authenticated/standups'
@@ -492,11 +518,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAuthenticatedMembersRouteImport
       parentRoute: typeof DashboardAuthenticatedRouteRoute
     }
+    '/dashboard/_authenticated/polls': {
+      id: '/dashboard/_authenticated/polls'
+      path: '/polls'
+      fullPath: '/dashboard/polls'
+      preLoaderRoute: typeof DashboardAuthenticatedPollsRouteImport
+      parentRoute: typeof DashboardAuthenticatedRouteRoute
+    }
     '/dashboard/_authenticated/profile': {
       id: '/dashboard/_authenticated/profile'
       path: '/profile'
       fullPath: '/dashboard/profile'
       preLoaderRoute: typeof DashboardAuthenticatedProfileRouteImport
+      parentRoute: typeof DashboardAuthenticatedRouteRoute
+    }
+    '/dashboard/_authenticated/pulse': {
+      id: '/dashboard/_authenticated/pulse'
+      path: '/pulse'
+      fullPath: '/dashboard/pulse'
+      preLoaderRoute: typeof DashboardAuthenticatedPulseRouteImport
       parentRoute: typeof DashboardAuthenticatedRouteRoute
     }
     '/dashboard/_authenticated/reports': {
@@ -598,7 +638,9 @@ interface DashboardAuthenticatedRouteRouteChildren {
   DashboardAuthenticatedKudosRoute: typeof DashboardAuthenticatedKudosRoute
   DashboardAuthenticatedMcpRoute: typeof DashboardAuthenticatedMcpRoute
   DashboardAuthenticatedMembersRoute: typeof DashboardAuthenticatedMembersRoute
+  DashboardAuthenticatedPollsRoute: typeof DashboardAuthenticatedPollsRoute
   DashboardAuthenticatedProfileRoute: typeof DashboardAuthenticatedProfileRoute
+  DashboardAuthenticatedPulseRoute: typeof DashboardAuthenticatedPulseRoute
   DashboardAuthenticatedReportsRoute: typeof DashboardAuthenticatedReportsRoute
   DashboardAuthenticatedSettingsRoute: typeof DashboardAuthenticatedSettingsRoute
   DashboardAuthenticatedStandupsRoute: typeof DashboardAuthenticatedStandupsRoute
@@ -620,7 +662,9 @@ const DashboardAuthenticatedRouteRouteChildren: DashboardAuthenticatedRouteRoute
     DashboardAuthenticatedKudosRoute: DashboardAuthenticatedKudosRoute,
     DashboardAuthenticatedMcpRoute: DashboardAuthenticatedMcpRoute,
     DashboardAuthenticatedMembersRoute: DashboardAuthenticatedMembersRoute,
+    DashboardAuthenticatedPollsRoute: DashboardAuthenticatedPollsRoute,
     DashboardAuthenticatedProfileRoute: DashboardAuthenticatedProfileRoute,
+    DashboardAuthenticatedPulseRoute: DashboardAuthenticatedPulseRoute,
     DashboardAuthenticatedReportsRoute: DashboardAuthenticatedReportsRoute,
     DashboardAuthenticatedSettingsRoute: DashboardAuthenticatedSettingsRoute,
     DashboardAuthenticatedStandupsRoute: DashboardAuthenticatedStandupsRoute,

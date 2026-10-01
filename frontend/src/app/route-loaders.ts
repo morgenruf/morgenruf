@@ -31,6 +31,11 @@ import {
   kudosReceiversOptions,
 } from '@/modules/kudos/queries';
 import { mcpKeysOptions } from '@/modules/mcp/queries';
+import { pollsOptions } from '@/modules/polls/queries';
+import {
+  pulseSettingsOptions,
+  pulseTrendOptions,
+} from '@/modules/pulse/queries';
 import { reportsOptions } from '@/modules/reports/queries';
 import { standupTemplatesOptions } from '@/modules/standups/queries';
 import { todayOptions } from '@/modules/today/queries';
@@ -260,6 +265,19 @@ export function prefetchDashboard(
       void client.query(kudosConfigOptions(services, team)).catch(noop);
       channels();
       directory();
+      break;
+
+    case 'polls':
+      void client.query(pollsOptions(services, team)).catch(noop);
+      channels();
+      directory();
+      break;
+
+    case 'pulse':
+      void client.query(pulseSettingsOptions(services, team)).catch(noop);
+      void client.query(pulseTrendOptions(services, team)).catch(noop);
+      void client.query(modulesOptions(services, team)).catch(noop);
+      channels();
       break;
 
     case 'celebrations': {

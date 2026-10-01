@@ -2485,6 +2485,8 @@ def verify_mcp_key(key: str) -> str | None:
 # foreign key is not ON DELETE CASCADE (standups before standup_schedules,
 # rematch requests before matches). connect_pair_history has no team_id, only
 # pairs of user IDs keyed by programme, so it is reached through its programme.
+# poll_votes, poll_salts and the pulse tally, respondent and invite rows are reached
+# through their poll or round the same way.
 #
 # A test reads every migration and fails when a table with a team_id is on
 # neither this list nor KEPT_TABLES, so a new table has to be decided on.
@@ -2503,6 +2505,14 @@ _PURGE_STEPS: tuple[tuple[str, str], ...] = (
     ("connect_zoom_links", "team_id = %s"),
     ("celebration_posts", "team_id = %s"),
     ("celebration_settings", "team_id = %s"),
+    ("pulse_tallies", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
+    ("pulse_respondents", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
+    ("pulse_invites", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
+    ("pulse_rounds", "team_id = %s"),
+    ("pulse_programs", "team_id = %s"),
+    ("poll_votes", "poll_id IN (SELECT id FROM polls WHERE team_id = %s)"),
+    ("poll_salts", "poll_id IN (SELECT id FROM polls WHERE team_id = %s)"),
+    ("polls", "team_id = %s"),
     ("kudos", "team_id = %s"),
     ("kudos_config", "team_id = %s"),
     ("daily_standup_threads", "team_id = %s"),
@@ -2538,19 +2548,21 @@ _HISTORY_SQL = """
     INSERT INTO workspace_history (
         team_id, team_name, installed_at, removed_at, removal_reason, install_source,
         members_count, standups_created, standup_answers, first_answer_at,
-        last_activity_at, kudos_count, coffee_rounds, modules_used,
-        days_installed, updated_at)
+        last_activity_at, kudos_count, coffee_rounds, polls_created, pulse_rounds,
+        modules_used, days_installed, updated_at)
     SELECT i.team_id, i.team_name, i.installed_at,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_at END,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_reason END,
            i.install_source,
            (SELECT COUNT(*) FROM members m WHERE m.team_id = i.team_id AND m.active),
            sc.n, st.n, st.first_at,
-           GREATEST(st.last_at, k.last_at, c.last_at),
-           k.n, c.n,
+           GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at),
+           k.n, c.n, po.n, pr.n,
            ARRAY_REMOVE(ARRAY[
                CASE WHEN sc.n > 0 OR st.n > 0 THEN 'standup' END,
                CASE WHEN k.n > 0 THEN 'kudos' END,
+               CASE WHEN po.n > 0 THEN 'polls' END,
+               CASE WHEN pr.n > 0 THEN 'pulse' END,
                CASE WHEN c.n > 0 THEN 'connect' END,
                CASE WHEN EXISTS (SELECT 1 FROM celebration_posts p WHERE p.team_id = i.team_id)
                     THEN 'celebrations' END,
@@ -2569,6 +2581,10 @@ _HISTORY_SQL = """
     CROSS JOIN LATERAL (
         SELECT COUNT(*) AS n, MAX(delivered_at) AS last_at
         FROM connect_matches WHERE team_id = i.team_id AND delivered_at IS NOT NULL) c
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM polls WHERE team_id = i.team_id) po
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(sent_on)::timestamptz AS last_at FROM pulse_rounds WHERE team_id = i.team_id) pr
     WHERE {where}
     ON CONFLICT (team_id) DO UPDATE SET
         team_name = EXCLUDED.team_name,
@@ -2583,6 +2599,8 @@ _HISTORY_SQL = """
         last_activity_at = EXCLUDED.last_activity_at,
         kudos_count = EXCLUDED.kudos_count,
         coffee_rounds = EXCLUDED.coffee_rounds,
+        polls_created = EXCLUDED.polls_created,
+        pulse_rounds = EXCLUDED.pulse_rounds,
         modules_used = EXCLUDED.modules_used,
         days_installed = EXCLUDED.days_installed,
         updated_at = NOW()
