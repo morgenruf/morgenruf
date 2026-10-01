@@ -7,6 +7,7 @@ import {
   FileChartColumn,
   HeartHandshake,
   Lightbulb,
+  ListChecks,
   LogOut,
   Plug,
   Settings2,
@@ -45,6 +46,7 @@ type DashboardPath =
   | '/dashboard/standups'
   | '/dashboard/connect'
   | '/dashboard/kudos'
+  | '/dashboard/polls'
   | '/dashboard/celebrations'
   | '/dashboard/members'
   | '/dashboard/insights'
@@ -101,6 +103,13 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: HeartHandshake,
         color: 'text-rose-500 dark:text-rose-400',
         module: 'kudos',
+      },
+      {
+        label: 'Polls',
+        path: '/dashboard/polls',
+        icon: ListChecks,
+        color: 'text-emerald-600 dark:text-emerald-400',
+        module: 'polls',
       },
       {
         label: 'Celebrations',

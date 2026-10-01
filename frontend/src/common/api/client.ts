@@ -8,6 +8,7 @@ import { Insights } from './generated/Insights';
 import { Kudos } from './generated/Kudos';
 import { Mcp } from './generated/Mcp';
 import { Members } from './generated/Members';
+import { Polls } from './generated/Polls';
 import { Profile } from './generated/Profile';
 import { Public } from './generated/Public';
 import { Reports } from './generated/Reports';
@@ -118,6 +119,7 @@ export function createApi(options: TransportOptions) {
     mcp: new Mcp(httpClient),
     connect: new Connect(httpClient),
     kudos: new Kudos(httpClient),
+    polls: new Polls(httpClient),
     celebrations: new Celebrations(httpClient),
     insights: new Insights(httpClient),
     public: new Public(httpClient),

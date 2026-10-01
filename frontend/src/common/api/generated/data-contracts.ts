@@ -101,6 +101,13 @@ export interface Channel {
   name: string;
 }
 
+export type ClosePollError = ApiError;
+
+export interface ClosePollParams {
+  /** @min 0 */
+  pollId: number;
+}
+
 export interface ConnectMatch {
   /** @format date-time */
   agreed_at: string | null;
@@ -529,6 +536,8 @@ export interface ListParticipationParams {
   rounds?: number;
 }
 
+export type ListPollsError = ApiError;
+
 export type ListProfilesError = ApiError;
 
 export type ListProgramMembersError = ApiError;
@@ -761,6 +770,31 @@ export interface PersistentBlocker {
   real_name: string | null;
   text: string;
   user_id: string;
+}
+
+export interface Poll {
+  anonymous: boolean;
+  can_close: boolean;
+  channel_id: string;
+  /** @format date-time */
+  closed_at: string | null;
+  /** @format date-time */
+  closes_at: string | null;
+  /** @format date-time */
+  created_at: string;
+  created_by: string;
+  hide_results: boolean;
+  id: number;
+  multiple: boolean;
+  options: PollOption[];
+  question: string;
+  total_votes: number;
+}
+
+export interface PollOption {
+  text: string;
+  voters: string[] | null;
+  votes: number | null;
 }
 
 export type PreviewAskForDatesError = ApiError;

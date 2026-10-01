@@ -12,6 +12,7 @@ import { InsightsPageSkeleton } from '@/modules/insights/loading';
 import { KudosPageSkeleton } from '@/modules/kudos/loading';
 import { McpPageSkeleton } from '@/modules/mcp/loading';
 import { MembersPageSkeleton } from '@/modules/members/loading';
+import { PollsPageSkeleton } from '@/modules/polls/loading';
 import { ProfilePageSkeleton } from '@/modules/profile/loading';
 import { ReportsPageSkeleton } from '@/modules/reports/loading';
 import { SettingsPageSkeleton } from '@/modules/settings/loading';
@@ -79,6 +80,8 @@ export const dashboardViews = {
   profile: { title: 'My profile', Skeleton: ProfilePageSkeleton },
 
   kudos: { title: 'Kudos', Skeleton: KudosPageSkeleton, module: 'kudos' },
+
+  polls: { title: 'Polls', Skeleton: PollsPageSkeleton, module: 'polls' },
 
   // Reachable while switched off, so HR can set it up before an admin turns
   // it on. The page explains its own state.

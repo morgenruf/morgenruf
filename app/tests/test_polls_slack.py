@@ -530,7 +530,7 @@ class TestModule:
         from src.modules.polls import MODULE
 
         assert MODULE.name == "polls" and MODULE.required_scopes == ()
-        assert MODULE.default_enabled
+        assert MODULE.default_enabled and MODULE.delegable
         assert "poll" in MODULE.slash_subcommands
         names = [s.name for s in REGISTRY]
         assert names.index("polls") == names.index("kudos") + 1

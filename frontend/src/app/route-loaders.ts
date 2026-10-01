@@ -31,6 +31,7 @@ import {
   kudosReceiversOptions,
 } from '@/modules/kudos/queries';
 import { mcpKeysOptions } from '@/modules/mcp/queries';
+import { pollsOptions } from '@/modules/polls/queries';
 import { reportsOptions } from '@/modules/reports/queries';
 import { standupTemplatesOptions } from '@/modules/standups/queries';
 import { todayOptions } from '@/modules/today/queries';
@@ -258,6 +259,12 @@ export function prefetchDashboard(
         .query(kudosGiversOptions(services, team, deps.days ?? 30))
         .catch(noop);
       void client.query(kudosConfigOptions(services, team)).catch(noop);
+      channels();
+      directory();
+      break;
+
+    case 'polls':
+      void client.query(pollsOptions(services, team)).catch(noop);
       channels();
       directory();
       break;

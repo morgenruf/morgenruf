@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
+from src.modules.polls.dashboard import register_routes
 from src.modules.polls.handlers import handle_poll_command, home_blocks, register_handlers
 from src.modules.polls.jobs import plan_jobs
 
@@ -21,13 +22,13 @@ MODULE = ModuleSpec(
     required_scopes=(),
     migrations_dir=Path(__file__).parent / "migrations",
     register_slack=register_handlers,
-    register_routes=None,
+    register_routes=register_routes,
     plan_jobs=plan_jobs,
     claim_dm=None,
     purge=None,
     nav=(NavItem(label="Polls", path="#polls"),),
     default_enabled=True,
-    delegable=False,
+    delegable=True,
     home_blocks=home_blocks,
     slash_subcommands={"poll": handle_poll_command},
     help_lines=(

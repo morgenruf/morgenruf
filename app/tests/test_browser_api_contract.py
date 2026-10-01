@@ -55,6 +55,7 @@ GET_PATHS = [
     "/dashboard/api/kudos/leaderboard",
     "/dashboard/api/kudos/givers",
     "/dashboard/api/kudos/config",
+    "/dashboard/api/polls",
     "/dashboard/api/connect/programs",
     "/dashboard/api/connect/programs/1/rounds",
     "/dashboard/api/connect/rounds/1/matches",
@@ -107,6 +108,7 @@ MUTATIONS = [
     ("DELETE", "/dashboard/api/mcp/keys/1", None),
     ("POST", "/dashboard/api/modules/connect", {"enabled": False}),
     ("POST", "/dashboard/api/kudos/config", {"emoji": "☕", "daily_allowance": 7}),
+    ("POST", "/dashboard/api/polls/2/close", None),
     ("POST", "/dashboard/api/connect/programs", {"channel_id": "C_ENGINEERING", "name": "Design chats"}),
     ("POST", "/dashboard/api/connect/programs/1", {"enabled": False}),
     ("DELETE", "/dashboard/api/connect/programs/1", None),
@@ -324,7 +326,7 @@ print(json.dumps(spec, sort_keys=True))
         for method, operation in path.items()
         if method in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == 69
+    assert len(operations) == 71
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
 

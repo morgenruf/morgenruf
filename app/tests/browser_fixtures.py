@@ -100,6 +100,52 @@ class BrowserData:
             }
         ]
         self.kudos_config = {"emoji": "🍁", "daily_allowance": 5, "token_auto": True, "channel_id": ""}
+        poll = {
+            "team_id": self.team_id,
+            "channel_id": "C_GENERAL",
+            "message_ts": "1700000000.000100",
+            "multiple": False,
+            "closes_at": None,
+            "closed_at": None,
+            "created_at": self.now - timedelta(hours=2),
+        }
+        self.polls = [
+            {
+                **poll,
+                "id": 1,
+                "created_by": "U_MEMBER",
+                "question": "Where should the offsite be?",
+                "options": ["Lisbon", "Berlin", "Online"],
+                "anonymous": False,
+                "hide_results": False,
+                "closes_at": self.now + timedelta(days=1),
+            },
+            {
+                **poll,
+                "id": 2,
+                "created_by": "U_ADMIN",
+                "question": "How was the last sprint?",
+                "options": ["Good", "Okay", "Rough"],
+                "anonymous": True,
+                "hide_results": True,
+            },
+            {
+                **poll,
+                "id": 3,
+                "created_by": "U_LEAD",
+                "question": "Friday demo time?",
+                "options": ["14:00", "16:00"],
+                "anonymous": False,
+                "hide_results": True,
+                "closed_at": self.now - timedelta(hours=1),
+            },
+        ]
+        # option index to voter keys; anonymous keys are opaque, as in the database
+        self.poll_votes = {
+            1: {0: ["U_ADMIN", "U_LEAD"], 2: ["U_MEMBER"]},
+            2: {0: ["a" * 64], 1: ["b" * 64]},
+            3: {1: ["U_ADMIN"]},
+        }
         self.programs = [
             {
                 "id": 1,
@@ -344,6 +390,29 @@ class BrowserData:
         row.update(clean, updated_by=updated_by, updated_at=self.now)
         return deepcopy(row)
 
+    def poll(self, poll_id):
+        return next((p for p in self.polls if p["id"] == poll_id), None)
+
+    def poll_counts(self, poll_id):
+        poll = self.poll(poll_id)
+        votes = self.poll_votes.get(poll_id, {})
+        return [len(votes.get(i, [])) for i in range(len(poll["options"]))] if poll else []
+
+    def list_polls(self, limit=50):
+        return [{**deepcopy(p), "counts": self.poll_counts(p["id"])} for p in self.polls[:limit]]
+
+    def poll_voters(self, poll_id):
+        if self.poll(poll_id)["anonymous"]:
+            raise ValueError("an anonymous poll has no voters to show")
+        return deepcopy(self.poll_votes.get(poll_id, {}))
+
+    def close_poll(self, poll_id):
+        poll = self.poll(poll_id)
+        if not poll or poll["closed_at"]:
+            return False
+        poll["closed_at"] = self.now
+        return True
+
     def holiday_rows(self):
         return [{"date": day, "name": name} for day, name in sorted(self.holidays.items())]
 
@@ -421,6 +490,7 @@ def create_test_app(patcher=None):
     import src.modules.connect.zoom as zoom
     import src.modules.insights.db as insights_db
     import src.modules.kudos.db as kudos_db
+    import src.modules.polls.db as polls_db
     import src.modules.standup.ai_summary as ai_summary
     import src.modules.standup.handlers as handlers
     import src.modules.standup.workflow as workflow
@@ -624,6 +694,16 @@ def create_test_app(patcher=None):
         },
     )
     install(
+        polls_db,
+        {
+            "list_polls": lambda team, limit=50: state.list_polls(limit),
+            "get_poll": lambda poll_id: deepcopy(state.poll(poll_id)),
+            "tally": lambda poll_id: state.poll_counts(poll_id),
+            "voters": lambda poll_id: state.poll_voters(poll_id),
+            "close_poll": lambda poll_id: state.close_poll(poll_id),
+        },
+    )
+    install(
         insights_db,
         {
             "contributor_recognition": lambda team, **kwargs: [
@@ -733,6 +813,9 @@ def create_test_app(patcher=None):
 
         def conversations_info(self, channel):
             return {"channel": next(c for c in state.channels if c["id"] == channel)}
+
+        def chat_update(self, **kwargs):
+            return {"ok": True}
 
     patch(slack_sdk, "WebClient", Slack)
     patch(oauth, "WebClient", Slack)
