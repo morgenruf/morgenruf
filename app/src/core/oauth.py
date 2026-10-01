@@ -215,21 +215,10 @@ def oauth_callback():
     # they press the button (src/core/email_consent.py).
     if is_new_install and authed_user_id:
         try:
-            from src.core.email_consent import offer_blocks  # noqa: PLC0415
-
-            text = (
-                "👋 Morgenruf is installed. Nothing runs until you create a standup: "
-                "open the Home tab and press *Create a standup*. It takes a minute. "
-                "Type `/morgenruf help` to see everything else."
-            )
             bot_client = WebClient(token=bot_token)
             dm = bot_client.conversations_open(users=authed_user_id)
             dm_channel = dm["channel"]["id"]
-            bot_client.chat_postMessage(
-                channel=dm_channel,
-                text=text,
-                blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": text}}, *offer_blocks()],
-            )
+            bot_client.chat_postMessage(channel=dm_channel, text=WELCOME_TEXT, blocks=_welcome_blocks())
         except Exception as exc:
             logger.warning("Could not send welcome DM to %s: %s", authed_user_id, exc)
 
@@ -261,6 +250,24 @@ def oauth_callback():
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+WELCOME_TEXT = (
+    "👋 Morgenruf is installed. Start your team's standup now: pick a channel and a time, that's it. "
+    "Type `/morgenruf help` to see everything else."
+)
+
+
+def _welcome_blocks() -> list[dict]:
+    """The first DM to the installer: the quick start first, then the email offer."""
+    from src.core.email_consent import offer_blocks  # noqa: PLC0415
+    from src.core.quickstart_button import button_block  # noqa: PLC0415
+
+    return [
+        {"type": "section", "text": {"type": "mrkdwn", "text": WELCOME_TEXT}},
+        button_block(),
+        *offer_blocks(),
+    ]
 
 
 def _is_slack_admin(bot_token: str, user_id: str) -> bool:

@@ -11,31 +11,16 @@ from __future__ import annotations
 
 import logging
 
+from src.core.quickstart_button import OPEN_ACTION, button_block
 from src.core.schedule_validation import DEFAULT_QUESTIONS, schedule_time_error, schedule_timezone_error
 
 logger = logging.getLogger(__name__)
 
-OPEN_ACTION = "quickstart:open"
 CALLBACK_ID = "quickstart_modal"
 DEFAULT_TIME = "09:30"
 WEEKDAYS = "mon,tue,wed,thu,fri"
 
-
-def button_block() -> dict:
-    """The "Start a standup" button. Its own block_id, so a message can drop
-    other action blocks (the email offer) and keep this one."""
-    return {
-        "type": "actions",
-        "block_id": "quickstart",
-        "elements": [
-            {
-                "type": "button",
-                "style": "primary",
-                "action_id": OPEN_ACTION,
-                "text": {"type": "plain_text", "text": "Start a standup"},
-            }
-        ],
-    }
+__all__ = ["OPEN_ACTION", "CALLBACK_ID", "button_block", "activate_waiting", "register"]
 
 
 def modal(tz: str) -> dict:

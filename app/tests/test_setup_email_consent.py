@@ -49,7 +49,7 @@ def db():
         yield fake
 
 
-def _click(action_id, user="U_INST", container=None):
+def _click(action_id, user="U_INST", container=None, message=None):
     bolt = FakeBolt()
     _consent_module().register_slack(bolt)
     client = MagicMock()
@@ -57,6 +57,8 @@ def _click(action_id, user="U_INST", container=None):
     body = {"user": {"id": user, "team_id": "T1"}, "team": {"id": "T1"}}
     if container:
         body["container"] = container
+    if message:
+        body["message"] = message
     ack = MagicMock()
     bolt.actions[action_id](ack=ack, body=body, client=client)
     ack.assert_called_once()
@@ -124,6 +126,37 @@ class TestOptingIn:
         update = client.chat_update.call_args.kwargs
         assert update["channel"] == "D1" and update["ts"] == "1.2"
         assert "email:opt_in" not in json.dumps(update["blocks"])
+
+    def test_pressing_the_email_button_keeps_the_quick_start_button(self, db):
+        from src.modules.standup.quickstart import button_block
+
+        offer = _consent_module().offer_blocks()
+        container = {"type": "message", "channel_id": "D1", "message_ts": "1.2"}
+        message = {"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "hi"}}, button_block(), *offer]}
+        with patch("src.core.mailer.send", return_value=True):
+            client = _click("email:opt_in", container=container, message=message)
+        kept = client.chat_update.call_args.kwargs["blocks"]
+        assert any(b.get("block_id") == "quickstart" for b in kept)
+        assert not any(
+            e.get("action_id") == "email:opt_in" for b in kept if b["type"] == "actions" for e in b["elements"]
+        )
+        assert _consent_module().OFFER_TEXT not in json.dumps(kept)
+
+    def test_an_offer_sent_before_it_had_a_block_id_is_still_removed(self, db):
+        """Slack gives a block without an id a random one, so a welcome DM
+        delivered before this release is matched by its button instead."""
+        from src.modules.standup.quickstart import button_block
+
+        old_offer = {
+            "type": "actions",
+            "block_id": "x9Q",
+            "elements": [{"type": "button", "action_id": "email:opt_in"}],
+        }
+        container = {"type": "message", "channel_id": "D1", "message_ts": "1.2"}
+        with patch("src.core.mailer.send", return_value=True):
+            client = _click("email:opt_in", container=container, message={"blocks": [button_block(), old_offer]})
+        kept = client.chat_update.call_args.kwargs["blocks"]
+        assert [b.get("block_id") for b in kept if b["type"] == "actions"] == ["quickstart"]
 
 
 class TestOptingOut:
