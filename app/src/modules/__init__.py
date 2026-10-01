@@ -17,6 +17,7 @@ from src.modules.insights import MODULE as INSIGHTS
 from src.modules.kudos import MODULE as KUDOS
 from src.modules.mcp import MODULE as MCP
 from src.modules.polls import MODULE as POLLS
+from src.modules.pulse import MODULE as PULSE
 from src.modules.standup import MODULE as STANDUP
 
-REGISTRY = (STANDUP, KUDOS, POLLS, CONNECT, CELEBRATIONS, INSIGHTS, MCP, GOOGLE_CHAT)
+REGISTRY = (STANDUP, KUDOS, POLLS, PULSE, CONNECT, CELEBRATIONS, INSIGHTS, MCP, GOOGLE_CHAT)
