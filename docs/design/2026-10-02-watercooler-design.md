@@ -134,9 +134,10 @@ Pool for a channel = built-ins in the channel's categories, minus hidden ones
 If the pool is empty (for example `custom` with no custom questions), skip the
 post and DM the channel's owner once, pointing at the dashboard.
 
-A cycle begins at the oldest post after the last moment every pool question had
-been used. Simpler in practice: walk this channel's posts newest first,
-collecting refs until one repeats or the pool is covered; those are "used".
+"Used in this cycle" is computed by walking the channel's posts newest first
+and collecting refs that are still in the pool, stopping at the first repeat or
+once every pool question is collected. No cycle counter is stored, so editing
+the pool (hiding, archiving, adding) never needs a reset.
 
 ## Posting
 
