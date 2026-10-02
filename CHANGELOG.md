@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.19] - 2026-10-02
+
 ### Added
 - **Watercooler.** A conversation question posted to a channel on the days and
   at the time you pick, skipping company holidays and days off; people reply
