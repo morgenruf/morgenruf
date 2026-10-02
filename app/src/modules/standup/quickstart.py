@@ -24,7 +24,52 @@ WEEKDAYS = "mon,tue,wed,thu,fri"
 __all__ = ["OPEN_ACTION", "CALLBACK_ID", "button_block", "activate_waiting", "register"]
 
 
-def modal(tz: str) -> dict:
+def quick_start_offers(team_id: str) -> list[tuple[str, str, object]]:
+    """(module name, label, start) for every module offering a quick start extra here.
+
+    Read from the registry, so this module never imports another by name. A
+    module is offered when this deployment and installation permit it, even
+    if the workspace has not switched it on yet: ticking the box is how they
+    switch it on.
+    """
+    try:
+        import src.core.db as db  # noqa: PLC0415
+        from src.core.modules import deploy_allowlist, is_active  # noqa: PLC0415
+        from src.modules import REGISTRY  # noqa: PLC0415
+
+        granted = db.granted_scopes(team_id)
+        allowlist = deploy_allowlist()
+        return [
+            (spec.name, spec.quick_start[0], spec.quick_start[1])
+            for spec in REGISTRY
+            if spec.quick_start and is_active(spec, granted, True, allowlist)
+        ]
+    except Exception as exc:
+        logger.info("quickstart: no extras for %s: %s", team_id, exc)
+        return []
+
+
+def _extras_block(offers: list) -> list[dict]:
+    if not offers:
+        return []
+    options = [{"text": {"type": "plain_text", "text": label}, "value": name} for name, label, _ in offers]
+    return [
+        {
+            "type": "input",
+            "block_id": "extras",
+            "optional": True,
+            "label": {"type": "plain_text", "text": "Also"},
+            "element": {
+                "type": "checkboxes",
+                "action_id": "extras",
+                "options": options,
+                "initial_options": options,
+            },
+        }
+    ]
+
+
+def modal(tz: str, offers: list | None = None) -> dict:
     return {
         "type": "modal",
         "callback_id": CALLBACK_ID,
@@ -61,6 +106,7 @@ def modal(tz: str) -> dict:
                     }
                 ],
             },
+            *_extras_block(offers or []),
         ],
     }
 
@@ -100,7 +146,8 @@ def handle_open(ack, body, client) -> None:
 
         _refuse_standup_change(client, user_id)
         return
-    client.views_open(trigger_id=body["trigger_id"], view=modal(_user_tz(client, user_id)))
+    team_id = _team_id(body)
+    client.views_open(trigger_id=body["trigger_id"], view=modal(_user_tz(client, user_id), quick_start_offers(team_id)))
 
 
 def _channel_error(channel_id: str | None) -> str | None:
@@ -125,6 +172,7 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
     values = view["state"]["values"]
     channel_id = (values.get("channel", {}).get("channel") or {}).get("selected_conversation")
     time = (values.get("time", {}).get("time") or {}).get("selected_time") or DEFAULT_TIME
+    extras = {o["value"] for o in (values.get("extras", {}).get("extras") or {}).get("selected_options") or []}
     user_id = body["user"]["id"]
     team_id = _team_id(body)
     channel_error = _channel_error(channel_id)
@@ -195,6 +243,13 @@ def handle_submit(ack, body, view, client, on_saved=None) -> None:
             "*Add agents and apps to this channel* and press *Add* next to Morgenruf. "
             "The standup switches on the moment I'm in, and I'll tell you here."
         )
+    for name, _label, start in quick_start_offers(team_id) if extras else []:
+        if name not in extras:
+            continue
+        try:
+            start(team_id, channel_id, user_id, tz)
+        except Exception as exc:
+            logger.warning("quickstart: %s did not start for %s: %s", name, team_id, exc)
     try:
         client.chat_postMessage(channel=user_id, text=text)
     except Exception as exc:

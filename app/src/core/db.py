@@ -2504,6 +2504,10 @@ _PURGE_STEPS: tuple[tuple[str, str], ...] = (
     ("connect_programs", "team_id = %s"),
     ("connect_zoom_links", "team_id = %s"),
     ("celebration_posts", "team_id = %s"),
+    ("watercooler_posts", "team_id = %s"),
+    ("watercooler_hidden", "team_id = %s"),
+    ("watercooler_questions", "team_id = %s"),
+    ("watercooler_channels", "team_id = %s"),
     ("celebration_settings", "team_id = %s"),
     ("pulse_tallies", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
     ("pulse_respondents", "round_id IN (SELECT id FROM pulse_rounds WHERE team_id = %s)"),
@@ -2550,21 +2554,22 @@ _HISTORY_SQL = """
         team_id, team_name, installed_at, removed_at, removal_reason, install_source,
         members_count, standups_created, standup_answers, first_answer_at,
         last_activity_at, kudos_count, coffee_rounds, polls_created, pulse_rounds,
-        modules_used, days_installed, updated_at)
+        watercooler_posts, modules_used, days_installed, updated_at)
     SELECT i.team_id, i.team_name, i.installed_at,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_at END,
            CASE WHEN i.active THEN NULL ELSE i.deactivated_reason END,
            i.install_source,
            (SELECT COUNT(*) FROM members m WHERE m.team_id = i.team_id AND m.active),
            sc.n, st.n, st.first_at,
-           GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at),
-           k.n, c.n, po.n, pr.n,
+           GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at, wc.last_at),
+           k.n, c.n, po.n, pr.n, wc.n,
            ARRAY_REMOVE(ARRAY[
                CASE WHEN sc.n > 0 OR st.n > 0 THEN 'standup' END,
                CASE WHEN k.n > 0 THEN 'kudos' END,
                CASE WHEN po.n > 0 THEN 'polls' END,
                CASE WHEN pr.n > 0 THEN 'pulse' END,
                CASE WHEN c.n > 0 THEN 'connect' END,
+               CASE WHEN wc.n > 0 THEN 'watercooler' END,
                CASE WHEN EXISTS (SELECT 1 FROM celebration_posts p WHERE p.team_id = i.team_id)
                     THEN 'celebrations' END,
                CASE WHEN EXISTS (SELECT 1 FROM mcp_api_keys a WHERE a.team_id = i.team_id) THEN 'mcp' END
@@ -2586,6 +2591,9 @@ _HISTORY_SQL = """
         SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM polls WHERE team_id = i.team_id) po
     CROSS JOIN LATERAL (
         SELECT COUNT(*) AS n, MAX(sent_on)::timestamptz AS last_at FROM pulse_rounds WHERE team_id = i.team_id) pr
+    CROSS JOIN LATERAL (
+        SELECT COUNT(*) AS n, MAX(created_at) AS last_at
+        FROM watercooler_posts WHERE team_id = i.team_id AND ts IS NOT NULL) wc
     WHERE {where}
     ON CONFLICT (team_id) DO UPDATE SET
         team_name = EXCLUDED.team_name,
@@ -2602,6 +2610,7 @@ _HISTORY_SQL = """
         coffee_rounds = EXCLUDED.coffee_rounds,
         polls_created = EXCLUDED.polls_created,
         pulse_rounds = EXCLUDED.pulse_rounds,
+        watercooler_posts = EXCLUDED.watercooler_posts,
         modules_used = EXCLUDED.modules_used,
         days_installed = EXCLUDED.days_installed,
         updated_at = NOW()
@@ -2774,6 +2783,7 @@ def usage_report_rows() -> list[dict]:
                p.n AS people_7d,
                st.n AS answers_7d,
                k.n AS kudos_7d,
+               wc.n AS watercooler_7d,
                EXISTS (SELECT 1 FROM standup_schedules s WHERE s.team_id = i.team_id) AS has_standup,
                i.installed_at > NOW() - INTERVAL '7 days' AS installed_this_week,
                (NOT i.active AND COALESCE(i.deactivated_at, h.removed_at) > NOW() - INTERVAL '7 days')
@@ -2791,6 +2801,10 @@ def usage_report_rows() -> list[dict]:
             SELECT COUNT(*) AS n FROM kudos
             WHERE team_id = i.team_id AND created_at > NOW() - INTERVAL '7 days') k
         CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS n FROM watercooler_posts
+            WHERE team_id = i.team_id AND ts IS NOT NULL
+              AND created_at > NOW() - INTERVAL '7 days') wc
+        CROSS JOIN LATERAL (
             SELECT COUNT(*) AS n FROM (
                 SELECT user_id FROM standups
                 WHERE team_id = i.team_id AND submitted_at > NOW() - INTERVAL '7 days'
@@ -2800,7 +2814,7 @@ def usage_report_rows() -> list[dict]:
         WHERE i.active OR COALESCE(i.deactivated_at, h.removed_at) > NOW() - INTERVAL '7 days'
         UNION ALL
         SELECT h.team_id, h.team_name, FALSE, h.installed_at, h.removed_at, h.install_source,
-               0, 0, 0, FALSE, h.installed_at > NOW() - INTERVAL '7 days', TRUE, FALSE, FALSE
+               0, 0, 0, 0, FALSE, h.installed_at > NOW() - INTERVAL '7 days', TRUE, FALSE, FALSE
         FROM workspace_history h
         WHERE h.removed_at > NOW() - INTERVAL '7 days'
           AND NOT EXISTS (SELECT 1 FROM installations i WHERE i.team_id = h.team_id)

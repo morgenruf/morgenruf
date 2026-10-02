@@ -255,7 +255,24 @@ class BrowserData:
                 "created_at": self.now,
             }
         ]
-        self.module_settings = {"standup": True, "connect": True, "kudos": True, "insights": True}
+        self.module_settings = {"standup": True, "connect": True, "kudos": True, "insights": True, "watercooler": True}
+        self.watercooler_channels = {
+            "C_GENERAL": {
+                "channel_id": "C_GENERAL",
+                "days": "mon,wed,fri",
+                "post_time": "10:00",
+                "timezone": "UTC",
+                "source": "both",
+                "categories": "light,work,remote,this_or_that",
+                "active": True,
+                "paused_reason": None,
+                "created_by": "U_ADMIN",
+            }
+        }
+        self.watercooler_questions = [
+            {"id": 1, "text": "What did you build this week?", "archived": False, "created_by": "U_ADMIN"}
+        ]
+        self.watercooler_hidden: set[str] = set()
         self.profiles = {
             "U_LEAD": {
                 "team_id": self.team_id,
@@ -457,6 +474,44 @@ class BrowserData:
             self.holidays[row["date"]] = row["name"]
         return len(rows)
 
+    def save_watercooler_channel(self, channel_id, fields, created_by):
+        row = self.watercooler_channels.setdefault(
+            channel_id,
+            {
+                "channel_id": channel_id,
+                "days": "mon,wed,fri",
+                "post_time": "10:00",
+                "timezone": "UTC",
+                "source": "both",
+                "categories": "light,work,remote,this_or_that",
+                "active": True,
+                "paused_reason": None,
+                "created_by": created_by,
+            },
+        )
+        row.update(fields)
+        return deepcopy(row)
+
+    def add_watercooler_question(self, text, created_by):
+        row = {
+            "id": max((q["id"] for q in self.watercooler_questions), default=0) + 1,
+            "text": text,
+            "archived": False,
+            "created_by": created_by,
+        }
+        self.watercooler_questions.append(row)
+        return deepcopy(row)
+
+    def update_watercooler_question(self, question_id, text=None, archived=None):
+        row = next((q for q in self.watercooler_questions if q["id"] == int(question_id)), None)
+        if row is None:
+            return None
+        if text is not None:
+            row["text"] = text
+        if archived is not None:
+            row["archived"] = archived
+        return deepcopy(row)
+
     def save_celebrations(self, fields, updated_by):
         self.celebration_settings.update(fields, updated_by=updated_by, updated_at=self.now)
         return deepcopy(self.celebration_settings)
@@ -531,6 +586,8 @@ def create_test_app(patcher=None):
     import src.modules.standup.ai_summary as ai_summary
     import src.modules.standup.handlers as handlers
     import src.modules.standup.workflow as workflow
+    import src.modules.watercooler.db as watercooler_db
+    import src.modules.watercooler.jobs as watercooler_jobs
     from flask import jsonify, request, session
     from src.core.api import csrf_token
     from src.http_app import create_http_app
@@ -740,6 +797,32 @@ def create_test_app(patcher=None):
             ),
         },
     )
+    install(
+        watercooler_db,
+        {
+            "list_channels": lambda team: deepcopy(list(state.watercooler_channels.values())),
+            "get_channel": lambda team, channel_id: deepcopy(state.watercooler_channels.get(channel_id)),
+            "count_channels": lambda team: len(state.watercooler_channels),
+            "save_channel": lambda team, channel_id, fields, created_by: state.save_watercooler_channel(
+                channel_id, fields, created_by
+            ),
+            "delete_channel": lambda team, channel_id: state.watercooler_channels.pop(channel_id, None) is not None,
+            "list_questions": lambda team, include_archived=True: deepcopy(
+                [q for q in state.watercooler_questions if include_archived or not q["archived"]]
+            ),
+            "count_questions": lambda team: len(state.watercooler_questions),
+            "add_question": lambda team, text, created_by: state.add_watercooler_question(text, created_by),
+            "update_question": lambda team, question_id, text=None, archived=None: state.update_watercooler_question(
+                question_id, text, archived
+            ),
+            "hidden_keys": lambda team: set(state.watercooler_hidden),
+            "set_hidden": lambda team, key, hidden: (
+                state.watercooler_hidden.add(key) if hidden else state.watercooler_hidden.discard(key)
+            ),
+        },
+    )
+    # "Post one now" reaches Slack; the browser tests stop at the route.
+    patch(watercooler_jobs, "run_post", lambda team, channel_id, force=False: "1700000000.000100")
     install(
         polls_db,
         {

@@ -19,6 +19,7 @@ import { ReportsPageSkeleton } from '@/modules/reports/loading';
 import { SettingsPageSkeleton } from '@/modules/settings/loading';
 import { StandupsPageSkeleton } from '@/modules/standups/loading';
 import { TodayPageSkeleton } from '@/modules/today/loading';
+import { WatercoolerPageSkeleton } from '@/modules/watercooler/loading';
 import { WebhooksPageSkeleton } from '@/modules/webhooks/loading';
 
 export const dashboardViews = {
@@ -98,6 +99,15 @@ export const dashboardViews = {
     title: 'Celebrations',
     Skeleton: CelebrationsPageSkeleton,
     module: 'celebrations',
+    requireActive: false,
+  },
+
+  // Reachable while switched off, like Celebrations: the person running it
+  // can set channels up first.
+  watercooler: {
+    title: 'Watercooler',
+    Skeleton: WatercoolerPageSkeleton,
+    module: 'watercooler',
     requireActive: false,
   },
 

@@ -69,6 +69,10 @@ def build(rows: list[dict], internal: set[str], today: date | None = None) -> st
         lines.append(f"Installed, no standup yet: {_names(idle)}{suffix}")
     if removed:
         lines.append(f"Removed this week: {_names(removed)}")
+    watercooler = [r for r in live if int(r.get("watercooler_7d") or 0) > 0]
+    if watercooler:
+        posts = sum(int(r.get("watercooler_7d") or 0) for r in watercooler)
+        lines.append(f"Watercooler: {posts} questions posted in {len(watercooler)} workspaces")
     if sources:
         ranked = sorted(sources.items(), key=lambda kv: (-kv[1], kv[0]))
         lines.append("New installs by source: " + ", ".join(f"{src} {n}" for src, n in ranked))

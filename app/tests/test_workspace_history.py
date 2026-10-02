@@ -134,7 +134,7 @@ class TestRecordHistory:
     def test_polls_and_pulse_count_as_activity(self, cursor):
         real_db.record_workspace_history("T1")
         sql = cursor.calls[0][0]
-        assert "GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at)" in sql
+        assert "GREATEST(st.last_at, k.last_at, c.last_at, po.last_at, pr.last_at, wc.last_at)" in sql
 
     def test_the_new_columns_are_counts(self):
         sql = (SRC / "core/migrations/066_history_polls_pulse.sql").read_text()

@@ -10,6 +10,7 @@ import {
   ListChecks,
   LogOut,
   MessageCircleHeart,
+  MessagesSquare,
   Plug,
   Settings2,
   Sunrise,
@@ -50,6 +51,7 @@ type DashboardPath =
   | '/dashboard/polls'
   | '/dashboard/pulse'
   | '/dashboard/celebrations'
+  | '/dashboard/watercooler'
   | '/dashboard/members'
   | '/dashboard/insights'
   | '/dashboard/reports'
@@ -131,6 +133,14 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: Cake,
         color: 'text-violet-500 dark:text-violet-400',
         module: 'celebrations',
+      },
+      {
+        label: 'Watercooler',
+        path: '/dashboard/watercooler',
+        icon: MessagesSquare,
+        color: 'text-amber-600 dark:text-amber-400',
+        module: 'watercooler',
+        access: 'watercooler',
       },
       {
         label: 'Members',

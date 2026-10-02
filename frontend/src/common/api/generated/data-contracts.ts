@@ -12,6 +12,8 @@
 
 export type AddHolidayError = ApiError;
 
+export type AddWatercoolerQuestionError = ApiError;
+
 export interface AiSummaryStatus {
   configured: boolean;
 }
@@ -263,6 +265,13 @@ export interface DeleteStandupParams {
   standupId: number;
 }
 
+export type DeleteWatercoolerChannelError = ApiError;
+
+export interface DeleteWatercoolerChannelParams {
+  /** @minLength 1 */
+  channelId: string;
+}
+
 export type DeleteWebhookError = ApiError;
 
 export interface DeleteWebhookParams {
@@ -371,6 +380,8 @@ export interface GetTodayParams {
    */
   kudos?: number;
 }
+
+export type GetWatercoolerError = ApiError;
 
 export type GetWebhookEventsError = ApiError;
 
@@ -802,6 +813,13 @@ export interface PollOption {
   votes: number | null;
 }
 
+export type PostWatercoolerNowError = ApiError;
+
+export interface PostWatercoolerNowParams {
+  /** @minLength 1 */
+  channelId: string;
+}
+
 export type PreviewAskForDatesError = ApiError;
 
 export interface ProfileImportInput {
@@ -1015,6 +1033,13 @@ export interface RunProgramParams {
   programId: number;
 }
 
+export type SaveWatercoolerChannelError = ApiError;
+
+export interface SaveWatercoolerChannelParams {
+  /** @minLength 1 */
+  channelId: string;
+}
+
 export interface ScheduleParticipation {
   completed: number;
   completion_rate: number;
@@ -1042,6 +1067,13 @@ export type SetStandupManagersError = ApiError;
 export interface SetStandupManagersParams {
   /** @min 0 */
   standupId: number;
+}
+
+export type SetWatercoolerHiddenError = ApiError;
+
+export interface SetWatercoolerHiddenParams {
+  /** @minLength 1 */
+  key: string;
 }
 
 export interface SettingsInput {
@@ -1297,11 +1329,107 @@ export interface UpdateStandupParams {
   standupId: number;
 }
 
+export type UpdateWatercoolerQuestionError = ApiError;
+
+export interface UpdateWatercoolerQuestionParams {
+  /** @min 0 */
+  questionId: number;
+}
+
 export type UpdateWebhookError = ApiError;
 
 export interface UpdateWebhookParams {
   /** @minLength 1 */
   hookId: string;
+}
+
+export interface WatercoolerBankQuestion {
+  category: string;
+  hidden: boolean;
+  key: string;
+  text: string;
+}
+
+export interface WatercoolerCategory {
+  key: string;
+  label: string;
+}
+
+export interface WatercoolerChannel {
+  active: boolean;
+  categories: string[];
+  channel_id: string;
+  days: string[];
+  paused_reason: string | null;
+  post_time: string;
+  source: "builtin" | "custom" | "both";
+  timezone: string;
+}
+
+export interface WatercoolerChannelInput {
+  /** @default true */
+  active?: boolean;
+  /**
+   * @maxItems 4
+   * @minItems 1
+   * @default ["light","work","remote","this_or_that"]
+   */
+  categories?: ("light" | "work" | "remote" | "this_or_that")[];
+  /**
+   * @maxItems 7
+   * @minItems 1
+   */
+  days: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[];
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  post_time: string;
+  /** @default "both" */
+  source?: "builtin" | "custom" | "both";
+  /**
+   * @minLength 1
+   * @maxLength 64
+   */
+  timezone: string;
+}
+
+export interface WatercoolerHiddenInput {
+  hidden: boolean;
+}
+
+export interface WatercoolerOverview {
+  bank: WatercoolerBankQuestion[];
+  can_manage: boolean;
+  categories: WatercoolerCategory[];
+  channels: WatercoolerChannel[];
+  max_channels: number;
+  max_questions: number;
+  questions: WatercoolerQuestion[];
+}
+
+export interface WatercoolerPostResult {
+  posted: boolean;
+}
+
+export interface WatercoolerQuestion {
+  archived: boolean;
+  id: number;
+  text: string;
+}
+
+export interface WatercoolerQuestionInput {
+  /**
+   * @minLength 5
+   * @maxLength 300
+   */
+  text: string;
+}
+
+export interface WatercoolerQuestionUpdate {
+  archived?: boolean;
+  /**
+   * @minLength 5
+   * @maxLength 300
+   */
+  text?: string;
 }
 
 export interface Webhook {
