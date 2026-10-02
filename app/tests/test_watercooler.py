@@ -385,12 +385,18 @@ def _as(client, role):
 class TestDashboard:
     def test_overview_lists_channels_bank_and_own_questions(self, browser):
         client, state = browser
-        _as(client, "member")
+        _as(client, "admin")
         body = client.get("/dashboard/api/watercooler").json
         assert body["channels"][0]["channel_id"] == "C_GENERAL"
         assert len(body["bank"]) == len(bank.QUESTIONS)
         assert body["questions"][0]["text"] == "What did you build this week?"
-        assert body["can_manage"] is False
+        assert body["can_manage"] is True
+
+    def test_members_cannot_read_the_setup(self, browser):
+        # Configuration for the people who run it; see test_read_access.py.
+        client, _ = browser
+        _as(client, "member")
+        assert client.get("/dashboard/api/watercooler").status_code == 403
 
     def test_members_cannot_change_anything(self, browser):
         client, state = browser

@@ -21,7 +21,7 @@ def register_routes(flask_app) -> None:
     import src.modules.watercooler.db as wdb
     from src.core.api import api_errors, register_api_blueprint
     from src.core.api_schemas import Ok
-    from src.core.dashboard import _admin_required, _login_required
+    from src.core.dashboard import _admin_required
     from src.core.schedule_validation import schedule_timezone_error
     from src.core.timezones import canonical_tz
     from src.modules.watercooler import bank, jobs, schemas
@@ -49,7 +49,7 @@ def register_routes(flask_app) -> None:
         return {"id": int(row["id"]), "text": row["text"], "archived": bool(row.get("archived"))}
 
     @bp.route("/dashboard/api/watercooler", methods=["GET"])
-    @_login_required
+    @_admin_required("watercooler")
     @bp.doc(operationId="getWatercooler", tags=["Watercooler"], security=[{"sessionCookie": []}])
     @api_errors(bp)
     @bp.response(200, schemas.Overview)

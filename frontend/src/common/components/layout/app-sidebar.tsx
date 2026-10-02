@@ -140,6 +140,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: MessagesSquare,
         color: 'text-amber-600 dark:text-amber-400',
         module: 'watercooler',
+        access: 'watercooler',
       },
       {
         label: 'Members',
