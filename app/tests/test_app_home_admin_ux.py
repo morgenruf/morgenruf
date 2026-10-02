@@ -89,7 +89,8 @@ def test_support_and_dashboard_are_separate_links(monkeypatch):
         for el in b.get("elements", []) or []
         if isinstance(el, dict) and el.get("action_id")
     }
-    assert urls["open_dashboard"] == "https://standups.example.com/dashboard"
+    # No plain link: the button opens a per-person sign-in (see test_dashboard_signin).
+    assert "open_dashboard" in urls and urls["open_dashboard"] is None
     assert urls["open_support"] == "https://github.com/morgenruf/morgenruf/issues"
     monkeypatch.setenv("APP_URL", "https://api.morgenruf.dev")
     view = blocks.app_home_view(standups=[], user_id="U1")

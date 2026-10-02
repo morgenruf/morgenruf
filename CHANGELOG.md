@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Fixed
+- **Members can sign in to the dashboard.** "Sign in with Slack" is the
+  install flow, so in a workspace that approves apps anyone but an admin was
+  asked to request an install and never got in. The Dashboard button on the
+  Home tab and the new `/morgenruf dashboard` now hand the person a sign-in
+  link of their own (one use, five minutes), with no admin needed. The login
+  page says so.
+
 ## [1.9.14] - 2026-10-01
 
 ### Added

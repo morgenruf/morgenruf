@@ -332,7 +332,7 @@ def help_text(team_id: str) -> str:
     Every help surface renders this one text: `/morgenruf help`, the old
     `/help`, `help` in a DM and the Help button on the Home tab.
     """
-    from src.core.links import dashboard_url, support_url  # noqa: PLC0415
+    from src.core.links import support_url  # noqa: PLC0415
 
     lines = [
         "*Your profile*",
@@ -356,7 +356,7 @@ def help_text(team_id: str) -> str:
         "*Anywhere*",
         "• `/morgenruf help`: show this message",
         "• The *Home* tab shows your standups, your profile and more",
-        f"• The <{dashboard_url()}|Dashboard> has settings, history and reports",
+        "• `/morgenruf dashboard`: a sign-in link to the dashboard (settings, history and reports)",
         "",
         f"📖 Docs: <https://docs.morgenruf.dev|docs.morgenruf.dev> · 💬 <{support_url()}|Get support>",
     ]
@@ -460,6 +460,21 @@ def _say_could_not_open(client, user_id: str) -> None:  # noqa: ANN001
         logger.info("profile: could not tell %s the modal failed", user_id)
 
 
+def _send_signin(body: dict, client, respond) -> None:  # noqa: ANN001
+    """`/morgenruf dashboard`: a sign-in link only the person who typed it sees."""
+    from src.core.dashboard_signin import signin_message  # noqa: PLC0415
+
+    user_id = body.get("user_id", "")
+    message = signin_message(body.get("team_id", ""), user_id)
+    try:
+        if respond is not None:
+            respond(**message)
+            return
+        client.chat_postMessage(channel=user_id, text=message["text"], blocks=message["blocks"])
+    except Exception:
+        logger.exception("could not send a dashboard sign-in to %s", user_id)
+
+
 def register_slack(app) -> None:
     """Attach /morgenruf and the profile modal to the Bolt app."""
 
@@ -479,6 +494,10 @@ def register_slack(app) -> None:
             except Exception:
                 logger.exception("profile: could not open the modal for %s", user_id)
                 _say_could_not_open(client, user_id)
+            return
+
+        if sub == "dashboard":
+            _send_signin(body, client, respond)
             return
 
         if dispatch_subcommand(body, client, respond):

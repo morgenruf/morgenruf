@@ -229,6 +229,8 @@ test('unknown dashboard paths and result routes never bootstrap a private sessio
 
   await page.goto('/dashboard/login?error=invalid-link');
 
-  await expect(page.getByRole('alert')).toContainText('invalid or has expired');
+  await expect(page.getByRole('alert')).toContainText(
+    'expired or was already used',
+  );
   expect(privateReads).toEqual([]);
 });
