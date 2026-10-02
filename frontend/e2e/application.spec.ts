@@ -29,7 +29,12 @@ test('authentication, signed legacy links, hash bookmarks, and logout', async ({
   await page.goto('/dashboard/standups');
 
   await expect(page).toHaveURL(/\/dashboard\/login/);
-  await expect(page.getByRole('link', { name: /slack/i })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Open Morgenruf in Slack' }),
+  ).toHaveAttribute('href', '/dashboard/open-in-slack');
+  await expect(
+    page.getByRole('link', { name: 'Install it with Slack' }),
+  ).toHaveAttribute('href', '/install');
 
   const link = await (
     await request.get(`${backend}/__test__/login-link`)
