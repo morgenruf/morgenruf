@@ -2,8 +2,8 @@ apiVersion: v2
 name: morgenruf
 description: Self-hosted Slack app for async standups, coffee chats, kudos and insights
 type: application
-version: 0.14.8
-appVersion: "1.9.14"
+version: 0.14.9
+appVersion: "1.9.15"
 keywords:
   - slack
   - standup
