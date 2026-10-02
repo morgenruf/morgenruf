@@ -2163,14 +2163,14 @@ def _alert_on_job_problem(event) -> None:  # noqa: ANN001
 
 
 def _send_day2_nudges() -> None:
-    """Hourly: one DM to installers two days in with no standup, and switch
+    """Hourly: the activation nudges to installers (day 2, 3 and 7), and switch
     on quick start standups whose channel the bot is now in."""
     try:
-        from src.core.activation import send_day2_nudges  # noqa: PLC0415
+        from src.core.activation import send_activation_nudges  # noqa: PLC0415
 
-        send_day2_nudges()
+        send_activation_nudges()
     except Exception:
-        logger.exception("Day-2 nudge failed")
+        logger.exception("Activation nudges failed")
     try:
         from src.core.standup_invites import sweep_waiting_standups  # noqa: PLC0415
 

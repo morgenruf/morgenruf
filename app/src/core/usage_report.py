@@ -37,8 +37,13 @@ def _names(rows: list[dict], with_people: bool = False) -> str:
     return ", ".join(f"{_name(r)} {_people(r)}" if with_people else _name(r) for r in rows)
 
 
-def build(rows: list[dict], internal: set[str], today: date | None = None) -> str:
-    """The report text for `rows` (see db.usage_report_rows), without `internal` teams."""
+def build(
+    rows: list[dict], internal: set[str], today: date | None = None, checklist: dict[str, int] | None = None
+) -> str:
+    """The report text for `rows` (see db.usage_report_rows), without `internal` teams.
+
+    `checklist` maps team_id to activation checklist steps done, out of five.
+    """
     today = today or datetime.now(timezone.utc).date()
     outside = [r for r in rows if r.get("team_id") not in internal]
     live = [r for r in outside if r.get("active")]
@@ -73,6 +78,10 @@ def build(rows: list[dict], internal: set[str], today: date | None = None) -> st
     if watercooler:
         posts = sum(int(r.get("watercooler_7d") or 0) for r in watercooler)
         lines.append(f"Watercooler: {posts} questions posted in {len(watercooler)} workspaces")
+    steps = [(r, checklist[r["team_id"]]) for r in live if checklist and r.get("team_id") in checklist]
+    if steps:
+        ranked = sorted(steps, key=lambda rs: (-rs[1], _name(rs[0])))
+        lines.append("Checklist steps done: " + ", ".join(f"{_name(r)} {n}/5" for r, n in ranked))
     if sources:
         ranked = sorted(sources.items(), key=lambda kv: (-kv[1], kv[0]))
         lines.append("New installs by source: " + ", ".join(f"{src} {n}" for src, n in ranked))
@@ -84,4 +93,22 @@ def post_weekly() -> bool:
     import src.core.db as db  # noqa: PLC0415
     from src.core.alerts import notify  # noqa: PLC0415
 
-    return notify(build(db.usage_report_rows(), internal_teams()))
+    rows = db.usage_report_rows()
+    internal = internal_teams()
+    return notify(build(rows, internal, checklist=checklist_counts(rows, internal)))
+
+
+def checklist_counts(rows: list[dict], internal: set[str]) -> dict[str, int]:
+    """Activation checklist steps done per live outside workspace. A failure skips that one."""
+    from src.core.activation import done_count  # noqa: PLC0415
+
+    counts: dict[str, int] = {}
+    for row in rows:
+        team_id = row.get("team_id")
+        if not team_id or team_id in internal or not row.get("active"):
+            continue
+        try:
+            counts[team_id] = done_count(team_id)
+        except Exception:
+            continue
+    return counts

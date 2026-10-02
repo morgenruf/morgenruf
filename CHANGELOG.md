@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Activation checklist.** Workspace admins see "Get your team going" at the
+  top of the Home tab: start a standup, add @Morgenruf to its channel, get the
+  first answers ("Send it now" sends today's questions straight away), add one
+  more ritual, and share the load with another admin or a standup manager.
+  Each step ticks itself off from what the workspace has done, and the card
+  goes away when all five are done or someone clicks Hide. The installer also
+  gets one DM on day 3 if the standup has no answers yet, and one on day 7 if
+  fewer than three steps are done. The Monday report shows each workspace's
+  progress.
+
 ## [1.9.19] - 2026-10-02
 
 ### Added

@@ -12,6 +12,37 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# The module that renders App Home registers how to redraw it, so core can
+# refresh the tab after one of its own buttons (the activation checklist)
+# without importing that module.
+_refresher = None
+
+
+def set_refresher(fn) -> None:  # noqa: ANN001
+    global _refresher
+    _refresher = fn
+
+
+def refresh_home(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
+    """Redraw one person's App Home, when a renderer has registered."""
+    if _refresher is None:
+        return
+    try:
+        _refresher(team_id, user_id, client)
+    except Exception:
+        logger.exception("could not refresh App Home for %s", user_id)
+
+
+def top_home_blocks(team_id: str, user_id: str) -> list[dict]:
+    """Core blocks that belong above everything else: the activation checklist."""
+    try:
+        from src.core.activation import checklist_blocks  # noqa: PLC0415
+
+        return checklist_blocks(team_id, user_id) or []
+    except Exception:
+        logger.exception("the activation checklist failed to render on the App Home")
+        return []
+
 
 def extra_home_blocks(team_id: str, user_id: str, exclude: str = "") -> list[dict]:
     """Blocks from every active module except the one doing the rendering.

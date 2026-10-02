@@ -2534,6 +2534,7 @@ _PURGE_STEPS: tuple[tuple[str, str], ...] = (
     ("workspace_config", "team_id = %s"),
     ("setup_email_consents", "team_id = %s"),
     ("install_emails", "team_id = %s"),
+    ("activation_checklist", "team_id = %s"),
 )
 PURGED_TABLES: tuple[str, ...] = tuple(table for table, _ in _PURGE_STEPS)
 
@@ -3114,6 +3115,97 @@ def workspaces_without_standup(hours: int) -> list[dict]:
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (hours,))
+            return [dict(r) for r in cur.fetchall()]
+
+
+# ── Activation checklist ────────────────────────────────────────────────────
+
+
+def checklist_state(team_id: str) -> dict:
+    """What the activation checklist needs to know, in one round trip.
+
+    Counts and flags only: whether a standup exists, whether one still waits
+    for the bot to be invited, how many people have ever answered, whether
+    anyone besides the installer helps run things, and the checklist's own
+    stored choices.
+    """
+    sql = """
+        SELECT
+            i.installed_by_user_id AS installer,
+            EXISTS (SELECT 1 FROM standup_schedules s WHERE s.team_id = i.team_id) AS has_standup,
+            EXISTS (SELECT 1 FROM standup_schedules s
+                    WHERE s.team_id = i.team_id AND s.awaiting_invite_by IS NOT NULL) AS awaiting_invite,
+            (SELECT COUNT(DISTINCT st.user_id) FROM standups st WHERE st.team_id = i.team_id) AS responders,
+            (
+                EXISTS (SELECT 1 FROM members m
+                        WHERE m.team_id = i.team_id AND m.role = 'admin' AND m.active
+                          AND m.user_id IS DISTINCT FROM i.installed_by_user_id)
+                OR EXISTS (SELECT 1 FROM module_admins a
+                           WHERE a.team_id = i.team_id AND a.user_id IS DISTINCT FROM i.installed_by_user_id)
+                OR EXISTS (SELECT 1 FROM standup_managers sm
+                           WHERE sm.team_id = i.team_id AND sm.user_id IS DISTINCT FROM i.installed_by_user_id)
+            ) AS shared,
+            c.hidden_at,
+            c.sent_now_on
+        FROM installations i
+        LEFT JOIN activation_checklist c ON c.team_id = i.team_id
+        WHERE i.team_id = %s
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id,))
+            row = cur.fetchone()
+    return dict(row) if row else {}
+
+
+def hide_checklist(team_id: str, user_id: str) -> None:
+    sql = """
+        INSERT INTO activation_checklist (team_id, hidden_at, hidden_by) VALUES (%s, NOW(), %s)
+        ON CONFLICT (team_id) DO UPDATE SET hidden_at = NOW(), hidden_by = EXCLUDED.hidden_by
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+
+
+def claim_send_now(team_id: str, today: date) -> bool:
+    """Reserve today's "Send it now". True only for the first press of the day."""
+    sql = """
+        INSERT INTO activation_checklist (team_id, sent_now_on) VALUES (%s, %s)
+        ON CONFLICT (team_id) DO UPDATE SET sent_now_on = EXCLUDED.sent_now_on
+        WHERE activation_checklist.sent_now_on IS DISTINCT FROM EXCLUDED.sent_now_on
+        RETURNING 1
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, today))
+            return cur.fetchone() is not None
+
+
+def release_send_now(team_id: str, today: date) -> None:
+    """Give today's press back when nothing could be sent."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE activation_checklist SET sent_now_on = NULL WHERE team_id = %s AND sent_now_on = %s",
+                (team_id, today),
+            )
+
+
+def workspaces_for_activation_nudge(kind: str, hours: int) -> list[dict]:
+    """Live installs at least `hours` old and under two weeks, not yet sent `kind`."""
+    sql = """
+        SELECT i.team_id, i.bot_token, i.installed_by_user_id
+        FROM installations i
+        WHERE i.active
+          AND i.purged_at IS NULL
+          AND i.installed_at < NOW() - make_interval(hours => %s)
+          AND i.installed_at > NOW() - INTERVAL '14 days'
+          AND NOT EXISTS (SELECT 1 FROM install_emails e WHERE e.team_id = i.team_id AND e.kind = %s)
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (hours, kind))
             return [dict(r) for r in cur.fetchall()]
 
 

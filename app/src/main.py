@@ -154,13 +154,15 @@ def register_slack_listeners(flask_app, bolt_app, modules) -> list[str]:
     register_dm_listener(bolt_app)
     register_channel_join_listener(bolt_app)
 
-    # Core's own Slack surface: /morgenruf, the member profile modal, and the
-    # setup email buttons.
+    # Core's own Slack surface: /morgenruf, the member profile modal, the
+    # setup email buttons and the activation checklist.
+    from src.core.activation import register_slack as register_activation
     from src.core.email_consent import register_slack as register_email_consent
     from src.core.profile_slack import register_slack as register_profile_slack
 
     register_profile_slack(bolt_app)
     register_email_consent(bolt_app)
+    register_activation(bolt_app)
     return register_modules(flask_app, bolt_app, modules)
 
 

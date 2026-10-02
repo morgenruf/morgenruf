@@ -1183,6 +1183,16 @@ def register_handlers(app: App) -> None:
         except Exception:
             logger.exception("Could not add module sections to App Home")
 
+        # Core's activation checklist goes above everything, for admins only.
+        try:
+            from src.core.home import top_home_blocks  # noqa: PLC0415
+
+            top = top_home_blocks(team_id, user_id)
+            if top and isinstance(view, dict) and isinstance(view.get("blocks"), list):
+                view["blocks"] = (top + view["blocks"])[:100]
+        except Exception:
+            logger.exception("Could not add the activation checklist to App Home")
+
         try:
             client.views_publish(user_id=user_id, view=view)
         except Exception as exc:
@@ -1370,6 +1380,11 @@ def register_handlers(app: App) -> None:
     from src.modules.standup import quickstart  # noqa: PLC0415
 
     quickstart.register(app, refresh_home=_refresh_home)
+
+    # Core's own App Home buttons (the activation checklist) redraw through this.
+    from src.core.home import set_refresher  # noqa: PLC0415
+
+    set_refresher(_refresh_home)
 
     def _publish_configure_view(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
         """Render and publish the configure mode App Home."""
