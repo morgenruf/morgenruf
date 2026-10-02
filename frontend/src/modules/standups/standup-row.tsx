@@ -114,6 +114,7 @@ export function StandupRow({
   healthPending,
   healthUnavailable,
   editable,
+  deletable = editable,
   onEdit,
 }: {
   standup: Standup;
@@ -122,6 +123,8 @@ export function StandupRow({
   healthPending: boolean;
   healthUnavailable: boolean;
   editable: boolean;
+  /** Admins only; a standup's manager may edit and pause it, not delete it. */
+  deletable?: boolean;
   onEdit: () => void;
 }) {
   const { setActive, remove } = useStandupMutations();
@@ -249,18 +252,22 @@ export function StandupRow({
                   {standup.active ? <Pause /> : <Play />}
                   {standup.active ? 'Pause' : 'Resume'}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  disabled={busy}
-                  onClick={() => {
-                    remove.reset();
-                    setDeleting(true);
-                  }}
-                >
-                  <Trash />
-                  Delete
-                </DropdownMenuItem>
+                {deletable && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      disabled={busy}
+                      onClick={() => {
+                        remove.reset();
+                        setDeleting(true);
+                      }}
+                    >
+                      <Trash />
+                      Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

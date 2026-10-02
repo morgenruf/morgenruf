@@ -1037,6 +1037,13 @@ export interface SessionInfo {
   user_id: string;
 }
 
+export type SetStandupManagersError = ApiError;
+
+export interface SetStandupManagersParams {
+  /** @min 0 */
+  standupId: number;
+}
+
 export interface SettingsInput {
   /** @default true */
   anniversaries?: boolean;
@@ -1070,6 +1077,7 @@ export interface Standup {
   active: boolean;
   ai_provider: string;
   ai_summary_enabled: boolean;
+  can_manage: boolean;
   channel_id: string;
   digest_email: string;
   digest_enabled: boolean;
@@ -1084,6 +1092,7 @@ export interface Standup {
   linear_team: string;
   manager_digest_enabled: boolean;
   manager_email: string;
+  managers: string[];
   name: string;
   next_run: string;
   notify_on_report: boolean;
@@ -1139,6 +1148,14 @@ export interface StandupInput {
   schedule_time?: string;
   schedule_tz?: string;
   sync_with_channel?: boolean;
+}
+
+export interface StandupManagers {
+  user_ids: string[];
+}
+
+export interface StandupManagersInput {
+  user_ids: string[];
 }
 
 export interface StandupResponse {

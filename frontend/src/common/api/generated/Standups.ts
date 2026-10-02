@@ -19,8 +19,12 @@ import type {
   ListStandupsError,
   ListTemplatesError,
   Ok,
+  SetStandupManagersError,
+  SetStandupManagersParams,
   Standup,
   StandupInput,
+  StandupManagers,
+  StandupManagersInput,
   StandupTemplate,
   UpdateStandupError,
   UpdateStandupParams,
@@ -117,6 +121,29 @@ export class Standups<SecurityDataType = unknown> {
       path: `/dashboard/api/templates`,
       method: "GET",
       secure: true,
+      format: "json",
+      ...params,
+    });
+  /**
+   * No description
+   *
+   * @tags Standups
+   * @name SetStandupManagers
+   * @summary Replace who manages this standup. New managers are told in Slack.
+   * @request PUT:/dashboard/api/standups/{standup_id}/managers
+   * @secure
+   */
+  setStandupManagers = (
+    { standupId }: SetStandupManagersParams,
+    data: StandupManagersInput,
+    params: RequestParams = {},
+  ) =>
+    this.http.request<StandupManagers, SetStandupManagersError>({
+      path: `/dashboard/api/standups/${standupId}/managers`,
+      method: "PUT",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
       format: "json",
       ...params,
     });

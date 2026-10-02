@@ -203,7 +203,8 @@ export function StandupsPage() {
                     metrics={metrics.get(standup.id)}
                     healthPending={health.isPending}
                     healthUnavailable={health.isError}
-                    editable={editable}
+                    editable={editable || !!standup.can_manage}
+                    deletable={editable}
                     onEdit={() =>
                       updateParams({ edit: String(standup.id), new: null })
                     }
@@ -228,14 +229,17 @@ export function StandupsPage() {
         )}
       </LoadingTransition>
 
-      {editable && query.data && (creating || editing) && (
-        <StandupEditor
-          key={editing?.id ?? 'new'}
-          standup={editing}
-          workspace={editing ?? query.data[0]}
-          close={() => updateParams({ edit: null, new: null })}
-        />
-      )}
+      {query.data &&
+        ((creating && editable) ||
+          (editing && (editable || editing.can_manage))) && (
+          <StandupEditor
+            key={editing?.id ?? 'new'}
+            standup={editing}
+            workspace={editing ?? query.data[0]}
+            admin={editable}
+            close={() => updateParams({ edit: null, new: null })}
+          />
+        )}
     </div>
   );
 }

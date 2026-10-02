@@ -92,6 +92,10 @@ GUARDED = [
 ]
 
 
+# Routes a standup's managers may use, besides the admins.
+PER_STANDUP = {"/dashboard/api/standups/<int:standup_id>"}
+
+
 def _fake_db(role="member", grants=(), admins=1):
     """A db double that answers permission questions like the real one.
 
@@ -104,6 +108,7 @@ def _fake_db(role="member", grants=(), admins=1):
     db.get_member_role.return_value = role
     db.count_admins.return_value = admins
     db.module_admin_grants.return_value = grants
+    db.managed_schedule_ids.return_value = set()
     db.team_module_admins.return_value = {"U_MEMBER": grants} if grants else {}
     db.can_administer.side_effect = lambda t, u, module=None: (
         role == "admin" or (module is not None and module in grants)
@@ -168,6 +173,10 @@ class TestNoMutatingRouteIsLeftOpen:
                 if path in SELF_SERVICE and "_login_required" in decorators:
                     continue
                 if path in OWNER_OR_ADMIN and "_login_required" in decorators:
+                    continue
+                # One standup's own managers may change it; the guard checks
+                # that standup (db.can_manage_standup), not "any member".
+                if path in PER_STANDUP and "_standup_manager_required" in decorators:
                     continue
                 if "_admin_required" not in decorators:
                     out.append(f"{sorted(methods & MUTATING)} {path} ({fn})")

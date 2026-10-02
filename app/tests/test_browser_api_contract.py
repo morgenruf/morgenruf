@@ -88,6 +88,7 @@ def test_every_read_serializes_a_realistic_response(browser, path):
 MUTATIONS = [
     ("POST", "/dashboard/api/standups", {"name": "New daily", "channel_id": "C_ENGINEERING"}),
     ("PUT", "/dashboard/api/standups/1", {"name": "Updated daily", "reminder_minutes": -1}),
+    ("PUT", "/dashboard/api/standups/1/managers", {"user_ids": ["U_MEMBER"]}),
     ("DELETE", "/dashboard/api/standups/1", None),
     ("PUT", "/dashboard/api/members/U_MEMBER/role", {"role": "admin"}),
     ("PUT", "/dashboard/api/members/U_MEMBER/modules/standup", None),
@@ -333,7 +334,7 @@ print(json.dumps(spec, sort_keys=True))
         for method, operation in path.items()
         if method in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == 74
+    assert len(operations) == 75
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
 

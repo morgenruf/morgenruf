@@ -46,6 +46,8 @@ server {
     location /slack/ { proxy_pass ${BACKEND_URL}; }
     location /google/ { proxy_pass ${BACKEND_URL}; }
     location /webhooks/ { proxy_pass ${BACKEND_URL}; }
+    # Celebration banner images: Slack fetches these from the app's own URL.
+    location /celebrations/banners/ { proxy_pass ${BACKEND_URL}; }
 
     location = /mcp { proxy_buffering off; proxy_pass ${BACKEND_URL}; }
     location /mcp/ { proxy_buffering off; proxy_pass ${BACKEND_URL}; }

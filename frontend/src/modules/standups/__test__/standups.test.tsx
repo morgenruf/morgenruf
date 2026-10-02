@@ -17,6 +17,7 @@ const mock = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   remove: vi.fn(),
+  setManagers: vi.fn(),
   channels: vi.fn(),
   members: vi.fn(),
   templates: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock('@/common/api/services-context', async (importOriginal) => {
       createStandup: mock.create,
       updateStandup: mock.update,
       deleteStandup: mock.remove,
+      setStandupManagers: mock.setManagers,
       listTemplates: mock.templates,
       getAiSummary: mock.ai,
     },
@@ -93,6 +95,8 @@ const standup: Standup = {
   sync_with_channel: false,
   registration_error: null,
   next_run: '',
+  can_manage: true,
+  managers: [],
 };
 
 function Location() {
@@ -143,6 +147,7 @@ beforeEach(() => {
   mock.create.mockResolvedValue({ data: standup });
   mock.update.mockResolvedValue({ data: standup });
   mock.remove.mockResolvedValue({ data: {} });
+  mock.setManagers.mockResolvedValue({ data: { user_ids: [] } });
 });
 
 describe('standup management', () => {
@@ -416,6 +421,7 @@ describe('standup management', () => {
 
   it('shows whole-channel enrollment and hides mutations for read-only members', async () => {
     mock.editable = false;
+    mock.list.mockResolvedValue({ data: [{ ...standup, can_manage: false }] });
 
     view();
 
@@ -1249,4 +1255,68 @@ it('asks before Escape throws away unsaved edits', async () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
   );
   expect(mock.update).not.toHaveBeenCalled();
+});
+
+describe('standup managers', () => {
+  it('lets a manager edit and pause their standup but not delete or move it', async () => {
+    mock.editable = false;
+    const user = userEvent.setup({ delay: null });
+    view();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Actions for Design daily' }),
+    );
+    expect(screen.getByRole('menuitem', { name: /Pause/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /Delete/ }),
+    ).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Edit Design daily' }));
+    expect(
+      await screen.findByText(
+        'Only a standup admin can move it to another channel.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: 'Managers' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Create standup' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lets an admin name managers, saved after the standup', async () => {
+    const user = userEvent.setup({ delay: null });
+    view();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit Design daily' }),
+    );
+    const managers = await screen.findByRole('region', { name: 'Managers' });
+    await user.click(
+      await within(managers).findByRole('checkbox', { name: /Mina/ }),
+    );
+    await user.click(screen.getByRole('button', { name: /Save/ }));
+
+    await waitFor(() =>
+      expect(mock.setManagers).toHaveBeenCalledWith(
+        { standupId: 7 },
+        { user_ids: ['U1'] },
+      ),
+    );
+    expect(mock.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not touch managers when they did not change', async () => {
+    const user = userEvent.setup({ delay: null });
+    view();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit Design daily' }),
+    );
+    await user.click(await screen.findByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(mock.update).toHaveBeenCalledTimes(1));
+    expect(mock.setManagers).not.toHaveBeenCalled();
+  });
 });
