@@ -254,8 +254,9 @@ class Store:
         self.posts[key] = {"ts": None, "user_ids": list(user_ids), "posted_on": posted_on}
         return True
 
-    def record(self, team, kind, day, ts):
+    def record(self, team, kind, day, ts, banner=None):
         self.posts[(team, kind, day)]["ts"] = ts
+        self.posts[(team, kind, day)]["banner"] = banner
 
     def release(self, team, kind, day):
         key = (team, kind, day)
@@ -323,6 +324,7 @@ def world(monkeypatch):
     monkeypatch.setattr("src.modules.celebrations.db.record_post", store.record)
     monkeypatch.setattr("src.modules.celebrations.db.release_post", store.release)
     monkeypatch.setattr("src.modules.celebrations.db.purge_old_posts", lambda team: 0)
+    monkeypatch.setattr("src.modules.celebrations.db.last_banner", lambda team, kind: None)
     monkeypatch.setattr(wc, "load_calendar", lambda team: state["calendar"])
     monkeypatch.setattr(jobs, "bot_client", lambda team: slack)
     monkeypatch.setattr(jobs, "DM_PAUSE_SECONDS", 0)

@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.15] - 2026-10-02
+
 ### Fixed
 - **Members can sign in to the dashboard.** "Sign in with Slack" is the
   install flow, so in a workspace that approves apps anyone but an admin was
@@ -12,6 +14,23 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   Home tab and the new `/morgenruf dashboard` now hand the person a sign-in
   link of their own (one use, five minutes), with no admin needed. The login
   page says so.
+
+### Added
+- **Celebration banners.** Each birthday and work anniversary post carries an
+  image: sixteen of them (a neon sign, a newspaper front page, a boarding
+  pass, an arcade level-up and more), picked at random and never the same
+  twice in a row. No name or year is in the picture, so any banner fits
+  anyone. They ship inside the app, so self-hosted installs have them too; if
+  Slack cannot reach the app's URL the post goes out as text. Turn them off in
+  Celebrations settings.
+- **CSV templates.** The holiday import and the birthday and start date
+  import each have a "Download template" link with the right columns.
+
+### Changed
+- **Import dialogs.** The preview runs as soon as a CSV is pasted or a file is
+  chosen, the file picker is a drop zone that shows the file name, the example
+  no longer looks like real input, and the save button appears only once
+  there is something to save.
 
 ## [1.9.14] - 2026-10-01
 

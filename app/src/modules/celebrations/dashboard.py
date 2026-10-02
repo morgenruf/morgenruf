@@ -73,6 +73,7 @@ def register_routes(flask_app) -> None:
             "post_time": settings.get("post_time") or cdb.DEFAULT_POST_TIME,
             "birthdays": bool(settings.get("birthdays", True)),
             "anniversaries": bool(settings.get("anniversaries", True)),
+            "banners": bool(settings.get("banners", True)),
             "working_days": working_day_keys(db.get_working_days(team_id)),
             "ready": cdb.is_ready(settings),
             "can_react": jobs.can_react(team_id),
@@ -131,6 +132,7 @@ def register_routes(flask_app) -> None:
                     "post_time": post_time,
                     "birthdays": bool(data.get("birthdays", True)),
                     "anniversaries": bool(data.get("anniversaries", True)),
+                    "banners": bool(data.get("banners", True)),
                 },
                 updated_by=session.get("user_id") or "",
             )
@@ -312,3 +314,6 @@ def register_routes(flask_app) -> None:
         return {"count": len(claimed)}
 
     register_api_blueprint(flask_app, bp)
+    from src.modules.celebrations.banners import register_route  # noqa: PLC0415
+
+    register_route(flask_app)

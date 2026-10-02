@@ -54,9 +54,8 @@ test('an admin sets up celebrations, keeps a holiday list and turns it on', asyn
 
   await page.getByRole('button', { name: 'Import holidays' }).click();
   await page
-    .getByLabel('CSV')
+    .getByLabel('CSV', { exact: true })
     .fill('date,name\n2027-01-01,New Year\nsoon,Oops\n');
-  await page.getByRole('button', { name: 'Preview' }).click();
   const preview = page.getByRole('region', { name: 'Holidays in the file' });
   await expect(preview.getByText('Will be saved')).toBeVisible();
   await expect(preview.getByText('Invalid')).toBeVisible();

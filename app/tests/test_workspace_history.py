@@ -61,7 +61,9 @@ def history_columns() -> list[str]:
 class TestTheHistoryTable:
     def test_it_is_the_next_migration(self):
         numbers = sorted(int(p.name[:3]) for p in SRC.rglob("migrations/*.sql"))
-        assert numbers[-1] == 66
+        # 066 was the newest when this shipped; later migrations only add to it.
+        assert numbers[-1] >= 66
+        assert len(numbers) == len(set(numbers))
         assert MIGRATION.exists()
 
     def test_it_has_the_columns_we_learn_from(self):

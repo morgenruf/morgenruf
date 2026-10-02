@@ -262,6 +262,9 @@
           "anniversaries": {
             "type": "boolean"
           },
+          "banners": {
+            "type": "boolean"
+          },
           "birthdays": {
             "type": "boolean"
           },
@@ -296,6 +299,7 @@
         },
         "required": [
           "anniversaries",
+          "banners",
           "birthdays",
           "can_react",
           "channel_id",
@@ -2304,6 +2308,10 @@
       "SettingsInput": {
         "properties": {
           "anniversaries": {
+            "default": true,
+            "type": "boolean"
+          },
+          "banners": {
             "default": true,
             "type": "boolean"
           },
