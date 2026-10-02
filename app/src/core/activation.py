@@ -211,7 +211,9 @@ def send_now(team_id: str, user_id: str) -> str:
     from src.core.scheduler import _send_standup_to_workspace  # noqa: PLC0415
 
     try:
-        _send_standup_to_workspace(team_id, token, schedule.get("channel_id") or "", int(schedule["id"]))
+        _send_standup_to_workspace(
+            team_id, token, schedule.get("channel_id") or "", int(schedule["id"]), skip_answered=True
+        )
     except Exception:
         logger.exception("send it now failed for %s", team_id)
         db.release_send_now(team_id, today)

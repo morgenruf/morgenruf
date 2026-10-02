@@ -133,7 +133,7 @@ class TestSendNow:
         db.claim_send_now.return_value = True
         db.get_installation.return_value = {"bot_token": "xoxb"}
         text, send = self._run(db)
-        send.assert_called_once_with("T1", "xoxb", "C4", 4)
+        send.assert_called_once_with("T1", "xoxb", "C4", 4, skip_answered=True)
         assert "Platform daily" in text
 
     def test_a_second_press_the_same_day_sends_nothing(self):

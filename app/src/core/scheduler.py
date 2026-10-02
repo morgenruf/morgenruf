@@ -394,9 +394,19 @@ def _schedule_today(team_id: str, schedule: dict | None) -> date:
 
 
 def _send_standup_to_workspace(
-    team_id: str, bot_token: str, channel_id: str, schedule_id: int | None = None, retry_attempt: int = 0
+    team_id: str,
+    bot_token: str,
+    channel_id: str,
+    schedule_id: int | None = None,
+    retry_attempt: int = 0,
+    skip_answered: bool = False,
 ) -> None:
-    """DM participants of a standup schedule (or all active members if no schedule)."""
+    """DM participants of a standup schedule (or all active members if no schedule).
+
+    `skip_answered` leaves out anyone who already answered this standup on its
+    local today. Scheduled runs do not need it; an on-demand run ("Send it
+    now") does, or it would ask people a second time.
+    """
     bot_token = _fresh_bot_token(team_id, bot_token)
     try:
         import src.core.db as db  # noqa: PLC0415
@@ -532,11 +542,27 @@ def _send_standup_to_workspace(
                 return
             logger.warning("Channel member sync failed for %s/%s: %s", team_id, schedule_id, exc)
 
+    answered: set[str] = set()
+    if skip_answered:
+        try:
+            import src.core.db as db  # noqa: PLC0415
+
+            answered = {
+                row.get("user_id")
+                for row in db.get_today_standups(team_id, for_date=local_day)
+                if not schedule_id or row.get("schedule_id") in (schedule_id, None)
+            }
+        except Exception as exc:
+            logger.warning("could not read today's answers for %s: %s", team_id, exc)
+
     failed_count = 0
     dm_count = 0
     for member in members:
         user_id = member["user_id"]
         cache_key = f"{team_id}:{user_id}"
+        if user_id in answered:
+            logger.debug("Skipping %s: already answered today", user_id)
+            continue
         try:
             if state_store.blocks_scheduled_dm(cache_key, schedule_id):
                 logger.debug("Skipping %s — already has active session", user_id)
