@@ -35,8 +35,7 @@ export default function LoginPage() {
               <h1>Your team's morning call</h1>
             </CardTitle>
             <CardDescription className="mt-2 text-sm">
-              Sign in with Slack to manage standups, coffee chats, and
-              recognition in your workspace.
+              Your standups, coffee chats and recognition, managed from Slack.
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-3 px-6">
@@ -51,31 +50,35 @@ export default function LoginPage() {
               </p>
             )}
 
+            {params.error === 'open-in-slack' && (
+              <p role="alert" className="mb-4 rounded-md bg-muted p-3 text-sm">
+                Open the Morgenruf app in your Slack workspace (Apps in the
+                sidebar), then click Dashboard on its Home tab.
+              </p>
+            )}
+
             <Button
               nativeButton={false}
               role="link"
-              render={<a href="/install" />}
+              render={<a href="/dashboard/open-in-slack" />}
               className="h-10 w-full"
             >
-              Continue with Slack
+              Open Morgenruf in Slack
             </Button>
 
-            <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
-              For the person adding Morgenruf to a workspace. Your workspace
-              permissions determine what you can manage.
+            <p className="mt-3 text-center text-sm leading-relaxed text-muted-foreground">
+              Then click <strong>Dashboard</strong> on the app&apos;s Home tab,
+              or type <code>/morgenruf dashboard</code> anywhere. You get a
+              sign-in link of your own, no admin needed.
             </p>
 
-            <section
-              aria-label="Already use Morgenruf"
-              className="mt-5 rounded-md border bg-muted/40 p-3 text-sm leading-relaxed"
-            >
-              <p className="font-medium">Already use Morgenruf in Slack?</p>
-              <p className="mt-1 text-muted-foreground">
-                Open Morgenruf in Slack and click <strong>Dashboard</strong> on
-                the Home tab, or type <code>/morgenruf dashboard</code>. You get
-                a sign-in link of your own, no admin needed.
-              </p>
-            </section>
+            <p className="mt-6 border-t pt-4 text-center text-xs leading-relaxed text-muted-foreground">
+              Adding Morgenruf to a new workspace?{' '}
+              <a href="/install" className="text-primary underline">
+                Install it with Slack
+              </a>
+              . Installing may need a Slack admin&apos;s approval.
+            </p>
           </CardContent>
         </Card>
       </div>

@@ -205,3 +205,36 @@ class TestASyncedStandupNeverFallsBackToEveryone:
         self._run()
         self.client.conversations_members.assert_not_called()
         assert {kw["users"] for _, kw in self.client.conversations_open.call_args_list} == {"U1"}
+
+
+class TestSendItNowSkipsPeopleWhoAnswered:
+    """An on-demand run must not ask someone who already answered today."""
+
+    def setup_method(self):
+        self.db = MagicMock()
+        self.db.get_standup_schedule.return_value = _schedule(sync_with_channel=False, participants=["U1", "U2"])
+        self.db.get_active_members.return_value = [
+            {"user_id": "U1", "real_name": "Answered"},
+            {"user_id": "U2", "real_name": "Not yet"},
+        ]
+        self.db.is_skipped_today.return_value = False
+        self.db.is_on_vacation.return_value = False
+        self.db.get_today_standups.return_value = [{"user_id": "U1", "schedule_id": 1}]
+        self.client = MagicMock()
+        self.client.conversations_open.return_value = {"channel": {"id": "D1"}}
+
+    def _dm_targets(self, **kwargs):
+        with (
+            patch_modules({"src.core.db": self.db}),
+            patch.object(sched_mod, "WebClient", return_value=self.client),
+            patch.object(sched_mod.state_store, "blocks_scheduled_dm", return_value=False),
+            patch.object(sched_mod, "_slack_dm_with_retry") as dm,
+        ):
+            sched_mod._send_standup_to_workspace("T1", "xoxb-test", "C1", 1, **kwargs)
+        return {call.args[1] for call in dm.call_args_list}
+
+    def test_skip_answered_leaves_out_who_already_answered(self):
+        assert self._dm_targets(skip_answered=True) == {"U2"}
+
+    def test_a_scheduled_run_is_unchanged(self):
+        assert self._dm_targets() == {"U1", "U2"}

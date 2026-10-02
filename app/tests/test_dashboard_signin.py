@@ -130,3 +130,35 @@ class TestSlack:
         assert sent["response_type"] == "ephemeral"
         assert oauth.verify_login_token(_token(_link(sent["blocks"])["url"])) == ("T1", "U9")
         client.chat_postMessage.assert_not_called()
+
+
+class TestOpenInSlack:
+    """The login page's main button: open the app in Slack, never the install flow."""
+
+    def _get(self, monkeypatch, **env):
+        from flask import Flask
+
+        from tests.test_dashboard import dashboard
+
+        for key in ("SLACK_APP_ID",):
+            monkeypatch.delenv(key, raising=False)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        app = Flask(__name__)
+        app.config["SECRET_KEY"] = "test"
+        app.register_blueprint(dashboard.browser_bp)
+        return app.test_client().get("/dashboard/open-in-slack")
+
+    def test_hosted_opens_the_hosted_app(self, monkeypatch):
+        response = self._get(monkeypatch, APP_URL="https://api.morgenruf.dev")
+        assert response.status_code == 302
+        assert response.headers["Location"] == "https://slack.com/app_redirect?app=A0AR0J2R9MJ"
+
+    def test_self_hosted_uses_its_own_app(self, monkeypatch):
+        response = self._get(monkeypatch, APP_URL="https://standups.example.com", SLACK_APP_ID="A123")
+        assert response.headers["Location"] == "https://slack.com/app_redirect?app=A123"
+
+    def test_without_an_app_id_it_explains_instead(self, monkeypatch):
+        response = self._get(monkeypatch, APP_URL="https://standups.example.com")
+        assert response.headers["Location"].endswith("/dashboard/login?error=open-in-slack")
+        assert "/install" not in response.headers["Location"]
