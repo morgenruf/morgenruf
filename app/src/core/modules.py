@@ -71,6 +71,11 @@ class ModuleSpec:
     # close and scrub open pulse rounds) instead of leaving it half running.
     # Errors are logged by the caller; the switch itself always takes effect.
     on_disable: Optional[Callable[[str], None]] = None
+    # An extra the standup quick start offers as a ticked checkbox, as
+    # (label, start). start(team_id, channel_id, user_id, tz) switches this
+    # module on for that channel. The quick start lists these from the
+    # registry, so it never imports another module by name.
+    quick_start: Optional[tuple[str, Callable]] = None
 
 
 def deploy_allowlist() -> Optional[set[str]]:

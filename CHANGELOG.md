@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Watercooler.** A conversation question posted to a channel on the days and
+  at the time you pick, skipping company holidays and days off; people reply
+  in the thread. About 150 built-in questions in four categories (light, work,
+  remote life, this or that), plus your own. Hide any built-in question for
+  your workspace only. Run it in several channels, each with its own schedule
+  and question mix, never repeating a question until the channel has seen
+  them all. Set it up with `/morgenruf watercooler`, from the Home tab or on
+  the new Watercooler page, where you can also post one straight away. The
+  standup quick start offers it as a ticked box. Off by default; a workspace
+  admin can put someone in charge of it.
+
 ## [1.9.18] - 2026-10-02
 
 ### Security

@@ -33,6 +33,7 @@ import { Route as DashboardAuthenticatedReportsRouteImport } from './routes/dash
 import { Route as DashboardAuthenticatedSettingsRouteImport } from './routes/dashboard/_authenticated/settings'
 import { Route as DashboardAuthenticatedStandupsRouteImport } from './routes/dashboard/_authenticated/standups'
 import { Route as DashboardAuthenticatedTodayRouteImport } from './routes/dashboard/_authenticated/today'
+import { Route as DashboardAuthenticatedWatercoolerRouteImport } from './routes/dashboard/_authenticated/watercooler'
 import { Route as DashboardAuthenticatedWebhooksRouteImport } from './routes/dashboard/_authenticated/webhooks'
 import { Route as DashboardAuthenticatedConnectIndexRouteImport } from './routes/dashboard/_authenticated/connect/index'
 import { Route as DashboardAuthenticatedConnectProgramIdRouteImport } from './routes/dashboard/_authenticated/connect/$programId'
@@ -175,6 +176,12 @@ const DashboardAuthenticatedTodayRoute =
     path: '/today',
     getParentRoute: () => DashboardAuthenticatedRouteRoute,
   } as any)
+const DashboardAuthenticatedWatercoolerRoute =
+  DashboardAuthenticatedWatercoolerRouteImport.update({
+    id: '/watercooler',
+    path: '/watercooler',
+    getParentRoute: () => DashboardAuthenticatedRouteRoute,
+  } as any)
 const DashboardAuthenticatedWebhooksRoute =
   DashboardAuthenticatedWebhooksRouteImport.update({
     id: '/webhooks',
@@ -229,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/standups': typeof DashboardAuthenticatedStandupsRoute
   '/dashboard/today': typeof DashboardAuthenticatedTodayRoute
+  '/dashboard/watercooler': typeof DashboardAuthenticatedWatercoolerRoute
   '/dashboard/webhooks': typeof DashboardAuthenticatedWebhooksRoute
   '/dashboard/': typeof DashboardAuthenticatedIndexRoute
   '/dashboard/connect/$programId': typeof DashboardAuthenticatedConnectProgramIdRoute
@@ -258,6 +266,7 @@ export interface FileRoutesByTo {
   '/dashboard/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/standups': typeof DashboardAuthenticatedStandupsRoute
   '/dashboard/today': typeof DashboardAuthenticatedTodayRoute
+  '/dashboard/watercooler': typeof DashboardAuthenticatedWatercoolerRoute
   '/dashboard/webhooks': typeof DashboardAuthenticatedWebhooksRoute
   '/dashboard/connect/$programId': typeof DashboardAuthenticatedConnectProgramIdRoute
   '/dashboard/connect/attendance': typeof DashboardAuthenticatedConnectAttendanceRoute
@@ -289,6 +298,7 @@ export interface FileRoutesById {
   '/dashboard/_authenticated/settings': typeof DashboardAuthenticatedSettingsRoute
   '/dashboard/_authenticated/standups': typeof DashboardAuthenticatedStandupsRoute
   '/dashboard/_authenticated/today': typeof DashboardAuthenticatedTodayRoute
+  '/dashboard/_authenticated/watercooler': typeof DashboardAuthenticatedWatercoolerRoute
   '/dashboard/_authenticated/webhooks': typeof DashboardAuthenticatedWebhooksRoute
   '/dashboard/_authenticated/': typeof DashboardAuthenticatedIndexRoute
   '/dashboard/_authenticated/connect/$programId': typeof DashboardAuthenticatedConnectProgramIdRoute
@@ -321,6 +331,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/standups'
     | '/dashboard/today'
+    | '/dashboard/watercooler'
     | '/dashboard/webhooks'
     | '/dashboard/'
     | '/dashboard/connect/$programId'
@@ -350,6 +361,7 @@ export interface FileRouteTypes {
     | '/dashboard/settings'
     | '/dashboard/standups'
     | '/dashboard/today'
+    | '/dashboard/watercooler'
     | '/dashboard/webhooks'
     | '/dashboard/connect/$programId'
     | '/dashboard/connect/attendance'
@@ -380,6 +392,7 @@ export interface FileRouteTypes {
     | '/dashboard/_authenticated/settings'
     | '/dashboard/_authenticated/standups'
     | '/dashboard/_authenticated/today'
+    | '/dashboard/_authenticated/watercooler'
     | '/dashboard/_authenticated/webhooks'
     | '/dashboard/_authenticated/'
     | '/dashboard/_authenticated/connect/$programId'
@@ -567,6 +580,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardAuthenticatedTodayRouteImport
       parentRoute: typeof DashboardAuthenticatedRouteRoute
     }
+    '/dashboard/_authenticated/watercooler': {
+      id: '/dashboard/_authenticated/watercooler'
+      path: '/watercooler'
+      fullPath: '/dashboard/watercooler'
+      preLoaderRoute: typeof DashboardAuthenticatedWatercoolerRouteImport
+      parentRoute: typeof DashboardAuthenticatedRouteRoute
+    }
     '/dashboard/_authenticated/webhooks': {
       id: '/dashboard/_authenticated/webhooks'
       path: '/webhooks'
@@ -645,6 +665,7 @@ interface DashboardAuthenticatedRouteRouteChildren {
   DashboardAuthenticatedSettingsRoute: typeof DashboardAuthenticatedSettingsRoute
   DashboardAuthenticatedStandupsRoute: typeof DashboardAuthenticatedStandupsRoute
   DashboardAuthenticatedTodayRoute: typeof DashboardAuthenticatedTodayRoute
+  DashboardAuthenticatedWatercoolerRoute: typeof DashboardAuthenticatedWatercoolerRoute
   DashboardAuthenticatedWebhooksRoute: typeof DashboardAuthenticatedWebhooksRoute
   DashboardAuthenticatedIndexRoute: typeof DashboardAuthenticatedIndexRoute
 }
@@ -669,6 +690,8 @@ const DashboardAuthenticatedRouteRouteChildren: DashboardAuthenticatedRouteRoute
     DashboardAuthenticatedSettingsRoute: DashboardAuthenticatedSettingsRoute,
     DashboardAuthenticatedStandupsRoute: DashboardAuthenticatedStandupsRoute,
     DashboardAuthenticatedTodayRoute: DashboardAuthenticatedTodayRoute,
+    DashboardAuthenticatedWatercoolerRoute:
+      DashboardAuthenticatedWatercoolerRoute,
     DashboardAuthenticatedWebhooksRoute: DashboardAuthenticatedWebhooksRoute,
     DashboardAuthenticatedIndexRoute: DashboardAuthenticatedIndexRoute,
   }

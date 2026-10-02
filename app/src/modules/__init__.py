@@ -19,5 +19,6 @@ from src.modules.mcp import MODULE as MCP
 from src.modules.polls import MODULE as POLLS
 from src.modules.pulse import MODULE as PULSE
 from src.modules.standup import MODULE as STANDUP
+from src.modules.watercooler import MODULE as WATERCOOLER
 
-REGISTRY = (STANDUP, KUDOS, POLLS, PULSE, CONNECT, CELEBRATIONS, INSIGHTS, MCP, GOOGLE_CHAT)
+REGISTRY = (STANDUP, KUDOS, POLLS, PULSE, CONNECT, CELEBRATIONS, WATERCOOLER, INSIGHTS, MCP, GOOGLE_CHAT)

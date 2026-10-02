@@ -50,6 +50,7 @@ const moduleLabels: Record<string, string> = {
   polls: 'Polls',
   pulse: 'Pulse',
   celebrations: 'Celebrations',
+  watercooler: 'Watercooler',
   insights: 'Insights',
 };
 

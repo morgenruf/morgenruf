@@ -39,6 +39,7 @@ import {
 import { reportsOptions } from '@/modules/reports/queries';
 import { standupTemplatesOptions } from '@/modules/standups/queries';
 import { todayOptions } from '@/modules/today/queries';
+import { watercoolerOptions } from '@/modules/watercooler/queries';
 import {
   webhookEventsOptions,
   webhooksOptions,
@@ -277,6 +278,11 @@ export function prefetchDashboard(
       void client.query(pulseSettingsOptions(services, team)).catch(noop);
       void client.query(pulseTrendOptions(services, team)).catch(noop);
       void client.query(modulesOptions(services, team)).catch(noop);
+      channels();
+      break;
+
+    case 'watercooler':
+      void client.query(watercoolerOptions(services, team)).catch(noop);
       channels();
       break;
 

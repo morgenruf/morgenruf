@@ -15,6 +15,7 @@ import { Pulse } from './generated/Pulse';
 import { Reports } from './generated/Reports';
 import { Session } from './generated/Session';
 import { Standups } from './generated/Standups';
+import { Watercooler } from './generated/Watercooler';
 import { Webhooks } from './generated/Webhooks';
 import { Workspace } from './generated/Workspace';
 
@@ -123,6 +124,7 @@ export function createApi(options: TransportOptions) {
     polls: new Polls(httpClient),
     pulse: new Pulse(httpClient),
     celebrations: new Celebrations(httpClient),
+    watercooler: new Watercooler(httpClient),
     insights: new Insights(httpClient),
     public: new Public(httpClient),
   };
