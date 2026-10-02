@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { errorMessage } from '@/common/api/errors';
@@ -7,6 +7,7 @@ import type {
   MemberProfileRecord,
   ProfileImportResult,
 } from '@/common/api/generated/data-contracts';
+import { CsvInput } from '@/common/components/csv-input';
 import { ProfileForm } from '@/common/components/profile-form';
 import { Badge } from '@/common/components/ui/badge';
 import { Button } from '@/common/components/ui/button';
@@ -28,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/common/components/ui/table';
-import { Textarea } from '@/common/components/ui/textarea';
+import { useAutoPreview } from '@/common/lib/csv';
 import { plural } from '@/common/lib/format';
 import { birthdayLabel } from '@/common/lib/profile';
 
@@ -112,6 +113,7 @@ export function ImportDatesDialog({
   const [overwrite, setOverwrite] = useState(false);
   const [preview, setPreview] = useState<ProfileImportResult | null>(null);
   const [error, setError] = useState('');
+  const latest = useRef(0);
 
   function reset() {
     setCsv('');
@@ -122,9 +124,11 @@ export function ImportDatesDialog({
 
   async function submit(write: boolean) {
     setError('');
+    const request = ++latest.current;
 
     try {
       const { data } = await run({ csv, preview: !write, overwrite });
+      if (request !== latest.current) return;
 
       if (write) {
         toast.success(`Saved dates for ${plural(data.written, 'member')}`);
@@ -132,9 +136,11 @@ export function ImportDatesDialog({
         onOpenChange(false);
       } else setPreview(data);
     } catch (failure) {
-      setError(errorMessage(failure));
+      if (request === latest.current) setError(errorMessage(failure));
     }
   }
+
+  useAutoPreview(csv, [overwrite], () => void submit(false));
 
   return (
     <Dialog
@@ -148,44 +154,23 @@ export function ImportDatesDialog({
         <DialogHeader>
           <DialogTitle>Import birthdays and start dates</DialogTitle>
           <DialogDescription>
-            Paste or upload a CSV with the columns{' '}
-            <code>email,birthday,start_date</code>. Birthdays can be MM-DD or a
-            full date; the year is dropped and never stored. Nothing is saved
-            until you have checked the preview.
+            Columns <code>email,birthday,start_date</code>. A birthday can be
+            MM-DD or a full date; the year is never stored. You see a preview
+            before anything is saved.
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-4">
-          <div className="flex flex-col gap-2 text-sm font-medium">
-            <label htmlFor={`${id}-csv`}>CSV</label>
-            <Textarea
-              id={`${id}-csv`}
-              className="min-h-32 font-mono"
-              placeholder={example}
-              value={csv}
-              onChange={(event) => {
-                setCsv(event.target.value);
-                setPreview(null);
-              }}
-            />
-          </div>
-          <div className="flex flex-col gap-2 text-sm font-medium">
-            <label htmlFor={`${id}-file`}>Or choose a file</label>
-            <input
-              id={`${id}-file`}
-              type="file"
-              accept=".csv,text/csv"
-              className="text-sm font-normal"
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-
-                if (file) {
-                  setCsv(await file.text());
-                  setPreview(null);
-                }
-              }}
-            />
-          </div>
+          <CsvInput
+            id={id}
+            value={csv}
+            example={example}
+            templateName="birthdays-and-start-dates-template.csv"
+            onChange={(text) => {
+              setCsv(text);
+              setPreview(null);
+            }}
+          />
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
@@ -275,21 +260,14 @@ export function ImportDatesDialog({
         </DialogBody>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            disabled={!csv.trim() || pending}
-            onClick={() => void submit(false)}
-          >
-            {pending && !preview ? 'Checking…' : 'Preview'}
-          </Button>
-          <Button
-            disabled={!preview?.ready || pending}
-            onClick={() => void submit(true)}
-          >
-            {pending && preview
-              ? 'Saving…'
-              : `Save ${plural(preview?.ready ?? 0, 'member')}`}
-          </Button>
+          {pending && !preview && (
+            <p className="mr-auto text-sm text-muted-foreground">Checking…</p>
+          )}
+          {!!preview?.ready && (
+            <Button disabled={pending} onClick={() => void submit(true)}>
+              {pending ? 'Saving…' : `Save ${plural(preview.ready, 'member')}`}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

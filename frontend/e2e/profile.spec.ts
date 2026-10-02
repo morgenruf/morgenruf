@@ -65,11 +65,10 @@ test('an admin previews a date import before anything is saved', async ({
 
   await page.getByRole('button', { name: 'Import dates' }).click();
   await page
-    .getByLabel('CSV')
+    .getByLabel('CSV', { exact: true })
     .fill(
       'email,birthday,start_date\nu_member@example.test,1990-07-04,2022-05-01\nnobody@example.test,01-01,\n',
     );
-  await page.getByRole('button', { name: 'Preview' }).click();
 
   const preview = page.getByRole('region', { name: 'Rows in the file' });
   await expect(preview.getByText('Will be saved')).toBeVisible();

@@ -12,6 +12,8 @@ Settings = model(
     post_time=string(),
     birthdays=boolean(),
     anniversaries=boolean(),
+    # An image on each post, picked at random, never the same twice in a row.
+    banners=boolean(),
     # From the core workspace calendar, edited here in this release.
     working_days=strings(),
     # A channel and a timezone are set, so posts can go out once enabled.
@@ -29,6 +31,7 @@ class SettingsInput(ApiSchema):
     post_time = fields.String(load_default="09:00", validate=validate.Regexp(r"^([01][0-9]|2[0-3]):[0-5][0-9]$"))
     birthdays = fields.Boolean(load_default=True)
     anniversaries = fields.Boolean(load_default=True)
+    banners = fields.Boolean(load_default=True)
     working_days = fields.List(
         fields.String(validate=validate.OneOf(WEEKDAY_KEYS)),
         required=True,

@@ -85,6 +85,7 @@ export interface BlockedResponse {
 
 export interface CelebrationSettings {
   anniversaries: boolean;
+  banners: boolean;
   birthdays: boolean;
   can_react: boolean;
   channel_id: string | null;
@@ -1039,6 +1040,8 @@ export interface SessionInfo {
 export interface SettingsInput {
   /** @default true */
   anniversaries?: boolean;
+  /** @default true */
+  banners?: boolean;
   /** @default true */
   birthdays?: boolean;
   /**

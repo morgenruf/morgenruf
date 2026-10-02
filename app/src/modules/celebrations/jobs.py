@@ -162,7 +162,36 @@ def can_react(team_id: str) -> bool:
     return REACTION_SCOPE in db.granted_scopes(team_id)
 
 
-def post_celebration(client, team_id: str, channel_id: str, celebration, today: date, cal, react: bool) -> str | None:
+def _choose_banner(team_id: str, kind: str) -> tuple[str | None, dict | None]:
+    """A banner for this post and its image block, or (None, None) when there is none to show."""
+    import src.modules.celebrations.db as cdb  # noqa: PLC0415
+    from src.modules.celebrations import banners  # noqa: PLC0415
+
+    try:
+        name = banners.pick(kind, cdb.last_banner(team_id, kind))
+    except Exception:
+        logger.warning("celebrations: could not read the last banner for %s", team_id)
+        name = banners.pick(kind, None)
+    block = banners.image_block(kind, name) if name else None
+    return (name, block) if block else (None, None)
+
+
+def _send(client, channel_id: str, text: str, banner_block: dict | None):
+    """Post with the banner, and without it if Slack refuses the image. Returns (response, banner shown)."""
+    base = {"channel": channel_id, "text": text, "unfurl_links": False, "unfurl_media": False}
+    if banner_block:
+        blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text}}, banner_block]
+        try:
+            return client.chat_postMessage(**base, blocks=blocks), True
+        except Exception as exc:
+            # Most often an install Slack cannot reach. The words matter, the picture does not.
+            logger.info("celebrations: banner refused in %s, posting text only: %s", channel_id, exc)
+    return client.chat_postMessage(**base), False
+
+
+def post_celebration(
+    client, team_id: str, channel_id: str, celebration, today: date, cal, react: bool, banners_on: bool = True
+) -> str | None:
     """Claim, post and react for one celebration. Returns the message ts, or None.
 
     The claim comes first. If Slack refuses the post the claim is released,
@@ -175,10 +204,13 @@ def post_celebration(client, team_id: str, channel_id: str, celebration, today: 
     kind, day = celebration.kind, celebration.day
     if not cdb.claim_post(team_id, kind, day, today, channel_id, celebration.user_ids):
         return None
+    banner, banner_block = _choose_banner(team_id, kind) if banners_on else (None, None)
     try:
         text = celebration_text(_fill_names(client, celebration), today, cal)
-        response = client.chat_postMessage(channel=channel_id, text=text, unfurl_links=False, unfurl_media=False)
+        response, shown = _send(client, channel_id, text, banner_block)
         ts = response.get("ts") if response else None
+        if not shown:
+            banner = None
     except Exception:
         logger.exception("celebrations: could not post the %s for %s in %s", kind, day, team_id)
         try:
@@ -187,7 +219,7 @@ def post_celebration(client, team_id: str, channel_id: str, celebration, today: 
             logger.exception("celebrations: could not release the claim for %s %s", kind, day)
         return None
     if ts:
-        cdb.record_post(team_id, kind, day, ts)
+        cdb.record_post(team_id, kind, day, ts, banner)
     if react and ts:
         try:
             client.reactions_add(channel=channel_id, timestamp=ts, name=REACTION)
@@ -231,7 +263,9 @@ def run_daily(team_id: str, now: datetime | None = None) -> list[str]:
     if celebrations:
         react = can_react(team_id)
         for c in celebrations:
-            ts = post_celebration(client, team_id, settings["channel_id"], c, today, cal, react)
+            ts = post_celebration(
+                client, team_id, settings["channel_id"], c, today, cal, react, bool(settings.get("banners", True))
+            )
             if ts:
                 posted.append(ts)
 

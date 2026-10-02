@@ -1106,7 +1106,7 @@ def app_home_view(
 
     import pytz as _pytz
 
-    from src.core.links import dashboard_url, support_url
+    from src.core.links import support_url
 
     # Compute local time string for the user
     local_time_str = ""
@@ -1155,7 +1155,6 @@ def app_home_view(
                 "type": "button",
                 "action_id": "open_dashboard",
                 "text": {"type": "plain_text", "text": "📊 Dashboard", "emoji": True},
-                "url": dashboard_url(),
             },
             {
                 "type": "button",
@@ -1183,7 +1182,6 @@ def app_home_view(
                 "type": "button",
                 "action_id": "open_dashboard",
                 "text": {"type": "plain_text", "text": "📊 Dashboard", "emoji": True},
-                "url": dashboard_url(),
             },
             {
                 "type": "button",
@@ -1460,7 +1458,6 @@ def app_home_configure_view(
     workspace_name: str = "",
 ) -> dict:
     """App Home tab in settings mode, for people who may manage standups."""
-    from src.core.links import dashboard_url
 
     blocks: list[dict] = [
         {
@@ -1496,14 +1493,13 @@ def app_home_configure_view(
                 "type": "mrkdwn",
                 "text": (
                     "Don't see the standup you are looking for? You are probably not in it. "
-                    f"Join an existing standup and edit it in the <{dashboard_url()}|Dashboard>. 👉"
+                    "Join an existing standup and edit it in the Dashboard. 👉"
                 ),
             },
             "accessory": {
                 "type": "button",
                 "action_id": "open_dashboard",
-                "text": {"type": "plain_text", "text": "Open the Dashboard 🔗", "emoji": True},
-                "url": dashboard_url(),
+                "text": {"type": "plain_text", "text": "Open the Dashboard", "emoji": True},
             },
         },
         {"type": "divider"},
@@ -1588,8 +1584,7 @@ def app_home_configure_view(
                 {
                     "type": "button",
                     "action_id": "open_dashboard",
-                    "text": {"type": "plain_text", "text": "Details 🔗", "emoji": True},
-                    "url": dashboard_url(),
+                    "text": {"type": "plain_text", "text": "Details", "emoji": True},
                 }
             )
             row.append(

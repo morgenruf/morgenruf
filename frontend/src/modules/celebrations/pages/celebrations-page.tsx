@@ -106,6 +106,7 @@ const defaults: SettingsForm = {
   post_time: '09:00',
   birthdays: true,
   anniversaries: true,
+  banners: true,
   working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
 };
 
@@ -187,6 +188,7 @@ function SettingsCard() {
           post_time: settings.data.post_time,
           birthdays: settings.data.birthdays,
           anniversaries: settings.data.anniversaries,
+          banners: settings.data.banners,
           working_days: settings.data.working_days,
         }
       : defaults,
@@ -361,6 +363,10 @@ function SettingsCard() {
                         {...form.register('anniversaries')}
                       />
                       Celebrate work anniversaries
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" {...form.register('banners')} />
+                      Add a banner image to each post
                     </label>
                   </div>
                 </fieldset>

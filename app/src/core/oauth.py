@@ -288,6 +288,11 @@ def _make_login_token(team_id: str, user_id: str = "") -> str:
     return base64.urlsafe_b64encode(f"{payload}.{_sign('login', payload)}".encode()).decode()
 
 
+def make_login_token(team_id: str, user_id: str) -> str:
+    """A one-time dashboard sign-in for someone Slack has just identified."""
+    return _make_login_token(team_id, user_id)
+
+
 def _read_login_token(token: str) -> tuple[str, str, str] | None:
     """Return (team_id, user_id, nonce) for a valid token at most 5 minutes old."""
     try:

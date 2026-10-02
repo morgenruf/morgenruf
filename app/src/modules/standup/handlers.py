@@ -1300,8 +1300,25 @@ def register_handlers(app: App) -> None:
         client.views_open(trigger_id=body["trigger_id"], view=modal)
 
     @app.action("open_dashboard")
-    def handle_open_dashboard(ack):  # noqa: ANN001
-        """Acknowledge dashboard link button (URL buttons still need ack)."""
+    def handle_open_dashboard(ack, body, client):  # noqa: ANN001
+        """Open a modal with a sign-in link for whoever clicked.
+
+        A plain link sent members to the install flow, which a workspace that
+        approves apps refuses to anyone but an admin.
+        """
+        ack()
+        from src.core.dashboard_signin import signin_modal  # noqa: PLC0415
+
+        user_id = body["user"]["id"]
+        team_id = (body.get("team") or {}).get("id") or body["user"].get("team_id", "")
+        try:
+            client.views_open(trigger_id=body["trigger_id"], view=signin_modal(team_id, user_id))
+        except Exception as exc:
+            logger.warning("Could not open the dashboard sign-in for %s: %s", user_id, exc)
+
+    @app.action("dashboard_signin_link")
+    def handle_dashboard_signin_link(ack):  # noqa: ANN001
+        """The link button in that modal. Slack opens the URL; this only acknowledges."""
         ack()
 
     @app.action("open_support")
