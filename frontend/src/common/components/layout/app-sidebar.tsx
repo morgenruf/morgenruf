@@ -67,6 +67,10 @@ type NavItem = {
   // neutral and only the glyph is tinted.
   color: string;
   module?: string;
+  // Who may open it: a feature's admins, or 'workspace' for workspace admins.
+  // Pages that show other people's numbers or the workspace's plumbing are
+  // hidden from everyone else; the API refuses them too.
+  access?: string;
 };
 
 const groups: { label: string; items: NavItem[] }[] = [
@@ -79,6 +83,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: Sunrise,
         color: 'text-orange-500 dark:text-orange-400',
         module: 'insights',
+        access: 'standup',
       },
     ],
   },
@@ -144,6 +149,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: Lightbulb,
         color: 'text-yellow-600 dark:text-yellow-400',
         module: 'insights',
+        access: 'standup',
       },
       {
         label: 'Reports',
@@ -156,6 +162,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         path: '/dashboard/analytics',
         icon: BarChart3,
         color: 'text-emerald-600 dark:text-emerald-400',
+        access: 'standup',
       },
     ],
   },
@@ -167,6 +174,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         path: '/dashboard/settings',
         icon: Settings2,
         color: 'text-slate-500 dark:text-slate-400',
+        access: 'workspace',
       },
       {
         label: 'Automation',
@@ -174,12 +182,14 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: Workflow,
         color: 'text-fuchsia-500 dark:text-fuchsia-400',
         module: 'standup',
+        access: 'standup',
       },
       {
         label: 'Webhooks',
         path: '/dashboard/webhooks',
         icon: Webhook,
         color: 'text-cyan-600 dark:text-cyan-400',
+        access: 'workspace',
       },
       {
         label: 'MCP',
@@ -187,6 +197,7 @@ const groups: { label: string; items: NavItem[] }[] = [
         icon: Plug,
         color: 'text-lime-600 dark:text-lime-400',
         module: 'mcp',
+        access: 'workspace',
       },
     ],
   },
@@ -200,7 +211,9 @@ export function AppSidebar({
   onLogout: () => void;
 }) {
   const modules = useWorkspaceModules();
-  const { canAdminister } = usePermissions();
+  const { canAdminister, isAdmin } = usePermissions();
+  const mayOpen = (access?: string) =>
+    !access || (access === 'workspace' ? isAdmin : canAdminister(access));
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
 
@@ -253,9 +266,11 @@ export function AppSidebar({
           {groups.map((group) => {
             const items = group.items.filter(
               (item) =>
-                !item.module ||
-                !modules.data ||
-                modules.data.find((mod) => mod.name === item.module)?.available,
+                mayOpen(item.access) &&
+                (!item.module ||
+                  !modules.data ||
+                  modules.data.find((mod) => mod.name === item.module)
+                    ?.available),
             );
 
             return items.length ? (
@@ -292,7 +307,8 @@ export function AppSidebar({
                               )
                                 .filter(
                                   ([label]) =>
-                                    label !== 'New coffee chat' ||
+                                    (label !== 'New coffee chat' &&
+                                      label !== 'Attendance') ||
                                     canAdminister('connect'),
                                 )
                                 .map(([label, path]) => (

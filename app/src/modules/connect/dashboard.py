@@ -255,7 +255,7 @@ def register_routes(flask_app) -> None:
         return rounds
 
     @bp.route("/dashboard/api/connect/rounds/<int:round_id>/matches", methods=["GET"])
-    @_login_required
+    @_admin_required("connect")
     @bp.doc(operationId="listMatches", tags=["Connect"], security=[{"sessionCookie": []}])
     @api_errors(bp)
     @bp.response(200, schemas.Match(many=True))
@@ -288,7 +288,7 @@ def register_routes(flask_app) -> None:
         return out
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/members", methods=["GET"])
-    @_login_required
+    @_admin_required("connect")
     @bp.doc(operationId="listProgramMembers", tags=["Connect"], security=[{"sessionCookie": []}])
     @api_errors(bp)
     @bp.response(200, schemas.ProgramMember(many=True))
@@ -408,7 +408,7 @@ def register_routes(flask_app) -> None:
         return {"configured": True, **summary}
 
     @bp.route("/dashboard/api/connect/programs/<int:program_id>/participation", methods=["GET"])
-    @_login_required
+    @_admin_required("connect")
     @bp.doc(operationId="listParticipation", tags=["Connect"], security=[{"sessionCookie": []}])
     @api_errors(bp)
     @bp.arguments(schemas.RoundsQuery, location="query", error_status_code=400)

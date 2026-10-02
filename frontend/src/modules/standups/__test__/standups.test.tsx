@@ -1266,7 +1266,10 @@ describe('standup managers', () => {
     await user.click(
       await screen.findByRole('button', { name: 'Actions for Design daily' }),
     );
-    expect(screen.getByRole('menuitem', { name: /Pause/ })).toBeInTheDocument();
+    // The menu opens asynchronously; wait for it before looking inside.
+    expect(
+      await screen.findByRole('menuitem', { name: /Pause/ }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('menuitem', { name: /Delete/ }),
     ).not.toBeInTheDocument();

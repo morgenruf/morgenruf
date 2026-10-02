@@ -23,11 +23,11 @@ import { StandupRow } from './standup-row';
 
 export function StandupsPage() {
   const query = useStandups();
-  const health = useStandupHealth();
   const { channels } = useStandupResources();
 
   const { canAdminister } = usePermissions();
   const editable = canAdminister('standup');
+  const health = useStandupHealth(editable);
 
   const route = getRouteApi('/dashboard/_authenticated/standups');
   const params = route.useSearch();
@@ -174,7 +174,7 @@ export function StandupsPage() {
             {query.error && (
               <ErrorState error={query.error} retry={() => query.refetch()} />
             )}
-            {health.isError && (
+            {editable && health.isError && (
               <div
                 role="alert"
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-2 text-sm"
@@ -201,7 +201,7 @@ export function StandupsPage() {
                     standup={standup}
                     channel={channelNames.get(standup.channel_id)}
                     metrics={metrics.get(standup.id)}
-                    healthPending={health.isPending}
+                    healthPending={editable && health.isPending}
                     healthUnavailable={health.isError}
                     editable={editable || !!standup.can_manage}
                     deletable={editable}

@@ -19,7 +19,7 @@ def register_routes(flask_app) -> None:
 
     import src.modules.insights.db as idb
     from src.core.api import api_errors, register_api_blueprint
-    from src.core.dashboard import _login_required
+    from src.core.dashboard import _admin_required
     from src.core.roster import eligible_members
     from src.modules.insights import schemas
     from src.modules.insights.rules import find_blocker_runs
@@ -31,7 +31,7 @@ def register_routes(flask_app) -> None:
         return value.isoformat() if value is not None and hasattr(value, "isoformat") else value
 
     @bp.route("/dashboard/api/insights", methods=["GET"])
-    @_login_required
+    @_admin_required("standup")
     @bp.doc(operationId="getInsights", tags=["Insights"], security=[{"sessionCookie": []}])
     @api_errors(bp)
     @bp.arguments(schemas.InsightsQuery, location="query", error_status_code=400)
@@ -74,7 +74,7 @@ def register_routes(flask_app) -> None:
         }
 
     @bp.route("/dashboard/api/today", methods=["GET"])
-    @_login_required
+    @_admin_required("standup")
     @bp.doc(operationId="getToday", tags=["Insights"], security=[{"sessionCookie": []}])
     @api_errors(bp)
     @bp.arguments(schemas.TodayQuery, location="query", error_status_code=400)

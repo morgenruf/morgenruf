@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.18] - 2026-10-02
+
+### Security
+- **Members could read other people's data in the dashboard.** Writes were
+  guarded but most reads were not, which went unnoticed while only the
+  installer could sign in; 1.9.16 let every member sign in. A member could see
+  every coworker's standup answers on Today (private channels included),
+  long-running blockers on Insights, per-person Analytics and Stats, coffee
+  chat pairs, attendance and opt-outs, automation rules, webhooks and API key
+  details. These now need the matching admin grant (Standups or Coffee chats)
+  or a workspace admin, the sidebar hides them, and a test fails any new
+  read route that has not been decided on.
+
 ## [1.9.17] - 2026-10-02
 
 ### Added

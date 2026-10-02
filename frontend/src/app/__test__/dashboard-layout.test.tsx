@@ -352,42 +352,62 @@ it('filters unavailable modules and marks the current navigation link', async ()
   );
 });
 
-it.each([true, false])(
-  'keeps exact submenu matching with admin permission %s',
-  async (canAdminister) => {
-    state.canAdminister = canAdminister;
-    state.modules.push({
-      name: 'connect',
-      available: true,
-      active: true,
-      missing_scopes: [],
-    });
-    await view('/dashboard/connect/attendance');
+it('keeps exact submenu matching for coffee chat admins', async () => {
+  state.modules.push({
+    name: 'connect',
+    available: true,
+    active: true,
+    missing_scopes: [],
+  });
+  await view('/dashboard/connect/attendance');
 
-    const navigation = within(
-      screen.getByRole('navigation', { name: 'Main navigation' }),
-    );
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'Main navigation' }),
+  );
 
-    expect(
-      navigation.getByRole('link', { name: 'Coffee chats' }),
-    ).toHaveAttribute('data-active');
-    expect(
-      navigation.getByRole('link', { name: 'Attendance' }),
-    ).toHaveAttribute('aria-current', 'page');
-    expect(
-      navigation.getByRole('link', { name: 'Attendance' }),
-    ).toHaveAttribute('data-active');
-    expect(
-      navigation.getByRole('link', { name: 'All coffee chats' }),
-    ).not.toHaveAttribute('aria-current');
-    expect(
-      navigation.getByRole('link', { name: 'All coffee chats' }),
-    ).not.toHaveAttribute('data-active');
-    expect(!!navigation.queryByRole('link', { name: 'New coffee chat' })).toBe(
-      canAdminister,
-    );
-  },
-);
+  expect(
+    navigation.getByRole('link', { name: 'Coffee chats' }),
+  ).toHaveAttribute('data-active');
+  expect(navigation.getByRole('link', { name: 'Attendance' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  expect(
+    navigation.getByRole('link', { name: 'All coffee chats' }),
+  ).not.toHaveAttribute('aria-current');
+  expect(
+    navigation.getByRole('link', { name: 'New coffee chat' }),
+  ).toBeInTheDocument();
+});
+
+it('hides pages about other people from members', async () => {
+  state.canAdminister = false;
+  state.modules.push(
+    { name: 'connect', available: true, active: true, missing_scopes: [] },
+    { name: 'insights', available: true, active: true, missing_scopes: [] },
+    { name: 'mcp', available: true, active: true, missing_scopes: [] },
+  );
+  await view('/dashboard/connect');
+
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'Main navigation' }),
+  );
+
+  for (const name of [
+    'Today',
+    'Insights',
+    'Analytics',
+    'Settings',
+    'Automation',
+    'Webhooks',
+    'MCP',
+    'Attendance',
+    'New coffee chat',
+  ])
+    expect(navigation.queryByRole('link', { name })).not.toBeInTheDocument();
+  for (const name of ['Standups', 'Coffee chats', 'Reports'])
+    expect(navigation.getByRole('link', { name })).toBeInTheDocument();
+});
 
 it('opens mobile navigation after a viewport change and closes it after selecting a route', async () => {
   await view('/dashboard/standups');

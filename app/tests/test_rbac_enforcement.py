@@ -142,7 +142,8 @@ class TestAMemberIsRefused:
         assert resp.status_code == 403, f"a member could {what} ({method} {path})"
 
     def test_reading_is_still_allowed(self, member_client):
-        # Roles gate changing things, not looking at them.
+        # A member still reads the standups they could see in Slack anyway.
+        # What else they may read, and why, is in test_read_access.py.
         assert member_client.get("/dashboard/api/standups").status_code == 200
 
 
