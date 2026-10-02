@@ -69,6 +69,9 @@ slack:
   clientSecret: ""
   # App Credentials → Signing Secret (32 hex chars, different from client secret)
   signingSecret: ""
+  # Basic Information → App ID (A0123...). Optional: the dashboard login page's
+  # "Open Morgenruf in Slack" button uses it. Blank shows instructions instead.
+  appId: ""
 
 # ---------------------------------------------------------------------------
 # Required: App URL — the public HTTPS URL where the bot is reachable

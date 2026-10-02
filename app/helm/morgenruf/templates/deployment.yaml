@@ -124,6 +124,8 @@ spec:
               value: {{ ternary "1" "0" (.Values.ops.purgeInactiveWorkspaces | default false) | quote }}
             - name: MORGENRUF_INTERNAL_TEAMS
               value: {{ .Values.ops.internalTeams | default "" | quote }}
+            - name: SLACK_APP_ID
+              value: {{ .Values.slack.appId | default "" | quote }}
             - name: MORGENRUF_OPS_EMAIL
               valueFrom:
                 secretKeyRef:
