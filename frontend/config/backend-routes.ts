@@ -2,6 +2,7 @@
 export const backendExactPaths = [
   '/dashboard',
   '/dashboard/logout',
+  '/dashboard/open-in-slack',
   '/install',
   '/oauth/callback',
   '/email/subscribe',

@@ -21,6 +21,7 @@ server {
     # Exact /dashboard still consumes existing Slack login links; nested pages belong to React.
     location = /dashboard { proxy_pass ${BACKEND_URL}; }
     location = /dashboard/logout { proxy_pass ${BACKEND_URL}; }
+    location = /dashboard/open-in-slack { proxy_pass ${BACKEND_URL}; }
 
     location = /install { proxy_pass ${BACKEND_URL}; }
     location = /oauth/callback { proxy_pass ${BACKEND_URL}; }

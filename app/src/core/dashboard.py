@@ -303,6 +303,20 @@ def dashboard():
     return redirect("/dashboard/", code=303)
 
 
+@browser_bp.route("/dashboard/open-in-slack")
+def open_in_slack():
+    """The login page's main button. Members sign in from inside Slack.
+
+    "Sign in with Slack" is the install flow, which a workspace that approves
+    apps refuses to anyone but an admin, so members are sent to the app in
+    Slack, where the Dashboard button gives them a link of their own.
+    """
+    from src.core.links import slack_app_url  # noqa: PLC0415
+
+    url = slack_app_url()
+    return redirect(url or "/dashboard/login?error=open-in-slack", code=302)
+
+
 @browser_bp.route("/dashboard/logout")
 def logout():
     session.clear()

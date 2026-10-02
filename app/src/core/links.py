@@ -29,3 +29,18 @@ def _is_hosted() -> bool:
 def support_url() -> str:
     """The support page on hosted, GitHub issues on a self-hosted install."""
     return _HOSTED_SUPPORT if _is_hosted() else _SELF_HOSTED_SUPPORT
+
+
+# The hosted Slack app. A self-hosted install has its own app and sets
+# SLACK_APP_ID; without it there is nothing to point at.
+_HOSTED_SLACK_APP_ID = "A0AR0J2R9MJ"
+
+
+def slack_app_url() -> str | None:
+    """Slack's own link that opens this app in the person's workspace.
+
+    No install and no admin: it only opens the app, whose Home tab hands out
+    a dashboard sign-in. None when the app id is not known.
+    """
+    app_id = os.environ.get("SLACK_APP_ID") or (_HOSTED_SLACK_APP_ID if _is_hosted() else "")
+    return f"https://slack.com/app_redirect?app={app_id}" if app_id else None
