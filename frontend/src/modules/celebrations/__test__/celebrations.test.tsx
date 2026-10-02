@@ -82,6 +82,7 @@ const settings = {
   post_time: '09:00',
   birthdays: true,
   anniversaries: true,
+  banners: true,
   working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
   ready: true,
   can_react: true,
@@ -183,6 +184,9 @@ it('saves a Sunday to Thursday week with its own timezone and post time', async 
   await user.click(
     screen.getByRole('checkbox', { name: 'Celebrate work anniversaries' }),
   );
+  await user.click(
+    screen.getByRole('checkbox', { name: 'Add a banner image to each post' }),
+  );
 
   await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
@@ -193,6 +197,7 @@ it('saves a Sunday to Thursday week with its own timezone and post time', async 
       post_time: '10:30',
       birthdays: true,
       anniversaries: false,
+      banners: false,
       working_days: ['mon', 'tue', 'wed', 'thu', 'sun'],
     }),
   );
@@ -292,7 +297,6 @@ it('previews a holiday import before saving it', async () => {
     await screen.findByRole('button', { name: 'Import holidays' }),
   );
   await user.type(screen.getByLabelText('CSV'), '2027-01-01,New Year');
-  await user.click(screen.getByRole('button', { name: 'Preview' }));
 
   const rows = await screen.findByRole('region', {
     name: 'Holidays in the file',

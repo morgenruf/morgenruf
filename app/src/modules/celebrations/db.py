@@ -17,7 +17,7 @@ DEFAULT_POST_TIME = "09:00"
 # looked up again on the day it is made, so a year is generous.
 POST_RETENTION_DAYS = 400
 
-_SETTING_FIELDS = ("channel_id", "timezone", "post_time", "birthdays", "anniversaries")
+_SETTING_FIELDS = ("channel_id", "timezone", "post_time", "birthdays", "anniversaries", "banners")
 
 
 def default_settings(team_id: str) -> dict:
@@ -28,6 +28,7 @@ def default_settings(team_id: str) -> dict:
         "post_time": DEFAULT_POST_TIME,
         "birthdays": True,
         "anniversaries": True,
+        "banners": True,
         "updated_by": None,
         "updated_at": None,
     }
@@ -113,13 +114,28 @@ def claim_post(
             return cur.fetchone() is not None
 
 
-def record_post(team_id: str, kind: str, celebration_date: date, ts: str) -> None:
+def record_post(team_id: str, kind: str, celebration_date: date, ts: str, banner: str | None = None) -> None:
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE celebration_posts SET ts = %s WHERE team_id = %s AND kind = %s AND celebration_date = %s",
-                (ts, team_id, kind, celebration_date),
+                "UPDATE celebration_posts SET ts = %s, banner = %s "
+                "WHERE team_id = %s AND kind = %s AND celebration_date = %s",
+                (ts, banner, team_id, kind, celebration_date),
             )
+
+
+def last_banner(team_id: str, kind: str) -> str | None:
+    """The banner on this workspace's latest post of this kind, so the next one differs."""
+    sql = """
+        SELECT banner FROM celebration_posts
+        WHERE team_id = %s AND kind = %s AND banner IS NOT NULL
+        ORDER BY created_at DESC LIMIT 1
+    """
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, kind))
+            row = cur.fetchone()
+    return row[0] if row else None
 
 
 def release_post(team_id: str, kind: str, celebration_date: date) -> None:

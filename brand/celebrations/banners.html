@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Celebration banners</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Yellowtail&family=Playfair+Display:ital,wght@0,900;1,700&family=UnifrakturMaguntia&family=Shrikhand&family=Press+Start+2P&family=Plus+Jakarta+Sans:wght@800&family=Bungee&family=Bebas+Neue&family=Anton&family=Space+Mono:wght@400;700&family=Pacifico&family=Cinzel:wght@700;900&family=Courier+Prime:wght@700&display=swap" rel="stylesheet">
+<style>
+  /* Sixteen banners, each its own idea (neon sign, newspaper, boarding pass...), not one layout recoloured.
+     1200x600 (2:1, stays a card on a phone), rendered at 2x. No names in the image: the mention lives in
+     the message text, so any banner fits anyone. render.sh opens this page with ?b=<id>. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1200px; height: 600px; overflow: hidden; }
+  .b { position: relative; width: 1200px; height: 600px; overflow: hidden; }
+  .abs { position: absolute; }
+  svg.layer { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const M = 'mascot.png';
+const svg = (inner, extra = '') => `<svg class="layer" viewBox="0 0 1200 600" ${extra}>${inner}</svg>`;
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+
+// 1. Neon sign on a brick wall at night.
+function neon() {
+  let bricks = '';
+  for (let y = 0, row = 0; y < 600; y += 40, row++)
+    for (let x = (row % 2) * -60; x < 1200; x += 120)
+      bricks += `<rect x="${x + 3}" y="${y + 3}" width="114" height="34" rx="3" fill="#2a1a24"/>`;
+  const glow = c => `text-shadow:0 0 6px #fff,0 0 14px ${c},0 0 28px ${c},0 0 56px ${c},0 0 90px ${c}`;
+  return `<div class="b" style="background:#160d13">${svg(`${bricks}
+      <radialGradient id="g1" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#ff2d95" stop-opacity=".28"/><stop offset="1" stop-color="#ff2d95" stop-opacity="0"/></radialGradient>
+      <rect width="1200" height="600" fill="url(#g1)"/>`)}
+    <div class="abs" style="left:0;right:0;top:110px;text-align:center;font-family:Yellowtail;font-size:170px;color:#ffe6f4;${glow('#ff2d95')};transform:rotate(-4deg)">Happy Birthday</div>
+    <div class="abs" style="left:0;right:0;top:360px;text-align:center;font-family:Bungee;font-size:54px;letter-spacing:.2em;color:#e6fbff;${glow('#00d1ff')}">OPEN ALL DAY</div>
+    <svg class="abs" style="left:150px;top:400px;filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 18px #ffd23f) drop-shadow(0 0 40px #ffd23f)" width="150" height="150" viewBox="0 0 150 150">
+      <g fill="none" stroke="#fff6c2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="20" y="70" width="110" height="60" rx="6"/><path d="M20 90 q14 12 27 0 t27 0 t28 0 t28 0"/>
+      <path d="M50 70 v-22 M75 70 v-22 M100 70 v-22"/><path d="M50 36 q6 -8 0 -16 q-6 8 0 16 M75 36 q6 -8 0 -16 q-6 8 0 16 M100 36 q6 -8 0 -16 q-6 8 0 16"/></g></svg>
+    <div class="abs" style="right:120px;top:395px;width:150px;height:150px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px #ff2d95,0 0 30px #ff2d95">
+      <img src="${M}" style="width:130px;margin:12px 0 0 10px"></div>
+  </div>`;
+}
+
+// 2. A newspaper front page.
+function newspaper() {
+  const lines = (x, y, w, n, seed) => { const r = rng(seed); let o = ''; for (let i = 0; i < n; i++) o += `<rect x="${x}" y="${y + i * 18}" width="${w * (i === n - 1 ? .5 : .85 + r() * .15)}" height="8" rx="2" fill="#b9b2a3"/>`; return o; };
+  return `<div class="b" style="background:#f4efe3">${svg(`
+      <rect x="40" y="30" width="1120" height="540" fill="none" stroke="#1a1a1a" stroke-width="3"/>
+      <line x1="60" y1="140" x2="1140" y2="140" stroke="#1a1a1a" stroke-width="3"/><line x1="60" y1="148" x2="1140" y2="148" stroke="#1a1a1a" stroke-width="1"/>
+      <line x1="60" y1="178" x2="1140" y2="178" stroke="#1a1a1a" stroke-width="1"/>
+      ${lines(70, 420, 330, 7, 3)} ${lines(800, 420, 330, 7, 9)}
+      <line x1="420" y1="410" x2="420" y2="550" stroke="#1a1a1a"/><line x1="780" y1="410" x2="780" y2="550" stroke="#1a1a1a"/>
+      ${lines(440, 470, 320, 4, 5)}`)}
+    <div class="abs" style="left:0;right:0;top:44px;text-align:center;font-family:UnifrakturMaguntia;font-size:86px;color:#1a1a1a">The Morgenruf Daily</div>
+    <div class="abs" style="left:70px;right:70px;top:152px;display:flex;justify-content:space-between;font:italic 700 20px 'Playfair Display';color:#1a1a1a"><span>Birthday edition</span><span>Free, as always</span><span>Late city final</span></div>
+    <div class="abs" style="left:70px;width:640px;top:196px;font:900 56px/1.02 'Playfair Display';color:#1a1a1a;letter-spacing:-.01em">LOCAL LEGEND<br>TURNS ANOTHER<br>YEAR MORE AWESOME</div>
+    <div class="abs" style="left:440px;top:420px;width:320px;font:italic 700 22px 'Playfair Display';color:#1a1a1a">Team reportedly "thrilled". Cake expected by noon.</div>
+    <div class="abs" style="left:780px;top:196px;width:350px;height:200px;border:3px solid #1a1a1a;background:#e5dfd0;overflow:hidden">
+      <div class="abs" style="inset:0;background-image:radial-gradient(#1a1a1a 1.2px,transparent 1.4px);background-size:7px 7px;opacity:.25"></div>
+      <img src="${M}" style="position:absolute;left:50%;top:50%;width:170px;transform:translate(-50%,-50%) rotate(-6deg);filter:grayscale(1) contrast(1.3)"></div>
+  </div>`;
+}
+
+// 3. Seventies groove: stacked rainbow arcs, chunky script.
+function groovy() {
+  const cols = ['#e2572b', '#f08a24', '#f4b63f', '#7a9a3a', '#3f6d6a'];
+  const arcs = cols.map((c, i) => `<path d="M${-200 + i * 70} 700 A${700 - i * 70} ${700 - i * 70} 0 0 1 ${1400 - i * 70} 700" fill="none" stroke="${c}" stroke-width="70"/>`).join('');
+  return `<div class="b" style="background:#f6e7c8">${svg(`<g transform="translate(0 40)">${arcs}</g>
+      <circle cx="600" cy="740" r="300" fill="#f6e7c8"/>
+      ${[[90, 90], [1110, 110], [1050, 520], [150, 500]].map(([x, y]) => `<g transform="translate(${x} ${y})"><circle r="26" fill="#f4b63f" stroke="#5a2d0c" stroke-width="4"/>${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<ellipse rx="10" ry="20" cy="-40" fill="#fff" stroke="#5a2d0c" stroke-width="4" transform="rotate(${i * 45})"/>`).join('')}<circle r="22" fill="#f4b63f" stroke="#5a2d0c" stroke-width="4"/></g>`).join('')}`)}
+    <div class="abs" style="left:0;right:0;top:150px;text-align:center;font-family:Shrikhand;font-size:120px;line-height:.95;color:#5a2d0c;text-shadow:5px 5px 0 #f4b63f,10px 10px 0 #e2572b">Have a groovy<br>birthday</div>
+    <img src="${M}" class="abs" style="left:530px;top:440px;width:140px;transform:rotate(-8deg)">
+  </div>`;
+}
+
+// 4. Foil balloon letters spelling YAY! against a sky.
+function balloons() {
+  const r = rng(5);
+  let clouds = '';
+  for (let i = 0; i < 6; i++) { const x = r() * 1200, y = 60 + r() * 480, s = .6 + r() * .8;
+    clouds += `<g transform="translate(${x} ${y}) scale(${s})" fill="#fff" opacity=".9"><ellipse rx="70" ry="30"/><ellipse cx="-40" cy="8" rx="45" ry="24"/><ellipse cx="45" cy="6" rx="50" ry="26"/><ellipse cx="0" cy="-22" rx="40" ry="28"/></g>`; }
+  const letter = (ch, x, rot, c1, c2) => `<div class="abs" style="left:${x}px;top:70px;transform:rotate(${rot}deg);text-align:center">
+      <div style="font:800 300px/1 'Plus Jakarta Sans';background:linear-gradient(160deg,${c1} 20%,#fff 38%,${c2} 55%,${c1} 85%);-webkit-background-clip:text;color:transparent;-webkit-text-stroke:4px rgba(0,0,0,.25);filter:drop-shadow(6px 10px 0 rgba(0,0,0,.12))">${ch}</div>
+      <svg width="40" height="200" style="margin-top:-30px"><path d="M20 0 q-14 50 6 100 t-6 100" stroke="#666" stroke-width="2.5" fill="none"/></svg></div>`;
+  return `<div class="b" style="background:linear-gradient(#7cc8ff,#bfe6ff)">${svg(clouds)}
+    ${letter('Y', 160, -8, '#ff4d6d', '#c9184a')}${letter('A', 390, 4, '#ffc83d', '#e09f00')}${letter('Y', 620, -5, '#4f3ce0', '#2d1fa8')}${letter('!', 850, 9, '#2ec4b6', '#13877d')}
+    <div class="abs" style="left:950px;top:330px;width:200px;height:200px;border-radius:50%;background:#fff;border:6px solid #111;box-shadow:8px 8px 0 #111;transform:rotate(6deg)"><img src="${M}" style="width:172px;margin:18px 0 0 12px"></div>
+    <div class="abs" style="left:110px;bottom:30px;font:800 40px 'Plus Jakarta Sans';color:#0b3a5c">It's your birthday.</div>
+  </div>`;
+}
+
+// 5. Anniversary as an arcade level-up screen. The rooster is pixelated on purpose.
+function arcade() {
+  const r = rng(13); let px = '';
+  for (let i = 0; i < 90; i++) { const x = Math.floor(r() * 150) * 8, y = Math.floor(r() * 75) * 8, c = ['#ffd23f', '#ff4d6d', '#2ec4b6', '#fff'][i % 4]; px += `<rect x="${x}" y="${y}" width="8" height="8" fill="${c}" opacity="${.4 + r() * .6}"/>`; }
+  return `<div class="b" style="background:#0d0221">${svg(`${px}
+      <rect x="0" y="0" width="1200" height="600" fill="url(#scan)"/>
+      <defs><pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="2" fill="rgba(255,255,255,.04)"/></pattern></defs>
+      <rect x="120" y="400" width="620" height="44" fill="none" stroke="#fff" stroke-width="6"/>
+      ${Array.from({ length: 14 }, (_, i) => `<rect x="${130 + i * 43}" y="410" width="36" height="24" fill="${i < 13 ? '#2ec4b6' : '#ffd23f'}"/>`).join('')}`)}
+    <div class="abs" style="left:120px;top:110px;font:44px 'Press Start 2P';color:#ffd23f;text-shadow:5px 5px 0 #ff4d6d">LEVEL UP!</div>
+    <div class="abs" style="left:120px;top:200px;font:30px/1.6 'Press Start 2P';color:#fff">+1 YEAR ON THE TEAM<br><span style="color:#2ec4b6">NEW SKILLS UNLOCKED</span></div>
+    <div class="abs" style="left:120px;top:465px;font:18px 'Press Start 2P';color:#fff">XP 9,999 / 10,000</div>
+    <div class="abs" style="left:120px;top:520px;font:18px 'Press Start 2P';color:#ff4d6d">PRESS START TO CONTINUE</div>
+    <div class="abs" style="left:820px;top:130px;width:300px;height:300px;border:8px solid #fff;background:#3d1a78;image-rendering:pixelated;display:flex;align-items:center;justify-content:center">
+      <canvas id="px" width="40" height="40" style="width:260px;height:260px;image-rendering:pixelated"></canvas></div>
+    <div class="abs" style="left:820px;top:450px;width:300px;text-align:center;font:20px 'Press Start 2P';color:#ffd23f">P1 READY</div>
+  </div>`;
+}
+
+// 6. Anniversary as an awards night: red curtains, spotlight, the rooster on stage.
+function awards() {
+  let folds = '';
+  for (let i = 0; i < 6; i++) folds += `<path d="M${i * 46} 0 q20 300 0 600" stroke="#5c0a14" stroke-width="10" fill="none" opacity=".6"/><path d="M${1200 - i * 46} 0 q-20 300 0 600" stroke="#5c0a14" stroke-width="10" fill="none" opacity=".6"/>`;
+  return `<div class="b" style="background:#140a0c">${svg(`
+      <path d="M600 -20 L380 600 H820 Z" fill="#fff7d1" opacity=".16"/>
+      <ellipse cx="600" cy="560" rx="260" ry="40" fill="#fff7d1" opacity=".25"/>
+      <path d="M0 0 H300 Q230 300 300 600 H0 Z" fill="#a4161a"/><path d="M1200 0 H900 Q970 300 900 600 H1200 Z" fill="#a4161a"/>${folds}
+      <path d="M0 0 H1200 V70 Q1050 110 900 70 Q750 110 600 70 Q450 110 300 70 Q150 110 0 70 Z" fill="#c1121f"/>
+      <path d="M0 70 Q150 110 300 70 Q450 110 600 70 Q750 110 900 70 Q1050 110 1200 70" stroke="#ffc83d" stroke-width="6" fill="none"/>
+      <rect x="430" y="470" width="340" height="90" rx="6" fill="#2b1d14" stroke="#ffc83d" stroke-width="4"/>`)}
+    <div class="abs" style="left:0;right:0;top:110px;text-align:center;font:italic 700 34px 'Playfair Display';color:#ffe8a3;letter-spacing:.04em">and the award for another great year goes to...</div>
+    <img src="${M}" class="abs" style="left:505px;top:250px;width:190px">
+    <svg class="abs" style="left:640px;top:330px" width="90" height="130" viewBox="0 0 120 160">
+      <path d="M20 0 h80 v40 a40 40 0 0 1 -80 0 z" fill="#ffc83d" stroke="#111" stroke-width="5"/><path d="M20 12 h-16 a18 18 0 0 0 20 34 M100 12 h16 a18 18 0 0 1 -20 34" fill="none" stroke="#111" stroke-width="5"/>
+      <rect x="50" y="78" width="20" height="24" fill="#ffc83d" stroke="#111" stroke-width="5"/><rect x="28" y="100" width="64" height="22" rx="4" fill="#5a3a1a" stroke="#111" stroke-width="5"/></svg>
+    <div class="abs" style="left:430px;top:478px;width:340px;text-align:center;font:900 46px/1 'Playfair Display';color:#ffc83d">YOU.</div>
+    <div class="abs" style="left:430px;top:528px;width:340px;text-align:center;font:italic 700 18px 'Playfair Display';color:#ffe8a3">Happy work anniversary</div>
+  </div>`;
+}
+
+const barcode = (x, y, w, h, seed, color = '#111') => { const r = rng(seed); let o = '', cx = x; while (cx < x + w) { const bw = 2 + Math.floor(r() * 5); if (r() > .35) o += `<rect x="${cx}" y="${y}" width="${bw}" height="${h}" fill="${color}"/>`; cx += bw + 2; } return o; };
+function sparkles(seed, n, colors) { const r = rng(seed); let o = ''; for (let i = 0; i < n; i++) { const x = r() * 1200, y = r() * 600, s = 4 + r() * 10, c = colors[i % colors.length];
+  o += `<path d="M${x} ${y - s} Q${x} ${y} ${x + s} ${y} Q${x} ${y} ${x} ${y + s} Q${x} ${y} ${x - s} ${y} Q${x} ${y} ${x} ${y - s}Z" fill="${c}" opacity="${.5 + r() * .5}"/>`; } return o; }
+
+// 7. A blockbuster movie poster.
+function movie() {
+  return `<div class="b" style="background:radial-gradient(circle at 78% 45%,#3a1f5c 0,#120a1f 55%,#07040d 100%)">${svg(`
+      <path d="M940 -40 L760 640 H1140 Z" fill="#ffd9a0" opacity=".07"/>${sparkles(17, 40, ['#fff', '#ffd9a0'])}`)}
+    <img src="${M}" class="abs" style="right:60px;top:100px;width:370px;filter:drop-shadow(0 0 30px rgba(255,180,90,.55)) drop-shadow(0 20px 30px rgba(0,0,0,.6))">
+    <div class="abs" style="left:80px;top:70px;font:22px 'Bebas Neue';letter-spacing:.4em;color:#d9c6ff">THIS YEAR, ONE HERO GETS CAKE</div>
+    <div class="abs" style="left:74px;top:110px;font:150px/.88 Anton;color:#fff;letter-spacing:.01em;text-shadow:0 6px 0 #6b2fd6">THE<br>BIRTHDAY</div>
+    <div class="abs" style="left:80px;top:445px;font:30px 'Bebas Neue';letter-spacing:.12em;color:#ffd9a0">★★★★★ &nbsp;"UNMISSABLE" &nbsp;THE WHOLE TEAM</div>
+    <div class="abs" style="left:80px;top:500px;width:620px;font:13px/1.35 'Bebas Neue';letter-spacing:.18em;color:#8f7fb0">MORGENRUF PICTURES PRESENTS A CAKE PRODUCTION · STARRING YOU · CANDLES BY EVERYONE · FROSTING DIRECTED BY THE KITCHEN · NOW SHOWING IN YOUR SLACK CHANNEL · ONE DAY ONLY</div>
+  </div>`;
+}
+
+// 8. A boarding pass to another year.
+function boarding() {
+  const field = (label, value, x, y, size = 40) => `<div class="abs" style="left:${x}px;top:${y}px;font:600 14px 'Space Mono';letter-spacing:.2em;color:#6b7a90">${label}<div style="font:700 ${size}px/1.1 'Space Mono';letter-spacing:0;color:#0b2545;margin-top:4px">${value}</div></div>`;
+  return `<div class="b" style="background:linear-gradient(135deg,#8ecae6,#219ebc)">${svg(`
+      <path d="M-50 520 Q300 420 600 480 T1250 430" stroke="#fff" stroke-width="4" stroke-dasharray="14 12" fill="none" opacity=".7"/>
+      <g transform="translate(90 110) rotate(-5)"><rect x="0" y="0" width="1060" height="430" rx="26" fill="#fffdf7"/></g>
+      <g transform="translate(90 110) rotate(-5)"><rect x="0" y="0" width="1060" height="90" rx="26" fill="#ff4d6d"/><rect x="0" y="60" width="1060" height="30" fill="#ff4d6d"/>
+        <line x1="790" y1="0" x2="790" y2="430" stroke="#c8c2b4" stroke-width="4" stroke-dasharray="10 10"/>
+        <circle cx="790" cy="0" r="22" fill="#5fb3d6"/><circle cx="790" cy="430" r="22" fill="#4aa6cb"/>
+        ${barcode(820, 330, 200, 70, 4, '#0b2545')}</g>`)}
+    <div class="abs" style="left:90px;top:110px;width:1060px;height:430px;transform:rotate(-5deg);transform-origin:0 0">
+      <div class="abs" style="left:36px;top:24px;font:800 34px 'Plus Jakarta Sans';color:#fff;letter-spacing:.06em">✈ MORGENRUF AIR</div>
+      <div class="abs" style="left:560px;top:30px;font:700 22px 'Space Mono';color:#fff">BOARDING PASS</div>
+      ${field('FROM', 'LAST<br>YEAR', 40, 120, 54)}
+      <div class="abs" style="left:250px;top:150px;font:60px 'Plus Jakarta Sans';color:#ff4d6d">✈</div>
+      ${field('TO', 'THIS<br>YEAR', 360, 120, 54)}
+      ${field('FLIGHT', 'HBD 001', 40, 310)} ${field('GATE', 'CAKE', 290, 310)} ${field('SEAT', '1A', 500, 310)}
+      ${field('CLASS', 'BIRTHDAY', 820, 120, 26)}
+      <img src="${M}" style="position:absolute;left:840px;top:180px;width:130px;transform:rotate(8deg)">
+    </div>
+  </div>`;
+}
+
+// 9. A record sleeve with the vinyl sliding out.
+function vinyl() {
+  let grooves = ''; for (let r = 60; r < 250; r += 7) grooves += `<circle cx="0" cy="0" r="${r}" fill="none" stroke="#222" stroke-width="1.5"/>`;
+  return `<div class="b" style="background:#f2e8d5">${svg(`
+      <g transform="translate(720 300)"><circle r="255" fill="#0c0c0c"/>${grooves}<circle r="90" fill="#ff4d6d"/><circle r="8" fill="#f2e8d5"/>
+        <path d="M-200 -120 A240 240 0 0 1 -60 -230" stroke="#fff" stroke-width="10" opacity=".08" fill="none"/></g>
+      <rect x="90" y="40" width="520" height="520" fill="#ffd23f" stroke="#111" stroke-width="6"/>
+      ${[0, 1, 2, 3, 4, 5].map(i => `<rect x="90" y="${300 + i * 34}" width="520" height="17" fill="${['#ff4d6d', '#f08a24', '#4f3ce0', '#2ec4b6', '#ff4d6d', '#f08a24'][i]}"/>`).join('')}
+      <rect x="90" y="40" width="520" height="520" fill="none" stroke="#111" stroke-width="6"/>`)}
+    <img src="${M}" class="abs" style="left:668px;top:248px;width:104px">
+    <div class="abs" style="left:120px;top:70px;font:22px 'Space Mono';font-weight:700;color:#111;letter-spacing:.1em">BIRTHDAY HITS · VOL. 1</div>
+    <div class="abs" style="left:116px;top:100px;font:96px/.92 Shrikhand;color:#111">Your<br>song.</div>
+    <div class="abs" style="left:990px;top:90px;width:200px;font:700 15px/1.9 'Space Mono';color:#111">SIDE A<br>1. Happy Birthday (Office Remix)<br>2. Cake O'Clock<br>3. Make a Wish<br>4. Another Lap Round the Sun<br>5. Hip Hip Hooray (Live)</div>
+  </div>`;
+}
+
+// 10. A birthday cake from above, the message piped in icing.
+function cakeTop() {
+  const r = rng(31); let sprinkles = '';
+  for (let i = 0; i < 160; i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 215, x = 520 + d * Math.cos(a), y = 300 + d * Math.sin(a);
+    if (Math.abs(x - 520) < 230 && Math.abs(y - 300) < 70) continue;
+    sprinkles += `<rect x="${x}" y="${y}" width="14" height="5" rx="2.5" fill="${['#ff4d6d', '#4f3ce0', '#ffd23f', '#2ec4b6', '#fff'][i % 5]}" transform="rotate(${r() * 180} ${x} ${y})"/>`; }
+  const candles = Array.from({ length: 10 }, (_, i) => { const a = Math.PI * 2 * i / 10, x = 520 + 190 * Math.cos(a), y = 300 + 190 * Math.sin(a);
+    return `<circle cx="${x}" cy="${y}" r="12" fill="${['#ff4d6d', '#4f3ce0', '#2ec4b6'][i % 3]}" stroke="#111" stroke-width="3"/><circle cx="${x}" cy="${y}" r="20" fill="#ffd23f" opacity=".35"/><circle cx="${x}" cy="${y}" r="5" fill="#fff6c2"/>`; }).join('');
+  return `<div class="b" style="background:#2ec4b6">${svg(`
+      ${Array.from({ length: 30 }, (_, i) => `<circle cx="${(i % 10) * 130 + 40}" cy="${Math.floor(i / 10) * 220 + 60}" r="34" fill="#28b3a6"/>`).join('')}
+      <circle cx="530" cy="314" r="270" fill="#000" opacity=".15"/>
+      <circle cx="520" cy="300" r="270" fill="#fff" stroke="#111" stroke-width="6"/>
+      <circle cx="520" cy="300" r="242" fill="#f9c6d8" stroke="#111" stroke-width="5"/>
+      ${Array.from({ length: 28 }, (_, i) => { const a = Math.PI * 2 * i / 28; return `<circle cx="${520 + 242 * Math.cos(a)}" cy="${300 + 242 * Math.sin(a)}" r="16" fill="#fff" stroke="#111" stroke-width="3"/>`; }).join('')}
+      ${sprinkles}${candles}`)}
+    <div class="abs" style="left:260px;top:228px;width:520px;text-align:center;font:84px/1 Pacifico;color:#c9184a;text-shadow:3px 3px 0 #fff">Happy Birthday</div>
+    <div class="abs" style="left:900px;top:150px;width:260px;height:260px;border-radius:50%;background:#fff;border:6px solid #111;box-shadow:10px 10px 0 #111;transform:rotate(8deg)"><img src="${M}" style="width:220px;margin:24px 0 0 18px"></div>
+    <div class="abs" style="left:880px;top:450px;width:300px;text-align:center;font:800 30px 'Plus Jakarta Sans';color:#06302c">Save a slice for us.</div>
+  </div>`;
+}
+
+// 11. A holographic trading card, rare edition.
+function trading() {
+  const stat = (k, v) => `<div style="display:flex;justify-content:space-between;font:700 15px 'Space Mono';color:#111;margin:3px 0"><span>${k}</span><span>${v}</span></div>`;
+  return `<div class="b" style="background:radial-gradient(circle at 70% 50%,#1b2a4a,#070b16)">${svg(sparkles(41, 70, ['#fff', '#a5f3fc', '#f5d0fe']))}
+    <div class="abs" style="left:80px;top:150px;width:560px">
+      <div style="font:24px 'Bebas Neue';letter-spacing:.4em;color:#a5f3fc">COLLECTOR'S EDITION</div>
+      <div style="font:112px/.9 Anton;color:#fff;margin-top:10px">ANOTHER<br><span style="background:linear-gradient(90deg,#f0abfc,#a5f3fc,#fde68a);-webkit-background-clip:text;color:transparent">YEAR.</span></div>
+      <div style="font:700 26px 'Plus Jakarta Sans';color:#cbd5e1;margin-top:18px">Happy work anniversary, legend.</div></div>
+    <div class="abs" style="left:770px;top:40px;width:330px;height:520px;border-radius:22px;padding:14px;transform:rotate(7deg);
+         background:linear-gradient(135deg,#f0abfc,#a5f3fc 30%,#fde68a 55%,#f0abfc 80%,#a5f3fc);box-shadow:0 30px 60px rgba(0,0,0,.6)">
+      <div style="height:100%;border-radius:12px;background:#fffbea;border:4px solid #111;padding:12px">
+        <div style="display:flex;justify-content:space-between;font:800 20px 'Plus Jakarta Sans'"><span>TEAM LEGEND</span><span style="color:#c026d3">★ RARE</span></div>
+        <div style="height:220px;margin:10px 0;border:4px solid #111;border-radius:8px;background:linear-gradient(160deg,#4f3ce0,#c026d3);display:flex;align-items:center;justify-content:center"><img src="${M}" style="width:190px"></div>
+        <div style="font:italic 700 14px 'Playfair Display';color:#444;margin-bottom:8px">Ability: makes every standup better.</div>
+        ${stat('RELIABILITY', '99')}${stat('KUDOS GIVEN', '97')}${stat('COFFEE CHATS', '100')}${stat('GOOD VIBES', 'MAX')}
+        <div style="margin-top:10px;text-align:center;font:800 14px 'Space Mono';background:#111;color:#fde68a;border-radius:6px;padding:6px">+1 YEAR EDITION</div></div></div>
+  </div>`;
+}
+
+// 12. A passport page, stamped.
+function passport() {
+  const stamp = (x, y, rot, color, html, round = false) => `<div class="abs" style="left:${x}px;top:${y}px;transform:rotate(${rot}deg);color:${color};border:5px solid ${color};${round ? 'border-radius:50%;width:190px;height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;' : 'border-radius:10px;padding:10px 18px;'}text-align:center;font:700 18px/1.25 'Space Mono';opacity:.85;mix-blend-mode:multiply">${html}</div>`;
+  let guilloche = ''; for (let i = 0; i < 40; i++) guilloche += `<ellipse cx="600" cy="300" rx="${560 - i * 6}" ry="${120 + i * 4}" fill="none" stroke="#d8cfa8" stroke-width="1" transform="rotate(${i * 4.5} 600 300)"/>`;
+  return `<div class="b" style="background:#efe6c6">${svg(guilloche)}
+    <div class="abs" style="left:60px;top:50px;font:700 20px 'Space Mono';letter-spacing:.3em;color:#7a6a3a">VISAS · VISAS · VISAS</div>
+    <div class="abs" style="left:60px;top:90px;width:230px;height:290px;background:#fff;border:3px solid #7a6a3a;padding:10px">
+      <div style="height:200px;background:#dfe7f0;display:flex;align-items:center;justify-content:center"><img src="${M}" style="width:170px"></div>
+      <div style="font:700 13px/1.5 'Space Mono';color:#333;margin-top:8px">HOLDER: TEAM LEGEND<br>STATUS: VALID FOREVER</div></div>
+    ${stamp(330, 80, -8, '#c1121f', 'HQ<br><span style="font-size:32px">YEAR<br>COMPLETE</span><br>★ ★ ★', true)}
+    ${stamp(560, 60, 6, '#1d4ed8', '<span style="font-size:30px">APPROVED</span><br>for another year')}
+    ${stamp(580, 220, -4, '#0f766e', 'ENTRY GRANTED<br><span style="font-size:28px">NEXT DESTINATION:</span><br>another great year')}
+    ${stamp(900, 90, 12, '#7c3aed', 'KUDOS<br><span style="font-size:36px">∞</span><br>RECEIVED', true)}
+    ${stamp(880, 330, -10, '#c2410c', '<span style="font-size:24px">COFFEE CHATS</span><br>VISITED: MANY')}
+    <div class="abs" style="left:60px;top:430px;font:900 64px/1 'Playfair Display';color:#2b2410">Happy work anniversary.</div>
+    <div class="abs" style="left:64px;top:510px;font:italic 700 26px 'Playfair Display';color:#7a6a3a">Thanks for the trip so far. Pack for another year.</div>
+  </div>`;
+}
+
+// 13. An engraved brass plaque on walnut.
+function plaque() {
+  let grain = ''; const r = rng(51); for (let i = 0; i < 70; i++) { const y = r() * 600; grain += `<path d="M0 ${y} Q300 ${y + (r() - .5) * 40} 600 ${y} T1200 ${y}" stroke="#4a2a14" stroke-width="${1 + r() * 3}" fill="none" opacity=".35"/>`; }
+  const engr = 'color:#5a4310;text-shadow:0 1px 0 rgba(255,255,255,.55),0 -1px 0 rgba(0,0,0,.25)';
+  return `<div class="b" style="background:linear-gradient(90deg,#6b3e1f,#8a5430 50%,#6b3e1f)">${svg(grain)}
+    <div class="abs" style="left:150px;top:55px;width:900px;height:490px;border-radius:16px;background:linear-gradient(135deg,#f6d77a,#c9972f 35%,#f3d27a 55%,#b8862a 80%,#e8c260);box-shadow:0 18px 30px rgba(0,0,0,.5),inset 0 0 0 10px rgba(90,60,10,.35)">
+      ${[[26, 26], [850, 26], [26, 440], [850, 440]].map(([x, y]) => `<div class="abs" style="left:${x}px;top:${y}px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff3c4,#8a6418);box-shadow:0 1px 2px rgba(0,0,0,.4)"></div>`).join('')}
+      <div class="abs" style="left:50px;top:110px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#f8e3a3,#b8862a);box-shadow:inset 0 4px 10px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center">
+        <img src="${M}" style="width:170px;filter:sepia(1) saturate(.7) contrast(1.1) brightness(.85);mix-blend-mode:multiply"></div>
+      <div class="abs" style="left:300px;top:60px;width:560px;text-align:center;font:700 22px 'Cinzel';letter-spacing:.25em;${engr}">IN RECOGNITION OF</div>
+      <div class="abs" style="left:300px;top:110px;width:560px;text-align:center;font:900 54px/1.1 'Cinzel';${engr}">Another<br>Outstanding Year</div>
+      <div class="abs" style="left:300px;top:270px;width:560px;text-align:center;font:italic 700 26px 'Playfair Display';${engr}">Presented with gratitude<br>by the whole team</div>
+      <div class="abs" style="left:300px;top:380px;width:560px;text-align:center;font:700 18px 'Cinzel';letter-spacing:.4em;${engr}">HAPPY WORK ANNIVERSARY</div></div>
+  </div>`;
+}
+
+// 14. A glossy magazine cover with the rooster as cover star.
+function magazine() {
+  return `<div class="b" style="background:#ffd23f">${svg(`<circle cx="760" cy="330" r="270" fill="#ffc300"/>`)}
+    <div class="abs" style="left:50px;top:0;font:900 190px/1 'Playfair Display';color:#e63946;letter-spacing:-.04em">TEAM</div>
+    <div class="abs" style="left:58px;top:190px;font:800 18px 'Plus Jakarta Sans';letter-spacing:.3em;color:#111">THE ANNIVERSARY ISSUE</div>
+    <img src="${M}" class="abs" style="left:650px;top:150px;width:390px;filter:drop-shadow(0 18px 24px rgba(0,0,0,.25))">
+    <div class="abs" style="left:58px;top:270px;width:440px;font:900 50px/1 'Playfair Display';color:#111">Another year<br>of <i style="color:#e63946">greatness</i></div>
+    <div class="abs" style="left:58px;top:395px;width:420px;font:800 21px/1.35 'Plus Jakarta Sans';color:#111">EXCLUSIVE: the secret to a perfect standup<br><span style="color:#e63946">Why everyone wants to pair with you</span></div>
+    <div class="abs" style="right:60px;top:60px;width:150px;height:150px;border-radius:50%;background:#e63946;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font:900 24px/1.05 'Playfair Display';transform:rotate(12deg)">COVER<br>STAR!</div>
+    <div class="abs" style="right:60px;bottom:40px;font:800 20px/1.3 'Plus Jakarta Sans';color:#111;text-align:right">PLUS: 365 days<br>of kudos inside</div>
+    <svg class="abs" style="left:58px;top:500px" width="160" height="70">${barcode(0, 0, 150, 52, 8)}</svg>
+  </div>`;
+}
+
+// 15. A shop receipt for the year.
+function receipt() {
+  const row = (k, v) => `<div style="display:flex;justify-content:space-between"><span>${k}</span><span>${v}</span></div>`;
+  return `<div class="b" style="background:#4f3ce0">${svg(`${sparkles(61, 40, ['#ffd23f', '#fff'])}`)}
+    <div class="abs" style="left:80px;top:170px;width:560px">
+      <div style="font:800 34px 'Plus Jakarta Sans';color:#ffd23f">Your year, itemised.</div>
+      <div style="font:800 88px/1 'Plus Jakarta Sans';color:#fff;margin-top:12px;letter-spacing:-.03em">Happy work anniversary!</div></div>
+    <div class="abs" style="left:740px;top:24px;width:380px;height:600px;background:#fffdf5;transform:rotate(4deg);box-shadow:0 20px 40px rgba(0,0,0,.35);padding:30px 34px;font:700 19px/1.75 'Courier Prime';color:#222;
+         -webkit-mask:linear-gradient(#000,#000) top/100% calc(100% - 14px) no-repeat, radial-gradient(circle at 10px 0,transparent 9px,#000 10px) bottom/20px 14px repeat-x">
+      <div style="text-align:center;font-size:24px">MORGENRUF STORE</div><div style="text-align:center">anniversary receipt</div>
+      <div style="border-top:2px dashed #999;margin:10px 0"></div>
+      ${row('1x great year', '★')}${row('ideas shared', 'many')}${row('coffee chats', 'plenty')}${row('bugs squashed', 'lots')}${row('kudos earned', 'all')}${row('blockers cleared', 'yes')}
+      <div style="border-top:2px dashed #999;margin:10px 0"></div>
+      <div style="display:flex;justify-content:space-between;font-size:26px"><span>TOTAL</span><span>PRICELESS</span></div>
+      <div style="text-align:center;margin-top:14px">thank you, come again<br>next year!</div>
+      <svg width="300" height="60" style="margin-top:10px">${barcode(10, 0, 290, 50, 12, '#222')}</svg></div>
+    <div class="abs" style="left:590px;top:440px;width:140px;height:140px;border-radius:50%;background:#fff;border:6px solid #111;box-shadow:8px 8px 0 #111;transform:rotate(-8deg)"><img src="${M}" style="width:118px;margin:12px 0 0 8px"></div>
+  </div>`;
+}
+
+// 16. Space: another orbit complete, with an embroidered mission patch.
+function orbit() {
+  const r = rng(71); let starsBg = ''; for (let i = 0; i < 160; i++) starsBg += `<circle cx="${r() * 1200}" cy="${r() * 600}" r="${r() * 2 + .4}" fill="#fff" opacity="${.3 + r() * .7}"/>`;
+  return `<div class="b" style="background:radial-gradient(circle at 20% 110%,#3b1d6e,#0b0b2b 60%)">${svg(`${starsBg}
+      <circle cx="170" cy="640" r="230" fill="#ff8a65"/><path d="M-60 600 Q170 520 400 600" stroke="#ffab91" stroke-width="18" fill="none" opacity=".6"/>
+      <ellipse cx="760" cy="300" rx="480" ry="170" fill="none" stroke="#a5b4fc" stroke-width="3" stroke-dasharray="10 12" transform="rotate(-14 760 300)"/>
+      <g transform="translate(330 370) rotate(-40)"><path d="M0 -40 q22 20 22 60 h-44 q0 -40 22 -60z" fill="#fff" stroke="#111" stroke-width="4"/><circle cy="2" r="8" fill="#7dd3fc" stroke="#111" stroke-width="3"/>
+        <path d="M-22 20 l-12 18 h12z M22 20 l12 18 h-12z" fill="#ff4d6d" stroke="#111" stroke-width="3"/><path d="M-10 22 q10 30 20 0" fill="#ffd23f"/></g>`)}
+    <div class="abs" style="left:70px;top:80px;width:620px">
+      <div style="font:700 22px 'Space Mono';letter-spacing:.3em;color:#a5b4fc">MISSION STATUS: ✓</div>
+      <div style="font:800 92px/1 'Plus Jakarta Sans';color:#fff;letter-spacing:-.03em;margin-top:10px">Another orbit<br><span style="color:#ffd23f">complete.</span></div>
+      <div style="font:700 26px 'Plus Jakarta Sans';color:#c7d2fe;margin-top:16px">Happy work anniversary. Next stop: year +1.</div></div>
+    <div class="abs" style="left:820px;top:110px;width:320px;height:320px;border-radius:50%;background:#1e3a8a;border:14px solid #ffd23f;box-shadow:0 0 0 6px #111,0 14px 30px rgba(0,0,0,.5);overflow:hidden">
+      <div class="abs" style="inset:0;background:radial-gradient(circle at 50% 120%,#ff8a65 0 30%,transparent 31%)"></div>
+      <img src="${M}" style="position:absolute;left:50%;top:46%;width:180px;transform:translate(-50%,-50%)">
+      <svg class="abs" style="inset:0" viewBox="0 0 320 320"><defs><path id="arc" d="M40 160 A120 120 0 0 1 280 160"/></defs>
+        <text font-family="Space Mono" font-weight="700" font-size="22" fill="#ffd23f" letter-spacing="4"><textPath href="#arc" startOffset="50%" text-anchor="middle">ORBIT COMPLETE</textPath></text></svg></div>
+  </div>`;
+}
+
+const C = {
+  'birthday-1': neon, 'birthday-2': newspaper, 'birthday-3': groovy, 'birthday-4': balloons,
+  'birthday-5': movie, 'birthday-6': boarding, 'birthday-7': vinyl, 'birthday-8': cakeTop,
+  'anniversary-1': arcade, 'anniversary-2': awards, 'anniversary-3': trading, 'anniversary-4': passport,
+  'anniversary-5': plaque, 'anniversary-6': magazine, 'anniversary-7': receipt, 'anniversary-8': orbit,
+};
+const id = new URLSearchParams(location.search).get('b');
+document.getElementById('root').innerHTML = C[id] ? C[id]() : Object.keys(C).map(k => C[k]()).join('');
+// Pixelate the mascot for the arcade screen.
+const cv = document.getElementById('px');
+if (cv) { const img = new Image(); img.onload = () => { const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(img, 0, 0, 40, 40); }; img.src = M; }
+</script>
+</body>
+</html>

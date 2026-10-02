@@ -222,14 +222,14 @@ describe('member profiles', () => {
       await screen.findByRole('button', { name: 'Import dates' }),
     );
 
-    const save = screen.getByRole('button', { name: /^Save \d+ member/ });
-    expect(save).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: /^Save \d+ member/ }),
+    ).not.toBeInTheDocument();
 
     await user.type(
       screen.getByLabelText('CSV'),
       'email,birthday{enter}mina@example.com,1990-07-04{enter}nobody@example.com,01-01',
     );
-    await user.click(screen.getByRole('button', { name: 'Preview' }));
 
     expect(
       await screen.findByText('No member with this email'),
