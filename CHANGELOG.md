@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.16] - 2026-10-02
+
+Everything in 1.9.15, which was tagged but never published: its frontend
+image failed the release security scan.
+
+### Security
+- **Frontend image.** Alpine packages are upgraded at build time, which picks
+  up the pcre2 fix for CVE-2026-103111 before the upstream nginx image does.
+
 ## [1.9.15] - 2026-10-02
 
 ### Fixed
