@@ -1081,6 +1081,7 @@ def register_handlers(app: App) -> None:
         except Exception:
             pass
         is_admin = may_manage_standups(team_id, user_id)
+        managed = set() if is_admin else _managed_ids(team_id, user_id)
         admin_contact = "" if is_admin else _admin_contact(team_id)
 
         try:
@@ -1130,6 +1131,7 @@ def register_handlers(app: App) -> None:
                     "questions": raw_q,
                     "next_run": _schedule_next_run(s),
                     "is_participant": is_participant,
+                    "can_manage": is_admin or s.get("id") in managed,
                     "user_responded_today": user_responded_today if is_participant else False,
                     "user_last_response_id": (_last_response_for(user_today, s.get("id")) or {}).get("id")
                     if is_participant
@@ -1142,7 +1144,7 @@ def register_handlers(app: App) -> None:
                 }
                 if is_participant:
                     standups.append(entry)
-                elif is_admin:
+                elif entry["can_manage"]:
                     all_other_standups.append(entry)
 
             try:
@@ -1161,7 +1163,7 @@ def register_handlers(app: App) -> None:
             workspace_name=workspace_name,
             user_tz=user_tz,
             is_admin=is_admin,
-            other_standups=all_other_standups if is_admin else [],
+            other_standups=all_other_standups,
             admin_contact=admin_contact,
         )
 
@@ -1480,9 +1482,10 @@ def register_handlers(app: App) -> None:
         ack()
         standup_id = body["actions"][0].get("value", "")
         team_id = body["user"]["team_id"]
-        if not may_manage_standups(team_id, body["user"]["id"]):
+        if not may_manage_standup(team_id, body["user"]["id"], standup_id):
             _refuse_standup_change(client, body["user"]["id"])
             return
+        channel_locked = not may_manage_standups(team_id, body["user"]["id"])
         try:
             import src.core.db as db  # noqa: PLC0415
             import src.modules.standup.blocks as _blocks  # noqa: PLC0415
@@ -1516,6 +1519,7 @@ def register_handlers(app: App) -> None:
                     "post_summary": schedule.get("post_summary", False),
                     "allow_edit_after_report": schedule.get("allow_edit_after_report", False),
                     "active": schedule.get("active", True),
+                    "channel_locked": channel_locked,
                 }
                 bot_channels = _get_bot_channels(client)
                 modal = _blocks.create_standup_modal(cfg, bot_channels=bot_channels)
@@ -1556,8 +1560,15 @@ def register_handlers(app: App) -> None:
         action_value = action.get("value", "") or action.get("selected_option", {}).get("value", "")
         user_id = body["user"]["id"]
         team_id = body["user"]["team_id"]
-        # Every item in this menu changes a standup (delete, pause, enable, edit).
-        if not may_manage_standups(team_id, user_id):
+        # Every item in this menu changes a standup. Pause, enable and edit are
+        # open to its managers; delete stays with the admins.
+        _verb, _, target = action_value.partition("_")
+        allowed = (
+            may_manage_standups(team_id, user_id)
+            if action_value.startswith("delete_")
+            else may_manage_standup(team_id, user_id, target)
+        )
+        if not allowed:
             _refuse_standup_change(client, user_id)
             return
 
@@ -1737,13 +1748,17 @@ def register_handlers(app: App) -> None:
         """Handle submission of the create/edit standup modal from App Home."""
         user_id: str = body["user"]["id"]
         team_id: str = body["team"]["id"]
-        # Checked again here, not only when the modal opened: the submission is
-        # what writes, and roles can change while a modal is open.
-        if not may_manage_standups(team_id, user_id):
-            ack(response_action="errors", errors={"standup_channel": _NOT_A_STANDUP_ADMIN})
-            return
         values = body["view"]["state"]["values"]
         private_metadata = body["view"].get("private_metadata", "")
+        # Checked again here, not only when the modal opened: the submission is
+        # what writes, and roles can change while a modal is open. Creating
+        # needs a standup admin; editing, an admin or this standup's manager.
+        admin = may_manage_standups(team_id, user_id)
+        allowed = admin or (bool(private_metadata) and may_manage_standup(team_id, user_id, private_metadata))
+        if not allowed:
+            error_block = "standup_channel" if "standup_channel" in values else "questions"
+            ack(response_action="errors", errors={error_block: _NOT_A_STANDUP_ADMIN})
+            return
 
         standup_ch = values.get("standup_channel", {}).get("standup_channel", {})
         channel_id = (
@@ -1752,6 +1767,22 @@ def register_handlers(app: App) -> None:
             or standup_ch.get("selected_channel")
             or ""
         )
+        if not admin:
+            # A manager keeps the standup where it is. The modal shows the
+            # channel as text; a crafted submission naming another is refused.
+            try:
+                import src.core.db as db  # noqa: PLC0415
+
+                current_channel = (db.get_standup_schedule(team_id, int(private_metadata)) or {}).get("channel_id", "")
+            except Exception:
+                current_channel = ""
+            if channel_id and channel_id != current_channel:
+                ack(
+                    response_action="errors",
+                    errors={"standup_channel": "Only a standup admin can move a standup to another channel."},
+                )
+                return
+            channel_id = current_channel
         questions_text = values.get("questions", {}).get("questions", {}).get("value", "")
         questions = [q.strip() for q in questions_text.split("\n") if q.strip()]
         # The DM time now comes from its own `standup_time` block. A modal opened
@@ -2236,6 +2267,29 @@ def may_manage_standups(team_id: str, user_id: str) -> bool:
     except Exception as exc:
         logger.warning("Could not check standup admin for %s: %s", user_id, exc)
         return False
+
+
+def may_manage_standup(team_id: str, user_id: str, standup_id) -> bool:  # noqa: ANN001
+    """Whether this person may change this one standup: an admin, or one of its managers.
+
+    The same rule as db.can_manage_standup. A failed lookup refuses.
+    """
+    if may_manage_standups(team_id, user_id):
+        return True
+    try:
+        return int(standup_id) in _managed_ids(team_id, user_id)
+    except (TypeError, ValueError):
+        return False
+
+
+def _managed_ids(team_id: str, user_id: str) -> set[int]:
+    try:
+        import src.core.db as db  # noqa: PLC0415
+
+        return db.managed_schedule_ids(team_id, user_id)
+    except Exception as exc:
+        logger.warning("Could not list the standups %s manages: %s", user_id, exc)
+        return set()
 
 
 def _admin_contact(team_id: str) -> str:

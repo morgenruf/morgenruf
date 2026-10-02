@@ -2519,6 +2519,7 @@ _PURGE_STEPS: tuple[tuple[str, str], ...] = (
     ("user_away", "team_id = %s"),
     ("user_skip", "team_id = %s"),
     ("standups", "team_id = %s"),
+    ("standup_managers", "team_id = %s"),
     ("standup_schedules", "team_id = %s"),
     ("member_profiles", "team_id = %s"),
     ("module_admins", "team_id = %s"),
@@ -2947,6 +2948,89 @@ def can_administer(team_id: str, user_id: str, module: str | None = None) -> boo
     if not module:
         return False
     return module in module_admin_grants(team_id, user_id)
+
+
+# ── Per-standup managers ────────────────────────────────────────────────────
+
+# A standup is run by a team, not a crowd. Ten is plenty and keeps a pasted
+# list from turning into "everyone manages everything".
+MAX_STANDUP_MANAGERS = 10
+
+
+def standup_managers(team_id: str, schedule_id: int) -> list[str]:
+    """Who manages this standup, in the order they were added."""
+    sql = "SELECT user_id FROM standup_managers WHERE team_id = %s AND schedule_id = %s ORDER BY added_at, user_id"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, schedule_id))
+            return [r[0] for r in cur.fetchall()]
+
+
+def team_standup_managers(team_id: str) -> dict[int, list[str]]:
+    """`{schedule_id: [user_id, ...]}` for every standup with a manager."""
+    out: dict[int, list[str]] = {}
+    sql = "SELECT schedule_id, user_id FROM standup_managers WHERE team_id = %s ORDER BY added_at, user_id"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id,))
+            for schedule_id, user_id in cur.fetchall():
+                out.setdefault(schedule_id, []).append(user_id)
+    return out
+
+
+def managed_schedule_ids(team_id: str, user_id: str) -> set[int]:
+    """The standups this person manages."""
+    sql = "SELECT schedule_id FROM standup_managers WHERE team_id = %s AND user_id = %s"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, user_id))
+            return {r[0] for r in cur.fetchall()}
+
+
+def set_standup_managers(team_id: str, schedule_id: int, user_ids: list[str], added_by: str = "") -> list[str]:
+    """Replace this standup's managers. Returns the people who were not managers before.
+
+    The standup must belong to the team, so a schedule id from another
+    workspace can never be given managers here.
+    """
+    wanted = list(dict.fromkeys(u for u in user_ids if u))
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM standup_schedules WHERE team_id = %s AND id = %s", (team_id, schedule_id))
+            if cur.fetchone() is None:
+                raise LookupError("standup not found")
+            cur.execute(
+                "SELECT user_id FROM standup_managers WHERE team_id = %s AND schedule_id = %s", (team_id, schedule_id)
+            )
+            before = {r[0] for r in cur.fetchall()}
+            cur.execute(
+                "DELETE FROM standup_managers WHERE team_id = %s AND schedule_id = %s AND NOT (user_id = ANY(%s))",
+                (team_id, schedule_id, wanted),
+            )
+            for user_id in wanted:
+                cur.execute(
+                    "INSERT INTO standup_managers (schedule_id, team_id, user_id, added_by) VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (schedule_id, user_id) DO NOTHING",
+                    (schedule_id, team_id, user_id, added_by or None),
+                )
+    return [u for u in wanted if u not in before]
+
+
+def can_manage_standup(team_id: str, user_id: str, schedule_id: int) -> bool:
+    """Whether this person may change this one standup.
+
+    A workspace admin or a Standups admin may change any standup; a manager
+    only the ones they were given. Creating, deleting, moving a standup to
+    another channel and naming managers stay with the admins.
+    """
+    if not user_id:
+        return False
+    if can_administer(team_id, user_id, "standup"):
+        return True
+    try:
+        return int(schedule_id) in managed_schedule_ids(team_id, user_id)
+    except (TypeError, ValueError):
+        return False
 
 
 # ── Email suppression and install follow-ups ────────────────────────────────

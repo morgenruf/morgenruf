@@ -25,6 +25,8 @@ export const backendNamespacePrefixes = [
   '/google/',
   '/webhooks/',
   '/mcp/',
+  // Celebration banner images, which Slack fetches from the app's own URL.
+  '/celebrations/banners/',
 ];
 
 const escapeRegex = (path: string) =>

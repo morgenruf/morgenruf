@@ -72,6 +72,7 @@ import {
   type Standup,
   type StandupInput,
 } from './hooks';
+import { ManagersField } from './managers-field';
 
 function Field({
   label,
@@ -274,10 +275,13 @@ export function StandupEditor({
   standup,
   workspace,
   close,
+  admin = true,
 }: {
   standup?: Standup;
   workspace?: Standup;
   close: () => void;
+  /** A Standups admin. False for a manager of this one standup. */
+  admin?: boolean;
 }) {
   const id = useId();
   const [tab, setTab] = useState<(typeof tabs)[number]>('Basics');
@@ -285,7 +289,8 @@ export function StandupEditor({
   const [memberSearch, setMemberSearch] = useState('');
   const memberSearchInput = useRef<HTMLInputElement>(null);
 
-  const { save } = useStandupMutations();
+  const { save, setManagers } = useStandupMutations();
+  const [managers, setManagerIds] = useState<string[]>(standup?.managers ?? []);
   const form = useForm<StandupInput>({
     defaultValues: standupDefaults(standup, workspace),
     shouldFocusError: false,
@@ -382,15 +387,26 @@ export function StandupEditor({
         };
         // Creating a schedule must not reset shared settings, including when
         // no existing schedule is available to expose the workspace values.
-        if (!standup) {
+        if (!standup || !admin) {
+          // A manager runs one standup, not the workspace: the server ignores
+          // these from them, so they are not sent.
           for (const field of workspaceSettingFields) {
-            if (!dirtyFields[field]) delete payload[field];
+            if (!admin || !dirtyFields[field]) delete payload[field];
           }
         }
         await save.mutateAsync({
           id: standup?.id,
           body: payload,
         });
+        const before = standup?.managers ?? [];
+        if (
+          admin &&
+          standup &&
+          (managers.length !== before.length ||
+            managers.some((user) => !before.includes(user)))
+        ) {
+          await setManagers.mutateAsync({ id: standup.id, userIds: managers });
+        }
         toast.success(standup ? 'Standup updated' : 'Standup created');
         close();
       } catch (error) {
@@ -531,7 +547,7 @@ export function StandupEditor({
                             name={field.name}
                             value={field.value}
                             items={channelOptions}
-                            disabled={save.isPending}
+                            disabled={save.isPending || !admin}
                             onValueChange={(value) => {
                               if (value !== null) field.onChange(value);
                             }}
@@ -555,7 +571,13 @@ export function StandupEditor({
                             </SelectContent>
                           </Select>
                         </LoadingField>
-                        <ChannelInviteHint channels={resources.channels} />
+                        {admin ? (
+                          <ChannelInviteHint channels={resources.channels} />
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Only a standup admin can move it to another channel.
+                          </p>
+                        )}
                       </div>
                     )}
                   />
@@ -719,6 +741,13 @@ export function StandupEditor({
                     </LoadingTransition>
                   </div>
                 </fieldset>
+                {admin && standup && (
+                  <ManagersField
+                    value={managers}
+                    onChange={setManagerIds}
+                    disabled={save.isPending}
+                  />
+                )}
               </section>
               <section
                 role="tabpanel"
@@ -1012,7 +1041,7 @@ export function StandupEditor({
                             name={field.name}
                             value={field.value}
                             items={reportChannelOptions}
-                            disabled={save.isPending}
+                            disabled={save.isPending || !admin}
                             onValueChange={(value) => {
                               if (value !== null) field.onChange(value);
                             }}
@@ -1100,6 +1129,7 @@ export function StandupEditor({
                     <Input
                       type="email"
                       placeholder="lead@company.com"
+                      readOnly={!admin}
                       {...register('digest_email')}
                     />
                   </Field>
@@ -1134,7 +1164,16 @@ export function StandupEditor({
                 hidden={tab !== 'Workspace'}
                 className="space-y-5"
               >
-                <div className="rounded-lg border bg-muted/30 p-4">
+                {!admin && (
+                  <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                    These settings apply to every standup in the workspace, so
+                    only an admin can change them.
+                  </p>
+                )}
+                <div
+                  hidden={!admin}
+                  className="rounded-lg border bg-muted/30 p-4"
+                >
                   <h3 className="mb-1 font-medium">
                     Shared workspace settings
                   </h3>

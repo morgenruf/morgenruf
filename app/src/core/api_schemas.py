@@ -142,8 +142,19 @@ Standup = model(
         "reminder_minutes": integer(),
         "nudge_minutes_before": integer(),
         "registration_error": string(allow_none=True),
+        # Whether the viewer may change this standup: an admin, a Standups
+        # admin, or one of its managers.
+        "can_manage": boolean(),
+        # Its managers' user ids, shown only to people who can change it.
+        "managers": strings(),
     },
 )
+
+StandupManagers = model("StandupManagers", user_ids=strings())
+
+
+class StandupManagersInput(ApiSchema):
+    user_ids = fields.List(fields.String(validate=validate.Length(min=1, max=40)), required=True)
 
 
 class StandupInput(ApiSchema):

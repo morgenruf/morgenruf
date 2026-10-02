@@ -56,6 +56,40 @@ def _is_safe_webhook_url(url: str) -> bool:
 # How often a session is checked against the roster. Each check also re-signs
 # the cookie, which is what makes PERMANENT_SESSION_LIFETIME a sliding window.
 _ACTIVE_CHECK_SECONDS = 60
+# How often a signed-in person is looked up in Slack itself. The members table
+# is reconciled with Slack only every few hours, so without this someone
+# deactivated in Slack kept their dashboard session until the next sync.
+_SLACK_CHECK_SECONDS = 600
+
+
+def _still_in_slack(team_id: str, user_id: str) -> bool | None:
+    """True or False from Slack, None when Slack could not be asked.
+
+    Deactivated (`deleted`), a bot, or unknown to Slack is False. A Slack
+    outage is None, so it never signs everyone out.
+    """
+    try:
+        inst = db.get_installation(team_id) or {}
+        token = inst.get("bot_token") if isinstance(inst, dict) else None
+    except Exception:
+        return None
+    if not token or not user_id:
+        return None
+    try:
+        from slack_sdk import WebClient  # noqa: PLC0415
+
+        response = WebClient(token=token).users_info(user=user_id)
+    except Exception as exc:
+        body = getattr(exc, "response", None)
+        error = body.get("error") if hasattr(body, "get") else None
+        if error in ("user_not_found", "account_inactive"):
+            return False
+        logger.info("session check could not reach Slack for %s: %s", user_id, exc)
+        return None
+    user = response.get("user") if hasattr(response, "get") else None
+    if not isinstance(user, dict):
+        return None
+    return not (user.get("deleted") is True or user.get("is_bot") is True)
 
 
 def _session_revoked():
@@ -78,6 +112,23 @@ def _session_revoked():
     except Exception as exc:
         logger.warning("session check DB error: %s", exc)
         return jsonify({"error": "Service unavailable"}), 503
+    if active:
+        try:
+            due = now - int(session.get("slack_checked_at") or 0) >= _SLACK_CHECK_SECONDS
+        except (TypeError, ValueError):
+            due = True
+        if due:
+            team_id, user_id = session.get("team_id") or "", session.get("user_id") or ""
+            in_slack = _still_in_slack(team_id, user_id)
+            session["slack_checked_at"] = now
+            if in_slack is False:
+                active = False
+                try:
+                    # The same flag the periodic sync sets, so standups stop
+                    # asking them too, not only the dashboard.
+                    db.set_members_active(team_id, [user_id], False)
+                except Exception as exc:
+                    logger.warning("could not mark %s inactive: %s", user_id, exc)
     if not active:
         session.clear()
         if request.path.startswith("/dashboard/api/"):
@@ -152,6 +203,62 @@ def _admin_required(arg=None):
 
     # Bare use: the decorator was applied directly to the function.
     return decorate(arg) if callable(arg) else decorate
+
+
+def _standup_manager_required(f):
+    """Require someone who may change the standup in the URL.
+
+    That is a workspace admin, a Standups admin, or a manager of this one
+    standup (see db.can_manage_standup). Routes that create or delete
+    standups keep `_admin_required("standup")`.
+    """
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        team_id = session.get("team_id")
+        user_id = session.get("user_id")
+        if not team_id:
+            return jsonify({"error": "Unauthorized"}), 401
+        revoked = _session_revoked()
+        if revoked is not None:
+            return revoked
+        try:
+            allowed = bool(db.can_administer(team_id, user_id or "", "standup")) or (
+                int(kwargs.get("standup_id") or 0) in _managed_ids(team_id, user_id or "")
+            )
+        except Exception as exc:
+            logger.warning("_standup_manager_required DB error: %s", exc)
+            return jsonify({"error": "Service unavailable"}), 503
+        if not allowed:
+            return jsonify({"error": "Ask an admin to make you a manager of this standup"}), 403
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
+def _managed_ids(team_id: str, user_id: str) -> set[int]:
+    """The standups this person manages; empty when that cannot be read, which refuses."""
+    try:
+        ids = db.managed_schedule_ids(team_id, user_id)
+        return set(ids) if isinstance(ids, (set, frozenset, list, tuple)) else set()
+    except Exception as exc:
+        logger.warning("could not read the standups %s manages: %s", user_id, exc)
+        return set()
+
+
+def _team_managers(team_id: str) -> dict:
+    try:
+        managers = db.team_standup_managers(team_id)
+        return managers if isinstance(managers, dict) else {}
+    except Exception as exc:
+        logger.warning("could not read standup managers for %s: %s", team_id, exc)
+        return {}
+
+
+# A manager runs one standup but does not choose where it posts or where its
+# answers are sent: those could point a team's answers at any channel or
+# address, so they stay with the admins.
+_MANAGER_LOCKED_FIELDS = ("channel_id", "report_channel", "digest_email")
 
 
 def _get_bot_token() -> str | None:
@@ -321,6 +428,9 @@ def _schedule_to_standup(row: dict, workspace: dict | None = None) -> dict:
         # #119: when it next fires, so a standup that runs can be told apart from
         # one that silently never will.
         "next_run": _next_run(row),
+        # Filled in per viewer by the routes that know who is asking.
+        "can_manage": False,
+        "managers": [],
     }
 
 
@@ -412,13 +522,24 @@ def _split_workspace_fields(data: dict) -> dict:
 @dashboard_bp.response(200, schemas.Standup(many=True))
 def api_list_standups():
     team_id = session["team_id"]
+    user_id = session.get("user_id") or ""
     try:
         rows = db.get_standup_schedules(team_id)
         # Merged so the form reads back what was saved. Without this the
         # workspace settings always came back as their defaults, which is why
         # choosing Anthropic and reloading snapped the dropdown to OpenAI.
         ws = _workspace_settings(team_id)
-        return [_schedule_to_standup(r, ws) for r in _visible_schedules(rows)]
+        admin = _sees_every_standup()
+        managed = set() if admin else _managed_ids(team_id, user_id)
+        managers = _team_managers(team_id)
+        out = []
+        for r in _visible_schedules(rows, also=managed):
+            standup = _schedule_to_standup(r, ws)
+            can_manage = bool(admin or r.get("id") in managed)
+            standup["can_manage"] = can_manage
+            standup["managers"] = managers.get(r.get("id"), []) if can_manage else []
+            out.append(standup)
+        return out
     except Exception as exc:
         logger.error("api_list_standups error: %s", exc)
         return []
@@ -472,14 +593,16 @@ def api_create_standup(data):
         ws_fields = _split_workspace_fields(data)
         if ws_fields:
             db.upsert_workspace_config(team_id, **ws_fields)
-        return _schedule_to_standup(row, _workspace_settings(team_id)), 201
+        standup = _schedule_to_standup(row, _workspace_settings(team_id))
+        standup["can_manage"] = True
+        return standup, 201
     except Exception as exc:
         logger.error("api_create_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
 @dashboard_bp.route("/dashboard/api/standups/<int:standup_id>", methods=["PUT"])
-@_admin_required("standup")
+@_standup_manager_required
 @dashboard_bp.doc(operationId="updateStandup", tags=["Standups"], security=[{"sessionCookie": [], "csrfHeader": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.arguments(schemas.StandupInput, error_status_code=400)
@@ -490,6 +613,16 @@ def api_update_standup(data, standup_id: str):
     invalid = schedule_payload_error(data)
     if invalid:
         return jsonify({"error": invalid}), 400
+    admin = bool(db.can_administer(team_id, session.get("user_id") or "", "standup"))
+    if not admin:
+        current = db.get_standup_schedule(team_id, int(standup_id))
+        if current is None:
+            return jsonify(error="Standup not found"), 404
+        for field in _MANAGER_LOCKED_FIELDS:
+            if field in data and (data[field] or "") != (current.get(field) or ""):
+                return jsonify(
+                    {"error": "Only standup admins can change where a standup posts or sends its answers"}
+                ), 403
     try:
         kwargs: dict = {}
         for field in (
@@ -526,12 +659,16 @@ def api_update_standup(data, standup_id: str):
         if row is None:
             return jsonify(error="Standup not found"), 404
 
-        # The workspace-level half of the same form.
-        ws_fields = _split_workspace_fields(data)
+        # The workspace-level half of the same form. A manager runs one
+        # standup, not the workspace, so their copy of these is ignored.
+        ws_fields = _split_workspace_fields(data) if admin else {}
         if ws_fields:
             db.upsert_workspace_config(team_id, **ws_fields)
 
-        return _schedule_to_standup(row, _workspace_settings(team_id))
+        standup = _schedule_to_standup(row, _workspace_settings(team_id))
+        standup["can_manage"] = True
+        standup["managers"] = _team_managers(team_id).get(int(standup_id), [])
+        return standup
     except Exception as exc:
         logger.error("api_update_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
@@ -550,6 +687,58 @@ def api_delete_standup(standup_id: str):
     except Exception as exc:
         logger.error("api_delete_standup error: %s", exc)
         return jsonify({"error": str(exc)}), 500
+
+
+@dashboard_bp.route("/dashboard/api/standups/<int:standup_id>/managers", methods=["PUT"])
+@_admin_required("standup")
+@dashboard_bp.doc(
+    operationId="setStandupManagers", tags=["Standups"], security=[{"sessionCookie": [], "csrfHeader": []}]
+)
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.StandupManagersInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.StandupManagers)
+def api_set_standup_managers(data, standup_id: str):
+    """Replace who manages this standup. New managers are told in Slack."""
+    team_id = session["team_id"]
+    user_ids = list(dict.fromkeys(u.strip() for u in data.get("user_ids") or [] if u.strip()))
+    if len(user_ids) > db.MAX_STANDUP_MANAGERS:
+        message = f"A standup can have at most {db.MAX_STANDUP_MANAGERS} managers."
+        return jsonify({"error": message, "details": {"user_ids": [message]}}), 400
+    try:
+        added = db.set_standup_managers(team_id, int(standup_id), user_ids, added_by=session.get("user_id") or "")
+    except LookupError:
+        return jsonify(error="Standup not found"), 404
+    except Exception as exc:
+        logger.error("api_set_standup_managers error: %s", exc)
+        return jsonify({"error": "Service unavailable"}), 503
+    if added:
+        _tell_new_managers(team_id, int(standup_id), added)
+    return {"user_ids": db.standup_managers(team_id, int(standup_id))}
+
+
+def _tell_new_managers(team_id: str, schedule_id: int, user_ids: list[str]) -> None:
+    """A DM to each new manager, so they know what they can now change and where."""
+    token = _get_bot_token()
+    if not token:
+        return
+    from slack_sdk import WebClient  # noqa: PLC0415
+
+    try:
+        row = db.get_standup_schedule(team_id, schedule_id) or {}
+    except Exception:
+        row = {}
+    name = row.get("name") or "a standup"
+    channel = f" in <#{row['channel_id']}>" if row.get("channel_id") else ""
+    text = (
+        f"You now manage *{name}*{channel}. You can change its questions, schedule and participants, "
+        "or pause it, from the Home tab (Configure) or the dashboard (`/morgenruf dashboard`)."
+    )
+    client = WebClient(token=token)
+    for user_id in user_ids:
+        try:
+            client.chat_postMessage(channel=user_id, text=text)
+        except Exception as exc:
+            logger.warning("could not tell %s they manage standup %s: %s", user_id, schedule_id, exc)
 
 
 @browser_bp.route("/email/subscribe", methods=["GET", "POST"])
@@ -1375,12 +1564,12 @@ def _sees_every_standup() -> bool:
         return False
 
 
-def _visible_schedules(schedules: list[dict]) -> list[dict]:
+def _visible_schedules(schedules: list[dict], also: set[int] | frozenset = frozenset()) -> list[dict]:
     """The schedules this viewer may read.
 
-    A member sees a standup they are in, or one posting to a channel they
-    could read in Slack anyway. Without this anyone signed in could read the
-    answers from a private channel's standup.
+    A member sees a standup they are in, one posting to a channel they could
+    read in Slack anyway, or one they manage (`also`). Without this anyone
+    signed in could read the answers from a private channel's standup.
     """
     if _sees_every_standup():
         return schedules
@@ -1394,8 +1583,10 @@ def _visible_schedules(schedules: list[dict]) -> list[dict]:
     visible = []
     for sched in schedules:
         channel_id = sched.get("channel_id") or ""
-        if user_id in (sched.get("participants") or []) or (
-            client is not None and channel_id and _can_see_channel(client, channel_id, user_id)
+        if (
+            sched.get("id") in also
+            or user_id in (sched.get("participants") or [])
+            or (client is not None and channel_id and _can_see_channel(client, channel_id, user_id))
         ):
             visible.append(sched)
     return visible

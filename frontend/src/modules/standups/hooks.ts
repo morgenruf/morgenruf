@@ -94,5 +94,16 @@ export function useStandupMutations() {
     onSuccess: invalidate,
   });
 
-  return { save, setActive, remove };
+  // Who manages one standup. Admins only; the editor saves it after the
+  // standup itself.
+  const setManagers = useMutation({
+    meta: { silent: true },
+    mutationFn: ({ id, userIds }: { id: number; userIds: string[] }) =>
+      api.standups
+        .setStandupManagers({ standupId: id }, { user_ids: userIds })
+        .then((r) => r.data),
+    onSuccess: invalidate,
+  });
+
+  return { save, setActive, remove, setManagers };
 }

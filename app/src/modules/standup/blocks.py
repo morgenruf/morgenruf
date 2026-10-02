@@ -482,14 +482,29 @@ def create_standup_modal(existing_config: dict | None = None, bot_channels: list
         if initial:
             channel_element["initial_option"] = initial
 
-    blocks = [
-        # Channel
+    # A manager runs this standup but does not choose where it posts, so the
+    # channel is shown, not offered. The submission keeps it either way.
+    channel_block: dict = (
         {
+            "type": "section",
+            "block_id": "standup_channel_locked",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Standup channel*\n<#{cfg.get('channel_id')}>  ·  only a standup admin can move it",
+            },
+        }
+        if cfg.get("channel_locked") and cfg.get("channel_id")
+        else {
             "type": "input",
             "block_id": "standup_channel",
             "label": {"type": "plain_text", "text": "Standup channel"},
             "element": channel_element,
-        },
+        }
+    )
+
+    blocks = [
+        # Channel
+        channel_block,
         # Questions
         {
             "type": "input",
@@ -1362,7 +1377,7 @@ def app_home_view(
                     }
                 )
 
-            if is_admin:
+            if is_admin or standup.get("can_manage"):
                 actions.append(
                     {
                         "type": "button",
@@ -1395,14 +1410,11 @@ def app_home_view(
                 blocks.append({"type": "actions", "elements": actions})
             blocks.append({"type": "divider"})
 
-    # Admin: other standups section
-    if is_admin and other_standups:
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "*🔧 Other standups (admin):*"},
-            }
-        )
+    # Not someone you answer, but someone you may change: every other standup
+    # for an admin, the ones you manage for a manager.
+    if other_standups:
+        title = "*🔧 Other standups (admin):*" if is_admin else "*🗂️ Standups you manage:*"
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": title}})
         for standup in other_standups:
             standup_id = standup.get("standup_id") or standup.get("id", "")
             name = standup.get("standup_name") or standup.get("name") or "Team Standup"
@@ -1430,6 +1442,19 @@ def app_home_view(
             )
 
         blocks.append({"type": "divider"})
+
+    # Someone who can change nothing is told who can, instead of finding out
+    # by pressing a button that is not there.
+    if standups and not is_admin and not other_standups and not any(s.get("can_manage") for s in standups):
+        who = f"<@{admin_contact}>" if admin_contact else "a workspace admin"
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": f"Need to change a standup? Ask {who} to make you its manager."}
+                ],
+            }
+        )
 
     # Footer
     blocks.append(

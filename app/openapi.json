@@ -2370,6 +2370,9 @@
           "ai_summary_enabled": {
             "type": "boolean"
           },
+          "can_manage": {
+            "type": "boolean"
+          },
           "channel_id": {
             "type": "string"
           },
@@ -2411,6 +2414,12 @@
           },
           "manager_email": {
             "type": "string"
+          },
+          "managers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "name": {
             "type": "string"
@@ -2487,6 +2496,7 @@
           "active",
           "ai_provider",
           "ai_summary_enabled",
+          "can_manage",
           "channel_id",
           "digest_email",
           "digest_enabled",
@@ -2501,6 +2511,7 @@
           "linear_team",
           "manager_digest_enabled",
           "manager_email",
+          "managers",
           "name",
           "next_run",
           "notify_on_report",
@@ -2646,6 +2657,36 @@
             "type": "boolean"
           }
         },
+        "type": "object"
+      },
+      "StandupManagers": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "user_ids"
+        ],
+        "type": "object"
+      },
+      "StandupManagersInput": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "user_ids"
+        ],
         "type": "object"
       },
       "StandupResponse": {
@@ -9878,6 +9919,127 @@
             "sessionCookie": []
           }
         ],
+        "tags": [
+          "Standups"
+        ]
+      }
+    },
+    "/dashboard/api/standups/{standup_id}/managers": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "standup_id",
+          "required": true,
+          "schema": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "setStandupManagers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StandupManagersInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandupManagers"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "default": {
+            "$ref": "#/components/responses/DEFAULT_ERROR"
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Replace who manages this standup. New managers are told in Slack.",
         "tags": [
           "Standups"
         ]

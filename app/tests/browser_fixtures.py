@@ -22,6 +22,8 @@ class BrowserData:
         self.today = self.now.date()
         self.roles = {"U_ADMIN": "admin", "U_MEMBER": "member", "U_LEAD": "member"}
         self.grants = {"U_LEAD": {"standup", "connect"}}
+        # schedule id -> user ids who manage that one standup
+        self.standup_managers: dict[int, list[str]] = {}
         self.members = [
             {
                 "user_id": user,
@@ -346,6 +348,14 @@ class BrowserData:
             row.update(fields)
         return deepcopy(row)
 
+    def set_standup_managers(self, team_id, schedule_id, user_ids, added_by=""):
+        if not any(s["id"] == int(schedule_id) for s in self.schedules):
+            raise LookupError("standup not found")
+        before = set(self.standup_managers.get(int(schedule_id), []))
+        wanted = list(dict.fromkeys(user_ids))
+        self.standup_managers[int(schedule_id)] = wanted
+        return [u for u in wanted if u not in before]
+
     def create_schedule(self, team_id, **fields):
         row = {
             **deepcopy(self.schedules[0]),
@@ -586,6 +596,16 @@ def create_test_app(patcher=None):
                 state.schedules, schedule_id, **fields
             ),
             "delete_standup_schedule": lambda team, schedule_id: state.delete(state.schedules, schedule_id),
+            "get_standup_schedule": lambda team, schedule_id: deepcopy(
+                next((s for s in state.schedules if s["id"] == int(schedule_id)), None)
+            ),
+            "managed_schedule_ids": lambda team, user: {
+                sid for sid, users in state.standup_managers.items() if user in users
+            },
+            "team_standup_managers": lambda team: deepcopy(state.standup_managers),
+            "standup_managers": lambda team, schedule_id: list(state.standup_managers.get(int(schedule_id), [])),
+            "set_standup_managers": state.set_standup_managers,
+            "MAX_STANDUP_MANAGERS": 10,
             "get_standups": lambda team, **kwargs: deepcopy(state.responses),
             "export_standups": lambda *args: deepcopy(state.responses),
             "get_participation_overview": lambda team, days=7, start=None, end=None: state.overview(days),

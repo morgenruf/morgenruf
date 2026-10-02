@@ -32,6 +32,11 @@ _db_mock = MagicMock()
 # Most dashboard mutations are admin-only, so the default session is an admin.
 # The role-specific tests set this themselves.
 _db_mock.get_member_role.return_value = "admin"
+# Per-standup managers: nobody manages anything unless a test says so.
+_db_mock.team_standup_managers.return_value = {}
+_db_mock.managed_schedule_ids.return_value = set()
+_db_mock.standup_managers.return_value = []
+_db_mock.MAX_STANDUP_MANAGERS = 10
 _oauth_mock = MagicMock()
 sys.modules["src.core.db"] = _db_mock
 sys.modules["src.core.oauth"] = _oauth_mock

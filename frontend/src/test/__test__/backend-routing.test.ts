@@ -52,6 +52,7 @@ describe('development and production routing parity', () => {
     '/mcp/unknown',
     '/dashboard?t=login-token',
     '/oauth/callback?state=signed',
+    '/celebrations/banners/birthday-1.jpg',
   ])('reserves %s for the backend', (url) => {
     expect(matchesBackend(url)).toBe(true);
   });
