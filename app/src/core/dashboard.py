@@ -1364,7 +1364,7 @@ def _participation_summary(overview: dict) -> dict:
 
 
 @dashboard_bp.route("/dashboard/api/stats", methods=["GET"])
-@_login_required
+@_admin_required("standup")
 @dashboard_bp.doc(operationId="getStats", tags=["Analytics"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.response(200, schemas.Stats)
@@ -1777,7 +1777,7 @@ def _clean_events(raw) -> tuple[list[str] | None, str | None]:
 
 
 @dashboard_bp.route("/dashboard/api/webhooks", methods=["GET"])
-@_login_required
+@_admin_required
 @dashboard_bp.doc(operationId="listWebhooks", tags=["Webhooks"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.response(200, schemas.Webhook(many=True))
@@ -1792,7 +1792,7 @@ def api_list_webhooks():
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/events", methods=["GET"])
-@_login_required
+@_admin_required
 @dashboard_bp.doc(operationId="getWebhookEvents", tags=["Webhooks"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.response(200, schemas.WebhookEvents)
@@ -1942,7 +1942,7 @@ def api_test_webhook(hook_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/webhooks/<hook_id>/deliveries", methods=["GET"])
-@_login_required
+@_admin_required
 @dashboard_bp.doc(operationId="listWebhookDeliveries", tags=["Webhooks"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.arguments(schemas.LimitQuery, location="query", error_status_code=400)
@@ -1989,7 +1989,7 @@ def api_delete_webhook(hook_id: str):
 
 
 @dashboard_bp.route("/dashboard/api/analytics", methods=["GET"])
-@_login_required
+@_admin_required("standup")
 @dashboard_bp.doc(operationId="getAnalytics", tags=["Analytics"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.arguments(schemas.DaysQuery, location="query", error_status_code=400)
@@ -2130,7 +2130,7 @@ def api_templates():
 
 
 @dashboard_bp.route("/dashboard/api/rules", methods=["GET"])
-@_login_required
+@_admin_required("standup")
 @dashboard_bp.doc(operationId="listRules", tags=["Automation"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.response(200, schemas.Rule(many=True))
@@ -2277,7 +2277,7 @@ def api_disable_feed():
 
 
 @dashboard_bp.route("/dashboard/api/mcp/keys", methods=["GET"])
-@_login_required
+@_admin_required
 @dashboard_bp.doc(operationId="listKeys", tags=["Mcp"], security=[{"sessionCookie": []}])
 @api_errors(dashboard_bp)
 @dashboard_bp.response(200, schemas.McpKeys)

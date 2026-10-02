@@ -41,11 +41,15 @@ export function useStandupResources(channelId = '') {
   return { channels, members, templates, ai };
 }
 
-export function useStandupHealth() {
+export function useStandupHealth(enabled = true) {
   const services = useServices();
   const { data: session } = useSession();
 
-  return useQuery(analyticsOptions(services, session?.team_id, 14));
+  // Participation is per person, so only people who run standups load it.
+  return useQuery({
+    ...analyticsOptions(services, session?.team_id, 14),
+    enabled: enabled && !!session?.team_id,
+  });
 }
 
 export function useStandupMutations() {
