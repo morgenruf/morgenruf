@@ -5,6 +5,25 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.17] - 2026-10-02
+
+### Added
+- **Standup managers.** A Standups admin can name up to ten managers for a
+  standup, in its settings. A manager can change that standup's questions,
+  schedule, participants and reminders, and pause it, from the Home tab or the
+  dashboard, without administering every other standup. Managers cannot
+  create or delete standups, move one to another channel, change where it
+  reports or emails, change workspace settings or name other managers. New
+  managers are told in Slack, and members who manage nothing see who to ask.
+
+### Fixed
+- **People who leave Slack lose dashboard access within minutes.** A signed-in
+  person is checked with Slack every ten minutes. A deactivated or deleted
+  account is signed out and stops being asked for standups straight away,
+  instead of at the next six-hourly member sync.
+- **Celebration banners load.** The dashboard proxy now passes banner images
+  through to the app, so Slack shows them instead of falling back to text.
+
 ## [1.9.16] - 2026-10-02
 
 Everything in 1.9.15, which was tagged but never published: its frontend
