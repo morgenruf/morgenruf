@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.20] - 2026-10-02
+
 ### Added
 - **Activation checklist.** Workspace admins see "Get your team going" at the
   top of the Home tab: start a standup, add @Morgenruf to its channel, get the
@@ -15,6 +17,13 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   gets one DM on day 3 if the standup has no answers yet, and one on day 7 if
   fewer than three steps are done. The Monday report shows each workspace's
   progress.
+
+### Changed
+- **Dashboard login page.** The main button is now "Open Morgenruf in Slack",
+  which opens the app in the person's workspace; its Dashboard button signs
+  them in with no admin needed. Installing is a small link underneath, so
+  members no longer land in the install flow and get asked to request admin
+  approval. Self-hosted installs set `SLACK_APP_ID` for the button.
 
 ## [1.9.19] - 2026-10-02
 
