@@ -113,6 +113,15 @@ spec:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: ZOOM_CLIENT_SECRET
             {{- end }}
+            {{- if and .Values.feedback.githubToken .Values.feedback.githubRepo }}
+            - name: FEEDBACK_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: FEEDBACK_GITHUB_TOKEN
+            - name: FEEDBACK_GITHUB_REPO
+              value: {{ .Values.feedback.githubRepo | quote }}
+            {{- end }}
             - name: LOG_LEVEL
               valueFrom:
                 secretKeyRef:

@@ -101,5 +101,7 @@ FEED = RateLimiter(limit=60, window=60)
 EMAIL_LINKS = RateLimiter(limit=20, window=60)
 OAUTH_CALLBACK = RateLimiter(limit=20, window=60)
 MCP_AUTH_FAILURES = RateLimiter(limit=20, window=60)
+# Keyed by person, not address: each report opens a GitHub issue.
+FEEDBACK = RateLimiter(limit=5, window=3600)
 
-ALL = (FEED, EMAIL_LINKS, OAUTH_CALLBACK, MCP_AUTH_FAILURES)
+ALL = (FEED, EMAIL_LINKS, OAUTH_CALLBACK, MCP_AUTH_FAILURES, FEEDBACK)

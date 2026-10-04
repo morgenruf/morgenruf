@@ -962,3 +962,66 @@ class TestPublicFeedDay:
         assert data["date"] == "2026-09-30"
         kwargs = _db_mock.get_standups.call_args.kwargs
         assert kwargs["from_date"] == kwargs["to_date"] == "2026-09-30"
+
+
+class TestFeedback:
+    """POST /dashboard/api/feedback files an issue for anyone signed in."""
+
+    payload = {
+        "kind": "bug",
+        "title": "Report page is empty",
+        "details": "Opened it, saw nothing.",
+        "page": "/dashboard/reports",
+    }
+
+    @pytest.fixture(autouse=True)
+    def _configured(self, monkeypatch):
+        monkeypatch.setenv("FEEDBACK_GITHUB_TOKEN", "github_pat_test")
+        monkeypatch.setenv("FEEDBACK_GITHUB_REPO", "morgenruf/feedback")
+        _db_mock.get_member_email.return_value = "ada@example.com"
+
+    def test_requires_sign_in(self, client):
+        assert client.post("/dashboard/api/feedback", json=self.payload).status_code == 401
+
+    def test_member_files_an_issue_with_context(self, authed_client, monkeypatch):
+        _db_mock.get_member_role.return_value = "member"
+        filed = MagicMock(return_value="https://github.com/morgenruf/feedback/issues/1")
+        monkeypatch.setattr(dashboard.feedback, "file_issue", filed)
+        try:
+            resp = authed_client.post(
+                "/dashboard/api/feedback", json=self.payload, headers={"User-Agent": "Firefox/140"}
+            )
+        finally:
+            _db_mock.get_member_role.return_value = "admin"
+        assert resp.status_code == 200
+        assert resp.get_json() == {"ok": True}
+        kind, title, details, context = filed.call_args.args
+        assert (kind, title, details) == ("bug", "Report page is empty", "Opened it, saw nothing.")
+        assert context["page"] == "/dashboard/reports"
+        assert context["browser"] == "Firefox/140"
+        assert context["sender"] == "U456 ada@example.com"
+        assert "T123" in context["workspace"]
+
+    def test_rejects_unknown_kind_and_short_title(self, authed_client):
+        assert authed_client.post("/dashboard/api/feedback", json={**self.payload, "kind": "rant"}).status_code == 400
+        assert authed_client.post("/dashboard/api/feedback", json={**self.payload, "title": "x"}).status_code == 400
+
+    def test_unconfigured_server_refuses(self, authed_client, monkeypatch):
+        monkeypatch.delenv("FEEDBACK_GITHUB_TOKEN")
+        assert authed_client.post("/dashboard/api/feedback", json=self.payload).status_code == 503
+
+    def test_github_failure_is_a_retryable_error(self, authed_client, monkeypatch):
+        monkeypatch.setattr(dashboard.feedback, "file_issue", MagicMock(return_value=None))
+        resp = authed_client.post("/dashboard/api/feedback", json=self.payload)
+        assert resp.status_code == 502
+        assert "Try again" in resp.get_json()["error"]
+
+    def test_rate_limited_per_person(self, authed_client, monkeypatch):
+        monkeypatch.setattr(dashboard.feedback, "file_issue", MagicMock(return_value="u"))
+        codes = [authed_client.post("/dashboard/api/feedback", json=self.payload).status_code for _ in range(6)]
+        assert codes == [200] * 5 + [429]
+
+    def test_session_says_whether_feedback_is_on(self, authed_client, monkeypatch):
+        assert authed_client.get("/dashboard/api/me").get_json()["feedback"] is True
+        monkeypatch.delenv("FEEDBACK_GITHUB_REPO")
+        assert authed_client.get("/dashboard/api/me").get_json()["feedback"] is False

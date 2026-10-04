@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import {
   BarChart3,
@@ -10,6 +11,7 @@ import {
   ListChecks,
   LogOut,
   MessageCircleHeart,
+  MessageSquareText,
   MessagesSquare,
   Plug,
   Settings2,
@@ -23,7 +25,8 @@ import {
 } from 'lucide-react';
 
 import { useWorkspaceModules } from '@/common/api/use-workspace-modules';
-import { usePermissions } from '@/common/auth/use-session';
+import { usePermissions, useSession } from '@/common/auth/use-session';
+import { FeedbackDialog } from '@/common/components/feedback-dialog';
 import { Button } from '@/common/components/ui/button';
 import {
   Sidebar,
@@ -226,6 +229,8 @@ export function AppSidebar({
     !access || (access === 'workspace' ? isAdmin : canAdminister(access));
   const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
+  const { data: session } = useSession();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const closeMobile = () => setOpenMobile(false);
   const isActive = (path: string, end = false) =>
@@ -351,6 +356,21 @@ export function AppSidebar({
 
       <SidebarGroup className="shrink-0 py-2">
         <SidebarMenu>
+          {session?.feedback && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => {
+                  closeMobile();
+                  setFeedbackOpen(true);
+                }}
+                aria-label="Send feedback"
+                tooltip="Send feedback"
+              >
+                <MessageSquareText className="text-violet-500 dark:text-violet-400" />
+                <span>Send feedback</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <SidebarMenuButton
               render={<Link to="/dashboard/profile" />}
@@ -389,6 +409,7 @@ export function AppSidebar({
           </span>
         </div>
       </SidebarFooter>
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </Sidebar>
   );
 }

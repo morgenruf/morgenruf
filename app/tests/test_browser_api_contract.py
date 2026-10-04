@@ -164,6 +164,7 @@ MUTATIONS = [
     ("POST", "/dashboard/api/watercooler/questions", {"text": "What is a tool you love?"}),
     ("PATCH", "/dashboard/api/watercooler/questions/1", {"archived": True}),
     ("PUT", "/dashboard/api/watercooler/bank/light-001", {"hidden": True}),
+    ("POST", "/dashboard/api/feedback", {"kind": "idea", "title": "Dark mode please", "page": "/dashboard/today"}),
     ("POST", "/dashboard/api/logout", None),
 ]
 
@@ -345,7 +346,7 @@ print(json.dumps(spec, sort_keys=True))
         for method, operation in path.items()
         if method in {"get", "post", "put", "patch", "delete"}
     ]
-    assert len(operations) == 82
+    assert len(operations) == 83
     assert len({operation["operationId"] for operation in operations}) == len(operations)
     assert all(operation["responses"] for operation in operations)
 

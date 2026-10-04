@@ -11,12 +11,14 @@
  */
 
 import type {
+  FeedbackInput,
   GetSessionError,
   LogoutError,
   Ok,
+  SendFeedbackError,
   SessionInfo,
 } from "./data-contracts";
-import { HttpClient, type RequestParams } from "./http-client";
+import { ContentType, HttpClient, type RequestParams } from "./http-client";
 
 export class Session<SecurityDataType = unknown> {
   http: HttpClient<SecurityDataType>;
@@ -54,6 +56,25 @@ export class Session<SecurityDataType = unknown> {
       path: `/dashboard/api/logout`,
       method: "POST",
       secure: true,
+      format: "json",
+      ...params,
+    });
+  /**
+   * No description
+   *
+   * @tags Session
+   * @name SendFeedback
+   * @summary File a bug report, suggestion or question from anyone signed in.
+   * @request POST:/dashboard/api/feedback
+   * @secure
+   */
+  sendFeedback = (data: FeedbackInput, params: RequestParams = {}) =>
+    this.http.request<Ok, SendFeedbackError>({
+      path: `/dashboard/api/feedback`,
+      method: "POST",
+      body: data,
+      secure: true,
+      type: ContentType.Json,
       format: "json",
       ...params,
     });

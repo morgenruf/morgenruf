@@ -200,6 +200,18 @@ zoom:
   clientSecret: ""
 
 # ---------------------------------------------------------------------------
+# Optional: Feedback
+#
+# The dashboard's "Send feedback" dialog files each report as an issue in
+# githubRepo (owner/name). Issues include the workspace and sender, so use a
+# private repository. githubToken is a fine-grained token with Issues read and
+# write on that repository only. Leave either empty and the dialog is hidden.
+# ---------------------------------------------------------------------------
+feedback:
+  githubToken: ""
+  githubRepo: ""
+
+# ---------------------------------------------------------------------------
 # Operations
 #
 # logLevel: set to DEBUG for verbose logs. It never turns on Flask's debug

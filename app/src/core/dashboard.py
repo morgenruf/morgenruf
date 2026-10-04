@@ -23,7 +23,7 @@ from flask_smorest import Blueprint
 
 import src.core.db as db
 from src.core import api_schemas as schemas
-from src.core import rate_limit
+from src.core import feedback, rate_limit
 from src.core.api import api_errors, csrf_token
 from src.core.oauth import consume_login_token
 from src.core.schedule_validation import DEFAULT_QUESTIONS, schedule_config_error, schedule_payload_error
@@ -879,7 +879,55 @@ def api_me():
         "module_admin": modules,
         "mcp_endpoint": f"{os.environ.get('APP_URL', _APP_URL).rstrip('/')}/mcp",
         "csrf_token": csrf_token(),
+        # Whether this server files feedback anywhere; the dialog is hidden if not.
+        "feedback": feedback.enabled(),
     }
+
+
+@dashboard_bp.route("/dashboard/api/feedback", methods=["POST"])
+@_login_required
+@dashboard_bp.doc(operationId="sendFeedback", tags=["Session"], security=[{"sessionCookie": [], "csrfHeader": []}])
+@api_errors(dashboard_bp)
+@dashboard_bp.arguments(schemas.FeedbackInput, error_status_code=400)
+@dashboard_bp.response(200, schemas.Ok)
+def api_send_feedback(data):
+    """File a bug report, suggestion or question from anyone signed in."""
+    team_id = session["team_id"]
+    user_id = session.get("user_id", "")
+    if not feedback.enabled():
+        return jsonify({"error": "Feedback is not set up on this server"}), 503
+    if not rate_limit.FEEDBACK.hit(f"{team_id}:{user_id}"):
+        return rate_limit.too_many()
+    try:
+        email = db.get_member_email(team_id, user_id) or ""
+    except Exception:
+        email = ""
+    from src.core.version import APP_VERSION  # noqa: PLC0415
+
+    team_name = session.get("team_name", "")
+    url = feedback.file_issue(
+        data["kind"],
+        data["title"],
+        data.get("details", ""),
+        {
+            "workspace": f"{team_name} ({team_id})" if team_name else team_id,
+            "sender": " ".join(part for part in (user_id, email) if part),
+            "page": data.get("page", ""),
+            "browser": request.headers.get("User-Agent", "")[:300],
+            "version": APP_VERSION,
+        },
+    )
+    if url is None:
+        return jsonify({"error": "Could not send your feedback. Try again in a minute."}), 502
+    try:
+        from src.core import alerts  # noqa: PLC0415
+
+        alerts.notify(
+            f"New feedback from {alerts._escape(team_name or team_id)}: {alerts._escape(data['title'])} {url}"
+        )
+    except Exception:
+        pass
+    return {"ok": True}
 
 
 @dashboard_bp.route("/dashboard/api/members/<user_id>/role", methods=["PUT"])

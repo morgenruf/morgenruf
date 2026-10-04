@@ -295,6 +295,25 @@ export interface FeedToken {
   url: string;
 }
 
+export interface FeedbackInput {
+  /**
+   * @maxLength 5000
+   * @default ""
+   */
+  details?: string;
+  kind: "bug" | "idea" | "other";
+  /**
+   * @maxLength 300
+   * @default ""
+   */
+  page?: string;
+  /**
+   * @minLength 3
+   * @maxLength 120
+   */
+  title: string;
+}
+
 export type GetAiSummaryError = ApiError;
 
 export type GetAnalyticsError = ApiError;
@@ -1052,8 +1071,11 @@ export interface ScheduleParticipation {
   series: (number | null)[];
 }
 
+export type SendFeedbackError = ApiError;
+
 export interface SessionInfo {
   csrf_token: string;
+  feedback: boolean;
   mcp_endpoint: string;
   module_admin: string[];
   role: string;

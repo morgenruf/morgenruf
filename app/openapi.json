@@ -722,6 +722,38 @@
         ],
         "type": "object"
       },
+      "FeedbackInput": {
+        "properties": {
+          "details": {
+            "default": "",
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "bug",
+              "idea",
+              "other"
+            ],
+            "type": "string"
+          },
+          "page": {
+            "default": "",
+            "maxLength": 300,
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 3,
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title"
+        ],
+        "type": "object"
+      },
       "Holiday": {
         "properties": {
           "date": {
@@ -2272,6 +2304,9 @@
           "csrf_token": {
             "type": "string"
           },
+          "feedback": {
+            "type": "boolean"
+          },
           "mcp_endpoint": {
             "type": "string"
           },
@@ -2296,6 +2331,7 @@
         },
         "required": [
           "csrf_token",
+          "feedback",
           "mcp_endpoint",
           "module_admin",
           "role",
@@ -6360,6 +6396,116 @@
         ],
         "tags": [
           "Workspace"
+        ]
+      }
+    },
+    "/dashboard/api/feedback": {
+      "post": {
+        "operationId": "sendFeedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "default": {
+            "$ref": "#/components/responses/DEFAULT_ERROR"
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "File a bug report, suggestion or question from anyone signed in.",
+        "tags": [
+          "Session"
         ]
       }
     },

@@ -18,6 +18,7 @@ const session = (team_id = 'T1'): SessionInfo => ({
   role: 'admin',
   module_admin: [],
   mcp_endpoint: 'https://example.test/mcp',
+  feedback: false,
   csrf_token: 'csrf-value',
 });
 

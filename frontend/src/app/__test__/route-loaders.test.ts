@@ -20,6 +20,7 @@ const session: SessionInfo = {
   module_admin: [],
   csrf_token: 'csrf',
   mcp_endpoint: '/mcp',
+  feedback: false,
 };
 
 const available = {
