@@ -606,6 +606,9 @@ def create_test_app(patcher=None):
 
     patch(dashboard, "db", db)
     patch(oauth, "db", db)
+    # Feedback is on, and filing it never reaches GitHub.
+    patch(dashboard.feedback, "enabled", lambda: True)
+    patch(dashboard.feedback, "file_issue", lambda *args: "https://github.test/feedback/issues/1")
     validate_profile = db.validate_member_profile
     patch(dashboard, "consume_login_token", oauth.consume_login_token)
     used_login_nonces: set[str] = set()

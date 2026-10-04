@@ -61,6 +61,8 @@ PUBLIC_BY_DESIGN = {
 # which test_member_profile_api proves.
 SELF_SERVICE = {
     "/dashboard/api/profile",
+    # Changes no workspace data: it files an issue for the maintainer.
+    "/dashboard/api/feedback",
 }
 
 # Mutating routes open to whoever owns the thing as well as its feature admins,

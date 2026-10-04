@@ -374,6 +374,24 @@ test('public feed and integration result pages need no session', async ({
   await expect(page).toHaveURL(/\/email\/result\?status=invalid/);
 });
 
+test('a member sends feedback from the sidebar', async ({ page, context }) => {
+  await signIn(context, 'member');
+  await page.goto('/dashboard/today');
+
+  await page.getByRole('button', { name: 'Send feedback' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Send feedback' });
+  await expect(
+    dialog.getByRole('radio', { name: /Report a bug/ }),
+  ).toHaveAttribute('aria-checked', 'true');
+  await dialog.getByRole('radio', { name: /Suggest an improvement/ }).click();
+  await dialog.getByLabel('Title').fill('Dark mode for reports');
+  await dialog.getByLabel('Details').fill('Easier to read at night.');
+  await dialog.getByRole('button', { name: 'Send feedback' }).click();
+
+  await expect(page.getByText('Thanks, your feedback was sent')).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+});
+
 test('shadcn sidebar sizing, tooltips, keyboard controls, and collapsed sign-out', async ({
   page,
   context,

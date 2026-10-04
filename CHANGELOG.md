@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.21] - 2026-10-03
+
+### Added
+- **Send feedback from the dashboard.** A "Send feedback" item in the sidebar
+  opens a short form: report a bug, suggest an improvement, or anything else.
+  Anyone signed in can send one, up to five an hour. Each report is filed as an
+  issue in a GitHub repository with the workspace, sender, page and browser, so
+  it can be reproduced and answered. Self-hosted installs set
+  `FEEDBACK_GITHUB_TOKEN` and `FEEDBACK_GITHUB_REPO` (a private repository);
+  without both the item is hidden.
+
 ## [1.9.20] - 2026-10-02
 
 ### Added

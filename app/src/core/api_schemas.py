@@ -61,6 +61,7 @@ Session = model(
     module_admin=strings(),
     mcp_endpoint=string(),
     csrf_token=string(),
+    feedback=boolean(),
 )
 Channel = model("Channel", id=string(), name=string())
 Member = model(
@@ -416,6 +417,13 @@ InviteMemberInput = model(
     role=fields.String(load_default="admin", validate=validate.OneOf(["admin", "member"])),
 )
 ModuleInput = model("ModuleInput", enabled=boolean())
+FeedbackInput = model(
+    "FeedbackInput",
+    kind=fields.String(required=True, validate=validate.OneOf(["bug", "idea", "other"])),
+    title=fields.String(required=True, validate=validate.Length(min=3, max=120)),
+    details=fields.String(load_default="", validate=validate.Length(max=5000)),
+    page=fields.String(load_default="", validate=validate.Length(max=300)),
+)
 McpKeyInput = model("McpKeyInput", name=fields.String(load_default="Default"))
 MemberQuery = model("MemberQuery", channel_id=fields.String())
 DaysQuery = model("DaysQuery", days=fields.Integer(validate=validate.Range(min=1, max=365)))
