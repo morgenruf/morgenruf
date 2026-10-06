@@ -25,6 +25,7 @@ RUN apk upgrade --no-cache \
  && rm -rf /usr/share/nginx/html/*
 
 COPY frontend/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY frontend/nginx-security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /workspace/frontend/dist/client /usr/share/nginx/html
 
 USER 101

@@ -5,6 +5,15 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Security
+- **The dashboard can no longer be framed by another site.** Every response
+  from the frontend container now sends `X-Frame-Options: DENY`,
+  `Content-Security-Policy: frame-ancestors 'none'`, `nosniff`, a strict
+  referrer policy, `Cross-Origin-Opener-Policy: same-origin` and a
+  permissions policy that turns off camera, microphone and location. Before
+  this, a page elsewhere could load a signed-in dashboard in a hidden frame
+  and trick an admin into clicking it.
+
 ## [1.9.21] - 2026-10-03
 
 ### Added
