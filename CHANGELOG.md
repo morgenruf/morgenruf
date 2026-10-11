@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 ## [Unreleased]
 
 ### Security
+- **Slack and Zoom tokens can be encrypted in the database.** Set
+  `TOKEN_ENCRYPTION_KEY` (`tokenEncryptionKey` in the Helm chart) and bot
+  tokens, their refresh tokens and Zoom tokens are stored as ciphertext, so a
+  leaked dump or backup cannot be used to act as a workspace. Before this they
+  were plain text. Without the key nothing changes. On an existing install,
+  set the key, let the rollout finish, then run `python src/encrypt_tokens.py`
+  once to encrypt the tokens already stored. Keep a copy of the key: without
+  it the stored tokens cannot be read and every workspace has to reinstall.
+  Do not roll back to an older image after encrypting, because it would send
+  the ciphertext to Slack as if it were the token.
 - **The dashboard can no longer be framed by another site.** Every response
   from the frontend container now sends `X-Frame-Options: DENY`,
   `Content-Security-Policy: frame-ancestors 'none'`, `nosniff`, a strict

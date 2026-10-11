@@ -101,6 +101,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "morgenruf.fullname" . }}-secret
                   key: APP_URL
+            {{- if .Values.tokenEncryptionKey }}
+            - name: TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "morgenruf.fullname" . }}-secret
+                  key: TOKEN_ENCRYPTION_KEY
+            {{- end }}
             {{- if and .Values.zoom.clientId .Values.zoom.clientSecret }}
             - name: ZOOM_CLIENT_ID
               valueFrom:

@@ -13,6 +13,7 @@ from typing import Any, Generator
 from zoneinfo import ZoneInfo
 
 from src.core.timezones import canonical_tz, local_today
+from src.core.token_crypto import decrypt_fields, encrypt_token
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,15 @@ def db_conn() -> Generator[Any, None, None]:
 # ---------------------------------------------------------------------------
 
 
+def _open_tokens(row: dict) -> dict:
+    """Decrypt the Slack tokens in a row read from installations.
+
+    Every query that selects bot_token goes through this, so callers always
+    get the token Slack issued whether or not it is encrypted at rest.
+    """
+    return decrypt_fields(row, "bot_token", "bot_refresh_token")
+
+
 def save_installation(
     team_id: str,
     team_name: str,
@@ -146,11 +156,11 @@ def save_installation(
                     team_id,
                     team_id,
                     team_name,
-                    bot_token,
+                    encrypt_token(bot_token),
                     bot_user_id,
                     app_id,
                     installed_by_user_id,
-                    bot_refresh_token,
+                    encrypt_token(bot_refresh_token),
                     bot_token_expires_at,
                     granted_scopes,
                 ),
@@ -168,7 +178,7 @@ def get_installation(team_id: str) -> dict | None:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (team_id,))
             row = cur.fetchone()
-    return dict(row) if row else None
+    return _open_tokens(dict(row)) if row else None
 
 
 def deactivate_installation(team_id: str, reason: str) -> bool:
@@ -222,7 +232,7 @@ def get_all_installations(include_inactive: bool = False) -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)
             rows = cur.fetchall()
-    return [dict(r) for r in rows]
+    return [_open_tokens(dict(r)) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -1996,7 +2006,7 @@ def teams_with_waiting_standups() -> list[dict]:
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)
-            return [dict(r) for r in cur.fetchall()]
+            return [_open_tokens(dict(r)) for r in cur.fetchall()]
 
 
 def activate_waiting_standup(schedule_id: int) -> bool:
@@ -2255,7 +2265,7 @@ def get_all_active_schedules() -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)
             rows = cur.fetchall()
-    return [dict(r) for r in rows]
+    return [_open_tokens(dict(r)) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -3115,7 +3125,7 @@ def workspaces_without_standup(hours: int) -> list[dict]:
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (hours,))
-            return [dict(r) for r in cur.fetchall()]
+            return [_open_tokens(dict(r)) for r in cur.fetchall()]
 
 
 # ── Activation checklist ────────────────────────────────────────────────────
@@ -3206,7 +3216,7 @@ def workspaces_for_activation_nudge(kind: str, hours: int) -> list[dict]:
     with db_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (hours, kind))
-            return [dict(r) for r in cur.fetchall()]
+            return [_open_tokens(dict(r)) for r in cur.fetchall()]
 
 
 def workspaces_awaiting_followup(days: int = 7) -> list[dict]:

@@ -30,7 +30,7 @@ from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 
-from src.core import logjson
+from src.core import logjson, token_crypto
 from src.core.dm_router import DMContext, route_dm
 from src.core.installation_store import PostgresInstallationStore
 from src.core.modules import active_modules, deploy_allowlist
@@ -273,6 +273,9 @@ def create_app() -> tuple[App, Flask]:
 
     flask_app = create_http_app(modules=[])
     flask_app.secret_key = _resolve_secret_key()
+    # A malformed TOKEN_ENCRYPTION_KEY should stop the boot, not the first
+    # install or token refresh that tries to use it.
+    token_crypto.enabled()
     registered = register_slack_listeners(flask_app, slack_app, _enabled_modules())
     logger.info("Modules registered: %s", ", ".join(registered) or "none")
 
