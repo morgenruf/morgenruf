@@ -13,7 +13,7 @@ psycopg2-binary==2.9.13
 resend==2.49.0
 requests==2.34.2
 PyJWT==2.15.1
-mcp==2.2.0
+mcp==2.3.0
 redis==8.1.0
 sentry-sdk[flask]==2.71.0
 posthog==7.60.2
