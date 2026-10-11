@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.22] - 2026-10-11
+
 ### Security
 - **Slack and Zoom tokens can be encrypted in the database.** Set
   `TOKEN_ENCRYPTION_KEY` (`tokenEncryptionKey` in the Helm chart) and bot
