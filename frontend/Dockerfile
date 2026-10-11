@@ -21,7 +21,13 @@ USER root
 # The upstream image lags Alpine's security fixes (pcre2 CVE-2026-103111 in
 # 2026-10), and the release scan refuses a fixable HIGH. Upgrading in place
 # picks up whatever Alpine has fixed since the base image was built.
-RUN apk upgrade --no-cache \
+#
+# OS_UPGRADE_DATE is today's date in a release build. Without it the build
+# cache replays this layer from whenever it last ran: the 1.9.22 build kept
+# libtiff 4.7.1 (CVE-2026-4775) days after Alpine shipped the fix.
+ARG OS_UPGRADE_DATE=unset
+RUN echo "OS packages as of ${OS_UPGRADE_DATE}" \
+ && apk upgrade --no-cache \
  && rm -rf /usr/share/nginx/html/*
 
 COPY frontend/nginx.conf.template /etc/nginx/templates/default.conf.template
