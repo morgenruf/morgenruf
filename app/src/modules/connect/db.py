@@ -7,6 +7,7 @@ from datetime import date
 import psycopg2.extras
 
 from src.core.db import db_conn
+from src.core.token_crypto import decrypt_fields, encrypt_token
 from src.modules.connect.matcher import PairStat
 
 
@@ -720,7 +721,14 @@ def save_zoom_link(
         with conn.cursor() as cur:
             cur.execute(
                 sql,
-                (team_id, user_id, access_token, refresh_token, access_expires_at, refresh_expires_at),
+                (
+                    team_id,
+                    user_id,
+                    encrypt_token(access_token),
+                    encrypt_token(refresh_token),
+                    access_expires_at,
+                    refresh_expires_at,
+                ),
             )
 
 
@@ -745,7 +753,7 @@ def zoom_link(team_id: str, user_id: str) -> dict | None:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (team_id, user_id))
             row = cur.fetchone()
-    return dict(row) if row else None
+    return decrypt_fields(dict(row), "access_token", "refresh_token") if row else None
 
 
 def revoke_zoom_link(team_id: str, user_id: str) -> None:

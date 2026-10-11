@@ -127,6 +127,26 @@ externalDatabase:
 flaskSecretKey: ""   # openssl rand -hex 32
 
 # ---------------------------------------------------------------------------
+# Optional, recommended: encrypt Slack and Zoom tokens in the database
+#
+# With a key set, tokens are stored as ciphertext, so a leaked dump or backup
+# cannot be used to act as your workspaces. Generate one with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#
+# Turning it on for an existing install is two steps, in this order:
+#   1. Set the key and upgrade. If the running image is older than the one
+#      that added this setting, upgrade the image first and set the key in a
+#      second upgrade, so no old pod ever meets an encrypted token.
+#   2. Once the rollout has finished and every pod has the key, encrypt the
+#      tokens already stored:
+#        kubectl exec deploy/<release> -c morgenruf -- python src/encrypt_tokens.py
+#
+# Keep a copy of the key somewhere safe. Without it the stored tokens cannot
+# be read, and every workspace would have to reinstall.
+# ---------------------------------------------------------------------------
+tokenEncryptionKey: ""
+
+# ---------------------------------------------------------------------------
 # Optional: Resend API key — for welcome emails on install
 # Get from https://resend.com — free tier is sufficient
 # ---------------------------------------------------------------------------
