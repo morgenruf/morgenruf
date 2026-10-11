@@ -72,6 +72,11 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix=sha-
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+      # Passed to the Dockerfiles so the OS package upgrade layer is rebuilt
+      # once a day instead of being served from the build cache forever.
+      - name: Today's date
+        id: today
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
       # A staging tag is never used by Compose or Helm. Release tags are only
       # promoted after BOTH images and ALL checks below have completed.
       - name: Build and stage (multi-arch)
@@ -84,7 +89,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ matrix.image }}:build-${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: APP_VERSION=${{ steps.meta.outputs.version }}
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            OS_UPGRADE_DATE=${{ steps.today.outputs.date }}
           cache-from: type=gha,scope=${{ matrix.cache }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache }}
           provenance: true
