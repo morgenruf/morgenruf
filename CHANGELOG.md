@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.23] - 2026-10-15
+
 ### Added
 - **MCP tools for Polls, Pulse, Celebrations and Watercooler.** `list_polls`,
   `get_poll_results`, `list_pulse_surveys`, `get_pulse_results`,
