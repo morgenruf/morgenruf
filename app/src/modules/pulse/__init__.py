@@ -17,6 +17,7 @@ from src.core.modules import ModuleSpec, NavItem
 from src.modules.pulse.dashboard import register_routes
 from src.modules.pulse.handlers import handle_pulse_command, home_blocks, register_handlers
 from src.modules.pulse.jobs import plan_jobs
+from src.modules.pulse.mcp import tools as mcp_tools
 
 
 def on_disable(team_id: str) -> None:
@@ -39,6 +40,7 @@ MODULE = ModuleSpec(
     default_enabled=False,
     delegable=True,
     home_blocks=home_blocks,
+    mcp_tools=mcp_tools,
     slash_subcommands={"pulse": handle_pulse_command},
     on_disable=on_disable,
     help_lines=("`/morgenruf pulse`: how the anonymous weekly check-in works and whether it is on",),

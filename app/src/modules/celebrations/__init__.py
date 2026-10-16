@@ -16,6 +16,7 @@ from src.core.modules import ModuleSpec, NavItem
 from src.modules.celebrations.dashboard import register_routes
 from src.modules.celebrations.handlers import on_channel_join, register_handlers
 from src.modules.celebrations.jobs import plan_jobs
+from src.modules.celebrations.mcp import tools as mcp_tools
 
 
 def purge(team_id: str) -> None:
@@ -37,6 +38,7 @@ MODULE = ModuleSpec(
     nav=(NavItem(label="Celebrations", path="#celebrations"),),
     default_enabled=False,
     delegable=True,
+    mcp_tools=mcp_tools,
     help_lines=(
         "Birthdays and work anniversaries are celebrated in the team channel. "
         "Add yours with `/morgenruf profile`, or opt out there",

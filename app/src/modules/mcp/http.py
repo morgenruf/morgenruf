@@ -321,8 +321,9 @@ def mcp_info():
             "docs": "https://docs.morgenruf.dev/mcp.html",
             "tools": [t["name"] for t in TOOLS],
             "note": (
-                "Authenticated tools/list returns more: coffee chats, kudos and insights "
-                "tools appear for workspaces that have those modules switched on."
+                "Authenticated tools/list returns more: coffee chats, kudos, insights, polls, "
+                "pulse, celebrations and watercooler tools appear for workspaces that have "
+                "those modules switched on."
             ),
         }
     )

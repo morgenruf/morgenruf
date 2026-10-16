@@ -18,6 +18,7 @@ from src.core.modules import ModuleSpec, NavItem
 from src.modules.watercooler.dashboard import register_routes
 from src.modules.watercooler.handlers import handle_command, home_blocks, register_handlers, start_default
 from src.modules.watercooler.jobs import plan_jobs
+from src.modules.watercooler.mcp import tools as mcp_tools
 
 
 def purge(team_id: str) -> None:
@@ -39,6 +40,7 @@ MODULE = ModuleSpec(
     default_enabled=False,
     delegable=True,
     home_blocks=home_blocks,
+    mcp_tools=mcp_tools,
     slash_subcommands={"watercooler": handle_command},
     help_lines=("`/morgenruf watercooler`: post a conversation question in a channel a few times a week",),
     quick_start=("Also post a watercooler question here Mon, Wed, Fri", start_default),
