@@ -16,6 +16,7 @@ from src.core.modules import ModuleSpec, NavItem
 from src.modules.polls.dashboard import register_routes
 from src.modules.polls.handlers import close_all, handle_poll_command, home_blocks, register_handlers
 from src.modules.polls.jobs import plan_jobs
+from src.modules.polls.mcp import tools as mcp_tools
 
 MODULE = ModuleSpec(
     name="polls",
@@ -30,6 +31,7 @@ MODULE = ModuleSpec(
     default_enabled=True,
     delegable=True,
     home_blocks=home_blocks,
+    mcp_tools=mcp_tools,
     slash_subcommands={"poll": handle_poll_command},
     on_disable=close_all,
     help_lines=(

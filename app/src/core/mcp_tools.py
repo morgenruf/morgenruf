@@ -67,3 +67,31 @@ def public_tools(team_id: str) -> list[dict[str, Any]]:
 def handler_for(team_id: str, name: str) -> Callable | None:
     tool = module_tools(team_id).get(name)
     return tool.get("handler") if tool else None
+
+
+def window(args: dict, default_days: int = 30, default_limit: int = 50) -> tuple[int, int]:
+    """`days` (1 to 365) and `limit` (1 to 200) from a tool call's arguments."""
+    days = max(1, min(int(args.get("days") or default_days), 365))
+    limit = max(1, min(int(args.get("limit") or default_limit), 200))
+    return days, limit
+
+
+def member_identities(team_id: str) -> dict[str, dict[str, Any]]:
+    """`{user_id: {"user_id", "name", "email"?}}`, the identity get_members carries.
+
+    Email only where the member row has one, so an outside tool can join on it
+    when it is there and fall back to the Slack user id when it is not.
+    """
+    from src.core import db  # noqa: PLC0415
+
+    out: dict[str, dict[str, Any]] = {}
+    for m in db.get_all_members(team_id):
+        person = {"user_id": m["user_id"], "name": m.get("real_name") or m.get("display_name") or ""}
+        if m.get("email"):
+            person["email"] = m["email"]
+        out[m["user_id"]] = person
+    return out
+
+
+def identity(people: dict[str, dict[str, Any]], user_id: str) -> dict[str, Any]:
+    return people.get(user_id) or {"user_id": user_id, "name": ""}

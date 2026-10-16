@@ -143,11 +143,23 @@ class TestShippedModules:
     """The real modules, so a rename or a bad schema is caught here."""
 
     def test_every_shipped_tool_is_well_formed(self):
+        from src.modules.celebrations.mcp import tools as celebration_tools
         from src.modules.connect.mcp import tools as connect_tools
         from src.modules.insights.mcp import tools as insights_tools
         from src.modules.kudos.mcp import tools as kudos_tools
+        from src.modules.polls.mcp import tools as poll_tools
+        from src.modules.pulse.mcp import tools as pulse_tools
+        from src.modules.watercooler.mcp import tools as watercooler_tools
 
-        for listed in (kudos_tools(), connect_tools(), insights_tools()):
+        for listed in (
+            kudos_tools(),
+            connect_tools(),
+            insights_tools(),
+            poll_tools(),
+            pulse_tools(),
+            celebration_tools(),
+            watercooler_tools(),
+        ):
             assert listed
             for t in listed:
                 assert t["name"] and t["description"]
@@ -155,21 +167,48 @@ class TestShippedModules:
                 assert callable(t["handler"])
 
     def test_tool_names_are_unique_across_modules(self):
+        from src.modules.celebrations.mcp import tools as celebration_tools
         from src.modules.connect.mcp import tools as connect_tools
         from src.modules.insights.mcp import tools as insights_tools
         from src.modules.kudos.mcp import tools as kudos_tools
+        from src.modules.polls.mcp import tools as poll_tools
+        from src.modules.pulse.mcp import tools as pulse_tools
+        from src.modules.watercooler.mcp import tools as watercooler_tools
 
-        names = [t["name"] for t in kudos_tools() + connect_tools() + insights_tools()]
+        names = [
+            t["name"]
+            for t in (
+                kudos_tools()
+                + connect_tools()
+                + insights_tools()
+                + poll_tools()
+                + pulse_tools()
+                + celebration_tools()
+                + watercooler_tools()
+            )
+        ]
         assert len(names) == len(set(names)), f"duplicate tool name: {names}"
 
     def test_no_module_tool_collides_with_a_standup_tool(self):
+        from src.modules.celebrations.mcp import tools as celebration_tools
         from src.modules.connect.mcp import tools as connect_tools
         from src.modules.insights.mcp import tools as insights_tools
         from src.modules.kudos.mcp import tools as kudos_tools
         from src.modules.mcp.http import TOOLS
+        from src.modules.polls.mcp import tools as poll_tools
+        from src.modules.pulse.mcp import tools as pulse_tools
+        from src.modules.watercooler.mcp import tools as watercooler_tools
 
         core = {t["name"] for t in TOOLS}
-        for t in kudos_tools() + connect_tools() + insights_tools():
+        for t in (
+            kudos_tools()
+            + connect_tools()
+            + insights_tools()
+            + poll_tools()
+            + pulse_tools()
+            + celebration_tools()
+            + watercooler_tools()
+        ):
             assert t["name"] not in core
 
     def test_a_tool_needing_an_id_says_so_rather_than_failing(self):

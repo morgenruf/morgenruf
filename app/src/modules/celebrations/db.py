@@ -164,6 +164,21 @@ def posted_keys(team_id: str, since: date) -> set[tuple[str, date]]:
             return {(kind, day) for kind, day in cur.fetchall()}
 
 
+def recent_posts(team_id: str, since: date, limit: int) -> list[dict]:
+    """Posts for celebrations from `since` on, newest first. ts is NULL when Slack never took it."""
+    sql = """
+        SELECT kind, celebration_date, posted_on, channel_id, user_ids, ts
+        FROM celebration_posts
+        WHERE team_id = %s AND celebration_date >= %s
+        ORDER BY celebration_date DESC, kind
+        LIMIT %s
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (team_id, since, limit))
+            return [dict(r) for r in cur.fetchall()]
+
+
 def purge_old_posts(team_id: str, days: int = POST_RETENTION_DAYS) -> int:
     with db_conn() as conn:
         with conn.cursor() as cur:

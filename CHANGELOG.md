@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **MCP tools for Polls, Pulse, Celebrations and Watercooler.** `list_polls`,
+  `get_poll_results`, `list_pulse_surveys`, `get_pulse_results`,
+  `get_upcoming_celebrations`, `get_celebration_history` and
+  `list_watercooler_topics`, each shown only when its module is on. Read only.
+  Anonymous polls return counts and never names; pulse results keep the
+  dashboard's group floors (nothing under 5 respondents, no breakdown under 10).
+
 ## [1.9.22] - 2026-10-11
 
 ### Security

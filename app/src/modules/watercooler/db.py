@@ -216,6 +216,16 @@ def posts_since(team_id: str, since: date) -> int:
             return int(cur.fetchone()[0])
 
 
+def recent_posts(team_id: str, since: date, limit: int) -> list[dict]:
+    """Questions Slack accepted from `since` on, newest first."""
+    return _rows(
+        "SELECT channel_id, posted_on, question_ref, ts FROM watercooler_posts "
+        "WHERE team_id = %s AND posted_on >= %s AND ts IS NOT NULL "
+        "ORDER BY posted_on DESC, channel_id LIMIT %s",
+        (team_id, since, limit),
+    )
+
+
 def purge_old_posts(team_id: str, days: int = POST_RETENTION_DAYS) -> int:
     return _exec(
         "DELETE FROM watercooler_posts WHERE team_id = %s AND posted_on < CURRENT_DATE - %s::int",
