@@ -57,7 +57,7 @@
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.3",
     "vitest": "^4.0.18",
-    "shadcn": "^4.21.3",
+    "shadcn": "^4.21.4",
     "@playwright/test": "^1.58.2"
   }
 }
