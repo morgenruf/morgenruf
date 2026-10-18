@@ -22,7 +22,7 @@ USER root
 # 2026-10), and the release scan refuses a fixable HIGH. Upgrading in place
 # picks up whatever Alpine has fixed since the base image was built.
 #
-# OS_UPGRADE_DATE is today's date in a release build. Without it the build
+# OS_UPGRADE_DATE is today's date (plus the run id on a release tag). Without it the build
 # cache replays this layer from whenever it last ran: the 1.9.22 build kept
 # libtiff 4.7.1 (CVE-2026-4775) days after Alpine shipped the fix.
 ARG OS_UPGRADE_DATE=unset
