@@ -1709,7 +1709,11 @@ def _sync_jobs_from_db_locked() -> None:
             continue
         if not config.get("active", True):
             continue
-        digests_only = team_id in teams_with_schedules
+        # No standup schedule yet: no workspace jobs. The old workspace-level
+        # standup DMed only the installer at 09:00 UTC, which read as spam.
+        if team_id not in teams_with_schedules:
+            continue
+        digests_only = True
         fp = _workspace_fingerprint(config, digests_only)
         desired_ws[team_id] = fp
         if _synced_workspace_fps.get(team_id) != fp:
@@ -1989,8 +1993,11 @@ def build_scheduler(installations: list[tuple[str, str, dict]]) -> BackgroundSch
             _synced_schedule_fps[(sched["team_id"], sched["id"])] = _schedule_fingerprint(sched)
 
     for team_id, bot_token, config in installations:
-        digests_only = team_id in teams_with_schedules
-        # Only digest/manager jobs when schedules own the standup and report.
+        # Only digest/manager jobs when schedules own the standup and report,
+        # and none at all before the first schedule (see _sync_jobs_from_db_locked).
+        if team_id not in teams_with_schedules:
+            continue
+        digests_only = True
         if _register_workspace_safely(scheduler, team_id, bot_token, config, digests_only):
             _synced_workspace_fps[team_id] = _workspace_fingerprint(config, digests_only)
 

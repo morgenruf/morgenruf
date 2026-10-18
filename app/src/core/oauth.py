@@ -234,9 +234,6 @@ def oauth_callback():
 
         capture("workspace_installed", team_id)
 
-    # Register scheduler job for this workspace
-    _schedule_workspace(team_id, bot_token)
-
     logger.info("Installation complete for team %s (%s)", team_id, team_name)
     # Set session and pass team_id in URL as fallback for proxies that drop cookies
     session.clear()
@@ -336,17 +333,3 @@ def consume_login_token(token: str) -> tuple[str, str] | None:
         logger.error("Could not claim dashboard login token: %s", exc)
         return None
     return team_id, user_id
-
-
-def _schedule_workspace(team_id: str, bot_token: str) -> None:
-    """Register a scheduler job for a newly installed workspace."""
-    try:
-        from src.core.scheduler import get_scheduler, register_workspace_job  # noqa: PLC0415
-
-        scheduler = get_scheduler()
-        if scheduler is None:
-            return
-        config = db.get_workspace_config(team_id) or {}
-        register_workspace_job(scheduler, team_id, bot_token, config)
-    except Exception as exc:
-        logger.warning("Could not register scheduler job for %s: %s", team_id, exc)

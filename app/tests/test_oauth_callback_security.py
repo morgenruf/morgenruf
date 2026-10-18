@@ -30,7 +30,6 @@ def oauth(monkeypatch):
     fake_db.save_installation.return_value = False
     fake_db.claim_login_token.return_value = True
     monkeypatch.setattr(mod, "db", fake_db)
-    monkeypatch.setattr(mod, "_schedule_workspace", lambda *a: None)
     return mod
 
 

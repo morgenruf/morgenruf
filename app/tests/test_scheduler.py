@@ -103,11 +103,15 @@ class TestSyncRegistersNewSchedules(_SyncTestBase):
         assert self.scheduler.get_job("digest_T1") is not None
         assert self.scheduler.get_job("standup_T1") is None
 
-    def test_team_without_schedules_gets_workspace_job(self):
+    def test_team_without_schedules_gets_no_jobs(self):
+        # Before the first schedule there is nothing to send: the old default
+        # standup DMed only the installer at 09:00 UTC.
         config = {"active": True, "channel_id": "C9", "schedule_time": "09:00", "schedule_tz": "UTC"}
         db = _make_db(installations=[_installation_row()], config=config)
         self.sync(db)
-        assert self.scheduler.get_job("standup_T1") is not None
+        assert self.scheduler.get_job("standup_T1") is None
+        assert self.scheduler.get_job("reminder_T1") is None
+        assert self.scheduler.get_job("digest_T1") is None
 
     def test_unchanged_schedule_not_reregistered(self):
         db = _make_db(schedules=[_schedule_row()], installations=[_installation_row()])
@@ -147,16 +151,17 @@ class TestSyncRemovesDeletedSchedules(_SyncTestBase):
         self.sync(db2)
         assert self.scheduler.get_job("schedule_T1_1") is None
         assert self.scheduler.get_job("reminder_schedule_T1_1") is None
-        # Workspace falls back to workspace-level standup jobs
-        assert self.scheduler.get_job("standup_T1") is not None
+        # No fallback to a workspace-level standup, and digests go too
+        assert self.scheduler.get_job("standup_T1") is None
+        assert self.scheduler.get_job("digest_T1") is None
 
     def test_uninstalled_workspace_jobs_removed(self):
-        db = _make_db(installations=[_installation_row()])
+        db = _make_db(schedules=[_schedule_row()], installations=[_installation_row()])
         self.sync(db)
-        assert self.scheduler.get_job("standup_T1") is not None
+        assert self.scheduler.get_job("digest_T1") is not None
         db2 = _make_db(installations=[])
         self.sync(db2)
-        assert self.scheduler.get_job("standup_T1") is None
+        assert self.scheduler.get_job("digest_T1") is None
         assert self.scheduler.get_job("digest_T1") is None
 
 
