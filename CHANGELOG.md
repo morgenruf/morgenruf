@@ -5,7 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
-## [1.9.24] - 2026-10-18
+## [1.9.25] - 2026-10-18
+
+### Fixed
+- **Release builds refresh OS packages every time.** 1.9.24 failed the release
+  scan on libx11 1.8.13 (CVE-2026-88806) after Alpine had shipped the fix, and
+  was never published. 1.9.25 carries its changes (#273).
+
+## [1.9.24] - 2026-10-18 (not published)
 
 ### Fixed
 - **No standup before setup.** A new workspace no longer gets a hidden default
