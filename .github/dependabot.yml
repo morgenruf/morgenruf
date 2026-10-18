@@ -35,6 +35,11 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies]
+    ignore:
+      # typescript-eslint refuses to load on TypeScript 7 (peer range is
+      # <6.1.0), so lint fails. Remove once typescript-eslint supports TS 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /frontend
