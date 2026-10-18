@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.24] - 2026-10-18
+
+### Fixed
+- **No standup before setup.** A new workspace no longer gets a hidden default
+  standup at 09:00 UTC that reached only the installer. Workspaces get scheduled
+  jobs once their first standup exists (#272).
+
+### Changed
+- Dependency updates (#263, #264).
+
 ## [1.9.23] - 2026-10-15
 
 ### Added
