@@ -108,7 +108,18 @@ def test_build_scheduler_uses_the_claiming_executor():
 
 def _started_scheduler():
     db = MagicMock()
-    db.get_all_active_schedules.return_value = []
+    db.get_all_active_schedules.return_value = [
+        {
+            "id": 1,
+            "team_id": "T1",
+            "bot_token": "xoxb-1",
+            "channel_id": "C1",
+            "schedule_time": "09:00",
+            "schedule_tz": "UTC",
+            "schedule_days": "mon,tue,wed,thu,fri",
+            "reminder_minutes": 30,
+        }
+    ]
     with patch.dict(sys.modules, {"src.core.db": db}), patch("src.core.db", db, create=True):
         scheduler = sched_mod.build_scheduler([("T1", "xoxb-1", {"schedule_time": "09:00", "channel_id": "C1"})])
     # Job defaults are applied when a pending job is really added, which is on start.
@@ -120,7 +131,7 @@ def test_every_job_gets_a_five_minute_grace_and_coalesces():
     scheduler = _started_scheduler()
     try:
         jobs = scheduler.get_jobs()
-        assert any(j.id == "standup_T1" for j in jobs)
+        assert any(j.id == "schedule_T1_1" for j in jobs)
         for job in jobs:
             assert job.misfire_grace_time == sched_mod.MISFIRE_GRACE_SECS == 300, job.id
             assert job.coalesce is True, job.id

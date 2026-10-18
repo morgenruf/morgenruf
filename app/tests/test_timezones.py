@@ -213,10 +213,11 @@ def test_build_scheduler_skips_a_bad_row_and_registers_the_rest(debian_tz, no_ca
 def test_build_scheduler_skips_a_bad_workspace_and_registers_the_rest(debian_tz, no_canonicalising, scheduler_state):
     good = {"channel_id": "C1", "schedule_time": "09:00", "schedule_tz": "Europe/Amsterdam"}
     bad = {**good, "schedule_tz": "US/Eastern"}
-    with patch_modules({"src.core.db": _make_db()}):
+    rows = [_schedule_row(1, team_id="T1"), _schedule_row(2, team_id="T2")]
+    with patch_modules({"src.core.db": _make_db(schedules=rows)}):
         scheduler = sched_mod.build_scheduler([("T1", "x", bad), ("T2", "x", good)])
 
-    assert scheduler.get_job("standup_T2") is not None
+    assert scheduler.get_job("digest_T2") is not None
     assert "T2" in sched_mod._synced_workspace_fps
     assert "T1" not in sched_mod._synced_workspace_fps
 
@@ -249,11 +250,12 @@ def test_sync_skips_a_bad_workspace_and_registers_the_rest(debian_tz, no_canonic
         "T2": {"active": True, "channel_id": "C1", "schedule_time": "09:00", "schedule_tz": "UTC"},
     }
     installations = [{"team_id": "T1", "bot_token": "x"}, {"team_id": "T2", "bot_token": "x"}]
-    with patch_modules({"src.core.db": _make_db(installations=installations, configs=configs)}):
+    rows = [_schedule_row(1, team_id="T1"), _schedule_row(2, team_id="T2")]
+    with patch_modules({"src.core.db": _make_db(schedules=rows, installations=installations, configs=configs)}):
         sched_mod._sync_jobs_from_db()
 
-    assert sched_mod._scheduler.get_job("standup_T2") is not None
-    assert sched_mod._scheduler.get_job("standup_T1") is None
+    assert sched_mod._scheduler.get_job("digest_T2") is not None
+    assert sched_mod._scheduler.get_job("digest_T1") is None
     assert sched_mod._synced_workspace_fps["T1"] == sched_mod._UNREGISTERED_FP
 
 
