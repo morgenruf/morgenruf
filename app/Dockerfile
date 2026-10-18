@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 # time so a fixed CVE in a system library (OpenSSL, for one) does not fail the
 # release scan or ship in the image.
 #
-# OS_UPGRADE_DATE is today's date in a release build. Without it the build
+# OS_UPGRADE_DATE is today's date (plus the run id on a release tag). Without it the build
 # cache replays this layer from whenever it last ran, so the image keeps old
 # packages and the scan fails on a CVE the upgrade would have fixed.
 ARG OS_UPGRADE_DATE=unset
