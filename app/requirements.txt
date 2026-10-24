@@ -17,5 +17,5 @@ cryptography==50.0.2
 mcp==2.3.0
 redis==8.1.0
 sentry-sdk[flask]==2.72.0
-posthog==7.69.0
+posthog==7.73.2
 gunicorn==26.2.0
