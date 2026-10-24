@@ -121,7 +121,7 @@ jobs:
       # Runs after a failed scan too, so the findings reach code scanning.
       - name: Upload scan results
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.scan.outcome != 'skipped' }}
-        uses: github/codeql-action/upload-sarif@v4.38.3
+        uses: github/codeql-action/upload-sarif@v4.39.1
         with:
           sarif_file: trivy-${{ matrix.cache }}.sarif
           category: ${{ matrix.cache }}
