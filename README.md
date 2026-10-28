@@ -409,6 +409,21 @@ Set these URLs in your Slack app settings:
 
 Then click **"Add to Slack"** from `https://your-tunnel-url/install`.
 
+**Socket Mode (no inbound traffic from Slack).** If your organization does not
+want Slack calling into the server, use Socket Mode instead of the two request
+URLs above:
+
+1. In your Slack app, open **Socket Mode** and turn it on.
+2. Under **Basic Information → App-Level Tokens**, create a token with the
+   `connections:write` scope.
+3. Set `SLACK_APP_TOKEN=xapp-...` in `.env` (Helm: `slack.appToken`) and restart.
+
+The bot then opens an outbound websocket to Slack, and `/slack/events` and
+`/slack/interactions` are no longer served. The dashboard and the OAuth
+redirect still run over HTTP, but only browsers reach them, so they can stay
+behind your private access. Slack does not list Socket Mode apps in its
+directory, so this is for self-hosted installs only.
+
 ### Mac as a permanent server
 
 To run on a Mac Mini or Mac server permanently:
@@ -566,7 +581,8 @@ app/helm/morgenruf/
 |----------|----------|-------------|
 | `SLACK_CLIENT_ID` | ✅ | Slack app client ID |
 | `SLACK_CLIENT_SECRET` | ✅ | Slack app client secret |
-| `SLACK_SIGNING_SECRET` | ✅ | Request signing secret |
+| `SLACK_SIGNING_SECRET` | ✅ | Request signing secret (not needed with Socket Mode) |
+| `SLACK_APP_TOKEN` | | App-level token (`xapp-...`). Turns on Socket Mode, see below |
 | `DATABASE_URL` | ✅ | PostgreSQL connection URL |
 | `APP_URL` | ✅ | Public base URL (e.g. `https://api.morgenruf.dev`) |
 | `FLASK_SECRET_KEY` | ✅ | Random secret for session cookies |

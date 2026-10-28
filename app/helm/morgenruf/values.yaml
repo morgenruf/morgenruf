@@ -69,6 +69,10 @@ slack:
   clientSecret: ""
   # App Credentials → Signing Secret (32 hex chars, different from client secret)
   signingSecret: ""
+  # Optional: Basic Information → App-Level Tokens (xapp-..., scope
+  # connections:write). Set it, and enable Socket Mode in the Slack app, to
+  # receive events over an outbound websocket: no ingress from Slack needed.
+  appToken: ""
   # Basic Information → App ID (A0123...). Optional: the dashboard login page's
   # "Open Morgenruf in Slack" button uses it. Blank shows instructions instead.
   appId: ""
