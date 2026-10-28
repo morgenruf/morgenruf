@@ -1,0 +1,34 @@
+name: Issue triage
+
+# Issue #274 sat for a week with no reply because a new issue was one more
+# notification among the dependabot ones. An issue from outside the project now
+# gets a reply at once, a needs-triage label, and an assignee, so it shows up
+# under GitHub's "Assigned" filter and the mobile app's assigned list.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    if: ${{ !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) && github.event.issue.user.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const issue = { owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number };
+            await github.rest.issues.addLabels({ ...issue, labels: ['needs-triage'] });
+            await github.rest.issues.addAssignees({ ...issue, assignees: ['anmolnagpal'] });
+            await github.rest.issues.createComment({
+              ...issue,
+              body: [
+                `Thanks @${context.payload.issue.user.login}, this is now on the triage list.`,
+                '',
+                'Expect a first reply within two working days. For a bug, the Morgenruf version, ' +
+                  'whether you are hosted or self-hosted, and any log lines around the failure help a lot.',
+              ].join('\n'),
+            });
