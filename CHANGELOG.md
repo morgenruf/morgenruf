@@ -5,6 +5,19 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.26] - 2026-10-28
+
+### Added
+- **Socket Mode for self-hosted installs.** Set `SLACK_APP_TOKEN` (an
+  app-level token with `connections:write`, Helm `slack.appToken`) and
+  Morgenruf receives Slack events over an outbound websocket instead of serving
+  `/slack/events` and `/slack/interactions`, so Slack never needs to reach the
+  server. The signing secret is not needed in this mode (#274, #279).
+
+### Fixed
+- A Connect test assumed Amsterdam summer time and failed every build after
+  25 October (#278).
+
 ## [1.9.25] - 2026-10-18
 
 ### Fixed
