@@ -87,8 +87,52 @@ def _resolve_signing_secret() -> str:
     secret = os.environ.get("SLACK_SIGNING_SECRET", "").strip()
     if secret:
         return secret
+    if _socket_mode_token():
+        # Socket Mode events arrive over the app's own websocket, so nothing
+        # is checked against the signing secret.
+        return os.urandom(32).hex()
     logger.error("SLACK_SIGNING_SECRET is not set. Slack requests will be rejected until it is.")
     return os.urandom(32).hex()
+
+
+def _socket_mode_token() -> str:
+    """The app-level token (xapp-...) that turns on Socket Mode, or ""."""
+    return os.environ.get("SLACK_APP_TOKEN", "").strip()
+
+
+def wire_slack_transport(flask_app, slack_app) -> str:  # noqa: ANN001
+    """Deliver Slack events over Socket Mode or HTTP. Returns the mode used.
+
+    With SLACK_APP_TOKEN set the bot opens an outbound websocket to Slack and
+    /slack/events and /slack/interactions are not served, so a self-hosted
+    install needs no inbound route from Slack. The dashboard and the OAuth
+    install flow still run over HTTP; those are reached by browsers, not by
+    Slack. Slack does not list Socket Mode apps in its directory, so the hosted
+    app keeps HTTP.
+    """
+    app_token = _socket_mode_token()
+    if app_token:
+        from slack_bolt.adapter.socket_mode import SocketModeHandler  # noqa: PLC0415
+
+        # connect() returns at once; the websocket runs on its own threads and
+        # reconnects by itself. Like the scheduler, it lives in the process
+        # that calls create_app, so there is one connection however many
+        # gunicorn workers fork from it.
+        SocketModeHandler(slack_app, app_token).connect()
+        logger.info("Slack Socket Mode connected; /slack/events is not served")
+        return "socket"
+
+    handler = SlackRequestHandler(slack_app)
+
+    @flask_app.route("/slack/events", methods=["POST"])
+    def slack_events():
+        return handler.handle(request)
+
+    @flask_app.route("/slack/interactions", methods=["POST"])
+    def slack_interactions():
+        return handler.handle(request)
+
+    return "http"
 
 
 def _resolve_secret_key() -> bytes | str:
@@ -279,15 +323,7 @@ def create_app() -> tuple[App, Flask]:
     registered = register_slack_listeners(flask_app, slack_app, _enabled_modules())
     logger.info("Modules registered: %s", ", ".join(registered) or "none")
 
-    handler = SlackRequestHandler(slack_app)
-
-    @flask_app.route("/slack/events", methods=["POST"])
-    def slack_events():
-        return handler.handle(request)
-
-    @flask_app.route("/slack/interactions", methods=["POST"])
-    def slack_interactions():
-        return handler.handle(request)
+    wire_slack_transport(flask_app, slack_app)
 
     @flask_app.route("/livez", methods=["GET"])
     def livez():

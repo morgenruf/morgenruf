@@ -63,6 +63,37 @@ class TestSigningSecret:
         assert a != b
 
 
+class TestSocketMode:
+    def _routes(self, flask_app):
+        return {r.rule for r in flask_app.url_map.iter_rules()}
+
+    def test_without_app_token_events_come_over_http(self, monkeypatch):
+        from flask import Flask
+
+        monkeypatch.delenv("SLACK_APP_TOKEN", raising=False)
+        flask_app = Flask(__name__)
+        assert main.wire_slack_transport(flask_app, MagicMock()) == "http"
+        assert {"/slack/events", "/slack/interactions"} <= self._routes(flask_app)
+
+    def test_app_token_connects_out_and_serves_no_slack_routes(self, monkeypatch):
+        from flask import Flask
+
+        monkeypatch.setenv("SLACK_APP_TOKEN", "xapp-1-test")
+        handler_cls = MagicMock()
+        monkeypatch.setattr("slack_bolt.adapter.socket_mode.SocketModeHandler", handler_cls)
+        flask_app, bolt_app = Flask(__name__), MagicMock()
+        assert main.wire_slack_transport(flask_app, bolt_app) == "socket"
+        handler_cls.assert_called_once_with(bolt_app, "xapp-1-test")
+        handler_cls.return_value.connect.assert_called_once()
+        assert not {"/slack/events", "/slack/interactions"} & self._routes(flask_app)
+
+    def test_socket_mode_does_not_need_a_signing_secret(self, monkeypatch, caplog):
+        monkeypatch.setenv("SLACK_APP_TOKEN", "xapp-1-test")
+        monkeypatch.delenv("SLACK_SIGNING_SECRET", raising=False)
+        assert len(main._resolve_signing_secret()) >= 32
+        assert "SLACK_SIGNING_SECRET is not set" not in caplog.text
+
+
 class _Scheduler:
     def __init__(self, running=True, thread_alive=True):
         self.running = running
