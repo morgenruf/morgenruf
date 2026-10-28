@@ -16,6 +16,6 @@ PyJWT==2.15.1
 cryptography==50.0.2
 mcp==2.3.0
 redis==8.1.0
-sentry-sdk[flask]==2.72.0
-posthog==7.69.0
+sentry-sdk[flask]==2.73.0
+posthog==7.75.11
 gunicorn==26.2.0
