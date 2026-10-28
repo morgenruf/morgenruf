@@ -1,0 +1,30 @@
+name: Close quiet issues
+
+# An issue labelled waiting-for-reply (set by issue-triage.yml when a
+# maintainer answers) closes after 14 days without activity. Any comment resets
+# the clock, and the reporter's comment drops the label altogether.
+
+on:
+  schedule:
+    - cron: '30 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v11
+        with:
+          only-issue-labels: waiting-for-reply
+          days-before-issue-stale: 14
+          days-before-issue-close: 0
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          close-issue-reason: completed
+          close-issue-message: >
+            Closing this since it has been two weeks without a reply. If you
+            still need help or the fix did not work, comment here and it will
+            be reopened.

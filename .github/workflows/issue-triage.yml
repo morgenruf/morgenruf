@@ -4,17 +4,23 @@ name: Issue triage
 # notification among the dependabot ones. An issue from outside the project now
 # gets a reply at once, a needs-triage label, and an assignee, so it shows up
 # under GitHub's "Assigned" filter and the mobile app's assigned list.
+#
+# After that the labels track whose turn it is. A maintainer's comment moves
+# the issue to waiting-for-reply (issue-stale.yml closes it after 14 quiet
+# days); the reporter's comment moves it back to needs-triage.
 
 on:
   issues:
     types: [opened]
+  issue_comment:
+    types: [created]
 
 permissions:
   issues: write
 
 jobs:
   triage:
-    if: ${{ !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) && github.event.issue.user.type != 'Bot' }}
+    if: ${{ github.event_name == 'issues' && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) && github.event.issue.user.type != 'Bot' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v9
@@ -32,3 +38,25 @@ jobs:
                   'whether you are hosted or self-hosted, and any log lines around the failure help a lot.',
               ].join('\n'),
             });
+
+  whose-turn:
+    # Only issues opened from outside the project, and never PR comments.
+    if: ${{ github.event_name == 'issue_comment' && !github.event.issue.pull_request && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) && github.event.comment.user.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const issue = { owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number };
+            const maintainer = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(context.payload.comment.author_association);
+            const [add, remove] = maintainer ? ['waiting-for-reply', 'needs-triage'] : ['needs-triage', 'waiting-for-reply'];
+            await github.rest.issues.addLabels({ ...issue, labels: [add] });
+            await github.rest.issues.removeLabel({ ...issue, name: remove }).catch((e) => {
+              if (e.status !== 404) throw e;
+            });
+            // An outside reporter cannot reopen an issue someone else closed,
+            // so their comment on a closed issue reopens it for them.
+            const reporter = context.payload.comment.user.login === context.payload.issue.user.login;
+            if (reporter && context.payload.issue.state === 'closed') {
+              await github.rest.issues.update({ ...issue, state: 'open' });
+            }
