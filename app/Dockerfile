@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 LABEL org.opencontainers.image.source="https://github.com/morgenruf/morgenruf"
 LABEL org.opencontainers.image.description="Slack standup bot — structured daily standups"
