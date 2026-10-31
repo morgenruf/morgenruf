@@ -2,7 +2,7 @@ slack-bolt==1.30.0
 slack-sdk==3.45.0
 apscheduler==3.11.3
 pytz==2026.5
-tzdata==2026.5
+tzdata==2026.6
 pyyaml==6.0.3
 httpx>=0.28.1
 python-dotenv==1.2.4
@@ -17,5 +17,5 @@ cryptography==50.0.2
 mcp==2.3.0
 redis==8.1.0
 sentry-sdk[flask]==2.73.0
-posthog==7.75.11
+posthog==7.76.1
 gunicorn==26.2.0
