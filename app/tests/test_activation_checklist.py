@@ -326,15 +326,31 @@ class TestDay7:
         db.record_install_email.assert_not_called()
 
 
+class TestRitual:
+    def test_answers_without_a_ritual_get_the_picker(self, slack):
+        (sent, _), db = _nudge(activation.send_ritual_nudges, {**FRESH, "has_standup": True, "responders": 2})
+        assert sent == 1
+        db.record_install_email.assert_called_once_with("T1", activation.KIND_RITUAL)
+        blocks = slack.chat_postMessage.call_args.kwargs["blocks"]
+        assert blocks[0]["accessory"]["action_id"] == activation.PICK_ACTION
+
+    def test_not_sent_without_answers_or_with_a_ritual_on(self, slack):
+        for state, rituals in (({**FRESH, "has_standup": True}, False), ({**FRESH, "responders": 2}, True)):
+            (sent, _), db = _nudge(activation.send_ritual_nudges, state, rituals=rituals)
+            assert sent == 0
+            db.record_install_email.assert_not_called()
+
+
 def test_one_failing_nudge_does_not_stop_the_others():
     calls = []
     with (
         patch.object(activation, "send_day2_nudges", side_effect=RuntimeError("boom")),
         patch.object(activation, "send_day3_nudges", side_effect=lambda: calls.append(3)),
         patch.object(activation, "send_day7_nudges", side_effect=lambda: calls.append(7)),
+        patch.object(activation, "send_ritual_nudges", side_effect=lambda: calls.append(10)),
     ):
         activation.send_activation_nudges()
-    assert calls == [3, 7]
+    assert calls == [3, 7, 10]
 
 
 # ── Monday report ───────────────────────────────────────────────────────────

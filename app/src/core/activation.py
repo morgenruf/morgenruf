@@ -8,7 +8,8 @@ installer through the first week:
   computed from data already stored, each with the button that does it. It
   goes away when every step is done or an admin hides it.
 * Nudges: one Slack DM to the installer on day 2 (no standup yet), day 3 (a
-  standup but no answer) and day 7 (fewer than three steps done). Each is
+  standup but no answer), day 7 (fewer than three steps done) and day 10
+  (answers coming in but nothing beyond the standup). Each is
   recorded before it is sent, so it can never go twice, and the operator's
   own workspaces are never nudged.
 
@@ -33,6 +34,8 @@ DAY3_HOURS = 72
 KIND_DAY7 = "nudge:day7"
 DAY7_HOURS = 168
 DAY7_BELOW = 3
+KIND_RITUAL = "nudge:ritual"
+RITUAL_HOURS = 240
 
 HIDE_ACTION = "activation:hide"
 INVITE_HELP_ACTION = "activation:invite_help"
@@ -524,9 +527,34 @@ def send_day7_nudges() -> tuple[int, int]:
     return _send_nudges(KIND_DAY7, DAY7_HOURS, build)
 
 
+RITUAL_TEXT = (
+    "Your standup is getting answers. Teams that stay usually add one more thing: "
+    "kudos, coffee chats, celebrations, polls or watercooler questions."
+)
+
+
+def send_ritual_nudges() -> tuple[int, int]:
+    """Day 10: the standup works but nothing else is on. Offers the ritual picker.
+
+    Active teams pass day 7 with three steps done and are never told about
+    the rest, so this one goes only to them.
+    """
+
+    def build(team_id: str):  # noqa: ANN202
+        done = {s.key: s.done for s in steps_for(team_id)}
+        if not done["answers"] or done["ritual"]:
+            return None
+        pick = Step("ritual", "", "", False, "Pick one", PICK_ACTION)
+        return RITUAL_TEXT, [
+            {"type": "section", "text": {"type": "mrkdwn", "text": RITUAL_TEXT}, "accessory": _button(pick)}
+        ]
+
+    return _send_nudges(KIND_RITUAL, RITUAL_HOURS, build)
+
+
 def send_activation_nudges() -> None:
     """Hourly: every nudge in order. One failing never stops the others."""
-    for fn in (send_day2_nudges, send_day3_nudges, send_day7_nudges):
+    for fn in (send_day2_nudges, send_day3_nudges, send_day7_nudges, send_ritual_nudges):
         try:
             fn()
         except Exception:

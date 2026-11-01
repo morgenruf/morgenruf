@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.27] - 2026-11-01
+
+### Added
+- **A day-10 DM about the other rituals.** Teams whose standup gets answers
+  pass the day-7 nudge and were never pointed at kudos, coffee chats,
+  celebrations, polls or watercooler questions. The installer now gets one DM
+  on day 10 when the standup has answers and nothing else is on, with a button
+  that opens the ritual picker.
+
+### Changed
+- Dependency bumps (#275, #277, #267, #281, #288).
+
 ## [1.9.26] - 2026-10-28
 
 ### Added
