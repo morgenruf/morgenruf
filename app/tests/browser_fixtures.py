@@ -31,11 +31,15 @@ class BrowserData:
                 "display_name": name.split()[0].lower(),
                 "email": f"{user.lower()}@example.test",
                 "avatar_url": "",
-                "tz": "UTC",
+                "tz": tz,
                 "active": True,
                 "on_vacation": False,
             }
-            for user, name in (("U_ADMIN", "Alex Morgan"), ("U_MEMBER", "Jamie Chen"), ("U_LEAD", "Sam Rivera"))
+            for user, name, tz in (
+                ("U_ADMIN", "Alex Morgan", "America/Toronto"),
+                ("U_MEMBER", "Jamie Chen", "Europe/Berlin"),
+                ("U_LEAD", "Sam Rivera", "Asia/Kolkata"),
+            )
         ]
         self.channels = [{"id": "C_ENGINEERING", "name": "engineering"}, {"id": "C_GENERAL", "name": "general"}]
         self.workspace = {
@@ -248,7 +252,7 @@ class BrowserData:
                 "name": "Escalate blockers",
                 "trigger": "blocker_detected",
                 "condition_value": None,
-                "action": "dm_user",
+                "action": "send_dm",
                 "action_target": "U_LEAD",
                 "action_message": "Please help unblock the team.",
                 "active": True,
@@ -932,7 +936,7 @@ def create_test_app(patcher=None):
                     {
                         "id": m["user_id"],
                         "name": m["display_name"],
-                        "tz": "UTC",
+                        "tz": m["tz"],
                         "is_bot": False,
                         "deleted": False,
                         "profile": {
