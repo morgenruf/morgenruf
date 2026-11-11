@@ -5,6 +5,21 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.29] - 2026-11-11
+
+### Added
+- **Structured access logs with request ids.** With `LOG_FORMAT=json`, every
+  request's access line carries `method`, `path`, `status`, `duration_ms`,
+  `bytes`, `request_id` and `user_agent` as JSON fields (ERROR for 5xx,
+  WARNING for 4xx), and the frontend's nginx writes the same fields. Each
+  request gets one id, kept from a well-formed `X-Request-ID` or generated,
+  returned in the response and attached to every line logged while serving
+  it, so a request can be followed from nginx to the backend. Neither side
+  logs client addresses or query strings, and feed tokens are logged as
+  `:token` (#301).
+- The backend pod is labelled `app.kubernetes.io/component: backend`, so log
+  shippers name it `<release>-backend` (#301).
+
 ## [1.9.28] - 2026-11-11
 
 ### Changed
