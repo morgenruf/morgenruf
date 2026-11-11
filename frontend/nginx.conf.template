@@ -1,3 +1,41 @@
+# Access lines as one JSON object each, with the same field names the backend
+# uses, so Loki can chart status and latency. No client address and no query
+# string: logs are readable by everyone with Grafana access, and sign-in codes
+# travel in query strings.
+map $http_x_request_id $req_id {
+    "~^[A-Za-z0-9._-]{8,128}$" $http_x_request_id;
+    default $request_id;
+}
+
+# The path as the client asked for it (not $uri, which reads /_shell.html
+# after the SPA fallback), without the query string. The public feed URL is
+# its own token, so that segment is hidden.
+map $request_uri $log_path {
+    "~^/feed/" "/feed/:token";
+    "~^(?<request_path>[^?]*)" $request_path;
+}
+
+map $status $log_level {
+    "~^5" ERROR;
+    "~^4" WARNING;
+    default INFO;
+}
+
+# $request_time is seconds with millisecond precision ("0.045"); this turns it
+# into whole milliseconds ("45") without leading zeros, so it is a JSON number.
+map $request_time $request_ms {
+    "~^0\.0*(?<ms>[0-9]+)$" $ms;
+    "~^(?<sec>[1-9][0-9]*)\.(?<frac>[0-9]{3})$" $sec$frac;
+    default 0;
+}
+
+log_format json_access escape=json
+    '{"time":"$time_iso8601","level":"$log_level","logger":"nginx.access",'
+    '"message":"$request_method $log_path $status",'
+    '"method":"$request_method","path":"$log_path","status":$status,'
+    '"duration_ms":$request_ms,"bytes":$body_bytes_sent,'
+    '"request_id":"$req_id","user_agent":"$http_user_agent"}';
+
 server {
     listen 8080;
     server_name _;
@@ -12,6 +50,10 @@ server {
     proxy_set_header X-Forwarded-Proto $forwarded_scheme;
     proxy_http_version 1.1;
     proxy_read_timeout 300s;
+    # One id per request, shared with the backend so both log lines match.
+    proxy_set_header X-Request-ID $req_id;
+
+    access_log /var/log/nginx/access.log json_access;
 
     location = /frontend-healthz {
         access_log off;

@@ -13,6 +13,9 @@ spec:
     metadata:
       labels:
         {{- include "morgenruf.selectorLabels" . | nindent 8 }}
+        # Pod template only, never the selector (selectors are immutable).
+        # Log shippers group by it: Loki's service_name becomes morgenruf-backend.
+        app.kubernetes.io/component: backend
     spec:
       securityContext:
         runAsNonRoot: true

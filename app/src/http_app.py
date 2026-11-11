@@ -9,11 +9,13 @@ from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from src.core.api import init_api, install_browser_security, register_api_blueprint
+from src.core.logjson import RequestIdMiddleware
 
 
 def create_http_app(*, modules=None, schema_only=False):
     app = Flask(__name__, static_folder=None)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    app.wsgi_app = RequestIdMiddleware(app.wsgi_app)
     app.config.update(
         SECRET_KEY=os.environ.get("FLASK_SECRET_KEY")
         or ("schema-export-does-not-serve-requests" if schema_only else None),
