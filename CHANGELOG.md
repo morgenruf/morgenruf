@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.28] - 2026-11-11
+
+### Changed
+- **Poll result bars are emoji squares.** The `▓░` bars came out grainy and
+  uneven in Slack, worst on mobile and in dark mode. They are now orange and
+  white squares, which render as even cells everywhere (#299).
+- README screenshots replaced with current ones, and kudos, insights,
+  celebrations and polls each get a section (#298).
+
+### Fixed
+- **The dashboard fetched the module list twice on every load**, and the
+  member list twice on pages that read it from a component, such as
+  Automation with a direct-message rule. The startup shell and the dashboard
+  each mount the sidebar, and the first request was cancelled and resent.
+  It now carries through to the second mount (#299).
+
 ## [1.9.27] - 2026-11-01
 
 ### Added
