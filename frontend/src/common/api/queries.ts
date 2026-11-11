@@ -17,8 +17,11 @@ export function sessionOptions({ api }: QueryServices) {
 export function modulesOptions({ api }: QueryServices, team?: string) {
   return queryOptions({
     queryKey: queryKeys.feature(team, 'modules'),
-    queryFn: async ({ signal }) =>
-      (await api.workspace.listModules({ signal })).data,
+    // No abort signal, here or in the member directory: the startup shell and
+    // the dashboard layout each mount these, so the first observer unmounts
+    // mid-request. With the signal, React Query cancels the request and the
+    // second mount sends it again; without it, the second mount reuses it.
+    queryFn: async () => (await api.workspace.listModules()).data,
     enabled: !!team,
   });
 }
@@ -48,12 +51,9 @@ export function memberDirectoryOptions(
 ) {
   return queryOptions({
     queryKey: queryKeys.feature(team, 'members', channel),
-    queryFn: async ({ signal }) =>
-      (
-        await api.members.listMembers(channel ? { channel_id: channel } : {}, {
-          signal,
-        })
-      ).data,
+    queryFn: async () =>
+      (await api.members.listMembers(channel ? { channel_id: channel } : {}))
+        .data,
     enabled: !!team,
   });
 }

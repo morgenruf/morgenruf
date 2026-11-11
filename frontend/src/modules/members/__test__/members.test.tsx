@@ -341,7 +341,7 @@ it('loads selected channel labels and clears filters without losing other choice
   await chooseOption(user, 'Filter by channel', 'All channels');
 
   await waitFor(() =>
-    expect(mock.members).toHaveBeenCalledWith({}, expect.anything()),
+    expect(mock.members).toHaveBeenCalledWith({}),
   );
   expect(
     screen.getByRole('combobox', { name: 'Filter by role' }),

@@ -73,10 +73,7 @@ describe('shared member directory', () => {
     );
 
     expect(mock.listMembers).toHaveBeenCalledTimes(1);
-    expect(mock.listMembers).toHaveBeenCalledWith(
-      {},
-      { signal: expect.any(AbortSignal) },
-    );
+    expect(mock.listMembers).toHaveBeenCalledWith({});
 
     expect(cache.getQueryData(['workspace', 'T1', 'members', ''])).toHaveLength(
       2,
@@ -123,10 +120,7 @@ describe('shared member directory', () => {
     );
 
     expect(await screen.findByText('Team one')).toBeInTheDocument();
-    expect(mock.listMembers).toHaveBeenCalledWith(
-      { channel_id: 'C1' },
-      { signal: expect.any(AbortSignal) },
-    );
+    expect(mock.listMembers).toHaveBeenCalledWith({ channel_id: 'C1' });
 
     mock.team = 'T2';
     mock.listMembers.mockResolvedValue({

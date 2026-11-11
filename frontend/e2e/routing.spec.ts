@@ -17,12 +17,10 @@ test('intent preloading and page hooks share one fresh session and member reques
   page.on('request', (request) => {
     if (request.method() === 'GET') reads.push(new URL(request.url()).pathname);
   });
-  // Start on a page that never reads the member directory, so the hover
-  // below is the only thing that can fetch it.
-  await page.goto('/dashboard/webhooks');
+  await page.goto('/dashboard/automation');
 
   await expect(
-    page.getByRole('heading', { name: 'Webhooks', exact: true }),
+    page.getByRole('heading', { name: 'Automation', exact: true }),
   ).toBeVisible();
 
   const members = page.getByRole('link', { name: 'Members', exact: true });
