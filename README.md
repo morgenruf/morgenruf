@@ -22,7 +22,7 @@ An open-source alternative to Geekbot, Donut, Standuply and HeyTaco, in one app.
 
 ---
 
-<img src="docs/screenshots/today.jpg" alt="The Morgenruf dashboard: who has answered today's standup, who is blocked, recent kudos and the next coffee chat" width="100%">
+<img src="docs/screenshots/today.jpg" alt="The Today page: this morning's answers with each person's mood, one marked blocked, and who is still to answer" width="100%">
 
 ## Why Morgenruf
 
@@ -42,23 +42,51 @@ This table sticks to what is structural. For free plan limits and prices of elev
 
 ## What you get
 
-### Standups, and whether they are working
+Every screenshot below is a real Morgenruf screen or Slack message, filled with an invented team.
 
-Each standup carries fourteen days of completion on its own card, so a schedule that is quietly slipping says so before anyone goes looking for it.
+### Standups that put the blocker first
 
-<img src="docs/screenshots/standups.jpg" alt="Two standups, each with a sparkline and a health badge" width="100%">
+The summary lands in the channel once everyone has answered or the window closes. Anyone blocked is named at the top, so it gets read before the rest.
+
+<img src="docs/screenshots/standup-summary.jpg" alt="The standup summary in Slack: who is blocked at the top, then each person's answers" width="560">
 
 ### Coffee chats that end in a meeting
 
-Settings on the left, the Slack message they produce on the right, updating as you type. The pair votes on an hour that suits both of them, and Zoom books it at that hour.
+The introduction names who was matched, gives them a starter question and offers hours that suit both timezones. The pair votes on one, and Zoom books it at that hour.
 
-<img src="docs/screenshots/coffee-chat-settings.jpg" alt="Coffee chat settings beside a live preview of the Slack introduction" width="100%">
+<img src="docs/screenshots/coffee-chat-intro.jpg" alt="The coffee chat introduction in Slack: who was matched, a starter question, and hours that suit both timezones" width="100%">
+
+### Kudos that say why
+
+`kudos @teammate` and a reason. The post names the person and quotes the reason, and the dashboard keeps two leaderboards: who was thanked most, and who thanks others most.
+
+<img src="docs/screenshots/kudos-slack.jpg" alt="A kudos post in Slack naming the person and quoting the reason" width="100%">
+
+<img src="docs/screenshots/kudos-leaderboards.jpg" alt="Kudos leaderboards: who was recognised most, and who recognises others most" width="100%">
+
+### Insights that need two signals at once
+
+Blockers repeated for days with nobody clearing them, and people who answer every standup but are never thanked. Neither shows up in a standup tool or a kudos tool alone.
+
+<img src="docs/screenshots/insights.jpg" alt="Insights: a teammate filing standups with no recognition, and a blocker repeated for three days" width="100%">
+
+### Celebrations around your working week
+
+Birthdays and work anniversaries in a channel. One that falls on a weekend or a company holiday is posted on the last working day before it.
+
+<img src="docs/screenshots/celebrations.jpg" alt="Coming up: two birthdays and two work anniversaries, one posted early on Friday" width="100%">
+
+### Polls in the channel
+
+`/morgenruf poll` and a question. Vote with buttons, watch the bars move, or keep results hidden until it closes. Anonymous votes cannot be tied to anyone once the poll closes.
+
+<img src="docs/screenshots/poll-slack.jpg" alt="A poll in Slack with vote buttons, result bars and the names of who voted" width="560">
 
 ### One person per feature, not one admin for everything
 
 Press a chip to put the team lead in charge of standups and someone in HR in charge of coffee chats and kudos. Neither of them can mint an API key or publish the workspace's standups.
 
-<img src="docs/screenshots/members.jpg" alt="Member cards showing which features each person runs" width="100%">
+<img src="docs/screenshots/members.jpg" alt="Member cards in the dashboard showing which features each person runs" width="100%">
 
 ---
 
