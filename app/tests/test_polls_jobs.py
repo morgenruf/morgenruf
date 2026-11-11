@@ -75,7 +75,7 @@ def test_a_due_poll_is_closed_and_redrawn_once(pdb, client):
     assert client.chat_update.call_count == 1
     kwargs = client.chat_update.call_args.kwargs
     assert kwargs["channel"] == "C1" and kwargs["ts"] == "1.000"
-    assert "▓" in str(kwargs["blocks"])
+    assert "large_orange_square" in str(kwargs["blocks"])
 
 
 def test_a_slack_error_does_not_reopen(pdb, client):

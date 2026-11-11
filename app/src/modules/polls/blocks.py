@@ -140,10 +140,16 @@ def create_modal(channel_id: str | None = None) -> dict:
     }
 
 
+# Slack emoji, not block characters: these render as even, coloured cells in
+# light and dark themes on every platform, where ▓░ came out grainy and uneven.
+_BAR_FILLED = ":large_orange_square:"
+_BAR_EMPTY = ":white_large_square:"
+
+
 def _bar(count: int, total: int) -> str:
     filled = round(_BAR_CELLS * count / total) if total else 0
     pct = round(100 * count / total) if total else 0
-    return f"{'▓' * filled}{'░' * (_BAR_CELLS - filled)} {count} ({pct}%)"
+    return f"{_BAR_FILLED * filled}{_BAR_EMPTY * (_BAR_CELLS - filled)}  {count} ({pct}%)"
 
 
 def _voter_line(user_ids: list[str]) -> str:

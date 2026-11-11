@@ -481,10 +481,10 @@ class TestVoting:
         click(world, "polls:vote:1:0", user=OTHER)
         before = json.dumps(world.updates[-1]["blocks"], ensure_ascii=False)
         assert "2 votes so far" in before
-        assert "▓" not in before and "(100%)" not in before and "░" not in before
+        assert "square:" not in before and "(100%)" not in before
         click(world, "polls:close:1", user=CREATOR)
         after = json.dumps(world.updates[-1]["blocks"], ensure_ascii=False)
-        assert "▓" in after and "2 (100%)" in after
+        assert "large_orange_square" in after and "2 (100%)" in after
 
     def test_a_vote_racing_a_close_never_reopens_the_message(self, world, monkeypatch):
         import src.modules.polls.db as pdb
@@ -672,8 +672,8 @@ class TestMessageBlocks:
 
         blocks = poll_message(self.POLL, [4, 6], {}, closed=False)
         lines = [b["elements"][0]["text"] for b in blocks if b["type"] == "context" and "%" in b["elements"][0]["text"]]
-        assert lines[0].startswith("▓▓▓▓░░░░░░ 4 (40%)")
-        assert lines[1].startswith("▓▓▓▓▓▓░░░░ 6 (60%)")
+        assert lines[0].startswith(":large_orange_square:" * 4 + ":white_large_square:" * 6 + "  4 (40%)")
+        assert lines[1].startswith(":large_orange_square:" * 6 + ":white_large_square:" * 4 + "  6 (60%)")
 
     def test_a_closing_time_is_shown_in_the_readers_timezone(self):
         from datetime import datetime, timezone
