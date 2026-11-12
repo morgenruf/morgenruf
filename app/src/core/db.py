@@ -2545,6 +2545,7 @@ _PURGE_STEPS: tuple[tuple[str, str], ...] = (
     ("setup_email_consents", "team_id = %s"),
     ("install_emails", "team_id = %s"),
     ("activation_checklist", "team_id = %s"),
+    ("whats_new_seen", "team_id = %s"),
 )
 PURGED_TABLES: tuple[str, ...] = tuple(table for table, _ in _PURGE_STEPS)
 
