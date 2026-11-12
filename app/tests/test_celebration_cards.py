@@ -101,7 +101,11 @@ def card_world(world, monkeypatch):  # noqa: F811 (the fixture imported above)
     monkeypatch.setattr("src.modules.celebrations.db.last_banner", lambda team, kind: None)
     monkeypatch.setattr("src.core.db.get_installation", lambda team: {"team_name": "Acme"})
     profiles = {
-        "U1": {"real_name": "Priya Raman", "image_512": "https://avatars.slack-edge.com/p.png", "is_custom_image": True},
+        "U1": {
+            "real_name": "Priya Raman",
+            "image_512": "https://avatars.slack-edge.com/p.png",
+            "is_custom_image": True,
+        },
         "U2": {"real_name": "Tom Berg", "image_512": "https://secure.gravatar.com/x", "is_custom_image": False},
     }
     slack.users_info = lambda user: {"user": {"id": user, "profile": profiles.get(user, {})}}
