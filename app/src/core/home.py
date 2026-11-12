@@ -34,14 +34,22 @@ def refresh_home(team_id: str, user_id: str, client) -> None:  # noqa: ANN001
 
 
 def top_home_blocks(team_id: str, user_id: str) -> list[dict]:
-    """Core blocks that belong above everything else: the activation checklist."""
+    """Core blocks that belong above everything else: the "What's new" card,
+    then the activation checklist."""
+    blocks: list[dict] = []
+    try:
+        from src.core.whats_new import home_blocks as news_blocks  # noqa: PLC0415
+
+        blocks.extend(news_blocks(team_id, user_id) or [])
+    except Exception:
+        logger.exception("the What's new card failed to render on the App Home")
     try:
         from src.core.activation import checklist_blocks  # noqa: PLC0415
 
-        return checklist_blocks(team_id, user_id) or []
+        blocks.extend(checklist_blocks(team_id, user_id) or [])
     except Exception:
         logger.exception("the activation checklist failed to render on the App Home")
-        return []
+    return blocks
 
 
 def extra_home_blocks(team_id: str, user_id: str, exclude: str = "") -> list[dict]:
