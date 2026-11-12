@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.31] - 2026-11-12
+
 ### Added
 - **Personal celebration banners.** A new Celebrations setting, "Make it
   personal", swaps the stock banner for a card drawn for the person: their
@@ -13,7 +15,7 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   one twice in a row. The post carries a signed URL and the app draws the
   card when Slack fetches it, so nothing is stored. Photos are read only from
   Slack's image hosts; with no custom photo the card shows initials. A post
-  for two or more people keeps a stock banner. Off by default.
+  for two or more people keeps a stock banner. Off by default (#303).
 
 ## [1.9.30] - 2026-11-12
 
