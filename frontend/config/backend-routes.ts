@@ -28,6 +28,8 @@ export const backendNamespacePrefixes = [
   '/mcp/',
   // Celebration banner images, which Slack fetches from the app's own URL.
   '/celebrations/banners/',
+  // Personal banner cards, drawn per post and fetched by Slack the same way.
+  '/celebrations/cards/',
 ];
 
 const escapeRegex = (path: string) =>
