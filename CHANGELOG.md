@@ -5,9 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.32] - 2026-11-12
+
+### Added
+- **What's new card.** The App Home tab opens with the newest feature a
+  person has not dismissed, with a button to try it and a "Got it" that
+  hides it for them. Items live in `src/core/whats_new.py`, drop off after
+  30 days, and are hidden where their feature is off. Dismissals are kept
+  in the new `whats_new_seen` table (migration 072), cleared by the
+  workspace purge (#308).
+- **Kudos by emoji reaction is on.** The app now asks for `reactions:read`
+  and subscribes to `reaction_added`. Reacting to a teammate's message with
+  the kudos emoji (the workspace token or `:morgenruf:`) gives them a kudos
+  linking to that message. Workspaces installed earlier must reinstall once;
+  their Home tab says so, with a Reinstall button for admins (#308).
+
 ### Fixed
 - Personal banner cards are routed to the backend by the frontend's nginx,
-  so Slack gets the image instead of the dashboard page.
+  so Slack gets the image instead of the dashboard page (#308).
+
+### Changed
+- Dependency updates: pip minor and patch group, @hookform/resolvers 7,
+  eslint 10, npm minor and patch group, github/codeql-action 4.39.3 (#308).
 
 ## [1.9.31] - 2026-11-12
 
