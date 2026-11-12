@@ -162,18 +162,42 @@ def can_react(team_id: str) -> bool:
     return REACTION_SCOPE in db.granted_scopes(team_id)
 
 
-def _choose_banner(team_id: str, kind: str) -> tuple[str | None, dict | None]:
-    """A banner for this post and its image block, or (None, None) when there is none to show."""
+def _choose_banner(team_id: str, kind: str, client=None, celebration=None) -> tuple[str | None, dict | None]:
+    """A banner for this post and its image block, or (None, None) when there is none to show.
+
+    With a client and a one-person celebration, a personal card (the
+    workspace turned them on); otherwise one of the stock images.
+    """
     import src.modules.celebrations.db as cdb  # noqa: PLC0415
     from src.modules.celebrations import banners  # noqa: PLC0415
 
     try:
-        name = banners.pick(kind, cdb.last_banner(team_id, kind))
+        last = cdb.last_banner(team_id, kind)
     except Exception:
         logger.warning("celebrations: could not read the last banner for %s", team_id)
-        name = banners.pick(kind, None)
+        last = None
+    if client is not None and celebration is not None and len(celebration.people) == 1:
+        card = _personal_banner(client, team_id, kind, celebration.people[0], last)
+        if card:
+            return card
+    name = banners.pick(kind, last)
     block = banners.image_block(kind, name) if name else None
     return (name, block) if block else (None, None)
+
+
+def _personal_banner(client, team_id: str, kind: str, person, last: str | None) -> tuple[str, dict] | None:
+    import src.core.db as db  # noqa: PLC0415
+    from src.modules.celebrations import cards  # noqa: PLC0415
+
+    try:
+        design = cards.pick(kind, last)
+        workspace = (db.get_installation(team_id) or {}).get("team_name") or ""
+        card = cards.card_for(client, person.user_id, kind, design, getattr(person, "years", None), workspace)
+        block = cards.image_block(card)
+    except Exception:
+        logger.exception("celebrations: no personal banner for %s, using a stock one", team_id)
+        return None
+    return (f"card-{design}", block) if block else None
 
 
 def _send(client, channel_id: str, text: str, banner_block: dict | None):
@@ -190,7 +214,15 @@ def _send(client, channel_id: str, text: str, banner_block: dict | None):
 
 
 def post_celebration(
-    client, team_id: str, channel_id: str, celebration, today: date, cal, react: bool, banners_on: bool = True
+    client,
+    team_id: str,
+    channel_id: str,
+    celebration,
+    today: date,
+    cal,
+    react: bool,
+    banners_on: bool = True,
+    personal: bool = False,
 ) -> str | None:
     """Claim, post and react for one celebration. Returns the message ts, or None.
 
@@ -204,7 +236,10 @@ def post_celebration(
     kind, day = celebration.kind, celebration.day
     if not cdb.claim_post(team_id, kind, day, today, channel_id, celebration.user_ids):
         return None
-    banner, banner_block = _choose_banner(team_id, kind) if banners_on else (None, None)
+    if banners_on:
+        banner, banner_block = _choose_banner(team_id, kind, client if personal else None, celebration)
+    else:
+        banner, banner_block = None, None
     try:
         text = celebration_text(_fill_names(client, celebration), today, cal)
         response, shown = _send(client, channel_id, text, banner_block)
@@ -264,7 +299,15 @@ def run_daily(team_id: str, now: datetime | None = None) -> list[str]:
         react = can_react(team_id)
         for c in celebrations:
             ts = post_celebration(
-                client, team_id, settings["channel_id"], c, today, cal, react, bool(settings.get("banners", True))
+                client,
+                team_id,
+                settings["channel_id"],
+                c,
+                today,
+                cal,
+                react,
+                bool(settings.get("banners", True)),
+                bool(settings.get("personal_banners", False)),
             )
             if ts:
                 posted.append(ts)

@@ -14,6 +14,8 @@ Settings = model(
     anniversaries=boolean(),
     # An image on each post, picked at random, never the same twice in a row.
     banners=boolean(),
+    # A card with the person's photo, name and years instead of a stock image.
+    personal_banners=boolean(),
     # From the core workspace calendar, edited here in this release.
     working_days=strings(),
     # A channel and a timezone are set, so posts can go out once enabled.
@@ -32,6 +34,7 @@ class SettingsInput(ApiSchema):
     birthdays = fields.Boolean(load_default=True)
     anniversaries = fields.Boolean(load_default=True)
     banners = fields.Boolean(load_default=True)
+    personal_banners = fields.Boolean(load_default=False)
     working_days = fields.List(
         fields.String(validate=validate.OneOf(WEEKDAY_KEYS)),
         required=True,

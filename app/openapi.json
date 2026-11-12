@@ -275,6 +275,9 @@
             "nullable": true,
             "type": "string"
           },
+          "personal_banners": {
+            "type": "boolean"
+          },
           "post_time": {
             "type": "string"
           },
@@ -303,6 +306,7 @@
           "birthdays",
           "can_react",
           "channel_id",
+          "personal_banners",
           "post_time",
           "ready",
           "timezone",
@@ -2359,6 +2363,10 @@
             "maxLength": 40,
             "minLength": 1,
             "type": "string"
+          },
+          "personal_banners": {
+            "default": false,
+            "type": "boolean"
           },
           "post_time": {
             "default": "09:00",
