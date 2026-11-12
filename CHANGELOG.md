@@ -15,6 +15,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
   Slack's image hosts; with no custom photo the card shows initials. A post
   for two or more people keeps a stock banner. Off by default.
 
+## [1.9.30] - 2026-11-12
+
+### Added
+- **Give kudos button.** The kudos section of the Slack App Home tab has a
+  Give kudos button while you have kudos left. It opens a form: pick a
+  person, say what they did, send. No command to type. It runs through the
+  same path as `/kudos`, so the daily allowance, the channel card and the
+  recipient's DM are unchanged (#302).
+- **Kudos by emoji reaction (dormant).** Reacting with the workspace's kudos
+  token, or `:morgenruf:`, on a teammate's message gives them a kudos that
+  links to the message. Own messages, bots and repeat reactions are ignored.
+  It stays off until the hosted app adds `reactions:read` and the
+  `reaction_added` event (#302).
+
 ## [1.9.29] - 2026-11-11
 
 ### Added
