@@ -319,8 +319,161 @@ def claim_dm_command(ctx) -> bool:
     return True
 
 
+GIVE_ACTION = "kudos:give"
+GIVE_CALLBACK = "kudos:give_submit"
+_REASON_MAX = 1000
+
+
+def give_modal() -> dict:
+    """Pick a person, say why. For people who will never type a command."""
+    return {
+        "type": "modal",
+        "callback_id": GIVE_CALLBACK,
+        "title": {"type": "plain_text", "text": "Give kudos"},
+        "submit": {"type": "plain_text", "text": "Send"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "to",
+                "label": {"type": "plain_text", "text": "Who is it for?"},
+                "element": {"type": "users_select", "action_id": "kudos:to"},
+            },
+            {
+                "type": "input",
+                "block_id": "why",
+                "label": {"type": "plain_text", "text": "What did they do?"},
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "kudos:why",
+                    "multiline": True,
+                    "max_length": _REASON_MAX,
+                    "placeholder": {"type": "plain_text", "text": "Helped me with my homework"},
+                },
+            },
+        ],
+    }
+
+
+def read_give_modal(view: dict) -> tuple[str, str]:
+    """(to_user, reason) from a submitted modal.
+
+    A plain text input arrives raw, unlike a message, so it is Slack-encoded
+    here to match what every other source stores and to keep typed markup text.
+    """
+    from src.modules.standup.blocks import escape_mrkdwn  # noqa: PLC0415
+
+    values = (view or {}).get("state", {}).get("values", {})
+    to_user = (values.get("to", {}).get("kudos:to", {}) or {}).get("selected_user") or ""
+    reason = (values.get("why", {}).get("kudos:why", {}) or {}).get("value") or ""
+    return to_user, escape_mrkdwn(reason.strip())
+
+
+# The workspace token is stored as `:name:` or a unicode emoji, but a reaction
+# arrives by name. The brand and default tokens are known; any other unicode
+# token cannot be named without an emoji table, so only those two work there.
+_UNICODE_NAMES = {"\N{MAPLE LEAF}": "maple_leaf"}
+
+
+def reaction_triggers(token: str) -> set[str]:
+    """Reaction names that count as giving kudos in a workspace using `token`."""
+    from src.modules.kudos.token import BRAND_EMOJI_NAME  # noqa: PLC0415
+
+    names = {BRAND_EMOJI_NAME}
+    token = token or ""
+    if token.startswith(":"):
+        names.add(token.strip(":").split("::")[0])
+    elif token in _UNICODE_NAMES:
+        names.add(_UNICODE_NAMES[token])
+    return names
+
+
+def _is_person(client, user_id: str) -> bool:
+    """A real, current teammate. Kudos to a bot or a deactivated account are skipped."""
+    try:
+        user = (client.users_info(user=user_id) or {}).get("user") or {}
+    except Exception as exc:
+        logger.info("kudos: could not look up %s: %s", user_id, exc)
+        return False
+    return bool(user) and not user.get("is_bot") and not user.get("deleted") and user_id != "USLACKBOT"
+
+
+def handle_reaction(client, team_id: str, bot_user_id: str, event: dict) -> bool:
+    """A kudos reaction on someone's message. True when a kudos was given.
+
+    Reacting to your own message, the bot's, or a message with no author is
+    ignored without a word: a reaction is not a request, so it gets no refusal.
+    """
+    item = event.get("item") or {}
+    giver, author = event.get("user") or "", event.get("item_user") or ""
+    if item.get("type") != "message" or not giver or not author or giver == author or author == bot_user_id:
+        return False
+
+    try:
+        import src.modules.kudos.db as kdb  # noqa: PLC0415
+
+        token = kdb.get_config(team_id).get("emoji") or ""
+    except Exception as exc:
+        logger.warning("kudos: could not read the token for %s: %s", team_id, exc)
+        return False
+    if (event.get("reaction") or "").split("::")[0] not in reaction_triggers(token):
+        return False
+
+    from src.core.modules import is_active_for  # noqa: PLC0415
+
+    if not is_active_for(team_id, "kudos") or not _is_person(client, author):
+        return False
+
+    channel, ts = item.get("channel") or "", item.get("ts") or ""
+    try:
+        link = client.chat_getPermalink(channel=channel, message_ts=ts)["permalink"]
+        reason = f"for this message: {link}"
+    except Exception as exc:
+        logger.info("kudos: no permalink for %s/%s: %s", channel, ts, exc)
+        reason = f"for a message in <#{channel}>"
+
+    try:
+        if kdb.already_given(team_id, giver, author, reason):
+            return False
+    except Exception as exc:
+        logger.warning("kudos: could not check for a repeat reaction in %s: %s", team_id, exc)
+    return give_kudos(client, team_id, giver, author, reason, giver, source="reaction")
+
+
 def register_handlers(app) -> None:
-    """Register the kudos slash commands. The DM form is claim_dm_command."""
+    """Register the kudos slash commands, the Give kudos button and modal, and
+    the reaction listener. The DM form is claim_dm_command."""
+
+    @app.action(GIVE_ACTION)
+    def handle_give_open(ack, body, client):  # noqa: ANN001
+        ack()
+        try:
+            client.views_open(trigger_id=body["trigger_id"], view=give_modal())
+        except Exception as exc:
+            logger.info("kudos: could not open the give modal: %s", exc)
+
+    @app.view(GIVE_CALLBACK)
+    def handle_give_submit(ack, body, view, client):  # noqa: ANN001
+        user_id = (body.get("user") or {}).get("id") or ""
+        team_id = (body.get("team") or {}).get("id") or ""
+        to_user, reason = read_give_modal(view)
+        if to_user == user_id:
+            ack(response_action="errors", errors={"to": "Kudos are for other people. Pick a teammate."})
+            return
+        if not reason:
+            ack(response_action="errors", errors={"why": "Say what they did."})
+            return
+        ack()
+        give_kudos(client, team_id, user_id, to_user, reason, user_id, source="button")
+        from src.core.home import refresh_home  # noqa: PLC0415
+
+        refresh_home(team_id, user_id, client)
+
+    # Dormant until the hosted app grants reactions:read and subscribes to
+    # reaction_added; until then Slack never sends the event.
+    @app.event("reaction_added")
+    def handle_reaction_added(event, client, context):  # noqa: ANN001
+        handle_reaction(client, context.team_id, context.bot_user_id, event)
 
     @app.command("/kudos")
     @app.command("/morgenruf-kudos")

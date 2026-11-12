@@ -83,10 +83,26 @@ def home_blocks(team_id: str, user_id: str) -> list[dict]:
                 ],
             }
         )
+        from src.modules.kudos.handlers import GIVE_ACTION  # noqa: PLC0415
+
+        if left:
+            blocks.append(
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "action_id": GIVE_ACTION,
+                            "style": "primary",
+                            "text": {"type": "plain_text", "text": f"{emoji} Give kudos", "emoji": True},
+                        }
+                    ],
+                }
+            )
         blocks.append(
             {
                 "type": "context",
-                "elements": [{"type": "mrkdwn", "text": "Send `kudos @teammate` and a reason to give one."}],
+                "elements": [{"type": "mrkdwn", "text": "Or send `kudos @teammate` and a reason to give one."}],
             }
         )
 

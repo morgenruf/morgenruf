@@ -205,3 +205,13 @@ def get_giver_leaderboard(team_id: str, days: int = 30) -> list[dict]:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (team_id, days))
             return [dict(r) for r in cur.fetchall()]
+
+
+def already_given(team_id: str, from_user: str, to_user: str, message: str) -> bool:
+    """True when this exact kudos exists, so removing and re-adding a reaction
+    does not count twice."""
+    sql = "SELECT 1 FROM kudos WHERE team_id = %s AND from_user = %s AND to_user = %s AND message = %s LIMIT 1"
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (team_id, from_user, to_user, message))
+            return cur.fetchone() is not None
