@@ -467,3 +467,160 @@ def test_both_manifests_ask_slack_to_escape_kudos_mentions(command):
     as_json = _commands(json.loads((ROOT / "slack-manifest.json").read_text()))
     assert as_yaml[command].get("should_escape") is True
     assert as_json[command].get("should_escape") is True
+
+
+# The Give kudos button and its modal.
+
+
+def _submit(app: App, to_user: str, reason: str) -> dict:
+    view = {
+        "type": "modal",
+        "callback_id": "kudos:give_submit",
+        "state": {
+            "values": {
+                "to": {"kudos:to": {"type": "users_select", "selected_user": to_user}},
+                "why": {"kudos:why": {"type": "plain_text_input", "value": reason}},
+            }
+        },
+    }
+    body = {"type": "view_submission", "team": {"id": TEAM}, "user": {"id": GIVER}, "view": view}
+    resp = app.dispatch(
+        BoltRequest(
+            body=urlencode({"payload": json.dumps(body)}),
+            headers={"content-type": ["application/x-www-form-urlencoded"]},
+        )
+    )
+    return json.loads(resp.body) if resp.body else {}
+
+
+@pytest.fixture
+def modal_world(world, monkeypatch):
+    import src.core.home as core_home
+
+    world.homes = []
+    monkeypatch.setattr(core_home, "refresh_home", lambda team_id, user_id, client: world.homes.append(user_id))
+    return world
+
+
+def test_the_button_opens_the_give_modal(world, monkeypatch):
+    opened = []
+    monkeypatch.setattr(WebClient, "views_open", lambda self, **kw: opened.append(kw["view"]["callback_id"]))
+    body = {
+        "type": "block_actions",
+        "team": {"id": TEAM},
+        "user": {"id": GIVER},
+        "trigger_id": "1.2.3",
+        "actions": [{"action_id": "kudos:give", "type": "button"}],
+    }
+    world.app.dispatch(
+        BoltRequest(
+            body=urlencode({"payload": json.dumps(body)}),
+            headers={"content-type": ["application/x-www-form-urlencoded"]},
+        )
+    )
+    assert opened == ["kudos:give_submit"]
+
+
+def test_a_modal_kudos_is_saved_and_home_refreshed(modal_world):
+    _submit(modal_world.app, ANMOL, "helped with <homework> & more")
+    assert [(k["to_user"], k["message"]) for k in modal_world.saved] == [
+        (ANMOL, "helped with &lt;homework&gt; &amp; more")
+    ]
+    assert modal_world.homes == [GIVER]
+
+
+def test_a_modal_kudos_to_yourself_is_refused_in_the_form(modal_world):
+    resp = _submit(modal_world.app, GIVER, "me")
+    assert resp.get("response_action") == "errors" and "to" in resp["errors"]
+    assert modal_world.saved == []
+
+
+def test_the_home_shows_the_button_only_with_kudos_left(monkeypatch):
+    import src.modules.kudos.db as kdb
+    from src.modules.kudos.home import home_blocks
+
+    monkeypatch.setattr(kdb, "get_kudos_leaderboard", lambda *a, **k: [])
+    monkeypatch.setattr(kdb, "get_giver_leaderboard", lambda *a, **k: [])
+    state = {"emoji": "\N{MAPLE LEAF}", "allowance": 5, "used": 0, "remaining": 5, "can_give": True}
+    monkeypatch.setattr(kdb, "allowance_state", lambda *a, **k: dict(state))
+    assert "kudos:give" in json.dumps(home_blocks(TEAM, GIVER))
+    state.update(remaining=0, can_give=False)
+    assert "kudos:give" not in json.dumps(home_blocks(TEAM, GIVER))
+
+
+# Kudos by emoji reaction.
+
+
+@pytest.fixture
+def react_world(world, monkeypatch):
+    import src.modules.kudos.db as kdb
+
+    world.people = {ANMOL: {"id": ANMOL}, GIVER: {"id": GIVER}, "UBOT2": {"id": "UBOT2", "is_bot": True}}
+    monkeypatch.setattr(WebClient, "users_info", lambda self, user: {"user": world.people.get(user, {})})
+    monkeypatch.setattr(
+        WebClient,
+        "chat_getPermalink",
+        lambda self, channel, message_ts: {"permalink": f"https://x.slack.com/archives/{channel}/p{message_ts}"},
+    )
+    monkeypatch.setattr(
+        kdb,
+        "already_given",
+        lambda team_id, f, t, m: any((k["from_user"], k["to_user"], k["message"]) == (f, t, m) for k in world.saved),
+    )
+    return world
+
+
+def _react(app: App, reaction: str, author: str = ANMOL, user: str = GIVER) -> None:
+    event = {
+        "type": "reaction_added",
+        "user": user,
+        "reaction": reaction,
+        "item_user": author,
+        "item": {"type": "message", "channel": "C0GENERAL", "ts": "1700000000.000200"},
+    }
+    body = {"type": "event_callback", "team_id": TEAM, "event": event}
+    app.dispatch(BoltRequest(body=json.dumps(body), headers={"content-type": ["application/json"]}))
+
+
+def test_a_token_reaction_gives_kudos_with_a_link(react_world):
+    _react(react_world.app, "maple_leaf")
+    assert [(k["from_user"], k["to_user"]) for k in react_world.saved] == [(GIVER, ANMOL)]
+    assert "https://x.slack.com/archives/C0GENERAL/" in react_world.saved[0]["message"]
+
+
+def test_the_brand_reaction_always_counts(react_world):
+    _react(react_world.app, "morgenruf")
+    assert len(react_world.saved) == 1
+
+
+def test_a_shortcode_token_counts_with_a_skin_tone(react_world):
+    react_world.kudos_config["emoji"] = ":clap:"
+    _react(react_world.app, "clap::skin-tone-3")
+    assert len(react_world.saved) == 1
+
+
+def test_reacting_twice_to_one_message_counts_once(react_world):
+    _react(react_world.app, "maple_leaf")
+    _react(react_world.app, "maple_leaf")
+    assert len(react_world.saved) == 1
+
+
+@pytest.mark.parametrize(
+    "reaction,author,user",
+    [
+        ("thumbsup", ANMOL, GIVER),
+        ("maple_leaf", GIVER, GIVER),
+        ("maple_leaf", "UBOT", GIVER),
+        ("maple_leaf", "UBOT2", GIVER),
+    ],
+    ids=["other-emoji", "own-message", "our-bot", "other-bot"],
+)
+def test_reactions_that_are_not_kudos_are_ignored_silently(react_world, reaction, author, user):
+    _react(react_world.app, reaction, author, user)
+    assert react_world.saved == [] and react_world.posts == []
+
+
+def test_no_reaction_kudos_when_the_module_is_off(react_world):
+    react_world.settings["kudos"] = False
+    _react(react_world.app, "maple_leaf")
+    assert react_world.saved == []
