@@ -91,6 +91,7 @@ export interface CelebrationSettings {
   birthdays: boolean;
   can_react: boolean;
   channel_id: string | null;
+  personal_banners: boolean;
   post_time: string;
   ready: boolean;
   timezone: string | null;
@@ -1110,6 +1111,8 @@ export interface SettingsInput {
    * @maxLength 40
    */
   channel_id: string;
+  /** @default false */
+  personal_banners?: boolean;
   /**
    * @default "09:00"
    * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$

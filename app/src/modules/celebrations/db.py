@@ -17,7 +17,7 @@ DEFAULT_POST_TIME = "09:00"
 # looked up again on the day it is made, so a year is generous.
 POST_RETENTION_DAYS = 400
 
-_SETTING_FIELDS = ("channel_id", "timezone", "post_time", "birthdays", "anniversaries", "banners")
+_SETTING_FIELDS = ("channel_id", "timezone", "post_time", "birthdays", "anniversaries", "banners", "personal_banners")
 
 
 def default_settings(team_id: str) -> dict:
@@ -29,6 +29,7 @@ def default_settings(team_id: str) -> dict:
         "birthdays": True,
         "anniversaries": True,
         "banners": True,
+        "personal_banners": False,
         "updated_by": None,
         "updated_at": None,
     }

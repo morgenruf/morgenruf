@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Personal celebration banners.** A new Celebrations setting, "Make it
+  personal", swaps the stock banner for a card drawn for the person: their
+  Slack photo, full name, the workspace name and, on an anniversary, the
+  years. Two designs for birthdays and two for anniversaries, never the same
+  one twice in a row. The post carries a signed URL and the app draws the
+  card when Slack fetches it, so nothing is stored. Photos are read only from
+  Slack's image hosts; with no custom photo the card shows initials. A post
+  for two or more people keeps a stock banner. Off by default.
+
 ## [1.9.30] - 2026-11-12
 
 ### Added

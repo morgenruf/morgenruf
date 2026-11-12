@@ -83,6 +83,7 @@ const settings = {
   birthdays: true,
   anniversaries: true,
   banners: true,
+  personal_banners: false,
   working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
   ready: true,
   can_react: true,
@@ -187,6 +188,7 @@ it('saves a Sunday to Thursday week with its own timezone and post time', async 
   await user.click(
     screen.getByRole('checkbox', { name: 'Add a banner image to each post' }),
   );
+  await user.click(screen.getByRole('checkbox', { name: /Make it personal/ }));
 
   await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
@@ -198,6 +200,7 @@ it('saves a Sunday to Thursday week with its own timezone and post time', async 
       birthdays: true,
       anniversaries: false,
       banners: false,
+      personal_banners: true,
       working_days: ['mon', 'tue', 'wed', 'thu', 'sun'],
     }),
   );

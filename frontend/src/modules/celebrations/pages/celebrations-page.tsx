@@ -107,6 +107,7 @@ const defaults: SettingsForm = {
   birthdays: true,
   anniversaries: true,
   banners: true,
+  personal_banners: false,
   working_days: ['mon', 'tue', 'wed', 'thu', 'fri'],
 };
 
@@ -189,6 +190,7 @@ function SettingsCard() {
           birthdays: settings.data.birthdays,
           anniversaries: settings.data.anniversaries,
           banners: settings.data.banners,
+          personal_banners: settings.data.personal_banners,
           working_days: settings.data.working_days,
         }
       : defaults,
@@ -367,6 +369,14 @@ function SettingsCard() {
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" {...form.register('banners')} />
                       Add a banner image to each post
+                    </label>
+                    <label className="flex items-center gap-2 pl-6 text-sm">
+                      <input
+                        type="checkbox"
+                        {...form.register('personal_banners')}
+                      />
+                      Make it personal: the person&apos;s Slack photo, name and
+                      years on the banner
                     </label>
                   </div>
                 </fieldset>

@@ -74,6 +74,7 @@ def register_routes(flask_app) -> None:
             "birthdays": bool(settings.get("birthdays", True)),
             "anniversaries": bool(settings.get("anniversaries", True)),
             "banners": bool(settings.get("banners", True)),
+            "personal_banners": bool(settings.get("personal_banners", False)),
             "working_days": working_day_keys(db.get_working_days(team_id)),
             "ready": cdb.is_ready(settings),
             "can_react": jobs.can_react(team_id),
@@ -133,6 +134,7 @@ def register_routes(flask_app) -> None:
                     "birthdays": bool(data.get("birthdays", True)),
                     "anniversaries": bool(data.get("anniversaries", True)),
                     "banners": bool(data.get("banners", True)),
+                    "personal_banners": bool(data.get("personal_banners", False)),
                 },
                 updated_by=session.get("user_id") or "",
             )
@@ -314,6 +316,7 @@ def register_routes(flask_app) -> None:
         return {"count": len(claimed)}
 
     register_api_blueprint(flask_app, bp)
-    from src.modules.celebrations.banners import register_route  # noqa: PLC0415
+    from src.modules.celebrations import banners, cards  # noqa: PLC0415
 
-    register_route(flask_app)
+    banners.register_route(flask_app)
+    cards.register_route(flask_app)
