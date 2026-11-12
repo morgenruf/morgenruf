@@ -469,8 +469,8 @@ def register_handlers(app) -> None:
 
         refresh_home(team_id, user_id, client)
 
-    # Dormant until the hosted app grants reactions:read and subscribes to
-    # reaction_added; until then Slack never sends the event.
+    # Needs reactions:read; a workspace installed before it was added gets
+    # no event until it reinstalls.
     @app.event("reaction_added")
     def handle_reaction_added(event, client, context):  # noqa: ANN001
         handle_reaction(client, context.team_id, context.bot_user_id, event)
