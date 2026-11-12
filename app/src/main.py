@@ -203,10 +203,12 @@ def register_slack_listeners(flask_app, bolt_app, modules) -> list[str]:
     from src.core.activation import register_slack as register_activation
     from src.core.email_consent import register_slack as register_email_consent
     from src.core.profile_slack import register_slack as register_profile_slack
+    from src.core.whats_new import register_slack as register_whats_new
 
     register_profile_slack(bolt_app)
     register_email_consent(bolt_app)
     register_activation(bolt_app)
+    register_whats_new(bolt_app)
     return register_modules(flask_app, bolt_app, modules)
 
 

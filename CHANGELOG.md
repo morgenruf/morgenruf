@@ -5,6 +5,10 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Fixed
+- Personal banner cards are routed to the backend by the frontend's nginx,
+  so Slack gets the image instead of the dashboard page.
+
 ## [1.9.31] - 2026-11-12
 
 ### Added

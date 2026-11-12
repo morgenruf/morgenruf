@@ -73,6 +73,7 @@ class TestEveryScopeIsUsed:
         "users.profile:read": [r"users_profile_get", r"users_info"],
         "emoji:read": [r"emoji_list"],
         "reactions:write": [r"reactions_add"],
+        "reactions:read": [r'@app\.event\("reaction_added"\)'],
         "team:read": [r"team_info"],
     }
 

@@ -53,6 +53,7 @@ describe('development and production routing parity', () => {
     '/dashboard?t=login-token',
     '/oauth/callback?state=signed',
     '/celebrations/banners/birthday-1.jpg',
+    '/celebrations/cards/abc.def.png',
   ])('reserves %s for the backend', (url) => {
     expect(matchesBackend(url)).toBe(true);
   });
