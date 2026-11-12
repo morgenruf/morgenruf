@@ -77,6 +77,7 @@
         "users.profile:read",
         "emoji:read",
         "reactions:write",
+        "reactions:read",
         "team:read"
       ]
     },
@@ -89,7 +90,8 @@
         "app_home_opened",
         "app_mention",
         "message.im",
-        "member_joined_channel"
+        "member_joined_channel",
+        "reaction_added"
       ]
     },
     "interactivity": {

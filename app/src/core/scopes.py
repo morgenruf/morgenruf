@@ -32,6 +32,8 @@ BOT_SCOPES: dict[str, str] = {
     "emoji:read": "Checking a workspace's custom emoji, so kudos can use your own token.",
     "reactions:write": "Adding a 🎉 to the Celebrations post, so people pile on. Optional: without it "
     "the post still goes out, just without the reaction.",
+    "reactions:read": "Hearing when someone reacts to a message with the workspace's kudos emoji, "
+    "which gives the author a kudos. Only reactions in channels the bot is in arrive.",
     "team:read": "The workspace name, shown in the dashboard and the digest.",
 }
 

@@ -53,6 +53,7 @@ oauth_config:
       - users.profile:read
       - emoji:read
       - reactions:write
+      - reactions:read
       - team:read
 
 settings:
@@ -63,6 +64,7 @@ settings:
       - app_mention
       - app_home_opened
       - member_joined_channel
+      - reaction_added
   interactivity:
     is_enabled: true
     request_url: "https://api.morgenruf.dev/slack/interactions"

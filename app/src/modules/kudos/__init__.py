@@ -31,6 +31,6 @@ MODULE = ModuleSpec(
     home_blocks=home_blocks,
     mcp_tools=mcp_tools,
     help_lines=(
-        "`/kudos @teammate message`: give someone kudos, or send `kudos @teammate message` to me in a DM, or press Give kudos on my Home tab",
+        "`/kudos @teammate message`: give someone kudos, or send `kudos @teammate message` to me in a DM, or press Give kudos on my Home tab, or react to their message with the kudos emoji",
     ),
 )
