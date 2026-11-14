@@ -17,12 +17,20 @@ jobs:
           # extraction was mechanical. A shallow checkout has no history to
           # walk, so the guard cannot run.
           fetch-depth: 0
+      # The Helm chart lives in morgenruf/helm-charts. Tests that check the
+      # code against the chart (env vars, migrate command) read it from here.
+      - uses: actions/checkout@v7
+        with:
+          repository: morgenruf/helm-charts
+          path: helm-charts
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
       - run: pip install pytest pytest-mock pytest-cov -r app/requirements.txt
       - run: python -m pytest app/tests/ -v --tb=short --cov=app/src --cov-report=xml
+        env:
+          MORGENRUF_CHART_DIR: helm-charts/morgenruf
       - uses: codecov/codecov-action@v7
         with:
           files: coverage.xml

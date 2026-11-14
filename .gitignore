@@ -12,7 +12,6 @@ dist/
 
 .DS_Store
 .netlify/
-app/helm/morgenruf/charts/
 morgenruf-prod-values.yaml
 
 .superpowers/

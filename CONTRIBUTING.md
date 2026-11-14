@@ -193,7 +193,6 @@ app/
   src/core/       # Flask, workspace services, API schemas, core SQL migrations
   src/modules/    # Feature services, routes, schemas, and SQL migrations
   openapi.json    # Generated browser API contract
-  helm/           # Backend and frontend Kubernetes resources
 frontend/
   src/router.tsx  # Router and per-router application services
   src/routes/     # Typed file routes and root document
@@ -204,6 +203,8 @@ frontend/
 scripts/          # Deterministic API generation and drift checks
 brand/            # Logo and brand assets
 ```
+
+The Helm chart lives in [morgenruf/helm-charts](https://github.com/morgenruf/helm-charts). Tests here check the code against it (every environment variable the code reads must be settable in the chart), so a change that needs the chart, such as a new environment variable, lands there first. Locally the tests read a `helm-charts` checkout next to this repo, or the path in `MORGENRUF_CHART_DIR`.
 
 ## Making changes
 

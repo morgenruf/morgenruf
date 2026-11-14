@@ -10,6 +10,8 @@ import pathlib
 import subprocess
 import sys
 
+from tests.chart import CHART, requires_chart
+
 APP = pathlib.Path(__file__).resolve().parents[1]
 
 
@@ -40,6 +42,7 @@ def test_shim_runs_as_a_script_path():
     assert "DATABASE_URL" in result.stderr
 
 
+@requires_chart
 def test_chart_command_matches_the_shim_path():
-    chart = (APP / "helm" / "morgenruf" / "templates" / "deployment.yaml").read_text()
+    chart = (CHART / "templates" / "deployment.yaml").read_text()
     assert 'command: ["python", "src/migrate.py"]' in chart
