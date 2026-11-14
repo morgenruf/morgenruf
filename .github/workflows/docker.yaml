@@ -16,6 +16,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # The Helm chart lives in morgenruf/helm-charts; the chart tests read it.
+      - uses: actions/checkout@v7
+        with:
+          repository: morgenruf/helm-charts
+          path: helm-charts
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -24,6 +29,8 @@ jobs:
       - run: ruff check app/src/
       - run: ruff format --check app/src/
       - run: python -m pytest app/tests/ scripts/tests/ -q
+        env:
+          MORGENRUF_CHART_DIR: helm-charts/morgenruf
       - run: ruff check scripts/dev.py scripts/tests/
       - run: ruff format --check scripts/dev.py scripts/tests/
 
