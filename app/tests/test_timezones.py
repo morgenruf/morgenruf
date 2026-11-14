@@ -72,9 +72,13 @@ def debian_tz(tmp_path, monkeypatch):
         dest = tmp_path / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
-    for module in [m for m in sys.modules if m == "tzdata" or m.startswith("tzdata.")]:
-        monkeypatch.setitem(sys.modules, module, None)
-    monkeypatch.setitem(sys.modules, "tzdata", None)
+
+    # Stub the tzdata fallback rather than poisoning sys.modules: Python 3.15's
+    # traceback hints import the missing module and crash on a None entry.
+    def no_tzdata(key):
+        raise zoneinfo.ZoneInfoNotFoundError(f"No time zone found with key {key}")
+
+    monkeypatch.setattr(zoneinfo._common, "load_tzdata", no_tzdata)
     zoneinfo.reset_tzpath([str(tmp_path)])
     zoneinfo.ZoneInfo.clear_cache()
     yield
