@@ -5,6 +5,17 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.33] - 2026-11-14
+
+### Changed
+- Backend image runs on Python 3.15 (python:3.15-slim) (#314).
+- Dependency updates: gunicorn 27.0.0, resend 2.53.2, posthog 7.87.0,
+  jsdom 31, npm minor and patch group including vite 8.3.8 and
+  playwright 1.65.0 (#314).
+
+### Fixed
+- The timezone test fixture no longer crashes pytest on Python 3.15 (#314).
+
 ## [1.9.32] - 2026-11-12
 
 ### Added
