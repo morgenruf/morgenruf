@@ -472,7 +472,7 @@ docker compose up -d --restart-policy always
 >
 > The password is required when the bundled database is enabled. Generate one with `openssl rand -hex 16` and keep it in your values file: changing it later will not change the password already initialised inside the volume.
 
-Morgenruf ships a production-ready Helm chart at `app/helm/morgenruf/`.
+Morgenruf ships a production-ready Helm chart. Its source is [morgenruf/helm-charts](https://github.com/morgenruf/helm-charts), published at [charts.morgenruf.dev](https://charts.morgenruf.dev).
 
 ### Database (recommended: external PostgreSQL)
 
@@ -583,8 +583,10 @@ httpRoute:
 
 ## Helm Chart Structure
 
+Source: [morgenruf/helm-charts](https://github.com/morgenruf/helm-charts), in `morgenruf/`.
+
 ```
-app/helm/morgenruf/
+morgenruf/
 ├── Chart.yaml
 ├── values.yaml
 └── templates/
@@ -728,7 +730,6 @@ morgenruf/
 ├── app/
 │   ├── src/            ← Python bot (Flask + slack-bolt)
 │   ├── openapi.json    ← Generated browser API contract
-│   ├── helm/morgenruf/ ← Production Helm chart
 │   └── Dockerfile
 ├── frontend/           ← React + Vite application, shared UI, feature modules
 ├── scripts/            ← API generation and drift checks

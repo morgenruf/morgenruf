@@ -13,9 +13,10 @@ from __future__ import annotations
 import pathlib
 import re
 
+from tests.chart import CHART, requires_chart
+
 APP = pathlib.Path(__file__).resolve().parent.parent
 SRC = APP / "src"
-CHART = APP / "helm/morgenruf"
 ENV_EXAMPLE = APP / ".env.example"
 
 # Read by the code but not set by whoever deploys it: supplied by the platform,
@@ -73,6 +74,7 @@ class TestEveryVariableCanBeSet:
         names = env_names_read()
         assert "SLACK_CLIENT_ID" in names, "the scanner is not reading the source"
 
+    @requires_chart
     def test_each_one_is_in_the_chart(self):
         chart = chart_text()
         missing = sorted(n for n in env_names_read() - DEV_ONLY if n not in chart)
@@ -85,6 +87,7 @@ class TestEveryVariableCanBeSet:
 
 
 class TestZoomSpecifically:
+    @requires_chart
     def test_it_is_optional_in_both_places(self):
         """Both halves or neither: one alone must not reference a secret key
         that the secret does not contain."""
@@ -93,6 +96,7 @@ class TestZoomSpecifically:
         for text in (dep, sec):
             assert "if and .Values.zoom.clientId .Values.zoom.clientSecret" in text
 
+    @requires_chart
     def test_values_declares_it_empty_by_default(self):
         values = (CHART / "values.yaml").read_text()
         assert re.search(r"zoom:\s*\n\s*clientId:\s*\"\"\s*\n\s*clientSecret:\s*\"\"", values)

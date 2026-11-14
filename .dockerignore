@@ -19,7 +19,5 @@ coverage*
 frontend/playwright-report
 frontend/test-results
 
-app/helm
-
 frontend/playwright-report-production/
 frontend/test-results-production/
