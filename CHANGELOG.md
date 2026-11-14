@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.34] - 2026-11-14
+
+### Security
+- Dependency fixes for open Dependabot alerts: seroval 1.8.1,
+  systeminformation 5.33.22, minimatch 11.0.8 (override), eslint 10.15.0.
+  deepmerge has no patched release yet (#315).
+
 ## [1.9.33] - 2026-11-14
 
 ### Changed
