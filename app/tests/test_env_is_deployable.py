@@ -48,6 +48,9 @@ NOT_OPERATOR_SET = {
     "SENTRY_ENV",
     # Baked into the image by the release workflow, not set by an operator.
     "APP_VERSION",
+    "GIT_COMMIT",
+    # Set by src.core.metrics itself to a fresh directory at start.
+    "PROMETHEUS_MULTIPROC_DIR",
 }
 
 # Documented for a local checkout, deliberately absent from the chart: turning

@@ -8,6 +8,7 @@ from datetime import timedelta
 from flask import Flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from src.core import metrics
 from src.core.api import init_api, install_browser_security, register_api_blueprint
 from src.core.logjson import RequestIdMiddleware
 
@@ -31,6 +32,7 @@ def create_http_app(*, modules=None, schema_only=False):
         # Anything past this is refused before it is read into memory.
         MAX_CONTENT_LENGTH=4 * 1024 * 1024,
     )
+    metrics.install_flask(app)
     init_api(app)
     install_browser_security(app)
     from src.core.dashboard import browser_bp, dashboard_bp

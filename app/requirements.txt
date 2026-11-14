@@ -1,5 +1,6 @@
 slack-bolt==1.30.0
 slack-sdk==3.46.0
+prometheus-client==0.26.0
 apscheduler==3.11.3
 pytz==2026.6
 tzdata==2026.6

@@ -11,7 +11,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import pytz
-from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, EVENT_JOB_MISSED
+from apscheduler.executors.base import run_job
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -19,6 +20,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
 
+from src.core import metrics
 from src.core.schedule_validation import schedule_config_error
 from src.core.slack_users import (
     fetch_human_users,
@@ -1930,6 +1932,31 @@ class ClaimingExecutor(ThreadPoolExecutor):
             if not run_times:
                 return
         super().submit_job(job, run_times)
+
+    def _do_submit_job(self, job, run_times):  # noqa: ANN001
+        # BasePoolExecutor._do_submit_job, with run_job timed and counted, and
+        # the job's name set so messages it sends are counted against it.
+        def callback(f):  # noqa: ANN001
+            exc, tb = f.exception_info() if hasattr(f, "exception_info") else (f.exception(), None)
+            if exc:
+                self._run_job_error(job.id, exc, tb or getattr(exc, "__traceback__", None))
+            else:
+                self._run_job_success(job.id, f.result())
+
+        f = self._pool.submit(_metered_run_job, job, job._jobstore_alias, run_times, self._logger.name)
+        f.add_done_callback(callback)
+
+
+_JOB_RESULTS = {EVENT_JOB_EXECUTED: "success", EVENT_JOB_ERROR: "error", EVENT_JOB_MISSED: "missed"}
+
+
+def _metered_run_job(job, jobstore_alias, run_times, logger_name):  # noqa: ANN001, ANN201
+    name = metrics.job_name(job.id)
+    start = time.perf_counter()
+    with metrics.job_context(name):
+        events = run_job(job, jobstore_alias, run_times, logger_name)
+    metrics.record_job(name, [_JOB_RESULTS.get(e.code, "error") for e in events], time.perf_counter() - start)
+    return events
 
 
 def _claim_run(job_id: str, run_at: datetime) -> bool:

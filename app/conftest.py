@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from unittest.mock import MagicMock
+
+# prometheus_client picks multiprocess mode when it is first imported, and a
+# test module may import it before src.core.metrics sets this (see there).
+os.environ.setdefault("PROMETHEUS_MULTIPROC_DIR", tempfile.mkdtemp(prefix="morgenruf-metrics-test-"))
 
 import pytest
 
