@@ -34,11 +34,14 @@ COPY teams.yaml.example ./teams.yaml
 # the MCP server report it.
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+# The release commit, reported by morgenruf_build_info.
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=$GIT_COMMIT
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=3000
 
-EXPOSE 3000
+EXPOSE 3000 9090
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:3000/healthz')"

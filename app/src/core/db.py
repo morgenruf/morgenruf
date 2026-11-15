@@ -12,6 +12,7 @@ from threading import Lock
 from typing import Any, Generator
 from zoneinfo import ZoneInfo
 
+from src.core import metrics
 from src.core.timezones import canonical_tz, local_today
 from src.core.token_crypto import decrypt_fields, encrypt_token
 
@@ -66,15 +67,24 @@ def initialize_pool():
     return _pool
 
 
+def _report_pool(pool) -> None:
+    # psycopg2's pool keeps its borrowed and idle connections in _used and _pool.
+    metrics.set_db_pool(len(pool._used), len(pool._pool), pool.maxconn)
+
+
 def get_conn():
     """Borrow a connection, lazily creating the pool."""
-    return initialize_pool().getconn()
+    pool = initialize_pool()
+    conn = pool.getconn()
+    _report_pool(pool)
+    return conn
 
 
 def release_conn(conn) -> None:
     """Return a connection to the pool."""
     if _pool is not None:
         _pool.putconn(conn)
+        _report_pool(_pool)
 
 
 @contextmanager

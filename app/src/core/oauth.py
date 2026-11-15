@@ -16,7 +16,7 @@ from slack_sdk import WebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 
 import src.core.db as db
-from src.core import rate_limit
+from src.core import metrics, rate_limit
 from src.core.scopes import BOT_SCOPES
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,7 @@ def oauth_callback():
 
     if error:
         logger.warning("OAuth flow returned error: %s", error)
+        metrics.INSTALLS.labels(result="denied").inc()
         return redirect("/auth/result?status=denied", code=303)
 
     incoming_state = request.args.get("state", "")
@@ -139,6 +140,7 @@ def oauth_callback():
     nonce = _state_nonce(incoming_state)
     if nonce is None or not expected_nonce or not hmac.compare_digest(nonce, expected_nonce):
         logger.warning("OAuth state validation failed")
+        metrics.INSTALLS.labels(result="invalid_state").inc()
         return redirect("/auth/result?status=invalid", code=303)
 
     if not code:
@@ -155,6 +157,7 @@ def oauth_callback():
         )
     except Exception as exc:
         logger.error("oauth_v2_access failed: %s", exc)
+        metrics.INSTALLS.labels(result="error").inc()
         return redirect("/auth/result?status=error", code=303)
 
     team_id: str = resp["team"]["id"]
@@ -189,8 +192,11 @@ def oauth_callback():
         db.upsert_workspace_config(team_id)
     except Exception as exc:
         logger.error("Failed to persist installation for %s: %s", team_id, exc)
+        metrics.INSTALLS.labels(result="persist_error").inc()
         # Don't fail the flow — continue to send welcome messages
     else:
+        # "existing" is a reinstall or a dashboard sign-in, which share this flow.
+        metrics.INSTALLS.labels(result="new" if is_new_install else "existing").inc()
         # Only a new install is tagged: sign-in runs through the same flow,
         # and a member signing in from a tagged link did not install anything.
         install_ref = session.get("install_ref", "")

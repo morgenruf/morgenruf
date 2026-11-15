@@ -101,6 +101,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ steps.meta.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
             OS_UPGRADE_DATE=${{ startsWith(github.ref, 'refs/tags/') && format('{0}-{1}-{2}', steps.today.outputs.date, github.run_id, github.run_attempt) || steps.today.outputs.date }}
           cache-from: type=gha,scope=${{ matrix.cache }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache }}

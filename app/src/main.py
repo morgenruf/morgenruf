@@ -30,7 +30,7 @@ from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 
-from src.core import logjson, token_crypto
+from src.core import logjson, metrics, token_crypto
 from src.core.dm_router import DMContext, route_dm
 from src.core.installation_store import PostgresInstallationStore
 from src.core.modules import active_modules, deploy_allowlist
@@ -309,6 +309,9 @@ def create_app() -> tuple[App, Flask]:
         oauth_settings=oauth_settings,
     )
 
+    metrics.install_slack_sdk()
+    metrics.install_bolt(slack_app)
+
     workspace_jobs = _load_workspace_jobs()
     scheduler = build_scheduler(workspace_jobs)
     scheduler.start()
@@ -431,6 +434,10 @@ if __name__ == "__main__":
             def load(self):
                 return self.application
 
+        # In the master, which also runs the scheduler, so one server reports
+        # every process. The worker never serves it.
+        metrics.start_server()
+
         StandaloneApplication(
             flask_app,
             {
@@ -448,5 +455,6 @@ if __name__ == "__main__":
                 # Nothing uses gunicornc, and its socket would be created
                 # under $HOME, which is read only in the container.
                 "control_socket_disable": True,
+                "child_exit": lambda _server, worker: metrics.mark_process_dead(worker.pid),
             },
         ).run()
