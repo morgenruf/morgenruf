@@ -5,6 +5,18 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.35] - 2026-11-14
+
+### Added
+- **Prometheus metrics.** The backend serves `/metrics` on its own port
+  (`METRICS_PORT`, default 9090), never through the frontend or the public
+  hostname: HTTP requests by route, Slack events and API calls (including
+  rate limits), scheduler job runs and durations, messages sent per job,
+  installs, active workspaces, DB pool usage and build info. Chart 0.15.0
+  adds the `metrics` port and a PodMonitor when the Prometheus Operator is
+  installed (#318, helm-charts#7).
+- posthog 7.87.1 (#317).
+
 ## [1.9.34] - 2026-11-14
 
 ### Security
