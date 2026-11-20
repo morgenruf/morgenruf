@@ -218,13 +218,29 @@ def kudos_channel(team_id: str) -> str:
         return ""
 
 
-def give_kudos(client, team_id: str, from_user: str, to_user: str, reason: str, reply_to: str, source: str) -> bool:
+def give_kudos(
+    client,
+    team_id: str,
+    from_user: str,
+    to_user: str,
+    reason: str,
+    reply_to: str,
+    source: str,
+    *,
+    confirm: bool = True,
+    origin_channel: str = "",
+) -> bool:
     """Check, save and announce one kudos. Returns True when it was saved.
 
     Every reply to the giver goes to reply_to (their DM). Once the row is
     saved the recipient gets a DM, and the card is shared in the kudos channel
     when there is one. Nothing is sent to anyone for a kudos that was not
     saved.
+
+    A kudos typed in a channel is already public, so it passes confirm=False
+    (the caller reacts to the message instead of DMing "sent") and its
+    origin_channel, so the card is not repeated in the channel it came from.
+    A refusal is always sent, since otherwise the giver never learns why.
     """
 
     def tell(text: str, blocks: list[dict] | None = None) -> None:
@@ -258,7 +274,7 @@ def give_kudos(client, team_id: str, from_user: str, to_user: str, reason: str, 
     capture("kudos_given", team_id, source=source)
 
     posted = False
-    if post_channel:
+    if post_channel and post_channel != origin_channel:
         card_text, card_blocks = kudos_card(from_user, to_user, reason, emoji)
         try:
             client.chat_postMessage(channel=post_channel, text=card_text, blocks=card_blocks)
@@ -282,6 +298,8 @@ def give_kudos(client, team_id: str, from_user: str, to_user: str, reason: str, 
         sent = f"Posted in <#{post_channel}>. I could not send <@{to_user}> a DM."
     else:
         sent = f"Saved. I could not reach <@{to_user}>, but it shows on the Kudos page in the dashboard."
+    if not confirm:
+        return True
     missed = (
         f"I could not post in <#{post_channel}>. Invite @Morgenruf to it so the next one shows up there."
         if post_channel and not posted
@@ -369,23 +387,45 @@ def read_give_modal(view: dict) -> tuple[str, str]:
     return to_user, escape_mrkdwn(reason.strip())
 
 
-# The workspace token is stored as `:name:` or a unicode emoji, but a reaction
-# arrives by name. The brand and default tokens are known; any other unicode
-# token cannot be named without an emoji table, so only those two work there.
-_UNICODE_NAMES = {"\N{MAPLE LEAF}": "maple_leaf"}
+def _unicode_names(token: str) -> set[str]:
+    """Slack's names for a unicode emoji, such as heart_eyes for \N{SMILING FACE WITH HEART-SHAPED EYES}.
+
+    Slack names an emoji by its GitHub-style alias where there is one and by
+    its CLDR name otherwise, so both are offered. The variation selector is
+    dropped first, because people paste \N{HEAVY BLACK HEART} with or without it.
+    """
+    import emoji  # noqa: PLC0415
+
+    data = emoji.EMOJI_DATA.get(token) or emoji.EMOJI_DATA.get(token.replace("\ufe0f", "")) or {}
+    return {n.strip(":") for n in [data.get("en", ""), *data.get("alias", [])] if n}
 
 
 def reaction_triggers(token: str) -> set[str]:
-    """Reaction names that count as giving kudos in a workspace using `token`."""
+    """Emoji names that count as giving kudos in a workspace using `token`.
+
+    The token is stored as `:name:` or as a unicode emoji, but Slack sends a
+    reaction, and the emoji in a message's text, by name.
+    """
     from src.modules.kudos.token import BRAND_EMOJI_NAME  # noqa: PLC0415
 
     names = {BRAND_EMOJI_NAME}
-    token = token or ""
+    token = (token or "").strip()
     if token.startswith(":"):
         names.add(token.strip(":").split("::")[0])
-    elif token in _UNICODE_NAMES:
-        names.add(_UNICODE_NAMES[token])
+    elif token:
+        names |= _unicode_names(token)
     return names
+
+
+def _workspace_triggers(team_id: str) -> set[str] | None:
+    """reaction_triggers for this workspace's token, or None when it cannot be read."""
+    try:
+        import src.modules.kudos.db as kdb  # noqa: PLC0415
+
+        return reaction_triggers(kdb.get_config(team_id).get("emoji") or "")
+    except Exception as exc:
+        logger.warning("kudos: could not read the token for %s: %s", team_id, exc)
+        return None
 
 
 def _is_person(client, user_id: str) -> bool:
@@ -409,16 +449,10 @@ def handle_reaction(client, team_id: str, bot_user_id: str, event: dict) -> bool
     if item.get("type") != "message" or not giver or not author or giver == author or author == bot_user_id:
         return False
 
-    try:
-        import src.modules.kudos.db as kdb  # noqa: PLC0415
-
-        token = kdb.get_config(team_id).get("emoji") or ""
-    except Exception as exc:
-        logger.warning("kudos: could not read the token for %s: %s", team_id, exc)
+    triggers = _workspace_triggers(team_id)
+    if not triggers or (event.get("reaction") or "").split("::")[0] not in triggers:
         return False
-    if (event.get("reaction") or "").split("::")[0] not in reaction_triggers(token):
-        return False
-
+    import src.modules.kudos.db as kdb  # noqa: PLC0415
     from src.core.modules import is_active_for  # noqa: PLC0415
 
     if not is_active_for(team_id, "kudos") or not _is_person(client, author):
@@ -438,6 +472,83 @@ def handle_reaction(client, team_id: str, bot_user_id: str, event: dict) -> bool
     except Exception as exc:
         logger.warning("kudos: could not check for a repeat reaction in %s: %s", team_id, exc)
     return give_kudos(client, team_id, giver, author, reason, giver, source="reaction")
+
+
+# `:name:` or `:name::skin-tone-2:` in a message's text. Slack writes every
+# emoji in a message as its name, however it was typed.
+_EMOJI_NAME = re.compile(r":([a-z0-9_+\-']+)(?:::[a-z0-9\-]+)?:")
+_ANY_MENTION = re.compile(r"<@([UW][A-Z0-9]+)(?:\|[^>]*)?>")
+_DONE_REACTION = "white_check_mark"
+
+
+def channel_kudos(text: str, triggers: set[str]) -> tuple[list[str], str] | None:
+    """(people mentioned, reason) when a channel message gives kudos, else None.
+
+    A message gives kudos when it carries the workspace's kudos emoji and
+    mentions at least one person: `@Sam :heart_eyes: great lesson today`.
+    The reason is the text with the mentions and the kudos emoji taken out.
+    """
+    import emoji  # noqa: PLC0415
+
+    # Slack sends names, but a raw emoji from an API client still counts.
+    text = emoji.demojize(text or "", language="alias")
+    if not any(m.group(1) in triggers for m in _EMOJI_NAME.finditer(text)):
+        return None
+    people = list(dict.fromkeys(_ANY_MENTION.findall(text)))
+    if not people:
+        return None
+    reason = _EMOJI_NAME.sub(lambda m: "" if m.group(1) in triggers else m.group(0), text)
+    reason = re.sub(r"\s+", " ", _ANY_MENTION.sub("", reason)).strip(" ,:-")
+    return people, reason
+
+
+def handle_channel_message(client, team_id: str, bot_user_id: str, event: dict) -> int:
+    """Kudos typed in a channel, the way Donut and HeyTaco do it. Returns how many were given.
+
+    Only plain messages from people count: edits, joins, bot posts and thread
+    broadcasts carry a subtype and are skipped. A message that is not a kudos
+    gets no reply at all. When at least one kudos goes through, the message
+    gets a check mark instead of a reply, so the channel stays quiet.
+    """
+    if event.get("channel_type") not in ("channel", "group") or event.get("subtype") or event.get("bot_id"):
+        return 0
+    giver, channel, ts = event.get("user") or "", event.get("channel") or "", event.get("ts") or ""
+    if not giver or not channel:
+        return 0
+    triggers = _workspace_triggers(team_id)
+    if not triggers:
+        return 0
+    found = channel_kudos(event.get("text") or "", triggers)
+    if not found:
+        return 0
+
+    people, reason = found
+    if not reason:
+        try:
+            reason = "for this message: " + client.chat_getPermalink(channel=channel, message_ts=ts)["permalink"]
+        except Exception as exc:
+            logger.info("kudos: no permalink for %s/%s: %s", channel, ts, exc)
+            reason = f"for a message in <#{channel}>"
+
+    given = 0
+    for person in people:
+        if person in (giver, bot_user_id) or not _is_person(client, person):
+            continue
+        if give_kudos(
+            client, team_id, giver, person, reason, giver, source="channel", confirm=False, origin_channel=channel
+        ):
+            given += 1
+    if given:
+        try:
+            client.reactions_add(channel=channel, timestamp=ts, name=_DONE_REACTION)
+        except Exception as exc:
+            logger.info("kudos: could not react to %s/%s: %s", channel, ts, exc)
+    return given
+
+
+def on_channel_message(event, client, context) -> None:  # noqa: ANN001
+    """Core's channel message hook (see core.modules.ModuleSpec)."""
+    handle_channel_message(client, context.team_id, context.bot_user_id, event)
 
 
 def register_handlers(app) -> None:

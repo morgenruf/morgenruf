@@ -228,8 +228,13 @@ def register_dm_listener(bolt_app) -> None:
     """
 
     @bolt_app.event("message")
-    def handle_dm(event, client, logger):  # noqa: ANN001
-        if event.get("channel_type") != "im" or event.get("bot_id"):
+    def handle_dm(event, client, context, logger):  # noqa: ANN001
+        if event.get("bot_id"):
+            return
+        if event.get("channel_type") in ("channel", "group"):
+            dispatch_channel_message(event, client, context)
+            return
+        if event.get("channel_type") != "im":
             return
         team_id = event.get("team") or ""
         ctx = DMContext(
@@ -249,6 +254,32 @@ def register_dm_listener(bolt_app) -> None:
             allowlist=None,
         )
         route_dm(modules, ctx, fallback=None)
+
+
+def dispatch_channel_message(event: dict, client, context) -> list[str]:
+    """Offer one channel message to every module active here that has a hook.
+
+    Most messages are not for any module, so this is cheap: modules without
+    the hook are skipped, and each hook returns at its first check. One hook
+    failing must not stop the next. Returns the names called, for tests.
+    """
+    import src.core.db as db  # noqa: PLC0415
+
+    team_id = context.team_id or event.get("team") or ""
+    hooked = [s for s in _enabled_modules() if s.on_channel_message is not None]
+    if not hooked:
+        return []
+    modules = active_modules(
+        hooked, granted_scopes=db.granted_scopes(team_id), settings=db.module_settings(team_id), allowlist=None
+    )
+    called: list[str] = []
+    for spec in modules:
+        try:
+            spec.on_channel_message(event, client, context)
+            called.append(spec.name)
+        except Exception:
+            logger.exception("module %s failed to handle a channel message", spec.name)
+    return called
 
 
 def dispatch_channel_join(modules, event: dict, client) -> list[str]:

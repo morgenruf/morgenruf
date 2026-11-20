@@ -131,7 +131,7 @@ Three days later the bot nudges pairs that have not met, and closes the round on
 
 ### Kudos
 
-`kudos @teammate nice work on the deploy` in a DM to the bot. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over. That is what makes people spend them.
+`kudos @teammate nice work on the deploy` in a DM to the bot. Or, in any channel Morgenruf is in, write `@teammate`, your kudos emoji and a reason (`@sam 🍁 great lesson today`): it counts as a kudos for everyone mentioned, and Morgenruf adds a ✅ to the message. Reacting to a message with the kudos emoji works too. Any emoji can be the token. Each person gets a daily allowance that resets at midnight *in their own timezone*, and unused ones do not carry over. That is what makes people spend them.
 
 The person you thank gets a DM with who it is from and why. To share kudos with everyone too, pick a **Kudos channel** under **Kudos → The token your team gives**. Only channels Morgenruf is in are listed, so invite it to the channel first.
 

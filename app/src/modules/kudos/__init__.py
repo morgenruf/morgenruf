@@ -10,7 +10,7 @@ from pathlib import Path
 
 from src.core.modules import ModuleSpec, NavItem
 from src.modules.kudos.dashboard import register_routes
-from src.modules.kudos.handlers import claim_dm_command, register_handlers
+from src.modules.kudos.handlers import claim_dm_command, on_channel_message, register_handlers
 from src.modules.kudos.home import home_blocks
 from src.modules.kudos.jobs import plan_jobs
 from src.modules.kudos.mcp import tools as mcp_tools
@@ -24,6 +24,7 @@ MODULE = ModuleSpec(
     plan_jobs=plan_jobs,
     claim_dm=None,
     claim_dm_command=claim_dm_command,
+    on_channel_message=on_channel_message,
     purge=None,
     nav=(NavItem(label="Kudos", path="#kudos"),),
     default_enabled=True,
@@ -32,5 +33,6 @@ MODULE = ModuleSpec(
     mcp_tools=mcp_tools,
     help_lines=(
         "`/kudos @teammate message`: give someone kudos, or send `kudos @teammate message` to me in a DM, or press Give kudos on my Home tab, or react to their message with the kudos emoji",
+        "In any channel I'm in, write `@teammate` plus the kudos emoji and a reason, and it counts as kudos",
     ),
 )

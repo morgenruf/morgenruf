@@ -34,12 +34,17 @@ BOT_SCOPES: dict[str, str] = {
     "the post still goes out, just without the reaction.",
     "reactions:read": "Hearing when someone reacts to a message with the workspace's kudos emoji, "
     "which gives the author a kudos. Only reactions in channels the bot is in arrive.",
+    "channels:history": "Hearing a kudos typed in a public channel the bot was invited to, such as "
+    '"@sam :tada: great lesson". Nothing else in the channel is stored or acted on.',
+    "groups:history": "The same, for private channels the bot was invited to.",
     "team:read": "The workspace name, shown in the dashboard and the digest.",
 }
 
-# Slack scrutinises history scopes hardest, so the two here are worth stating
-# plainly: both are the app's own conversations. There is no scope for reading
-# a channel the app was not invited to, and none for channel history at all.
+# Slack scrutinises history scopes hardest, so they are worth stating plainly.
+# im/mpim history are the app's own conversations. channels/groups history
+# deliver messages only from channels someone invited the bot to, and only a
+# message carrying the kudos emoji and a mention is acted on; the rest are
+# dropped unread.
 SCOPE_STRING = ",".join(BOT_SCOPES)
 
 

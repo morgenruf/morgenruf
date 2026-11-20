@@ -5,6 +5,20 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Added
+- **Kudos in the channel, the way Donut does it.** In any channel Morgenruf is
+  in, `@teammate` plus the workspace's kudos emoji and a reason gives each
+  person mentioned a kudos. The message gets a check mark instead of a reply,
+  the recipient gets a DM, and the card is not repeated when the message is
+  already in the kudos channel. Needs two new scopes, `channels:history` and
+  `groups:history`, so existing workspaces reinstall once (the What's new card
+  offers it). Only messages carrying the kudos emoji and a mention are acted on.
+
+### Fixed
+- Reaction kudos ignored every unicode token except the maple leaf, so a
+  workspace using, say, a heart-eyes emoji could never give kudos by reaction.
+  Unicode tokens are now matched by their Slack names (emoji 2.16.0).
+
 ## [1.9.37] - 2026-11-20
 
 ### Security
