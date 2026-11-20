@@ -83,3 +83,19 @@ def test_query_inside_a_request_is_still_traced():
         conn.cursor().execute("SELECT 1")
     spans = {s.name: s for s in _exporter.get_finished_spans()}
     assert spans["SELECT"].parent.span_id == req.get_span_context().span_id
+
+
+def test_metrics_scrape_query_is_not_traced():
+    import src.core.db as db
+    from src.core.metrics import _ActiveWorkspaces
+
+    _exporter.clear()
+
+    def count_installations():
+        with db.db_conn() as conn:
+            conn.cursor().execute("SELECT COUNT(*) FROM installations WHERE active")
+        return 3
+
+    with patch.object(db, "db_conn", _traced_db_conn()), patch.object(db, "count_installations", count_installations):
+        assert list(_ActiveWorkspaces().collect())[0].samples[0].value == 3
+    assert _exporter.get_finished_spans() == ()
