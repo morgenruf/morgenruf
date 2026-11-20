@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.38] - 2026-11-20
+
 ### Added
 - **Kudos in the channel, the way Donut does it.** In any channel Morgenruf is
   in, `@teammate` plus the workspace's kudos emoji and a reason gives each
