@@ -5,6 +5,8 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.37] - 2026-11-20
+
 ### Security
 - Frontend image now builds on `ghcr.io/nginx/nginx-unprivileged:stable-alpine`,
   which already ships nginx 1.30.7 (fixes CVE-2026-113425, CVE-2026-121810,
