@@ -5,6 +5,16 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Changed
+- **Traces now connect.** Work that Slack Bolt and the scheduler run on worker
+  threads (database queries, Slack API calls) used to be traces of their own,
+  so a Slack event showed one bare span and the database queries showed up as
+  hundreds of loose traces an hour. Threading and urllib (slack_sdk)
+  instrumentation keep them in the request's trace. Each scheduled job run is
+  now one `job <name>` span with its queries under it.
+- JSON log lines include `trace_id` and `span_id` while a span is active, so
+  Grafana links a log line to its trace and a trace to its log lines.
+
 ## [1.9.37] - 2026-11-20
 
 ### Security

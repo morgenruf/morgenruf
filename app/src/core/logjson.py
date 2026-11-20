@@ -14,6 +14,11 @@ import re
 import uuid
 from datetime import UTC, datetime
 
+try:
+    from opentelemetry import trace as _otel_trace
+except ImportError:  # tracing is optional
+    _otel_trace = None
+
 # Attributes every LogRecord carries. Anything else on a record came from
 # `extra=` and is worth shipping.
 _RESERVED = frozenset(logging.LogRecord("", 0, "", 0, "", None, None).__dict__) | {
@@ -23,6 +28,19 @@ _RESERVED = frozenset(logging.LogRecord("", 0, "", 0, "", None, None).__dict__) 
 }
 
 TEXT_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+
+
+def trace_ids() -> dict[str, str]:
+    """trace_id and span_id of the span active on this thread, empty when there is none.
+
+    Grafana links a log line to its trace in Tempo through trace_id.
+    """
+    if _otel_trace is None:
+        return {}
+    ctx = _otel_trace.get_current_span().get_span_context()
+    if not ctx.is_valid:
+        return {}
+    return {"trace_id": format(ctx.trace_id, "032x"), "span_id": format(ctx.span_id, "016x")}
 
 
 def json_enabled() -> bool:
@@ -39,6 +57,7 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        payload.update(trace_ids())
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         elif record.exc_text:
