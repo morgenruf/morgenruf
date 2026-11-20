@@ -428,8 +428,9 @@ def _scheduler_alive(scheduler) -> bool:  # noqa: ANN001
 
 def _database_reachable() -> bool:
     try:
-        import src.core.db as db  # noqa: PLC0415
         from opentelemetry.instrumentation.utils import suppress_instrumentation  # noqa: PLC0415
+
+        import src.core.db as db  # noqa: PLC0415
 
         # /healthz is excluded from tracing, so without this its query became a
         # root "SELECT" trace every few seconds.
