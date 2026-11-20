@@ -74,6 +74,8 @@ class TestEveryScopeIsUsed:
         "emoji:read": [r"emoji_list"],
         "reactions:write": [r"reactions_add"],
         "reactions:read": [r'@app\.event\("reaction_added"\)'],
+        "channels:history": [r"on_channel_message="],
+        "groups:history": [r"on_channel_message="],
         "team:read": [r"team_info"],
     }
 
@@ -100,10 +102,18 @@ class TestEveryScopeIsUsed:
         bad = [s for s in BOT_SCOPES if s.startswith(forbidden)]
         assert not bad, f"Slack does not approve these for non-partners: {bad}"
 
-    def test_no_channel_history_scope(self):
-        """The app reads its own DMs and group DMs, never a channel's history."""
-        assert "channels:history" not in BOT_SCOPES
-        assert "groups:history" not in BOT_SCOPES
+    def test_channel_history_is_only_for_kudos(self):
+        """Channel messages are read for one thing: a kudos typed in a channel.
+
+        Customers asked for Donut-style `@sam :tada: thanks` (2026-11-20). The
+        app still never calls conversations.history on a channel, and kudos is
+        the only module with a channel message hook.
+        """
+        from src.modules import REGISTRY
+
+        assert [m.name for m in REGISTRY if m.on_channel_message] == ["kudos"]
+        source = (APP / "src/modules/kudos/handlers.py").read_text()
+        assert "conversations_history" not in source
 
 
 class TestSlashCommands:

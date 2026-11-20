@@ -78,6 +78,8 @@
         "emoji:read",
         "reactions:write",
         "reactions:read",
+        "channels:history",
+        "groups:history",
         "team:read"
       ]
     },
@@ -91,7 +93,9 @@
         "app_mention",
         "message.im",
         "member_joined_channel",
-        "reaction_added"
+        "reaction_added",
+        "message.channels",
+        "message.groups"
       ]
     },
     "interactivity": {

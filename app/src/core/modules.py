@@ -60,6 +60,12 @@ class ModuleSpec:
     # module the deployment permits; each hook decides whether the channel is
     # one it cares about.
     on_channel_join: Optional[Callable] = None
+    # Called with (event, client, context) for every plain message in a public
+    # or private channel the bot is in (message.channels / message.groups).
+    # Same single-listener reason as on_channel_join. Core only offers it to
+    # modules active for the workspace; the hook must stay silent on messages
+    # that are not for it, since this sees every message in those channels.
+    on_channel_message: Optional[Callable] = None
     # Words this module answers after `/morgenruf`, such as `poll`, mapped to
     # handler(body, client, respond, args_text). Core calls the handler after
     # ack() and only while the module is active here, so a module gets a

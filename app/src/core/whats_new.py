@@ -36,6 +36,15 @@ class Item:
 # Newest first.
 ITEMS: tuple[Item, ...] = (
     Item(
+        id="2026-11-channel-kudos",
+        published=date(2026, 11, 20),
+        text="*Give kudos right in the channel.* Write `@teammate`, your kudos emoji and a reason in any "
+        "channel Morgenruf is in, and it counts. Morgenruf adds a \N{WHITE HEAVY CHECK MARK} so you know. "
+        "Any emoji works as your kudos emoji now, for reactions too.",
+        module="kudos",
+        scope="channels:history",
+    ),
+    Item(
         id="2026-11-kudos-reactions",
         published=date(2026, 11, 12),
         text="*Give kudos with an emoji.* React to a teammate's message with your kudos emoji "

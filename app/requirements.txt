@@ -30,3 +30,4 @@ opentelemetry-instrumentation-requests==0.66b2
 opentelemetry-instrumentation-httpx==0.66b2
 opentelemetry-instrumentation-threading==0.66b2
 opentelemetry-instrumentation-urllib==0.66b2
+emoji==2.16.0
