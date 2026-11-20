@@ -52,3 +52,34 @@ def test_job_run_is_a_span_with_its_work_as_children():
     root = spans["job connect:round"]
     assert root.attributes["job.id"] == "connect:T01:round:7"
     assert spans["SELECT"].parent.span_id == root.context.span_id
+
+
+def _traced_db_conn():
+    """A db_conn whose cursor is wrapped by the real DB-API instrumentation."""
+    from contextlib import contextmanager
+
+    from opentelemetry.instrumentation import dbapi
+
+    @contextmanager
+    def db_conn():
+        yield dbapi.instrument_connection("t", MagicMock(), "postgresql", tracer_provider=_provider)
+
+    return db_conn
+
+
+def test_health_check_query_is_not_traced():
+    import src.core.db as db
+    from src.main import _database_reachable
+
+    _exporter.clear()
+    with patch.object(db, "db_conn", _traced_db_conn()):
+        assert _database_reachable()
+    assert _exporter.get_finished_spans() == ()
+
+
+def test_query_inside_a_request_is_still_traced():
+    _exporter.clear()
+    with _tracer.start_as_current_span("req") as req, _traced_db_conn()() as conn:
+        conn.cursor().execute("SELECT 1")
+    spans = {s.name: s for s in _exporter.get_finished_spans()}
+    assert spans["SELECT"].parent.span_id == req.get_span_context().span_id
