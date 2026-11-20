@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import threading
@@ -19,6 +20,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from slack_sdk import WebClient
+
+try:
+    from opentelemetry import trace as _otel_trace
+    from opentelemetry.trace import Status, StatusCode
+except ImportError:  # tracing is optional
+    _otel_trace = None
 
 from src.core import metrics
 from src.core.schedule_validation import schedule_config_error
@@ -1953,10 +1960,25 @@ _JOB_RESULTS = {EVENT_JOB_EXECUTED: "success", EVENT_JOB_ERROR: "error", EVENT_J
 def _metered_run_job(job, jobstore_alias, run_times, logger_name):  # noqa: ANN001, ANN201
     name = metrics.job_name(job.id)
     start = time.perf_counter()
-    with metrics.job_context(name):
+    with _job_span(job.id, name) as span, metrics.job_context(name):
         events = run_job(job, jobstore_alias, run_times, logger_name)
-    metrics.record_job(name, [_JOB_RESULTS.get(e.code, "error") for e in events], time.perf_counter() - start)
+        results = [_JOB_RESULTS.get(e.code, "error") for e in events]
+        if span is not None and "error" in results:
+            span.set_status(Status(StatusCode.ERROR, "job failed"))
+    metrics.record_job(name, results, time.perf_counter() - start)
     return events
+
+
+def _job_span(job_id: str, name: str):  # noqa: ANN202
+    """One trace per job run, so its database queries and Slack calls are children of it
+    instead of each being a trace of its own. A no-op when tracing is not installed."""
+    if _otel_trace is None:
+        return contextlib.nullcontext()
+    return _otel_trace.get_tracer(__name__).start_as_current_span(
+        f"job {name}",
+        kind=_otel_trace.SpanKind.INTERNAL,
+        attributes={"job.id": job_id, "job.name": name},
+    )
 
 
 def _claim_run(job_id: str, run_at: datetime) -> bool:
