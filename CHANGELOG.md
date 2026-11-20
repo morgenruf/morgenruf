@@ -5,6 +5,14 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.36] - 2026-11-20
+
+### Added
+- **OpenTelemetry tracing, off by default.** When `OTEL_EXPORTER_OTLP_ENDPOINT`
+  is set, the backend sends traces over OTLP/HTTP for Flask under gunicorn,
+  psycopg2, redis, requests and httpx. Unset, nothing is loaded. Chart 0.16.0
+  adds `tracing.endpoint` (#319, helm-charts#8).
+
 ## [1.9.35] - 2026-11-14
 
 ### Added
