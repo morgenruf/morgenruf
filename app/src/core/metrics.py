@@ -202,8 +202,13 @@ class _ActiveWorkspaces:
     """Read the active install count from the database at scrape time."""
 
     def collect(self):
+        # The scrape has no request span, so without this the query became a
+        # root "SELECT" trace on every scrape.
+        from opentelemetry.instrumentation.utils import suppress_instrumentation  # noqa: PLC0415
+
         try:
-            count = _count_active_workspaces()
+            with suppress_instrumentation():
+                count = _count_active_workspaces()
         except Exception as exc:
             logger.warning("metrics: could not count active workspaces: %s", exc)
             return
