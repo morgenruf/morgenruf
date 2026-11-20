@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.39] - 2026-11-20
+
+### Fixed
+- The `/healthz` readiness check's database query no longer shows up in
+  tracing as a stray root `SELECT` trace every few seconds.
+
 ## [1.9.38] - 2026-11-20
 
 ### Added
