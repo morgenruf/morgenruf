@@ -5,6 +5,12 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+## [1.9.40] - 2026-11-20
+
+### Fixed
+- The Prometheus scrape's active workspace count no longer shows up in
+  tracing as a stray root `SELECT` trace on every scrape.
+
 ## [1.9.39] - 2026-11-20
 
 ### Fixed
