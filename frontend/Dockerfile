@@ -15,7 +15,10 @@ RUN pnpm install --frozen-lockfile
 COPY frontend/ frontend/
 RUN pnpm --filter @morgenruf/frontend build && test -s frontend/dist/client/_shell.html
 
-FROM nginxinc/nginx-unprivileged:stable-alpine
+# GHCR gets new nginx releases before Docker Hub (1.30.7, with fixes for
+# CVE-2026-113425, 121810, 123007, 123633, 118899 and 123634, was on GHCR on
+# 2026-11-18 and still missing from Docker Hub on 2026-11-20).
+FROM ghcr.io/nginx/nginx-unprivileged:stable-alpine
 
 USER root
 # The upstream image lags Alpine's security fixes (pcre2 CVE-2026-103111 in

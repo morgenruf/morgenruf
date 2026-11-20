@@ -5,6 +5,13 @@ Format: [Keep a Changelog](https://keepachangelog.com) | Versioning: [SemVer](ht
 
 ## [Unreleased]
 
+### Security
+- Frontend image now builds on `ghcr.io/nginx/nginx-unprivileged:stable-alpine`,
+  which already ships nginx 1.30.7 (fixes CVE-2026-113425, CVE-2026-121810,
+  CVE-2026-123007, CVE-2026-123633, CVE-2026-118899, CVE-2026-123634).
+  Docker Hub was still on 1.30.6, so the 1.9.36 tag failed its image scan and
+  never published.
+
 ## [1.9.36] - 2026-11-20
 
 ### Added
